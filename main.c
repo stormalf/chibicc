@@ -33,7 +33,6 @@ static bool opt_static;
 static bool opt_shared;
 static bool isCc1input = false;
 static bool isCc1output = false;
-static bool isDebug = false;
 static char *opt_MF;
 static char *opt_MT;
 char *opt_o;
@@ -46,12 +45,14 @@ static StringArray std_include_paths;
 
 char *base_file;
 static char *output_file;
-static FILE *f;
+FILE *f;
 
 // for dot diagrams
 FILE *dotf;
 char *dot_file;
 bool isDotfile = false;
+bool isDebug = false;
+char *previousfile = " ";
 
 static char logFile[] = "/tmp/chibicc.log";
 static StringArray input_paths;
@@ -573,10 +574,11 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-fno-strict-aliasing") ||
         !strcmp(argv[i], "-m64") ||
         !strcmp(argv[i], "-m32") ||
+        !strcmp(argv[i], "--whole-archive") ||
+        !strcmp(argv[i], "--no-whole-archive") ||
         !strcmp(argv[i], "-Bsymbolic") ||
         !strcmp(argv[i], "-z") ||
         !strcmp(argv[i], "defs") ||
-        //        !strcmp(argv[i], "-pthread") ||
         !strcmp(argv[i], "-pedantic") ||
         !strcmp(argv[i], "-nostdinc") ||
         !strcmp(argv[i], "-mno-red-zone") ||
@@ -1079,7 +1081,16 @@ int main(int argc, char **argv)
 {
   atexit(cleanup);
 
-  if (isDebug)
+  int isInvalidArg = validateArgs(argc, argv);
+  if (isInvalidArg == -1)
+  {
+    error("%s : in main Invalid parameter detected!", MAIN_C);
+    usage(-2);
+  }
+  parse_args(argc, argv);
+
+  // the parsing need to be done before trying to open the log file
+  if (isDebug && f == NULL)
   {
     f = fopen(logFile, "w");
     if (f == NULL)
@@ -1089,15 +1100,8 @@ int main(int argc, char **argv)
     }
   }
 
+  // init_macros can call tokenize functions moving here to be able to print debug values
   init_macros();
-
-  int isInvalidArg = validateArgs(argc, argv);
-  if (isInvalidArg == -1)
-  {
-    error("%s : in main Invalid parameter detected!", MAIN_C);
-    usage(-2);
-  }
-  parse_args(argc, argv);
 
   if (opt_cc1 && !isCc1input)
   {

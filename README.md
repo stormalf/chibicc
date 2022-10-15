@@ -192,6 +192,7 @@ it means that if you don't use the ld linker or ld.lld probably some options sho
 
 List of options ignored :
 
+    "-O"
     "-W"
     "-g"
     "-std="
@@ -202,12 +203,16 @@ List of options ignored :
     "-fno-strict-aliasing"
     "-m64"
     "-m32"
+    "--whole-archive"
+    "--no-whole-archive"
     "-Bsymbolic"
+    "-z"
+    "defs"
     "-pedantic"
     "-nostdinc"
     "-mno-red-zone"
     "-w"
-    "-z"
+
 
 ## Dockerfile and devcontainer
 
@@ -253,35 +258,35 @@ Very interesting project that helps to find some bugs (see issue from 108 to 118
 
     CC=chibicc ./Configure
     
-You need to remove from the file from openssl/crypto/perlasm/x86_64-xlate.pl
+    You need to remove from the file from openssl/crypto/perlasm/x86_64-xlate.pl
 
     	my $section='.note.gnu.property, #alloc';
 
-by :
+    by :
 
     	my $section='.note.gnu.property';
 
     make
 
-It fails for extended assembly :
+    It fails for extended assembly :
 
     chibicc  -Iinclude  -fPIC -pthread -m64 -Wall -O3 -DOPENSSL_BUILDING_OPENSSL -DNDEBUG   -c -o engines/afalg-dso-e_afalg.o engines/e_afalg.c
     /usr/include/x86_64-linux-gnu/asm/swab.h:10:    __asm__("bswapl %0" : "=r" (val) : "0" (val));
                                                                      ^ parse.c : in asm_stmt : extended assembly not managed yet!
 
-Replace chibicc by gcc for compiling this one :
+    Replace chibicc by gcc for compiling this one :
 
     gcc  -Iinclude  -fPIC -pthread -m64 -Wall -O3 -DOPENSSL_BUILDING_OPENSSL -DNDEBUG   -c -o engines/afalg-dso-e_afalg.o engines/e_afalg.c
 
     make
 
-One issue remaining : 
+openssh-portable : https://github.com/openssh/openssh-portable.git
 
-    chibicc  -Iinclude -Iapps/include  -pthread -m64 -Wall -O3 -DOPENSSL_BUILDING_OPENSSL -DNDEBUG   -c -o test/rsa_complex-bin-rsa_complex.o test/rsa_complex.c
-    /usr/include/x86_64-linux-gnu/bits/cmathcalls.h:55: __MATHCALL (cacos, (_Mdouble_complex_ __z));
-                                                                                            ^ expected ','    
+    autoreconf -fi
+    CC=chibicc ./configure
+    make
 
-fixed for now by using gcc. I'll try to fix later.
+
 
 ## Limits
 
@@ -289,8 +294,12 @@ Some C projects doesn't compile for now. It helps to find some bugs and to try t
 
 VLC
 
-    VLC doesn't compile with chibicc because it has some extended assembly inline that are not managed yet. Even if for this part I'll try to use gcc it failed during linking with multiple definitions. If I use gcc to compile VLC it compiles fine. Perhaps mixing chibicc and gcc is not a great idea!
+    ./boostrap
+    CC=chibicc CFLAGS="-fPIC" DEFS="-DHAVE_CONFIG_H -DHAVE_ATTRIBUTE_PACKED -DVLC_USED -DVLC_API -DVLC_DEPRECATED -DVLC_MALLOC" ./configure --disable-lua --disable-a52 --disable-xcb --disable-qt --disable-po --target=linux
+    make all
 
+    VLC doesn't compile with chibicc because it has some extended assembly inline that are not managed yet. Even if for this part I'll try to use gcc it failed during linking with multiple definitions. If I use gcc to compile VLC it compiles fine. Perhaps mixing chibicc and gcc is not a great idea!
+    
 
 ## TODO
 
@@ -337,7 +346,14 @@ VLC
     - issue #118 issues/issue118.c:1: NID_sha_224
                                      ^ parse.c: in primary : error: undefined variable
     - issue #119 caused by _Complex attribute   /usr/include/x86_64-linux-gnu/bits/cmathcalls.h:55: __MATHCALL (cacos, (_Mdouble_complex_ __z));
-    ^ expected ','
+                                                                                                                                ^ expected ','
+    - issue #120 in VLC static_assert function outside a function caused an issue with chibicc
+        issues/issue120.c:30: static_assert(AOUT_CHANIDX_MAX == AOUT_CHAN_MAX, "channel count mismatch");
+                                                             ^ tokenize.c: in skip : expected ','
+    - issue #121 in VLC static_assert function with sizeof or offsetof caused an issue with chibicc:
+        ./include/stddef.h:11: #define offsetof(type, member) ((size_t)&(((type *)0)->member))
+                                                                       ^ tokenize.c: in skip : expected ','
+
 
 ## debug
 
@@ -367,8 +383,8 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.12 Adding -dotfile parameter that generates a xxx.dot file that we can visualized using graphviz package by [hdewig100](https://github.com/hedwig100/chibicc). Adding in error message chibicc file name and function when a message error is displayed to help for debugging. Adding in Makefile the way to create shared library libchibicc.so. Fixing issue #116 with 1024_160 splitted wrongly in two tokens. Fixing issue #117 with number after generic parameter like "fromtype##2obj_decode". Fixing issue #118 same as 117, to allow some identifiers to start by number when they are generics. Linking lpthread if -pthread is passed. Ignoring -z and -Bsymbolic. Fixing the issue with linkage need to add current directory to the path before the others (probably it's a security issue because it means that for compiling the objects library found in the current path will be taken in priority!)
-Fixing issue #119 about cmathcalls. Removing fix for #119 caused an infinite loop and fixing it by adding _Complex as attribute like _Atomic.
+1.0.13 Adding other projects compiled successfully with chibicc. Adding some information in debug file like all tokens generated by tokenize function. Fixing some issues found with vlc static_assert function outside a function(#120 and #121). Adding -no-whole-archive and -whole-archive as ignored parameters
+
 
 ## old release notes
 
@@ -405,3 +421,5 @@ trying to document cc1 and x options and adding a max length control parameter. 
 
 1.0.11 Fixing issue #113 about \_Atomic when it's placed after the type. Fixing other issue like issue #108 sometimes some #ifdef are not recognized if a macro ends the previous line and the next line starting by a preprocessing instruction. Managing differently -soname and adding option -z, and --version-script. Adding -debug option to write commands in /tmp/chibicc.log (later I'll add some debugs info/values on this file to help to fix bugs). Adding 2 functions in stdatomic.h needed by VLC atomic_compare_exchange_strong_explicit(object, expected, desired, success, failure) that returns false for now and atomic_compare_exchange_weak_explicit(object, expected, desired, success, failure) that returns false too. Managing .lo files (libtool object). Adding generic path for Fix 'gcc library path is not found' on some platforms #108 by [Stardust8502](https://github.com/Stardust8502/chibicc). 
 
+1.0.12 Adding -dotfile parameter that generates a xxx.dot file that we can visualized using graphviz package by [hdewig100](https://github.com/hedwig100/chibicc). Adding in error message chibicc file name and function when a message error is displayed to help for debugging. Adding in Makefile the way to create shared library libchibicc.so. Fixing issue #116 with 1024_160 splitted wrongly in two tokens. Fixing issue #117 with number after generic parameter like "fromtype##2obj_decode". Fixing issue #118 same as 117, to allow some identifiers to start by number when they are generics. Linking lpthread if -pthread is passed. Ignoring -z and -Bsymbolic. Fixing the issue with linkage need to add current directory to the path before the others (probably it's a security issue because it means that for compiling the objects library found in the current path will be taken in priority!)
+Fixing issue #119 about cmathcalls. Removing fix for #119 caused an infinite loop and fixing it by adding _Complex as attribute like _Atomic.
