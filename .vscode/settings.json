@@ -1,5 +1,6 @@
 {
   "files.associations": {
-    "chibicc.h": "c"
+    "chibicc.h": "c",
+    "cassert": "c"
   }
 }

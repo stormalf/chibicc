@@ -471,13 +471,11 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     SIGNED = 1 << 17,
     UNSIGNED = 1 << 18,
   };
-
   Type *ty = ty_int;
   int counter = 0;
   bool is_atomic = false;
   while (is_typename(tok))
   {
-
     // Handle storage class specifiers.
     if (equal(tok, "typedef") || equal(tok, "static") || equal(tok, "extern") ||
         equal(tok, "inline") || equal(tok, "_Thread_local") || equal(tok, "__thread"))
@@ -507,7 +505,8 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     // These keywords are recognized but ignored.
     // fixing issue #119 _Complex
     if (consume(&tok, tok, "const") || consume(&tok, tok, "volatile") ||
-        consume(&tok, tok, "auto") || consume(&tok, tok, "register") || consume(&tok, tok, "_Complex") ||
+        consume(&tok, tok, "auto") || consume(&tok, tok, "register") ||
+        consume(&tok, tok, "_Complex") ||
         consume(&tok, tok, "restrict") || consume(&tok, tok, "__restrict") ||
         consume(&tok, tok, "__restrict__") || consume(&tok, tok, "_Noreturn"))
       continue;
@@ -676,6 +675,8 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
 // param       = declspec declarator
 static Type *func_params(Token **rest, Token *tok, Type *ty)
 {
+  if (isDebug && f != NULL)
+    print_debug_tokens(PARSE_C, "func_params", tok);
   if (equal(tok, "void") && equal(tok->next, ")"))
   {
     *rest = tok->next->next;
@@ -685,11 +686,13 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
   Type head = {};
   Type *cur = &head;
   bool is_variadic = false;
-
   while (!equal(tok, ")"))
   {
+
     if (cur != &head)
+    {
       tok = skip(tok, ",");
+    }
     if (equal(tok, "..."))
     {
       is_variadic = true;
@@ -697,12 +700,20 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
       skip(tok, ")");
       break;
     }
+    // printf("========ici %s\n", tok->loc);
+    //  provisory fix for static_assert outside a function caused issue with chibicc
+    //  issue #120 not sure why it works only inside a function, gcc compiles than even if static_assert is outside a function
+    if (equal(tok->next, "==") || equal(tok, "(") || equal(tok, "sizeof") || equal(tok, "_Alignof"))
+    {
+      Node *node = expr(&tok, tok);
+      *rest = tok;
+      break;
+    }
 
     Type *ty2 = declspec(&tok, tok, NULL);
     ty2 = declarator(&tok, tok, ty2);
 
     Token *name = ty2->name;
-
     if (ty2->kind == TY_ARRAY)
     {
       // "array of T" is converted to "pointer to T" only in the parameter
@@ -757,6 +768,7 @@ static Type *array_dimensions(Token **rest, Token *tok, Type *ty)
 //             | ε
 static Type *type_suffix(Token **rest, Token *tok, Type *ty)
 {
+
   if (equal(tok, "("))
     return func_params(rest, tok->next, ty);
 
@@ -767,14 +779,15 @@ static Type *type_suffix(Token **rest, Token *tok, Type *ty)
   return ty;
 }
 
-// pointers = ("*" ("const" | "volatile" | "restrict" | "_Complex")*)*
+// pointers = ("*" ("const" | "volatile" | "restrict" | "_Complex" )*)*
 static Type *pointers(Token **rest, Token *tok, Type *ty)
 {
   while (consume(&tok, tok, "*"))
   {
     ty = pointer_to(ty);
     while (equal(tok, "const") || equal(tok, "volatile") || equal(tok, "restrict") ||
-           equal(tok, "__restrict") || equal(tok, "__restrict__") || equal(tok, "_Atomic") || equal(tok, "_Complex"))
+           equal(tok, "__restrict") || equal(tok, "__restrict__") ||
+           equal(tok, "_Atomic") || equal(tok, "_Complex"))
       tok = tok->next;
   }
   *rest = tok;
@@ -790,7 +803,8 @@ static Type *declarator(Token **rest, Token *tok, Type *ty)
     Token *start = tok;
     Type dummy = {};
     declarator(&tok, start->next, &dummy);
-    tok = skip(tok, ")");
+    if (equal(tok, ")"))
+      tok = skip(tok, ")");
     ty = type_suffix(rest, tok, ty);
     return declarator(&tok, start->next, ty);
   }
@@ -802,6 +816,7 @@ static Type *declarator(Token **rest, Token *tok, Type *ty)
     name = tok;
     tok = tok->next;
   }
+
   ty = type_suffix(rest, tok, ty);
   ty->name = name;
   ty->name_pos = name_pos;
@@ -818,7 +833,8 @@ static Type *abstract_declarator(Token **rest, Token *tok, Type *ty)
     Token *start = tok;
     Type dummy = {};
     abstract_declarator(&tok, start->next, &dummy);
-    tok = skip(tok, ")");
+    if (equal(tok, ")"))
+      tok = skip(tok, ")");
     ty = type_suffix(rest, tok, ty);
     return abstract_declarator(&tok, start->next, ty);
   }
@@ -2416,7 +2432,6 @@ static Node *to_assign(Node *binary)
   add_type(binary->lhs);
   add_type(binary->rhs);
   Token *tok = binary->tok;
-
   // Convert `A.x op= C` to `tmp = &A, (*tmp).x = (*tmp).x op C`.
   if (binary->lhs->kind == ND_MEMBER)
   {
@@ -3329,6 +3344,7 @@ static Node *postfix(Token **rest, Token *tok)
   }
   else
   {
+
     node = primary(&tok, tok);
   }
 
@@ -3391,7 +3407,6 @@ static Node *postfix(Token **rest, Token *tok)
 static Node *funcall(Token **rest, Token *tok, Node *fn)
 {
   add_type(fn);
-
   if (fn->ty->kind != TY_FUNC &&
       (fn->ty->kind != TY_PTR || fn->ty->base->kind != TY_FUNC))
     error_tok(fn->tok, "%s: in funcall : not a function", PARSE_C);
@@ -3452,7 +3467,7 @@ static Node *funcall(Token **rest, Token *tok, Node *fn)
 //               | "default" ":" assign
 static Node *generic_selection(Token **rest, Token *tok)
 {
-  Token *start = tok;
+  // Token *start = tok;
   tok = skip(tok, "(");
 
   Node *ctrl = assign(&tok, tok);
@@ -3511,7 +3526,9 @@ static Node *generic_selection(Token **rest, Token *tok)
 static Node *primary(Token **rest, Token *tok)
 {
   Token *start = tok;
-  if (equal(tok, "(") && equal(tok->next, "{"))
+  if (isDebug && f != NULL)
+    print_debug_tokens(PARSE_C, "primary", tok);
+  if ((equal(tok, "(") && equal(tok->next, "{")))
   {
     // This is a GNU statement expresssion.
     Node *node = new_node(ND_STMT_EXPR, tok);
@@ -3644,10 +3661,9 @@ static Node *primary(Token **rest, Token *tok)
     *rest = skip(tok->next, ")");
     return to_assign(node);
   }
-
   if (tok->kind == TK_IDENT)
   {
-    // Variable or enum constant
+    //  Variable or enum constant
     VarScope *sc = find_var(tok);
     *rest = tok->next;
 
@@ -3669,7 +3685,13 @@ static Node *primary(Token **rest, Token *tok)
     }
 
     if (equal(tok->next, "("))
-      error_tok(tok, "%s: in primary : implicit declaration of a function", PARSE_C);
+    {
+
+      Node *node = unary(rest, tok->next);
+      return node;
+      // error_tok(tok, "%s: in primary : implicit declaration of a function", PARSE_C);
+    }
+
     error_tok(tok, "%s: in primary : error: undefined variable", PARSE_C);
   }
 
