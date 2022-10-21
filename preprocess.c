@@ -209,6 +209,7 @@ static Token *skip_cond_incl2(Token *tok)
 // Nested `#if` and `#endif` are skipped.
 static Token *skip_cond_incl(Token *tok)
 {
+
   while (tok->kind != TK_EOF)
   {
     if (is_hash(tok) &&
@@ -945,10 +946,15 @@ static Token *include_file(Token *tok, char *path, Token *filename_tok)
 static void read_line_marker(Token **rest, Token *tok)
 {
   Token *start = tok;
-  tok = preprocess(copy_line(rest, tok));
+  bool isReadLine = true;
+  tok = preprocess(copy_line(rest, tok), isReadLine);
+  // if (isDebug && f != NULL)
+  //   print_debug_tokens(PREPROCESS_C, "read_line_marker", tok);
 
-  if (tok->kind != TK_NUM || tok->ty->kind != TY_INT)
+  if (tok->kind != TK_NUM && tok->ty->kind != TY_INT)
     error_tok(tok, "%s: in read_line_marker : invalid line marker", PREPROCESS_C);
+
+  // fix issue with negative number that cause Assembler less number than one
   start->file->line_delta = tok->val - start->line_no;
 
   tok = tok->next;
@@ -1096,6 +1102,7 @@ static Token *preprocess2(Token *tok)
     if (equal(tok, "line"))
     {
       read_line_marker(&tok, tok->next);
+      // tok = skip_line(tok->next->next->next);
       continue;
     }
 
@@ -1395,16 +1402,15 @@ static void join_adjacent_string_literals(Token *tok)
 }
 
 // Entry point function of the preprocessor.
-Token *preprocess(Token *tok)
+Token *preprocess(Token *tok, bool isReadLine)
 {
   tok = preprocess2(tok);
-  if (cond_incl)
+  if (cond_incl && !isReadLine)
     error_tok(cond_incl->tok, "%s: in preprocess : unterminated conditional directive", PREPROCESS_C);
   convert_pp_tokens(tok);
   join_adjacent_string_literals(tok);
-  if (isDebug && f != NULL)
-    print_debug_tokens(PREPROCESS_C, "preprocess", tok);
+
   for (Token *t = tok; t; t = t->next)
-    t->line_no += t->line_delta;
+    t->line_no += abs(t->line_delta); // fixing issue with negative number that caused assembly issue
   return tok;
 }

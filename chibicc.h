@@ -182,7 +182,7 @@ char *search_include_paths(char *filename);
 void init_macros(void);
 void define_macro(char *name, char *buf);
 void undef_macro(char *name);
-Token *preprocess(Token *tok);
+Token *preprocess(Token *tok, bool isReadLine);
 
 //
 // parse.c

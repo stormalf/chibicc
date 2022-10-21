@@ -41,7 +41,8 @@ static void verror_at(char *filename, char *input, int line_no,
     end++;
 
   // Print out the line.
-  int indent = fprintf(stderr, "%s:%d: ", filename, line_no);
+  int errpos = (loc - line) + 1;
+  int indent = fprintf(stderr, "%s:%d:%d:\033[0;31m error: \033[0m", filename, line_no, errpos) - 11;
   fprintf(stderr, "%.*s\n", (int)(end - line), line);
 
   // Show the error message.
@@ -820,8 +821,8 @@ Token *tokenize(File *file)
   add_line_numbers(head.next);
 
   // for debug needs print all the tokens with values
-  if (isDebug && f != NULL)
-    print_debug_tokens(TOKENIZE_C, "tokenize", head.next);
+  // if (isDebug && f != NULL)
+  //   print_debug_tokens(TOKENIZE_C, "tokenize", head.next);
   return head.next;
 }
 
