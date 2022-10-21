@@ -161,6 +161,7 @@ static Token *parse_typedef(Token *tok, Type *basety);
 static bool is_function(Token *tok);
 static Token *function(Token *tok, Type *basety, VarAttr *attr);
 static Token *global_variable(Token *tok, Type *basety, VarAttr *attr);
+static void create_param_lvars(Type *param);
 
 static int align_down(int n, int align)
 {
@@ -186,10 +187,12 @@ static VarScope *find_var(Token *tok)
 {
   for (Scope *sc = scope; sc; sc = sc->next)
   {
+    // printf("2======%s\n", tok->loc);
     VarScope *sc2 = hashmap_get2(&sc->vars, tok->loc, tok->len);
     if (sc2)
       return sc2;
   }
+
   return NULL;
 }
 
@@ -675,8 +678,9 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
 // param       = declspec declarator
 static Type *func_params(Token **rest, Token *tok, Type *ty)
 {
-  if (isDebug && f != NULL)
-    print_debug_tokens(PARSE_C, "func_params", tok);
+
+  // if (isDebug && f != NULL)
+  //   print_debug_tokens(PARSE_C, "func_params", tok);
   if (equal(tok, "void") && equal(tok->next, ")"))
   {
     *rest = tok->next->next;
@@ -693,6 +697,7 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
     {
       tok = skip(tok, ",");
     }
+
     if (equal(tok, "..."))
     {
       is_variadic = true;
@@ -700,7 +705,7 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
       skip(tok, ")");
       break;
     }
-    // printf("========ici %s\n", tok->loc);
+
     //  provisory fix for static_assert outside a function caused issue with chibicc
     //  issue #120 not sure why it works only inside a function, gcc compiles than even if static_assert is outside a function
     if (equal(tok->next, "==") || equal(tok, "(") || equal(tok, "sizeof") || equal(tok, "_Alignof"))
@@ -711,9 +716,10 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
     }
 
     Type *ty2 = declspec(&tok, tok, NULL);
+    // printf("2======%s\n", tok->loc);
     ty2 = declarator(&tok, tok, ty2);
-
     Token *name = ty2->name;
+
     if (ty2->kind == TY_ARRAY)
     {
       // "array of T" is converted to "pointer to T" only in the parameter
@@ -745,8 +751,18 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
 // array-dimensions = ("static" | "restrict")* const-expr? "]" type-suffix
 static Type *array_dimensions(Token **rest, Token *tok, Type *ty)
 {
+
   while (equal(tok, "static") || equal(tok, "restrict"))
     tok = tok->next;
+
+  // trying to fix issue with regex
+  //=======if the params contains a variable int __nmatch and the next parameter used this variable it fails with undefined variable
+  if (tok->kind == TK_IDENT)
+  {
+    VarScope *sc = find_var(tok);
+    if (sc == NULL)
+      tok = tok->next;
+  }
 
   if (equal(tok, "]"))
   {
@@ -770,7 +786,9 @@ static Type *type_suffix(Token **rest, Token *tok, Type *ty)
 {
 
   if (equal(tok, "("))
+  {
     return func_params(rest, tok->next, ty);
+  }
 
   if (equal(tok, "["))
     return array_dimensions(rest, tok->next, ty);
@@ -797,9 +815,12 @@ static Type *pointers(Token **rest, Token *tok, Type *ty)
 // declarator = pointers ("(" ident ")" | "(" declarator ")" | ident) type-suffix
 static Type *declarator(Token **rest, Token *tok, Type *ty)
 {
+
   ty = pointers(&tok, tok, ty);
+
   if (equal(tok, "(") && !is_typename(tok->next) && !equal(tok->next, ")"))
   {
+
     Token *start = tok;
     Type dummy = {};
     declarator(&tok, start->next, &dummy);
@@ -811,12 +832,12 @@ static Type *declarator(Token **rest, Token *tok, Type *ty)
 
   Token *name = NULL;
   Token *name_pos = tok;
+  // printf("3======%s\n", tok->loc);
   if (tok->kind == TK_IDENT)
   {
     name = tok;
     tok = tok->next;
   }
-
   ty = type_suffix(rest, tok, ty);
   ty->name = name;
   ty->name_pos = name_pos;
@@ -986,7 +1007,6 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
   int i = 0;
   while (!equal(tok, ";"))
   {
-
     if (i++ > 0)
       tok = skip(tok, ",");
 
@@ -1014,7 +1034,7 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
     if (ty->kind == TY_VLA)
     {
       if (equal(tok, "="))
-        error_tok(tok, "%s: in new_unary: variable-sized object may not be initialized", PARSE_C);
+        error_tok(tok, "%s: in declaration: variable-sized object may not be initialized", PARSE_C);
 
       // Variable length arrays (VLAs) are translated to alloca() calls.
       // For example, `int x[n+2]` is translated to `tmp = n + 2,
@@ -1040,9 +1060,10 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
     }
 
     if (var->ty->size < 0)
-      error_tok(ty->name, "%s: in new_unary : variable has incomplete type", PARSE_C);
+      error_tok(ty->name, "%s: in declaration : variable has incomplete type", PARSE_C);
+
     if (var->ty->kind == TY_VOID)
-      error_tok(ty->name, "%s: in new_unary : variable declared void", PARSE_C);
+      error_tok(ty->name, "%s: in declaration : variable declared void", PARSE_C);
   }
 
   Node *node = new_node(ND_BLOCK, tok);
@@ -3313,9 +3334,11 @@ static Node *new_inc_dec(Node *node, Token *tok, int addend)
 //              | "--"
 static Node *postfix(Token **rest, Token *tok)
 {
+  // printf("=======%s\n", tok->loc);
   Node *node;
   if (equal(tok, "(") && is_typename(tok->next))
   {
+
     // Compound literal
     Token *start = tok;
     Type *ty = typename(&tok, tok->next);
@@ -3526,8 +3549,6 @@ static Node *generic_selection(Token **rest, Token *tok)
 static Node *primary(Token **rest, Token *tok)
 {
   Token *start = tok;
-  if (isDebug && f != NULL)
-    print_debug_tokens(PARSE_C, "primary", tok);
   if ((equal(tok, "(") && equal(tok->next, "{")))
   {
     // This is a GNU statement expresssion.
@@ -3743,6 +3764,7 @@ static Token *parse_typedef(Token *tok, Type *basety)
 
 static void create_param_lvars(Type *param)
 {
+
   if (param)
   {
     create_param_lvars(param->next);

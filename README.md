@@ -287,6 +287,10 @@ openssh-portable : https://github.com/openssh/openssh-portable.git
     make
 
 
+luajit: https://github.com/LuaJIT/LuaJIT.git 
+    
+    CC=chibicc make
+
 
 ## Limits
 
@@ -353,6 +357,9 @@ VLC
     - issue #121 in VLC static_assert function with sizeof or offsetof caused an issue with chibicc:
         ./include/stddef.h:11: #define offsetof(type, member) ((size_t)&(((type *)0)->member))
                                                                        ^ tokenize.c: in skip : expected ','
+    - issue #122 in util_linux compilation it fails during assembly "file number less than 0" when #line generates negative number
+    - issue #123 in util_linux compilation fails with regex when a local variable in arguments it's used for another argument.
+           extern int regexec(..., size_t __nmatch,...   regmatch_t __pmatch[_Restrict_arr_  _REGEX_NELTS(__nmatch)],...
 
 
 ## debug

@@ -1,9 +1,14 @@
 #include "test.h"
 
-int main() {
+int main()
+{
 #line 500 "foo"
   ASSERT(501, __LINE__);
   ASSERT(0, strcmp(__FILE__, "foo"));
+
+#line 400 "test.h"
+  ASSERT(401, __LINE__);
+  ASSERT(0, strcmp(__FILE__, "test.h"));
 
 #line 800 "bar"
   ASSERT(801, __LINE__);

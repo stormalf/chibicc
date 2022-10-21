@@ -377,7 +377,7 @@ static void parse_args(int argc, char **argv)
     // }
 
     // not sure why the --version-script is interpreted as -version-script ?
-    if (!strcmp(argv[i], "-version-script"))
+    if (!strcmp(argv[i], "-version-script") || !strcmp(argv[i], "--version-script"))
     {
       char *tmp = argv[++i];
       check_parms_length(tmp);
@@ -576,9 +576,11 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-m32") ||
         !strcmp(argv[i], "--whole-archive") ||
         !strcmp(argv[i], "--no-whole-archive") ||
+        !strcmp(argv[i], "-fsigned-char") ||
         !strcmp(argv[i], "-Bsymbolic") ||
         !strcmp(argv[i], "-z") ||
         !strcmp(argv[i], "defs") ||
+        !strcmp(argv[i], "-flto") ||
         !strcmp(argv[i], "-pedantic") ||
         !strcmp(argv[i], "-nostdinc") ||
         !strcmp(argv[i], "-mno-red-zone") ||
@@ -739,7 +741,7 @@ static void run_cc1(int argc, char **argv, char *input, char *output)
     args[argc++] = "-cc1-output";
     args[argc++] = output;
   }
-  // only to compile VLC if not it failed without these definitions set up
+
   run_subprocess(args);
   free(args);
 }
@@ -876,8 +878,9 @@ static void cc1(void)
 
   // Tokenize and parse.
   Token *tok2 = must_tokenize_file(base_file);
+  bool isReadLine = false;
   tok = append_tokens(tok, tok2);
-  tok = preprocess(tok);
+  tok = preprocess(tok, isReadLine);
 
   // If -M or -MD are given, print file dependencies.
   if (opt_M || opt_MD)
