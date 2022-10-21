@@ -30,7 +30,7 @@
 #endif
 
 #define PRODUCT "chibicc"
-#define VERSION "1.0.13"
+#define VERSION "1.0.14"
 #define MAXLEN 101
 #define DEFAULT_TARGET_MACHINE "x86_64-linux-gnu"
 
@@ -556,9 +556,3 @@ extern bool isDotfile;
 extern bool isDebug;
 extern char *extract_filename(char *tmpl);
 extern char *extract_path(char *tmpl, char *basename);
-
-//
-// sanitize.c
-//
-void spc_sanitize_environment(void);
-int validateArgs(int argc, char **argv);

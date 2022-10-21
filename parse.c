@@ -708,7 +708,7 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
 
     //  provisory fix for static_assert outside a function caused issue with chibicc
     //  issue #120 not sure why it works only inside a function, gcc compiles than even if static_assert is outside a function
-    if (equal(tok->next, "==") || equal(tok, "(") || equal(tok, "sizeof") || equal(tok, "_Alignof"))
+    if (equal(tok->next, "==") || equal(tok, "sizeof") || equal(tok, "_Alignof"))
     {
       Node *node = expr(&tok, tok);
       *rest = tok;

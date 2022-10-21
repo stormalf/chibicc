@@ -1,8 +1,6 @@
 #include "chibicc.h"
 #define MAIN_C "main.c"
 
-extern char **environ;
-
 typedef enum
 {
   FILE_NONE,
@@ -10,7 +8,7 @@ typedef enum
   FILE_ASM,
   FILE_OBJ,
   FILE_AR,
-  FILE_DSO
+  FILE_DSO,
 } FileType;
 
 StringArray include_paths;
@@ -109,7 +107,9 @@ static void add_default_include_paths(char *argv0)
 
   // Keep a copy of the standard include paths for -MMD option.
   for (int i = 0; i < include_paths.len; i++)
+  {
     strarray_push(&std_include_paths, include_paths.data[i]);
+  }
 }
 
 static void define(char *str)
@@ -276,9 +276,13 @@ static void parse_args(int argc, char **argv)
       continue;
     }
 
+    // sometimes we can have -I dir or -Idir
     if (!strncmp(argv[i], "-I", 2))
     {
-      strarray_push(&include_paths, argv[i] + 2);
+      if (strlen(argv[i]) == 2)
+        strarray_push(&include_paths, argv[++i]);
+      else
+        strarray_push(&include_paths, argv[i] + 2);
       continue;
     }
 
@@ -706,8 +710,6 @@ static void run_subprocess(char **argv)
 
   if (fork() == 0)
   {
-    // sanitize environment variables here only PATH and IFS.
-    spc_sanitize_environment();
 
     execvp(argv[0], argv);
     fprintf(stderr, "%s : in run_subprocess exec failed: %s: %s\n", MAIN_C, argv[0], strerror(errno));
@@ -1084,12 +1086,6 @@ int main(int argc, char **argv)
 {
   atexit(cleanup);
 
-  int isInvalidArg = validateArgs(argc, argv);
-  if (isInvalidArg == -1)
-  {
-    error("%s : in main Invalid parameter detected!", MAIN_C);
-    usage(-2);
-  }
   parse_args(argc, argv);
 
   // the parsing need to be done before trying to open the log file
