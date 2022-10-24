@@ -572,6 +572,7 @@ static void parse_args(int argc, char **argv)
         !strncmp(argv[i], "-W", 2) ||
         !strncmp(argv[i], "-g", 2) ||
         !strncmp(argv[i], "-std=", 5) ||
+        !strncmp(argv[i], "-std", 4) ||
         !strcmp(argv[i], "-ffreestanding") ||
         !strcmp(argv[i], "-fno-omit-frame-pointer") ||
         !strcmp(argv[i], "-fno-stack-protector") ||

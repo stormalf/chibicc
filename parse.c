@@ -3549,6 +3549,7 @@ static Node *generic_selection(Token **rest, Token *tok)
 static Node *primary(Token **rest, Token *tok)
 {
   Token *start = tok;
+
   if ((equal(tok, "(") && equal(tok->next, "{")))
   {
     // This is a GNU statement expresssion.
@@ -4028,6 +4029,7 @@ Obj *parse(Token *tok)
       tok = function(tok, basety, &attr);
       continue;
     }
+
     // Global variable
     tok = global_variable(tok, basety, &attr);
   }
