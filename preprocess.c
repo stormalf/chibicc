@@ -370,6 +370,7 @@ static CondIncl *push_cond_incl(Token *tok, bool included)
 
 static Macro *find_macro(Token *tok)
 {
+
   if (tok->kind != TK_IDENT)
     return NULL;
   return hashmap_get2(&macros, tok->loc, tok->len);
@@ -977,7 +978,7 @@ static Token *preprocess2(Token *tok)
   while (tok->kind != TK_EOF)
   {
 
-    // If it is a macro, expand it.
+    // // // If it is a macro, expand it.
     if (expand_macro(&tok, tok))
       continue;
 
@@ -1145,7 +1146,6 @@ static Token *preprocess2(Token *tok)
     }
     error_tok(tok, "%s: in preprocess2 : invalid preprocessor directive", PREPROCESS_C);
   }
-
   cur->next = tok;
   return head.next;
 }
@@ -1406,6 +1406,8 @@ static void join_adjacent_string_literals(Token *tok)
 Token *preprocess(Token *tok, bool isReadLine)
 {
   tok = preprocess2(tok);
+  // to manage issue with macro used before its definition. gcc allows it
+  tok = preprocess3(tok);
   if (cond_incl && !isReadLine)
     error_tok(cond_incl->tok, "%s: in preprocess : unterminated conditional directive", PREPROCESS_C);
   convert_pp_tokens(tok);
@@ -1414,4 +1416,28 @@ Token *preprocess(Token *tok, bool isReadLine)
   for (Token *t = tok; t; t = t->next)
     t->line_no += abs(t->line_delta); // fixing issue with negative number that caused assembly issue
   return tok;
+}
+
+// a temp fix to manage the fact that gcc allows that a macro was defined after their use. See issue124.c for more details
+Token *preprocess3(Token *tok)
+{
+  Token head = {};
+  Token *cur = &head;
+  // Token *start = tok;
+
+  while (tok->kind != TK_EOF)
+  {
+
+    Macro *m = find_macro(tok);
+    if (m != NULL && m->body->len == 0)
+    {
+      if (expand_macro(&tok, tok))
+        continue;
+    }
+    cur = cur->next = tok;
+    tok = tok->next;
+  }
+
+  cur->next = tok;
+  return head.next;
 }

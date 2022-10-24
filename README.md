@@ -374,7 +374,7 @@ util-linux : https://github.com/util-linux/util-linux.git
     - issue #122 in util_linux compilation it fails during assembly "file number less than 0" when #line generates negative number
     - issue #123 in util_linux compilation fails with regex when a local variable in arguments it's used for another argument.
            extern int regexec(..., size_t __nmatch,...   regmatch_t __pmatch[_Restrict_arr_  _REGEX_NELTS(__nmatch)],...
-
+    - issue #124 some macro defined after their used caused issue with chibicc. gcc allows it. 
 
 ## debug
 
@@ -404,7 +404,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.14 Removing sanitizing functions, causing issue during git compile. Fixing issue caused by fix issue 120. Fixing issue with -I \<dir\>.
+1.0.14 Removing sanitizing functions, causing issue during git compile. Fixing issue caused by fix issue 120. Fixing issue with -I \<dir\>. Fixing also the preprocess when some macros are defined after they are used, gcc allows it. For now the temporary fix manages only macro with empty body that they are used before their definition.
 
 
 
