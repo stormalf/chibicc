@@ -187,7 +187,6 @@ static VarScope *find_var(Token *tok)
 {
   for (Scope *sc = scope; sc; sc = sc->next)
   {
-    // printf("2======%s\n", tok->loc);
     VarScope *sc2 = hashmap_get2(&sc->vars, tok->loc, tok->len);
     if (sc2)
       return sc2;
@@ -716,7 +715,6 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
     }
 
     Type *ty2 = declspec(&tok, tok, NULL);
-    // printf("2======%s\n", tok->loc);
     ty2 = declarator(&tok, tok, ty2);
     Token *name = ty2->name;
 
@@ -832,7 +830,6 @@ static Type *declarator(Token **rest, Token *tok, Type *ty)
 
   Token *name = NULL;
   Token *name_pos = tok;
-  // printf("3======%s\n", tok->loc);
   if (tok->kind == TK_IDENT)
   {
     name = tok;
@@ -1081,6 +1078,18 @@ static Token *skip_excess_element(Token *tok)
   }
 
   assign(&tok, tok);
+  return tok;
+}
+
+// to skip old C style extra tokens
+// fix =====#126
+static Token *skip_excess_element2(Token *tok)
+{
+  if (!equal(tok, "{"))
+  {
+    tok = skip_excess_element2(tok->next);
+  }
+
   return tok;
 }
 
@@ -3334,7 +3343,6 @@ static Node *new_inc_dec(Node *node, Token *tok, int addend)
 //              | "--"
 static Node *postfix(Token **rest, Token *tok)
 {
-  // printf("=======%s\n", tok->loc);
   Node *node;
   if (equal(tok, "(") && is_typename(tok->next))
   {
@@ -3877,6 +3885,12 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
     fn->va_area = new_lvar("__va_area__", array_of(ty_char, 136));
   fn->alloca_bottom = new_lvar("__alloca_size__", pointer_to(ty_char));
 
+  // old c style with type parameters declared before the beginning of the function body "{"
+  // issue =====#126 for now workaround is to skip them
+  while (!equal(tok, "{"))
+  {
+    tok = skip_excess_element2(tok);
+  }
   tok = skip(tok, "{");
 
   // [https://www.sigbus.info/n1570#6.4.2.2p1] "__func__" is
