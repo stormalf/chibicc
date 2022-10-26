@@ -377,10 +377,16 @@ util-linux : https://github.com/util-linux/util-linux.git
     - issue #123 in util_linux compilation fails with regex when a local variable in arguments it's used for another argument.
            extern int regexec(..., size_t __nmatch,...   regmatch_t __pmatch[_Restrict_arr_  _REGEX_NELTS(__nmatch)],...
     - issue #124 some macro defined after their used caused issue with chibicc. gcc allows it. 
-    - issue #125 old C style with declaration argument type after the function parameters and before the beginning of the function body :
+    - issue #125 extended assembly not managed yet. First taken in account of extended assembly (basic one only one operand)
+    - issue #126 old C style with declaration argument type after the function parameters and before the beginning of the function body :
             size_t strlcpy(dst, src, siz) char *dst; const char *src; size_t siz; {...
             strlcpy.c:44:2: error:  char *dst;
                                     ^ tokenize.c: in skip : expected '{'
+    - issue #127 incorrect fix for old C style that cause issue later during linkage.
+    - issue #128 union initialized by an expression failed :
+            issues/issue127.c:49:     union sockaddr_u localaddr = lfdi->remoteaddr;
+                                                                 ^ tokenize.c: in skip : expected ','
+
 ## debug
 
 To debug with gdb don't forget to use the set follow-fork-mode child because chibicc creates a child job.
@@ -409,7 +415,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.14 Removing sanitizing functions, causing issue during git compile. Fixing issue caused by fix issue 120. Fixing issue with -I \<dir\>. Fixing also the preprocess when some macros are defined after they are used, gcc allows it. For now the temporary fix manages only macro with empty body that they are used before their definition. Fixing issue #125 about old C style skipping for now the extra tokens.
+1.0.14 Removing sanitizing functions, causing issue during git compile. Fixing issue caused by fix issue 120. Fixing issue with -I \<dir\>. Fixing also the preprocess when some macros are defined after they are used, gcc allows it. For now the temporary fix manages only macro with empty body that they are used before their definition. Fixing issue #126 about old C style skipping for now the extra tokens. Fixing issue #128 about union initialized by an expression. Fixing a basic extended assembly #125 (partially) for now only something like 	\__asm\__("bswapl %0" : "=r" (val) : "0" (val)); works (a lot of work to forecast to add other assembly possibilities step by step).
 
 
 
