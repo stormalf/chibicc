@@ -41,8 +41,7 @@ static void verror_at(char *filename, char *input, int line_no,
     end++;
 
   // Print out the line.
-  int errpos = (loc - line) + 1;
-  int indent = fprintf(stderr, "%s:%d:%d:\033[0;31m error: \033[0m", filename, line_no, errpos) - 10;
+  int indent = fprintf(stderr, "%s:%d: ", filename, line_no);
   fprintf(stderr, "%.*s\n", (int)(end - line), line);
 
   // Show the error message.

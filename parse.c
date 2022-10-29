@@ -21,13 +21,6 @@
 
 // Scope for local variables, global variables, typedefs
 // or enum constants
-typedef struct
-{
-  Obj *var;
-  Type *type_def;
-  Type *enum_ty;
-  int enum_val;
-} VarScope;
 
 // Represents a block scope.
 typedef struct Scope Scope;
@@ -161,7 +154,10 @@ static Token *parse_typedef(Token *tok, Type *basety);
 static bool is_function(Token *tok);
 static Token *function(Token *tok, Type *basety, VarAttr *attr);
 static Token *global_variable(Token *tok, Type *basety, VarAttr *attr);
-static void create_param_lvars(Type *param);
+static Type *func_params2(Token **rest, Token *tok, Type *ty);
+static void initializer3(Token **rest, Token *tok, Initializer *init);
+static Token *skip_excess_element2(Token *tok);
+static bool check_old_style(Token **rest, Token *tok, Type *ty);
 
 static int align_down(int n, int align)
 {
@@ -183,7 +179,7 @@ static void leave_scope(void)
 }
 
 // Find a variable by name.
-static VarScope *find_var(Token *tok)
+VarScope *find_var(Token *tok)
 {
   for (Scope *sc = scope; sc; sc = sc->next)
   {
@@ -694,7 +690,8 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
 
     if (cur != &head)
     {
-      tok = skip(tok, ",");
+      if (equal(tok, ","))
+        tok = skip(tok, ",");
     }
 
     if (equal(tok, "..."))
@@ -707,7 +704,8 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
 
     //  provisory fix for static_assert outside a function caused issue with chibicc
     //  issue #120 not sure why it works only inside a function, gcc compiles than even if static_assert is outside a function
-    if (equal(tok->next, "==") || equal(tok, "sizeof") || equal(tok, "_Alignof"))
+    // fixing also #121 with equal(tok, "(")
+    if (equal(tok->next, "==") || equal(tok, "(") || equal(tok, "sizeof") || equal(tok, "_Alignof"))
     {
       Node *node = expr(&tok, tok);
       *rest = tok;
@@ -782,6 +780,14 @@ static Type *array_dimensions(Token **rest, Token *tok, Type *ty)
 //             | ε
 static Type *type_suffix(Token **rest, Token *tok, Type *ty)
 {
+  bool is_old_style = false;
+  // fix issue =====#127 and issue =====#126 with old C style function
+  if (equal(tok, "(") && !is_typename(tok->next))
+  {
+    is_old_style = check_old_style(rest, tok, ty);
+    if (is_old_style)
+      return func_params2(rest, tok->next, ty);
+  }
 
   if (equal(tok, "("))
   {
@@ -924,7 +930,8 @@ static Type *enum_specifier(Token **rest, Token *tok)
   while (!consume_end(rest, tok))
   {
     if (i++ > 0)
-      tok = skip(tok, ",");
+      if (equal(tok, ","))
+        tok = skip(tok, ",");
 
     char *name = get_ident(tok);
     tok = tok->next;
@@ -1078,18 +1085,6 @@ static Token *skip_excess_element(Token *tok)
   }
 
   assign(&tok, tok);
-  return tok;
-}
-
-// to skip old C style extra tokens
-// fix =====#126
-static Token *skip_excess_element2(Token *tok)
-{
-  if (!equal(tok, "{"))
-  {
-    tok = skip_excess_element2(tok->next);
-  }
-
   return tok;
 }
 
@@ -1273,6 +1268,7 @@ static int count_array_init_elements(Token *tok, Type *ty)
 
   while (!consume_end(&tok, tok))
   {
+
     if (!first)
       tok = skip(tok, ",");
 
@@ -1414,7 +1410,8 @@ static void struct_initializer2(Token **rest, Token *tok, Initializer *init, Mem
     Token *start = tok;
 
     if (!first)
-      tok = skip(tok, ",");
+      if (equal(tok, ","))
+        tok = skip(tok, ",");
 
     first = false;
 
@@ -1466,9 +1463,32 @@ static void union_initializer(Token **rest, Token *tok, Initializer *init)
       consume(&tok, tok, ",");
     *rest = skip(tok, "}");
   }
+  else if (equal(tok->next, "->"))
+  {
+    initializer3(rest, tok, init->children[0]);
+    return;
+  }
   else
   {
     initializer2(rest, tok, init->children[0]);
+  }
+}
+
+// initializer = struct-> union
+static void initializer3(Token **rest, Token *tok, Initializer *init)
+{
+
+  if (init->ty->kind == TY_STRUCT)
+  {
+    Node *expr = assign(rest, tok);
+    add_type(expr);
+    if (expr->ty->kind == TY_STRUCT || expr->ty->kind == TY_UNION)
+    {
+      init->expr = expr;
+      return;
+    }
+
+    init->expr = assign(rest, tok);
   }
 }
 
@@ -1852,7 +1872,10 @@ static Node *asm_stmt(Token **rest, Token *tok)
   // extended assembly like asm ( assembler_template: output operands (optional) : input operands (optional) : list of clobbered registers (optional))
   if (equal(tok->next, ":"))
   {
-    error_tok(tok->next, "%s : in asm_stmt : extended assembly not managed yet!", PARSE_C);
+    node->asm_str = extended_asm(node, rest, tok);
+    if (!node->asm_str)
+      error_tok(tok, "%s: in asm_stmt : error during extended_asm function null returned!", PARSE_C);
+    return node;
   }
   node->asm_str = tok->str;
   *rest = skip(tok->next, ")");
@@ -3051,7 +3074,8 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
     while (!consume(&tok, tok, ";"))
     {
       if (!first)
-        tok = skip(tok, ",");
+        if (equal(tok, ","))
+          tok = skip(tok, ",");
 
       first = false;
 
@@ -3114,7 +3138,8 @@ static Token *attribute_list(Token *tok, Type *ty)
     while (!consume(&tok, tok, ")"))
     {
       if (!first)
-        tok = skip(tok, ",");
+        if (equal(tok, ","))
+          tok = skip(tok, ",");
       first = false;
 
       if (consume(&tok, tok, "packed"))
@@ -3451,7 +3476,8 @@ static Node *funcall(Token **rest, Token *tok, Node *fn)
   while (!equal(tok, ")"))
   {
     if (cur != &head)
-      tok = skip(tok, ",");
+      if (equal(tok, ","))
+        tok = skip(tok, ",");
 
     Node *arg = assign(&tok, tok);
     add_type(arg);
@@ -3515,7 +3541,8 @@ static Node *generic_selection(Token **rest, Token *tok)
 
   while (!consume(rest, tok, ")"))
   {
-    tok = skip(tok, ",");
+    if (equal(tok, ","))
+      tok = skip(tok, ",");
 
     if (equal(tok, "default"))
     {
@@ -3622,7 +3649,8 @@ static Node *primary(Token **rest, Token *tok)
   {
     tok = skip(tok->next, "(");
     Type *t1 = typename(&tok, tok);
-    tok = skip(tok, ",");
+    if (equal(tok, ","))
+      tok = skip(tok, ",");
     Type *t2 = typename(&tok, tok);
     *rest = skip(tok, ")");
     return new_num(is_compatible(t1, t2), start);
@@ -3646,9 +3674,11 @@ static Node *primary(Token **rest, Token *tok)
     Node *node = new_node(ND_CAS, tok);
     tok = skip(tok->next, "(");
     node->cas_addr = assign(&tok, tok);
-    tok = skip(tok, ",");
+    if (equal(tok, ","))
+      tok = skip(tok, ",");
     node->cas_old = assign(&tok, tok);
-    tok = skip(tok, ",");
+    if (equal(tok, ","))
+      tok = skip(tok, ",");
     node->cas_new = assign(&tok, tok);
     *rest = skip(tok, ")");
     return node;
@@ -3659,7 +3689,8 @@ static Node *primary(Token **rest, Token *tok)
     Node *node = new_node(ND_EXCH, tok);
     tok = skip(tok->next, "(");
     node->lhs = assign(&tok, tok);
-    tok = skip(tok, ",");
+    if (equal(tok, ","))
+      tok = skip(tok, ",");
     node->rhs = assign(&tok, tok);
     *rest = skip(tok, ")");
     return node;
@@ -3669,9 +3700,11 @@ static Node *primary(Token **rest, Token *tok)
   {
     tok = skip(tok->next, "(");
     Node *obj = new_unary(ND_DEREF, assign(&tok, tok), tok);
-    tok = skip(tok, ",");
+    if (equal(tok, ","))
+      tok = skip(tok, ",");
     Node *val = assign(&tok, tok);
-    tok = skip(tok, ",");
+    if (equal(tok, ","))
+      tok = skip(tok, ",");
     Node *node;
 
     if (equal(tok, "0"))
@@ -3760,7 +3793,8 @@ static Token *parse_typedef(Token *tok, Type *basety)
   while (!consume(&tok, tok, ";"))
   {
     if (!first)
-      tok = skip(tok, ",");
+      if (equal(tok, ","))
+        tok = skip(tok, ",");
     first = false;
 
     Type *ty = declarator(&tok, tok, basety);
@@ -3886,11 +3920,12 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   fn->alloca_bottom = new_lvar("__alloca_size__", pointer_to(ty_char));
 
   // old c style with type parameters declared before the beginning of the function body "{"
-  // issue =====#126 for now workaround is to skip them
+  // issue =====#126 we ignored the extra tokens they are dealt by func_params2 function
   while (!equal(tok, "{"))
   {
     tok = skip_excess_element2(tok);
   }
+
   tok = skip(tok, "{");
 
   // [https://www.sigbus.info/n1570#6.4.2.2p1] "__func__" is
@@ -4161,4 +4196,123 @@ char *nodekind2str(NodeKind kind)
   default:
     return "UNREACHABLE"; // Atomic e
   }
+}
+
+// this function manages the old C style parameters.
+static Type *func_params2(Token **rest, Token *tok, Type *ty)
+{
+
+  Type head = {};
+  Type *cur = &head;
+  bool is_variadic = false;
+  for (Token *t = tok; !equal(tok, ")"); t = t->next)
+    tok = t;
+
+  if (equal(tok, ")"))
+    tok = tok->next;
+
+  // for (Token *t = tok; t->kind != TK_EOF; t = t->next)
+  //   printf("3=======%s\n", t->loc);
+
+  while (!equal(tok, "{"))
+  {
+
+    if (cur != &head)
+    {
+      if (equal(tok, ";"))
+        tok = skip(tok, ";");
+    }
+
+    if (equal(tok, "..."))
+    {
+      is_variadic = true;
+      tok = tok->next;
+      skip(tok, ")");
+      break;
+    }
+
+    //  provisory fix for static_assert outside a function caused issue with chibicc
+    //  issue #120 not sure why it works only inside a function, gcc compiles than even if static_assert is outside a function
+    if (equal(tok->next, "==") || equal(tok, "sizeof") || equal(tok, "_Alignof"))
+    {
+      Node *node = expr(&tok, tok);
+      *rest = tok;
+      break;
+    }
+
+    Type *ty2 = declspec(&tok, tok, NULL);
+    ty2 = declarator(&tok, tok, ty2);
+    Token *name = ty2->name;
+
+    if (ty2->kind == TY_ARRAY)
+    {
+      // "array of T" is converted to "pointer to T" only in the parameter
+      // context. For example, *argv[] is converted to **argv by this.
+      ty2 = pointer_to(ty2->base);
+      ty2->name = name;
+    }
+    else if (ty2->kind == TY_FUNC)
+    {
+      // Likewise, a function is converted to a pointer to a function
+      // only in the parameter context.
+      ty2 = pointer_to(ty2);
+      ty2->name = name;
+    }
+    cur = cur->next = copy_type(ty2);
+  }
+
+  if (cur == &head)
+    is_variadic = true;
+
+  ty = func_type(ty);
+  ty->params = head.next;
+  ty->is_variadic = is_variadic;
+  *rest = tok;
+  for (Token *t = tok; !equal(tok, "{"); t = t->next)
+    tok = t;
+
+  return ty;
+}
+
+// to skip old C style extra tokens
+// fix =====#126
+static Token *skip_excess_element2(Token *tok)
+{
+  if (!equal(tok, "{"))
+  {
+    tok = skip_excess_element2(tok->next);
+  }
+
+  return tok;
+}
+
+// this function checks if we have an old C style function declaration
+static bool check_old_style(Token **rest, Token *tok, Type *ty)
+{
+
+  bool hasExtraTokens = false;
+  bool endArgFunc = false;
+
+  if (equal(tok->next, ")"))
+    return hasExtraTokens;
+
+  while (!equal(tok, "{"))
+  {
+
+    if (equal(tok, "..."))
+      break;
+
+    if (is_typename(tok))
+      break;
+
+    if (equal(tok, ")"))
+      if (!equal(tok->next, "{"))
+      {
+        hasExtraTokens = true;
+        break;
+      }
+
+    tok = tok->next;
+  }
+  return hasExtraTokens;
 }

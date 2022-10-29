@@ -81,7 +81,7 @@ static char *reg_dx(int sz)
   unreachable();
 }
 
-static char *reg_ax(int sz)
+char *reg_ax(int sz)
 {
   switch (sz)
   {
