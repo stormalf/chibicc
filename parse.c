@@ -154,8 +154,10 @@ static Token *parse_typedef(Token *tok, Type *basety);
 static bool is_function(Token *tok);
 static Token *function(Token *tok, Type *basety, VarAttr *attr);
 static Token *global_variable(Token *tok, Type *basety, VarAttr *attr);
-// static void create_param_lvars(Type *param);
+static Type *func_params2(Token **rest, Token *tok, Type *ty);
 static void initializer3(Token **rest, Token *tok, Initializer *init);
+static Token *skip_excess_element2(Token *tok);
+static bool check_old_style(Token **rest, Token *tok, Type *ty);
 
 static int align_down(int n, int align)
 {
@@ -702,7 +704,8 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
 
     //  provisory fix for static_assert outside a function caused issue with chibicc
     //  issue #120 not sure why it works only inside a function, gcc compiles than even if static_assert is outside a function
-    if (equal(tok->next, "==") || equal(tok, "sizeof") || equal(tok, "_Alignof"))
+    // fixing also #121 with equal(tok, "(")
+    if (equal(tok->next, "==") || equal(tok, "(") || equal(tok, "sizeof") || equal(tok, "_Alignof"))
     {
       Node *node = expr(&tok, tok);
       *rest = tok;
@@ -777,6 +780,14 @@ static Type *array_dimensions(Token **rest, Token *tok, Type *ty)
 //             | ε
 static Type *type_suffix(Token **rest, Token *tok, Type *ty)
 {
+  bool is_old_style = false;
+  // fix issue =====#127 and issue =====#126 with old C style function
+  if (equal(tok, "(") && !is_typename(tok->next))
+  {
+    is_old_style = check_old_style(rest, tok, ty);
+    if (is_old_style)
+      return func_params2(rest, tok->next, ty);
+  }
 
   if (equal(tok, "("))
   {
@@ -1074,18 +1085,6 @@ static Token *skip_excess_element(Token *tok)
   }
 
   assign(&tok, tok);
-  return tok;
-}
-
-// to skip old C style extra tokens
-// fix =====#126
-static Token *skip_excess_element2(Token *tok)
-{
-  if (!equal(tok, "{"))
-  {
-    tok = skip_excess_element2(tok->next);
-  }
-
   return tok;
 }
 
@@ -3921,19 +3920,11 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   fn->alloca_bottom = new_lvar("__alloca_size__", pointer_to(ty_char));
 
   // old c style with type parameters declared before the beginning of the function body "{"
-  // issue =====#126 for now workaround is to skip them
-  // while (!equal(tok, "{"))
-  // {
-  //   ty = declarator(&tok, tok, basety);
-  //   VarScope *sc = find_var(tok);
-  //   if (sc)
-  //   {
-  //     delete_var(tok);
-  //     enter_scope();
-  //     create_param_lvars(ty->params);
-  //   }
-  //   tok = skip_excess_element2(tok);
-  // }
+  // issue =====#126 we ignored the extra tokens they are dealt by func_params2 function
+  while (!equal(tok, "{"))
+  {
+    tok = skip_excess_element2(tok);
+  }
 
   tok = skip(tok, "{");
 
@@ -4205,4 +4196,123 @@ char *nodekind2str(NodeKind kind)
   default:
     return "UNREACHABLE"; // Atomic e
   }
+}
+
+// this function manages the old C style parameters.
+static Type *func_params2(Token **rest, Token *tok, Type *ty)
+{
+
+  Type head = {};
+  Type *cur = &head;
+  bool is_variadic = false;
+  for (Token *t = tok; !equal(tok, ")"); t = t->next)
+    tok = t;
+
+  if (equal(tok, ")"))
+    tok = tok->next;
+
+  // for (Token *t = tok; t->kind != TK_EOF; t = t->next)
+  //   printf("3=======%s\n", t->loc);
+
+  while (!equal(tok, "{"))
+  {
+
+    if (cur != &head)
+    {
+      if (equal(tok, ";"))
+        tok = skip(tok, ";");
+    }
+
+    if (equal(tok, "..."))
+    {
+      is_variadic = true;
+      tok = tok->next;
+      skip(tok, ")");
+      break;
+    }
+
+    //  provisory fix for static_assert outside a function caused issue with chibicc
+    //  issue #120 not sure why it works only inside a function, gcc compiles than even if static_assert is outside a function
+    if (equal(tok->next, "==") || equal(tok, "sizeof") || equal(tok, "_Alignof"))
+    {
+      Node *node = expr(&tok, tok);
+      *rest = tok;
+      break;
+    }
+
+    Type *ty2 = declspec(&tok, tok, NULL);
+    ty2 = declarator(&tok, tok, ty2);
+    Token *name = ty2->name;
+
+    if (ty2->kind == TY_ARRAY)
+    {
+      // "array of T" is converted to "pointer to T" only in the parameter
+      // context. For example, *argv[] is converted to **argv by this.
+      ty2 = pointer_to(ty2->base);
+      ty2->name = name;
+    }
+    else if (ty2->kind == TY_FUNC)
+    {
+      // Likewise, a function is converted to a pointer to a function
+      // only in the parameter context.
+      ty2 = pointer_to(ty2);
+      ty2->name = name;
+    }
+    cur = cur->next = copy_type(ty2);
+  }
+
+  if (cur == &head)
+    is_variadic = true;
+
+  ty = func_type(ty);
+  ty->params = head.next;
+  ty->is_variadic = is_variadic;
+  *rest = tok;
+  for (Token *t = tok; !equal(tok, "{"); t = t->next)
+    tok = t;
+
+  return ty;
+}
+
+// to skip old C style extra tokens
+// fix =====#126
+static Token *skip_excess_element2(Token *tok)
+{
+  if (!equal(tok, "{"))
+  {
+    tok = skip_excess_element2(tok->next);
+  }
+
+  return tok;
+}
+
+// this function checks if we have an old C style function declaration
+static bool check_old_style(Token **rest, Token *tok, Type *ty)
+{
+
+  bool hasExtraTokens = false;
+  bool endArgFunc = false;
+
+  if (equal(tok->next, ")"))
+    return hasExtraTokens;
+
+  while (!equal(tok, "{"))
+  {
+
+    if (equal(tok, "..."))
+      break;
+
+    if (is_typename(tok))
+      break;
+
+    if (equal(tok, ")"))
+      if (!equal(tok->next, "{"))
+      {
+        hasExtraTokens = true;
+        break;
+      }
+
+    tok = tok->next;
+  }
+  return hasExtraTokens;
 }
