@@ -33,7 +33,7 @@ test: $(TESTS)
 # #for managing dot diagram
 # test-png: $(TESTS)
 	
-test-all: test test-stage2
+test-all: test test-stage2 projects
 
 # Stage 2
 
@@ -52,6 +52,18 @@ stage2/test/%.exe: stage2/$(OBJECT) test/%.c
 test-stage2: $(TESTS:test/%=stage2/test/%)
 	for i in $^; do echo $$i; ./$$i || exit 1; echo; done
 	test/driver.sh ./stage2/$(OBJECT)
+
+projects: curl zlib nmap
+
+curl:
+	cd ../curl && make clean && make
+
+zlib:
+	cd ../curl && make clean && make
+
+nmap:
+	cd ../nmap && make clean && make	
+
 
 # Misc.
 
