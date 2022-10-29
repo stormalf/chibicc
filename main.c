@@ -581,6 +581,7 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-m32") ||
         !strcmp(argv[i], "--whole-archive") ||
         !strcmp(argv[i], "--no-whole-archive") ||
+        !strcmp(argv[i], "-fsigned-char") ||
         !strcmp(argv[i], "-Bsymbolic") ||
         !strcmp(argv[i], "-z") ||
         !strcmp(argv[i], "defs") ||
