@@ -689,10 +689,7 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
   {
 
     if (cur != &head)
-    {
-      if (equal(tok, ","))
-        tok = skip(tok, ",");
-    }
+      tok = skip(tok, ",");
 
     if (equal(tok, "..."))
     {
@@ -828,8 +825,7 @@ static Type *declarator(Token **rest, Token *tok, Type *ty)
     Token *start = tok;
     Type dummy = {};
     declarator(&tok, start->next, &dummy);
-    if (equal(tok, ")"))
-      tok = skip(tok, ")");
+    tok = skip(tok, ")");
     ty = type_suffix(rest, tok, ty);
     return declarator(&tok, start->next, ty);
   }
@@ -857,8 +853,7 @@ static Type *abstract_declarator(Token **rest, Token *tok, Type *ty)
     Token *start = tok;
     Type dummy = {};
     abstract_declarator(&tok, start->next, &dummy);
-    if (equal(tok, ")"))
-      tok = skip(tok, ")");
+    tok = skip(tok, ")");
     ty = type_suffix(rest, tok, ty);
     return abstract_declarator(&tok, start->next, ty);
   }
@@ -930,8 +925,7 @@ static Type *enum_specifier(Token **rest, Token *tok)
   while (!consume_end(rest, tok))
   {
     if (i++ > 0)
-      if (equal(tok, ","))
-        tok = skip(tok, ",");
+      tok = skip(tok, ",");
 
     char *name = get_ident(tok);
     tok = tok->next;
@@ -1410,8 +1404,7 @@ static void struct_initializer2(Token **rest, Token *tok, Initializer *init, Mem
     Token *start = tok;
 
     if (!first)
-      if (equal(tok, ","))
-        tok = skip(tok, ",");
+      tok = skip(tok, ",");
 
     first = false;
 
@@ -3074,8 +3067,7 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
     while (!consume(&tok, tok, ";"))
     {
       if (!first)
-        if (equal(tok, ","))
-          tok = skip(tok, ",");
+        tok = skip(tok, ",");
 
       first = false;
 
@@ -3138,8 +3130,7 @@ static Token *attribute_list(Token *tok, Type *ty)
     while (!consume(&tok, tok, ")"))
     {
       if (!first)
-        if (equal(tok, ","))
-          tok = skip(tok, ",");
+        tok = skip(tok, ",");
       first = false;
 
       if (consume(&tok, tok, "packed"))
@@ -3476,8 +3467,7 @@ static Node *funcall(Token **rest, Token *tok, Node *fn)
   while (!equal(tok, ")"))
   {
     if (cur != &head)
-      if (equal(tok, ","))
-        tok = skip(tok, ",");
+      tok = skip(tok, ",");
 
     Node *arg = assign(&tok, tok);
     add_type(arg);
@@ -3541,8 +3531,7 @@ static Node *generic_selection(Token **rest, Token *tok)
 
   while (!consume(rest, tok, ")"))
   {
-    if (equal(tok, ","))
-      tok = skip(tok, ",");
+    tok = skip(tok, ",");
 
     if (equal(tok, "default"))
     {
@@ -3674,11 +3663,9 @@ static Node *primary(Token **rest, Token *tok)
     Node *node = new_node(ND_CAS, tok);
     tok = skip(tok->next, "(");
     node->cas_addr = assign(&tok, tok);
-    if (equal(tok, ","))
-      tok = skip(tok, ",");
+    tok = skip(tok, ",");
     node->cas_old = assign(&tok, tok);
-    if (equal(tok, ","))
-      tok = skip(tok, ",");
+    tok = skip(tok, ",");
     node->cas_new = assign(&tok, tok);
     *rest = skip(tok, ")");
     return node;
@@ -3689,8 +3676,7 @@ static Node *primary(Token **rest, Token *tok)
     Node *node = new_node(ND_EXCH, tok);
     tok = skip(tok->next, "(");
     node->lhs = assign(&tok, tok);
-    if (equal(tok, ","))
-      tok = skip(tok, ",");
+    tok = skip(tok, ",");
     node->rhs = assign(&tok, tok);
     *rest = skip(tok, ")");
     return node;
@@ -3700,11 +3686,9 @@ static Node *primary(Token **rest, Token *tok)
   {
     tok = skip(tok->next, "(");
     Node *obj = new_unary(ND_DEREF, assign(&tok, tok), tok);
-    if (equal(tok, ","))
-      tok = skip(tok, ",");
+    tok = skip(tok, ",");
     Node *val = assign(&tok, tok);
-    if (equal(tok, ","))
-      tok = skip(tok, ",");
+    tok = skip(tok, ",");
     Node *node;
 
     if (equal(tok, "0"))
@@ -3793,8 +3777,7 @@ static Token *parse_typedef(Token *tok, Type *basety)
   while (!consume(&tok, tok, ";"))
   {
     if (!first)
-      if (equal(tok, ","))
-        tok = skip(tok, ",");
+      tok = skip(tok, ",");
     first = false;
 
     Type *ty = declarator(&tok, tok, basety);
@@ -3952,8 +3935,7 @@ static Token *global_variable(Token *tok, Type *basety, VarAttr *attr)
   while (!consume(&tok, tok, ";"))
   {
     if (!first)
-      if (equal(tok, ","))
-        tok = skip(tok, ",");
+      tok = skip(tok, ",");
     first = false;
 
     Type *ty = declarator(&tok, tok, basety);
@@ -4218,10 +4200,7 @@ static Type *func_params2(Token **rest, Token *tok, Type *ty)
   {
 
     if (cur != &head)
-    {
-      if (equal(tok, ";"))
-        tok = skip(tok, ";");
-    }
+      tok = skip(tok, ";");
 
     if (equal(tok, "..."))
     {
@@ -4291,7 +4270,6 @@ static bool check_old_style(Token **rest, Token *tok, Type *ty)
 {
 
   bool hasExtraTokens = false;
-  bool endArgFunc = false;
 
   if (equal(tok->next, ")"))
     return hasExtraTokens;
