@@ -158,6 +158,7 @@ static Type *func_params2(Token **rest, Token *tok, Type *ty);
 static void initializer3(Token **rest, Token *tok, Initializer *init);
 static Token *skip_excess_element2(Token *tok);
 static bool check_old_style(Token **rest, Token *tok, Type *ty);
+static bool is_expression(Token **rest, Token *tok, Type *ty);
 
 static int align_down(int n, int align)
 {
@@ -674,8 +675,6 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
 static Type *func_params(Token **rest, Token *tok, Type *ty)
 {
 
-  // if (isDebug && f != NULL)
-  //   print_debug_tokens(PARSE_C, "func_params", tok);
   if (equal(tok, "void") && equal(tok->next, ")"))
   {
     *rest = tok->next->next;
@@ -685,6 +684,7 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
   Type head = {};
   Type *cur = &head;
   bool is_variadic = false;
+
   while (!equal(tok, ")"))
   {
 
@@ -702,7 +702,8 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
     //  provisory fix for static_assert outside a function caused issue with chibicc
     //  issue #120 not sure why it works only inside a function, gcc compiles than even if static_assert is outside a function
     // fixing also #121 with equal(tok, "(")
-    if (equal(tok->next, "==") || equal(tok, "(") || equal(tok, "sizeof") || equal(tok, "_Alignof"))
+    // but fix 121 caused other issues with other function and not only _Static_assert function
+    if (equal(tok->next, "==") || (equal(tok, "(") && is_expression(rest, tok, ty)) || equal(tok, "sizeof") || equal(tok, "_Alignof"))
     {
       Node *node = expr(&tok, tok);
       *rest = tok;
@@ -1490,6 +1491,7 @@ static void initializer3(Token **rest, Token *tok, Initializer *init)
 //             | assign
 static void initializer2(Token **rest, Token *tok, Initializer *init)
 {
+
   // trying to fix issue #62
   if (equal(tok, ","))
     return;
@@ -4193,14 +4195,17 @@ static Type *func_params2(Token **rest, Token *tok, Type *ty)
   if (equal(tok, ")"))
     tok = tok->next;
 
-  // for (Token *t = tok; t->kind != TK_EOF; t = t->next)
-  //   printf("3=======%s\n", t->loc);
-
   while (!equal(tok, "{"))
   {
 
     if (cur != &head)
-      tok = skip(tok, ";");
+    {
+      // fixing ISS-133 workaround for now
+      if (equal(tok, ";"))
+        tok = skip(tok, ";");
+      else if (equal(tok, ","))
+        tok = skip(tok, ",");
+    }
 
     if (equal(tok, "..."))
     {
@@ -4212,7 +4217,8 @@ static Type *func_params2(Token **rest, Token *tok, Type *ty)
 
     //  provisory fix for static_assert outside a function caused issue with chibicc
     //  issue #120 not sure why it works only inside a function, gcc compiles than even if static_assert is outside a function
-    if (equal(tok->next, "==") || equal(tok, "sizeof") || equal(tok, "_Alignof"))
+    // fixing also #121 with equal(tok, "(")
+    if (equal(tok->next, "==") || (equal(tok, "(") && is_expression(rest, tok, ty)) || equal(tok, "sizeof") || equal(tok, "_Alignof"))
     {
       Node *node = expr(&tok, tok);
       *rest = tok;
@@ -4238,6 +4244,8 @@ static Type *func_params2(Token **rest, Token *tok, Type *ty)
       ty2->name = name;
     }
     cur = cur->next = copy_type(ty2);
+    // fixing ======issue#134 with wrong number of parameters when old C functions
+    tok = tok->next;
   }
 
   if (cur == &head)
@@ -4247,8 +4255,9 @@ static Type *func_params2(Token **rest, Token *tok, Type *ty)
   ty->params = head.next;
   ty->is_variadic = is_variadic;
   *rest = tok;
-  for (Token *t = tok; !equal(tok, "{"); t = t->next)
-    tok = t;
+
+  // for (Token *t = tok; !equal(tok, "{"); t = t->next)
+  //   tok = t;
 
   return ty;
 }
@@ -4269,10 +4278,8 @@ static Token *skip_excess_element2(Token *tok)
 static bool check_old_style(Token **rest, Token *tok, Type *ty)
 {
 
-  bool hasExtraTokens = false;
-
   if (equal(tok->next, ")"))
-    return hasExtraTokens;
+    return false;
 
   while (!equal(tok, "{"))
   {
@@ -4285,12 +4292,25 @@ static bool check_old_style(Token **rest, Token *tok, Type *ty)
 
     if (equal(tok, ")"))
       if (!equal(tok->next, "{"))
-      {
-        hasExtraTokens = true;
-        break;
-      }
+        return true;
 
     tok = tok->next;
   }
-  return hasExtraTokens;
+  return false;
+}
+
+// returns true if it's an expression
+static bool is_expression(Token **rest, Token *tok, Type *ty)
+{
+  while (!equal(tok, "{"))
+  {
+    if (equal(tok, "&"))
+      return true;
+
+    if (equal(tok, "^"))
+      return true;
+    tok = tok->next;
+  }
+
+  return false;
 }
