@@ -205,7 +205,6 @@ List of options ignored :
     "-m32"
     "--whole-archive"
     "--no-whole-archive"
-    "-fsigned-char"
     "-Bsymbolic"
     "-z"
     "defs"
@@ -300,6 +299,13 @@ git: https://github.com/git/git.git
     CC=chibicc CFLAGS=-fPIC ./configure
     make
 
+nmap: https://github.com/nmap/nmap.git
+
+    CC=chibicc CFLAGS=-fPIC ./configure
+    make
+    ...
+    chibicc -o ncat -fPIC   ncat_main.o ncat_connect.o ncat_core.o ncat_posix.o ncat_listen.o ncat_proxy.o ncat_ssl.o base64.o http.o util.o sys_wrap.o http_digest.o ncat_lua.o ../nsock/src/libnsock.a ../nbase/libnbase.a -lssl -lcrypto -lpcap ./../liblua/liblua.a -lm
+    make[1]: Leaving directory '../nmap/ncat'
 
 ## Limits
 
@@ -415,7 +421,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.14 Removing sanitizing functions, causing issue during git compile. Fixing issue caused by fix issue 120. Fixing issue with -I \<dir\>. Fixing also the preprocess when some macros are defined after they are used, gcc allows it. For now the temporary fix manages only macro with empty body that they are used before their definition. Fixing issue #126 about old C style skipping for now the extra tokens. Fixing issue #128 about union initialized by an expression. Fixing a basic extended assembly #125 (partially) for now only something like 	\__asm\__("bswapl %0" : "=r" (val) : "0" (val)); works (a lot of work to forecast to add other assembly possibilities step by step).
+1.0.14 Removing sanitizing functions, causing issue during git compile. Fixing issue caused by fix issue 120. Fixing issue with -I \<dir\>. Fixing also the preprocess when some macros are defined after they are used, gcc allows it. For now the temporary fix manages only macro with empty body that they are used before their definition. Fixing issue #126 about old C style skipping for now the extra tokens. Fixing issue #128 about union initialized by an expression. Fixing a basic extended assembly #125 (partially) for now only something like 	\__asm\__("bswapl %0" : "=r" (val) : "0" (val)); works (a lot of work to forecast to add other assembly possibilities step by step). Fixing #127(#126) more securely (ignoring was not enough causing issue during linkage). Fixing a mistake on removing the fix for issue #121 that caused an infinite loop.
 
 
 

@@ -1,0 +1,1 @@
+# needed to have the diagram folder empty into git
