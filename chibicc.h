@@ -366,9 +366,18 @@ struct Node
   int unique_number;
 };
 
+typedef struct
+{
+  Obj *var;
+  Type *type_def;
+  Type *enum_ty;
+  int enum_val;
+} VarScope;
+
 Node *new_cast(Node *expr, Type *ty);
 int64_t const_expr(Token **rest, Token *tok);
 Obj *parse(Token *tok);
+VarScope *find_var(Token *tok);
 
 extern bool opt_fbuiltin;
 //
@@ -499,6 +508,7 @@ void print_debug_tokens(char *currentfilename, char *function, Token *tok);
 
 void codegen(Obj *prog, FILE *out);
 int align_to(int n, int align);
+char *reg_ax(int sz);
 
 //
 // unicode.c
@@ -557,3 +567,13 @@ extern bool isDotfile;
 extern bool isDebug;
 extern char *extract_filename(char *tmpl);
 extern char *extract_path(char *tmpl, char *basename);
+
+//
+// extended_asm.c
+//
+
+char *extended_asm(Node *node, Token **rest, Token *tok);
+char *output_asm(Node *node, Token **rest, Token *tok);
+char *input_asm(Node *node, Token **rest, Token *tok);
+char *subst_asm(char *template, char *output_str, char *input_str);
+char *string_replace(char *str, char *oldstr, char *newstr);

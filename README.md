@@ -205,7 +205,6 @@ List of options ignored :
     "-m32"
     "--whole-archive"
     "--no-whole-archive"
-    "-fsigned-char"
     "-Bsymbolic"
     "-z"
     "defs"
@@ -300,6 +299,13 @@ git: https://github.com/git/git.git
     CC=chibicc CFLAGS=-fPIC ./configure
     make
 
+nmap: https://github.com/nmap/nmap.git
+
+    CC=chibicc CFLAGS=-fPIC ./configure
+    make
+    ...
+    chibicc -o ncat -fPIC   ncat_main.o ncat_connect.o ncat_core.o ncat_posix.o ncat_listen.o ncat_proxy.o ncat_ssl.o base64.o http.o util.o sys_wrap.o http_digest.o ncat_lua.o ../nsock/src/libnsock.a ../nbase/libnbase.a -lssl -lcrypto -lpcap ./../liblua/liblua.a -lm
+    make[1]: Leaving directory '../nmap/ncat'
 
 ## Limits
 
@@ -377,10 +383,16 @@ util-linux : https://github.com/util-linux/util-linux.git
     - issue #123 in util_linux compilation fails with regex when a local variable in arguments it's used for another argument.
            extern int regexec(..., size_t __nmatch,...   regmatch_t __pmatch[_Restrict_arr_  _REGEX_NELTS(__nmatch)],...
     - issue #124 some macro defined after their used caused issue with chibicc. gcc allows it. 
-    - issue #125 old C style with declaration argument type after the function parameters and before the beginning of the function body :
+    - issue #125 extended assembly not managed yet. First taken in account of extended assembly (basic one only one operand)
+    - issue #126 old C style with declaration argument type after the function parameters and before the beginning of the function body :
             size_t strlcpy(dst, src, siz) char *dst; const char *src; size_t siz; {...
             strlcpy.c:44:2: error:  char *dst;
                                     ^ tokenize.c: in skip : expected '{'
+    - issue #127 incorrect fix for old C style that cause issue later during linkage.
+    - issue #128 union initialized by an expression failed :
+            issues/issue127.c:49:     union sockaddr_u localaddr = lfdi->remoteaddr;
+                                                                 ^ tokenize.c: in skip : expected ','
+
 ## debug
 
 To debug with gdb don't forget to use the set follow-fork-mode child because chibicc creates a child job.
@@ -409,7 +421,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.14 Removing sanitizing functions, causing issue during git compile. Fixing issue caused by fix issue 120. Fixing issue with -I \<dir\>. Fixing also the preprocess when some macros are defined after they are used, gcc allows it. For now the temporary fix manages only macro with empty body that they are used before their definition. Fixing issue #125 about old C style skipping for now the extra tokens.
+1.0.14 Removing sanitizing functions, causing issue during git compile. Fixing issue caused by fix issue 120. Fixing issue with -I \<dir\>. Fixing also the preprocess when some macros are defined after they are used, gcc allows it. For now the temporary fix manages only macro with empty body that they are used before their definition. Fixing issue #126 about old C style skipping for now the extra tokens. Fixing issue #128 about union initialized by an expression. Fixing a basic extended assembly #125 (partially) for now only something like 	\__asm\__("bswapl %0" : "=r" (val) : "0" (val)); works (a lot of work to forecast to add other assembly possibilities step by step). Fixing #127(#126) more securely (ignoring was not enough causing issue during linkage). Fixing a mistake on removing the fix for issue #121 that caused an infinite loop.
 
 
 
