@@ -53,7 +53,10 @@ test-stage2: $(TESTS:test/%=stage2/test/%)
 	for i in $^; do echo $$i; ./$$i || exit 1; echo; done
 	test/driver.sh ./stage2/$(OBJECT)
 
-projects: curl zlib nmap
+projects-all: projects openssl util-linux
+
+projects: curl zlib nmap 
+
 
 curl:
 	cd ../curl && make clean && make
@@ -64,6 +67,11 @@ zlib:
 nmap:
 	cd ../nmap && make clean && make	
 
+openssl:
+	cd ../openssl && make clean && make
+
+util-linux:
+	cd ../util-linux && make clean && make
 
 # Misc.
 
@@ -78,4 +86,4 @@ clean:
 	rm -rf $(OBJECT) tmp* $(TESTS) test/*.s test/*.exe stage2 diagram/*.png test/*.dot $(OBJECTLIB)
 	find * -type f '(' -name '*~' -o -name '*.o' ')' -exec rm {} ';'
 
-.PHONY: test clean test-stage2 libchibicc
+.PHONY: test clean test-stage2 libchibicc projects projects-all test-all

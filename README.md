@@ -255,7 +255,6 @@ curl : https://github.com/curl/curl.git
         CCLD     curl
 
 openssl : https://github.com/openssl/openssl.git
-Very interesting project that helps to find some bugs (see issue from 108 to 118). It doesn't link well for now!
 
     CC=chibicc ./Configure
     
@@ -269,17 +268,6 @@ Very interesting project that helps to find some bugs (see issue from 108 to 118
 
     make
 
-    It fails for extended assembly :
-
-    chibicc  -Iinclude  -fPIC -pthread -m64 -Wall -O3 -DOPENSSL_BUILDING_OPENSSL -DNDEBUG   -c -o engines/afalg-dso-e_afalg.o engines/e_afalg.c
-    /usr/include/x86_64-linux-gnu/asm/swab.h:10:    __asm__("bswapl %0" : "=r" (val) : "0" (val));
-                                                                     ^ parse.c : in asm_stmt : extended assembly not managed yet!
-
-    Replace chibicc by gcc for compiling this one :
-
-    gcc  -Iinclude  -fPIC -pthread -m64 -Wall -O3 -DOPENSSL_BUILDING_OPENSSL -DNDEBUG   -c -o engines/afalg-dso-e_afalg.o engines/e_afalg.c
-
-    make
 
 openssh-portable : https://github.com/openssh/openssh-portable.git
 
@@ -307,6 +295,12 @@ nmap: https://github.com/nmap/nmap.git
     chibicc -o ncat -fPIC   ncat_main.o ncat_connect.o ncat_core.o ncat_posix.o ncat_listen.o ncat_proxy.o ncat_ssl.o base64.o http.o util.o sys_wrap.o http_digest.o ncat_lua.o ../nsock/src/libnsock.a ../nbase/libnbase.a -lssl -lcrypto -lpcap ./../liblua/liblua.a -lm
     make[1]: Leaving directory '../nmap/ncat'
 
+util-linux : https://github.com/util-linux/util-linux.git
+
+    ./autogen.sh
+    CC=chibicc CFLAGS=-fPIC ./configure
+
+
 ## Limits
 
 Some C projects doesn't compile for now. It helps to find some bugs and to try to fix them!
@@ -319,13 +313,6 @@ VLC : https://github.com/videolan/vlc.git
 
     VLC doesn't compile with chibicc because it has some extended assembly inline that are not managed yet. Even if for this part I'll try to use gcc it failed during linking with multiple definitions. If I use gcc to compile VLC it compiles fine. Perhaps mixing chibicc and gcc is not a great idea!
     
-util-linux : https://github.com/util-linux/util-linux.git
-
-    ./autogen.sh
-    CC=chibicc CFLAGS=-fPIC ./configure
-
-    It fails only on extended assembly. Compiling fine lots of tools like fdisk, setsid, kill, mount...
-
 
 ## TODO
 
@@ -365,8 +352,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.16  Fixing issue #133 with old C style function declaration when using comma separator for same variable type parameter declaration. Fixing also issue #136 (ISS-136) zlib project error with unknown extension. Fixing issue #134 (ISS-134) with parameter expression during zlib project.
-Fixing issue #131 (ISS-131) parsing issue when trying to compile nginx project caused by fix #121. Adding some projects to test in Makefile because sometimes some fixes cause side effects!
+1.0.17 Fixing ISS-129 need to manage output other than "=r".
 
 
 ## old release notes

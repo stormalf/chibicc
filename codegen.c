@@ -63,7 +63,7 @@ int align_to(int n, int align)
   return (n + align - 1) / align * align;
 }
 
-static char *reg_dx(int sz)
+char *reg_dx(int sz)
 {
   switch (sz)
   {
@@ -77,6 +77,24 @@ static char *reg_dx(int sz)
     return "%rdx";
   case 16:
     return "%rdx";
+  }
+  unreachable();
+}
+
+char *reg_cx(int sz)
+{
+  switch (sz)
+  {
+  case 1:
+    return "%cl";
+  case 2:
+    return "%cx";
+  case 4:
+    return "%ecx";
+  case 8:
+    return "%rcx";
+  case 16:
+    return "%rcx";
   }
   unreachable();
 }

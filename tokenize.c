@@ -126,7 +126,7 @@ static Token *new_token(TokenKind kind, char *start, char *end)
   return tok;
 }
 
-static bool startswith(char *p, char *q)
+bool startswith(char *p, char *q)
 {
   return strncmp(p, q, strlen(q)) == 0;
 }
