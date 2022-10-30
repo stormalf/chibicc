@@ -30,7 +30,7 @@
 #endif
 
 #define PRODUCT "chibicc"
-#define VERSION "1.0.16"
+#define VERSION "1.0.17"
 #define MAXLEN 101
 #define DEFAULT_TARGET_MACHINE "x86_64-linux-gnu"
 
@@ -170,6 +170,7 @@ File *new_file(char *name, int file_no, char *contents);
 Token *tokenize_string_literal(Token *tok, Type *basety);
 Token *tokenize(File *file);
 Token *tokenize_file(char *filename);
+bool startswith(char *p, char *q);
 
 #define unreachable() \
   error("internal error at %s:%d", __FILE__, __LINE__)
@@ -509,6 +510,9 @@ void print_debug_tokens(char *currentfilename, char *function, Token *tok);
 void codegen(Obj *prog, FILE *out);
 int align_to(int n, int align);
 char *reg_ax(int sz);
+char *reg_bx(int sz);
+char *reg_cx(int sz);
+char *reg_dx(int sz);
 
 //
 // unicode.c
@@ -577,3 +581,5 @@ char *output_asm(Node *node, Token **rest, Token *tok);
 char *input_asm(Node *node, Token **rest, Token *tok);
 char *subst_asm(char *template, char *output_str, char *input_str);
 char *string_replace(char *str, char *oldstr, char *newstr);
+char *generate_input_asm(char *input_str);
+bool check_template(char *template);
