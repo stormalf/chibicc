@@ -195,15 +195,17 @@ typedef struct Obj Obj;
 struct Obj
 {
   Obj *next;
-  char *name;    // Variable name
-  Type *ty;      // Type
-  Token *tok;    // representative token
-  bool is_local; // local or global/function
-  int align;     // alignment
+  char *name;     // Variable name
+  char *funcname; // function name
+  Type *ty;       // Type
+  Token *tok;     // representative token
+  bool is_local;  // local or global/function
+  int align;      // alignment
 
   // Local variable
   int offset;
-
+  int order;
+  int nbparm;
   // Global variable or function
   bool is_function;
   bool is_definition;
@@ -379,6 +381,7 @@ Node *new_cast(Node *expr, Type *ty);
 int64_t const_expr(Token **rest, Token *tok);
 Obj *parse(Token *tok);
 VarScope *find_var(Token *tok);
+Obj *find_func(char *name);
 
 extern bool opt_fbuiltin;
 //
@@ -408,11 +411,13 @@ typedef enum
 struct Type
 {
   TypeKind kind;
-  int size;         // sizeof() value
-  int align;        // alignment
-  bool is_unsigned; // unsigned or signed
-  bool is_atomic;   // true if _Atomic
-  Type *origin;     // for type compatibility check
+  int size;          // sizeof() value
+  int align;         // alignment
+  bool is_unsigned;  // unsigned or signed
+  bool is_atomic;    // true if _Atomic
+  bool is_pointer;   // true if it's a pointer
+  Type *pointertype; // store the pointer type int, char...
+  Type *origin;      // for type compatibility check
 
   // Pointer-to or array-of type. We intentionally use the same member
   // to represent pointer/array duality in C.
@@ -583,3 +588,12 @@ char *subst_asm(char *template, char *output_str, char *input_str);
 char *string_replace(char *str, char *oldstr, char *newstr);
 char *generate_input_asm(char *input_str);
 bool check_template(char *template);
+int search_output_index(char c);
+char *int_to_string(int i);
+int retrieve_parameter_order(int order, char *funcname);
+char *load_variable(int order);
+char *generate_output_asm(char *output_str);
+char *opcode(int size);
+char *update_register_size(char *reg, int size);
+char *retrieve_output_index_str(char letter);
+int retrieve_output_index(char letter);
