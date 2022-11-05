@@ -81,6 +81,24 @@ char *reg_dx(int sz)
   unreachable();
 }
 
+char *reg_bx(int sz)
+{
+  switch (sz)
+  {
+  case 1:
+    return "%bl";
+  case 2:
+    return "%bx";
+  case 4:
+    return "%ebx";
+  case 8:
+    return "%rbx";
+  case 16:
+    return "%rbx";
+  }
+  unreachable();
+}
+
 char *reg_cx(int sz)
 {
   switch (sz)
