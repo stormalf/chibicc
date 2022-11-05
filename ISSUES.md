@@ -67,4 +67,5 @@ List all issues found and fixed
         test/example.c:89: Byte *compr, *uncompr;
                                       ^ tokenize.c: in skip : expected ';'
     - issue #134 (ISS-134) with parameter expression during zlib project due to bug in func_params2.                                     
-    - issue #136 (ISS-136) zlib project error with unknown extension: main.c : in get_file_type : unknown file extension: libz.so.1.2.12                                      
+    - issue #136 (ISS-136) zlib project error with unknown extension: main.c : in get_file_type : unknown file extension: libz.so.1.2.12                             
+    - issue #139 (ISS-139) extended assembly compiling but execution doesn't return the correct result.

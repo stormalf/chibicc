@@ -79,6 +79,7 @@ struct InitDesg
   Obj *var;
 };
 
+static int order = 0;
 // All local variable instances created during parsing are
 // accumulated to this list.
 static Obj *locals;
@@ -371,11 +372,13 @@ static Obj *new_var(char *name, Type *ty)
   return var;
 }
 
-static Obj *new_lvar(char *name, Type *ty)
+static Obj *new_lvar(char *name, Type *ty, char *funcname)
 {
   Obj *var = new_var(name, ty);
   var->is_local = true;
   var->next = locals;
+  var->order = order;
+  var->funcname = funcname;
   locals = var;
   return var;
 }
@@ -665,7 +668,6 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     ty = copy_type(ty);
     ty->is_atomic = true;
   }
-
   *rest = tok;
   return ty;
 }
@@ -711,7 +713,14 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
     }
 
     Type *ty2 = declspec(&tok, tok, NULL);
+    Type *backup = ty2;
     ty2 = declarator(&tok, tok, ty2);
+    if (ty2->kind == TY_PTR)
+    {
+      ty2->is_pointer = true;
+      ty2->pointertype = backup;
+    }
+
     Token *name = ty2->name;
 
     if (ty2->kind == TY_ARRAY)
@@ -980,7 +989,7 @@ static Node *compute_vla_size(Type *ty, Token *tok)
   else
     base_sz = new_num(ty->base->size, tok);
 
-  ty->vla_size = new_lvar("", ty_ulong);
+  ty->vla_size = new_lvar("", ty_ulong, NULL);
 
   Node *expr = new_binary(ND_ASSIGN, new_var_node(ty->vla_size, tok),
                           new_binary(ND_MUL, ty->vla_len, base_sz, tok),
@@ -1038,7 +1047,7 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
       // Variable length arrays (VLAs) are translated to alloca() calls.
       // For example, `int x[n+2]` is translated to `tmp = n + 2,
       // x = alloca(tmp)`.
-      Obj *var = new_lvar(get_ident(ty->name), ty);
+      Obj *var = new_lvar(get_ident(ty->name), ty, NULL);
       Token *tok = ty->name;
       Node *expr = new_binary(ND_ASSIGN, new_vla_ptr(var, tok),
                               new_alloca(new_var_node(ty->vla_size, tok)),
@@ -1048,7 +1057,7 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
       continue;
     }
 
-    Obj *var = new_lvar(get_ident(ty->name), ty);
+    Obj *var = new_lvar(get_ident(ty->name), ty, NULL);
     if (attr && attr->align)
       var->align = attr->align;
 
@@ -2079,7 +2088,6 @@ static Node *stmt(Token **rest, Token *tok)
     cont_label = node->cont_label = new_unique_name();
 
     node->then = stmt(rest, tok);
-
     brk_label = brk;
     cont_label = cont;
     return node;
@@ -2095,7 +2103,6 @@ static Node *stmt(Token **rest, Token *tok)
     cont_label = node->cont_label = new_unique_name();
 
     node->then = stmt(&tok, tok->next);
-
     brk_label = brk;
     cont_label = cont;
 
@@ -2483,7 +2490,7 @@ static Node *to_assign(Node *binary)
   // Convert `A.x op= C` to `tmp = &A, (*tmp).x = (*tmp).x op C`.
   if (binary->lhs->kind == ND_MEMBER)
   {
-    Obj *var = new_lvar("", pointer_to(binary->lhs->lhs->ty));
+    Obj *var = new_lvar("", pointer_to(binary->lhs->lhs->ty), NULL);
     Node *expr1 = new_binary(ND_ASSIGN, new_var_node(var, tok),
                              new_unary(ND_ADDR, binary->lhs->lhs, tok), tok);
 
@@ -2518,10 +2525,10 @@ static Node *to_assign(Node *binary)
     Node head = {};
     Node *cur = &head;
 
-    Obj *addr = new_lvar("", pointer_to(binary->lhs->ty));
-    Obj *val = new_lvar("", binary->rhs->ty);
-    Obj *old = new_lvar("", binary->lhs->ty);
-    Obj *new = new_lvar("", binary->lhs->ty);
+    Obj *addr = new_lvar("", pointer_to(binary->lhs->ty), NULL);
+    Obj *val = new_lvar("", binary->rhs->ty, NULL);
+    Obj *old = new_lvar("", binary->lhs->ty, NULL);
+    Obj *new = new_lvar("", binary->lhs->ty, NULL);
     Obj *ret = binary->atomic_fetch ? old : new;
 
     cur = cur->next =
@@ -2570,7 +2577,7 @@ static Node *to_assign(Node *binary)
   }
 
   // Convert `A op= B` to ``tmp = &A, *tmp = *tmp op B`.
-  Obj *var = new_lvar("", pointer_to(binary->lhs->ty));
+  Obj *var = new_lvar("", pointer_to(binary->lhs->ty), NULL);
 
   Node *expr1 = new_binary(ND_ASSIGN, new_var_node(var, tok),
                            new_unary(ND_ADDR, binary->lhs, tok), tok);
@@ -2646,7 +2653,7 @@ static Node *conditional(Token **rest, Token *tok)
   {
     // [GNU] Compile `a ?: b` as `tmp = a, tmp ? tmp : b`.
     add_type(cond);
-    Obj *var = new_lvar("", cond->ty);
+    Obj *var = new_lvar("", cond->ty, NULL);
     Node *lhs = new_binary(ND_ASSIGN, new_var_node(var, tok), cond, tok);
     Node *rhs = new_node(ND_COND, tok);
     rhs->cond = new_var_node(var, tok);
@@ -3380,16 +3387,11 @@ static Node *postfix(Token **rest, Token *tok)
     }
     else
     {
-      Obj *var = new_lvar("", ty);
+      Obj *var = new_lvar("", ty, NULL);
       Node *lhs = lvar_initializer(&tok, tok, var);
       Node *rhs = new_var_node(var, tok);
       node = new_binary(ND_COMMA, lhs, rhs, start);
     }
-
-    // Obj *var = new_lvar("", ty);
-    // Node *lhs = lvar_initializer(rest, tok, var);
-    // Node *rhs = new_var_node(var, tok);
-    // return new_binary(ND_COMMA, lhs, rhs, start);
   }
   else
   {
@@ -3506,7 +3508,7 @@ static Node *funcall(Token **rest, Token *tok, Node *fn)
   // If a function returns a struct, it is caller's responsibility
   // to allocate a space for the return value.
   if (node->ty->kind == TY_STRUCT || node->ty->kind == TY_UNION)
-    node->ret_buffer = new_lvar("", node->ty);
+    node->ret_buffer = new_lvar("", node->ty, NULL);
   return node;
 }
 
@@ -3790,16 +3792,17 @@ static Token *parse_typedef(Token *tok, Type *basety)
   return tok;
 }
 
-static void create_param_lvars(Type *param)
+static void create_param_lvars(Type *param, char *funcname)
 {
 
   if (param)
   {
-    create_param_lvars(param->next);
+    create_param_lvars(param->next, funcname);
     if (!param->name)
       return;
     // error_tok(param->name_pos, "parameter name omitted");
-    new_lvar(get_ident(param->name), param);
+    new_lvar(get_ident(param->name), param, funcname);
+    order++;
   }
 }
 
@@ -3828,7 +3831,7 @@ static void resolve_goto_labels(void)
   gotos = labels = NULL;
 }
 
-static Obj *find_func(char *name)
+Obj *find_func(char *name)
 {
   Scope *sc = scope;
   while (sc->next)
@@ -3890,19 +3893,21 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   current_fn = fn;
   locals = NULL;
   enter_scope();
-  create_param_lvars(ty->params);
-
+  // if it's a pointer we don't know the size of the type of pointer int ? char ?
+  create_param_lvars(ty->params, name_str);
+  // store the number of function parameters to be used for extended assembly
+  fn->nbparm = order;
   // A buffer for a struct/union return value is passed
   // as the hidden first parameter.
   Type *rty = ty->return_ty;
   if ((rty->kind == TY_STRUCT || rty->kind == TY_UNION) && rty->size > 16)
-    new_lvar("", pointer_to(rty));
+    new_lvar("", pointer_to(rty), name_str);
 
   fn->params = locals;
 
   if (ty->is_variadic)
-    fn->va_area = new_lvar("__va_area__", array_of(ty_char, 136));
-  fn->alloca_bottom = new_lvar("__alloca_size__", pointer_to(ty_char));
+    fn->va_area = new_lvar("__va_area__", array_of(ty_char, 136), name_str);
+  fn->alloca_bottom = new_lvar("__alloca_size__", pointer_to(ty_char), name_str);
 
   // old c style with type parameters declared before the beginning of the function body "{"
   // issue =====#126 we ignored the extra tokens they are dealt by func_params2 function
@@ -3925,6 +3930,7 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
 
   fn->body = compound_stmt(&tok, tok);
   fn->locals = locals;
+  order = 0;
   leave_scope();
   resolve_goto_labels();
   return tok;
@@ -4062,7 +4068,6 @@ Obj *parse(Token *tok)
       tok = function(tok, basety, &attr);
       continue;
     }
-
     // Global variable
     tok = global_variable(tok, basety, &attr);
   }
@@ -4225,8 +4230,18 @@ static Type *func_params2(Token **rest, Token *tok, Type *ty)
       break;
     }
 
+    // Type *ty2 = declspec(&tok, tok, NULL);
+    // ty2 = declarator(&tok, tok, ty2);
+    // Token *name = ty2->name;
     Type *ty2 = declspec(&tok, tok, NULL);
+    Type *backup = ty2;
     ty2 = declarator(&tok, tok, ty2);
+    if (ty2->kind == TY_PTR)
+    {
+      ty2->is_pointer = true;
+      ty2->pointertype = backup;
+    }
+
     Token *name = ty2->name;
 
     if (ty2->kind == TY_ARRAY)
