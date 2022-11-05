@@ -33,7 +33,7 @@ test: $(TESTS)
 # #for managing dot diagram
 # test-png: $(TESTS)
 	
-test-all: test test-stage2 projects
+test-all: test test-stage2 
 
 # Stage 2
 
@@ -53,9 +53,9 @@ test-stage2: $(TESTS:test/%=stage2/test/%)
 	for i in $^; do echo $$i; ./$$i || exit 1; echo; done
 	test/driver.sh ./stage2/$(OBJECT)
 
-projects-all: projects openssl util-linux
+projects-all: projects openssl 
 
-projects: curl zlib nmap 
+projects: curl zlib nmap util-linux
 
 
 curl:

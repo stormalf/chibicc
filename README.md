@@ -352,7 +352,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.17 Fixing ISS-129 need to manage output other than "=r".
+1.0.17 Fixing ISS-129 need to manage output other than "=r". Fixing ISS-139 extended assembly compiling but execution doesn't return the correct result. 
 
 
 ## old release notes
