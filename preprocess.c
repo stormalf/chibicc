@@ -81,8 +81,12 @@ static CondIncl *cond_incl;
 static HashMap pragma_once;
 static int include_next_idx;
 
+//ISS-142
+extern bool opt_E;
+
 static Token *preprocess2(Token *tok);
 static Macro *find_macro(Token *tok);
+static void join_adjacent_string_literals(Token *tok);
 
 static bool is_hash(Token *tok)
 {
@@ -467,17 +471,18 @@ static MacroArg *read_macro_arg_one(Token **rest, Token *tok, bool read_rest)
 
     if (tok->kind == TK_EOF)
       error_tok(tok, "%s: in read_macro_arg_one : premature end of input", PREPROCESS_C);
+    
 
     if (equal(tok, "("))
       level++;
     else if (equal(tok, ")"))
       level--;
-
     cur = cur->next = copy_token(tok);
     tok = tok->next;
   }
 
   cur->next = new_eof(tok);
+
 
   MacroArg *arg = calloc(1, sizeof(MacroArg));
   if (arg == NULL)
@@ -786,9 +791,11 @@ static bool expand_macro(Token **rest, Token *tok)
   hs = hideset_union(hs, new_hideset(m->name));
   Token *body = subst(m->body, args);
   body = add_hideset(body, hs);
+  
   for (Token *t = body; t->kind != TK_EOF; t = t->next)
   {
     t->origin = macro_token;
+
   }
   *rest = append(body, tok->next);
   //#issue 108 not sure why but this corrupts some tokens "#" that are not recognized starting at beginning of the line.
@@ -1147,6 +1154,7 @@ static Token *preprocess2(Token *tok)
     error_tok(tok, "%s: in preprocess2 : invalid preprocessor directive", PREPROCESS_C);
   }
   cur->next = tok;
+
   return head.next;
 }
 
@@ -1366,9 +1374,11 @@ static void join_adjacent_string_literals(Token *tok)
       tok1 = tok1->next;
   }
 
+
   // Second pass: concatenate adjacent string literals.
   for (Token *tok1 = tok; tok1->kind != TK_EOF;)
   {
+
     if (tok1->kind != TK_STR || tok1->next->kind != TK_STR)
     {
       tok1 = tok1->next;
@@ -1400,6 +1410,7 @@ static void join_adjacent_string_literals(Token *tok)
     tok1->next = tok2;
     tok1 = tok2;
   }
+
 }
 
 // Entry point function of the preprocessor.
@@ -1408,13 +1419,18 @@ Token *preprocess(Token *tok, bool isReadLine)
   tok = preprocess2(tok);
   // to manage issue with macro used before its definition. gcc allows it
   tok = preprocess3(tok);
+
   if (cond_incl && !isReadLine)
     error_tok(cond_incl->tok, "%s: in preprocess : unterminated conditional directive", PREPROCESS_C);
   convert_pp_tokens(tok);
-  join_adjacent_string_literals(tok);
+  //ISS-142 temp fix 
+  if (!opt_E)
+    join_adjacent_string_literals(tok);
 
+  
   for (Token *t = tok; t; t = t->next)
     t->line_no += abs(t->line_delta); // fixing issue with negative number that caused assembly issue
+
   return tok;
 }
 
@@ -1427,7 +1443,6 @@ Token *preprocess3(Token *tok)
 
   while (tok->kind != TK_EOF)
   {
-
     Macro *m = find_macro(tok);
     if (m != NULL && m->body->len == 0)
     {
