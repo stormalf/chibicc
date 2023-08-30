@@ -70,3 +70,6 @@ List all issues found and fixed
     - issue #136 (ISS-136) zlib project error with unknown extension: main.c : in get_file_type : unknown file extension: libz.so.1.2.12                             
     - issue #139 (ISS-139) extended assembly compiling but execution doesn't return the correct result.
     - issue #142 (ISS-142) Preprocessor fail with nested macros. First temporary fix.
+    - adding install in makefile (#PR24 from rurban). 
+    - Adding ND_MOD in is_const_expr(#issue 134 from matthewsot). 
+    - Fixing incorrect small struct passing in 5th argument position (issue #127 from sgraham).
