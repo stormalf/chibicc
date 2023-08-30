@@ -1115,6 +1115,7 @@ static void gen_expr(Node *node)
     println("  call *%%r10");
     println("  add $%d, %%rsp", stack_args * 8);
 
+
     depth -= stack_args;
 
     // It looks like the most significant 48 or 56 bits in RAX may
@@ -1551,8 +1552,16 @@ static void assign_lvar_offsets(Obj *prog)
       {
       case TY_STRUCT:
       case TY_UNION:
-        if (ty->size <= 16)
-        {
+          if (ty->size <= 8) {
+            bool fp1 = has_flonum(ty, 0, 8, 0);
+            if (fp + fp1 < FP_MAX && gp + !fp1 < GP_MAX) {
+              fp = fp + fp1;
+              gp = gp + !fp1;
+              continue;
+            }
+          } else if (ty->size <= 16) {
+        //if (ty->size <= 16)
+        //{
           bool fp1 = has_flonum(ty, 0, 8, 0);
           bool fp2 = has_flonum(ty, 8, 16, 8);
           if (fp + fp1 + fp2 < FP_MAX && gp + !fp1 + !fp2 < GP_MAX)

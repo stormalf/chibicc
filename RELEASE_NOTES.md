@@ -48,3 +48,5 @@ Fixing issue #119 about cmathcalls. Removing fix for #119 caused an infinite loo
 
 1.0.16  Fixing issue #133 with old C style function declaration when using comma separator for same variable type parameter declaration. Fixing also issue #136 (ISS-136) zlib project error with unknown extension. Fixing issue #134 (ISS-134) with parameter expression during zlib project.
 Fixing issue #131 (ISS-131) parsing issue when trying to compile nginx project caused by fix #121. Adding some projects to test in Makefile because sometimes some fixes cause side effects!
+
+1.0.17 Fixing ISS-129 need to manage output other than "=r". Fixing ISS-139 extended assembly compiling but execution doesn't return the correct result. Fixing temporary ISS-142 caused by join_adjacent_string_literals function.
