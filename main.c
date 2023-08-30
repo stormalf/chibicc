@@ -1064,8 +1064,6 @@ static void run_linker(StringArray *inputs, char *output)
 
 static FileType get_file_type(char *filename)
 {
-  if (opt_x != FILE_NONE)
-    return opt_x;
 
   if (endswith(filename, ".a"))
     return FILE_AR;
@@ -1081,6 +1079,10 @@ static FileType get_file_type(char *filename)
     return FILE_ASM;
   if (endswith(filename, ".so.4"))
     return FILE_DSO;
+
+  if (opt_x != FILE_NONE)
+    return opt_x;
+
 
   error("%s : in get_file_type <command line>: unknown file extension: %s", MAIN_C, filename);
 }
