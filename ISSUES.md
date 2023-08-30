@@ -73,3 +73,4 @@ List all issues found and fixed
     - adding install in makefile (#PR24 from rurban). 
     - Adding ND_MOD in is_const_expr(#issue 134 from matthewsot). 
     - Fixing incorrect small struct passing in 5th argument position (issue #127 from sgraham).
+    - ISS-140 fixing compiling chibicc with chibicc tests failed with trying to parse the object.o file instead of linking only.
