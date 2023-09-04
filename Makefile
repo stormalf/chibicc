@@ -92,4 +92,7 @@ install:
 	sudo cp include/* /usr/local/include/x86_64-linux-gnu/chibicc/
 	sudo cp chibicc /usr/local/bin/chibicc
 
-.PHONY: test clean test-stage2 libchibicc projects projects-all test-all install
+uninstall:
+	sudo rm -rf	/usr/local/include/x86_64-linux-gnu/chibicc && sudo rm /usr/local/bin/chibicc
+
+.PHONY: test clean test-stage2 libchibicc projects projects-all test-all install uninstall

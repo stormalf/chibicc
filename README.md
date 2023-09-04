@@ -353,7 +353,7 @@ Example of diagram generated with -dotfile parameter :
 ## release notes
 
 
-1.0.18    adding install in makefile (#PR24 from rurban). Adding ND_MOD in is_const_expr(#issue 134 from matthewsot). Fixing incorrect small struct passing in 5th argument position (issue #127 from sgraham). Fixing ISS-140 compiling chibicc with chibicc tests failed with trying to parse the object.o file instead of linking only.
+1.0.18    adding install and uninstall in makefile (#PR24 from rurban). Adding ND_MOD in is_const_expr(#issue 134 from matthewsot). Fixing incorrect small struct passing in 5th argument position (issue #127 from sgraham). Fixing ISS-140 compiling chibicc with chibicc tests failed with trying to parse the object.o file instead of linking only.
 
 ## old release notes
 
