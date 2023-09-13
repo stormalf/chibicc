@@ -31,7 +31,7 @@
 #endif
 
 #define PRODUCT "chibicc"
-#define VERSION "1.0.18"
+#define VERSION "1.0.19"
 #define MAXLEN 101
 #define DEFAULT_TARGET_MACHINE "x86_64-linux-gnu"
 
@@ -521,6 +521,15 @@ char *reg_bx(int sz);
 char *reg_cx(int sz);
 char *reg_dx(int sz);
 void assign_lvar_offsets_assembly(Obj *fn);
+int add_register_used(char *regist);
+void clear_register_used();
+char *register32_to_64(char *regist);
+char *register16_to_64(char *regist);
+char *register8_to_64(char *regist);
+char *register_available();  
+char *specific_register_available(char *regist); 
+int check_register_used(char *regist);
+void check_register_in_template(char *template); 
 
 //
 // unicode.c
