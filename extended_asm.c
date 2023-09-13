@@ -133,15 +133,16 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
     asmExt->template->templatestr = template;
     asmExt->template->hasPercent = check_template(template);
     char *input_asm_str;
-    //char *output_str;
     char *output_loading;
-    //char *input_str;
     asmtype = 0;
     nbInput = 0;
     nbOutput = 0;
     nbClobber = 0;
     nbLabel = 0;
-    
+    //clear the registerUsed array
+    clear_register_used();
+    //mark the register used if found in template
+    check_register_in_template(template);
     
     while (!equal(tok->next, ";") && !equal(tok, ";"))
     {
@@ -223,7 +224,7 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
     asm_str = subst_asm(asm_str, " {", "%{");
     asm_str = subst_asm(asm_str, " |", "%|");
     asm_str = subst_asm(asm_str, " }", "%}");
-    
+    //printf("=====%s\n", asm_str);
     *rest = tok;
     // free memory
     for (int i = 0; i < 10; i++)
@@ -253,7 +254,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->output[nbOutput]->prefix = "=";
                 else
                     asmExt->output[nbOutput]->prefix = "+";
-                asmExt->output[nbOutput]->reg = "%rax";
+                asmExt->output[nbOutput]->reg = specific_register_available("%rax");
                 asmExt->output[nbOutput]->letter = 'r';
                 asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
                 
@@ -265,7 +266,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->output[nbOutput]->prefix = "=";
                 else
                     asmExt->output[nbOutput]->prefix = "+";
-                asmExt->output[nbOutput]->reg = "%rax";
+                asmExt->output[nbOutput]->reg = specific_register_available("%rax");
                 asmExt->output[nbOutput]->letter = 'm';
                 asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
                 
@@ -275,23 +276,23 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             {
                 if (!strncmp(tok->str, "=a", tok->len))
                 {
-                    asmExt->output[nbOutput]->reg = "%rax";
+                    asmExt->output[nbOutput]->reg = specific_register_available("%rax");
                     asmExt->output[nbOutput]->letter = 'a';
 
                 }
                 else if (!strncmp(tok->str, "=b", tok->len))
                 {
-                    asmExt->output[nbOutput]->reg = "%rbx";
+                    asmExt->output[nbOutput]->reg = specific_register_available("%rbx");
                     asmExt->output[nbOutput]->letter = 'b';
                 }
                 else if (!strncmp(tok->str, "=c", tok->len))
                 {
-                    asmExt->output[nbOutput]->reg = "%rcx";
+                    asmExt->output[nbOutput]->reg = specific_register_available("%rcx");
                     asmExt->output[nbOutput]->letter = 'c';
                 }
                 else if (!strncmp(tok->str, "=d", tok->len))
                 {
-                    asmExt->output[nbOutput]->reg = "%rdx";
+                    asmExt->output[nbOutput]->reg = specific_register_available("%rdx");
                     asmExt->output[nbOutput]->letter = 'd';
                 }
                 else
