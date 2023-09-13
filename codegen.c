@@ -14,6 +14,7 @@ static Obj *current_fn;
 
 static void gen_expr(Node *node);
 static void gen_stmt(Node *node);
+static void print_offset(Obj *prog);
 
 __attribute__((format(printf, 1, 2))) static void println(char *fmt, ...)
 {
@@ -1851,4 +1852,80 @@ void codegen(Obj *prog, FILE *out)
   assign_lvar_offsets(prog);
   emit_data(prog);
   emit_text(prog);
+  //print offset for each variable
+  if (isDebug)
+    print_offset(prog);
 }
+
+
+
+// Print offset.
+static void print_offset(Obj *prog)
+{
+  for (Obj *fn = prog; fn; fn = fn->next)
+  {
+
+      
+    for (Obj *var = fn->params; var; var = var->next)
+    {
+    printf("===== %s %s %d\n", fn->name, var->name, var->offset );
+    }
+    for (Obj *var = fn->locals; var; var = var->next)
+    {
+      printf("===== %s %s %d\n", fn->name, var->name, var->offset );
+      //update the function name if it's missing
+      if (!var->funcname)
+        var->funcname = fn->name;
+    }
+
+  }
+}
+
+
+//here the goal is to update offset for parameters and local variables to be able to use them when managing assembly inline
+void assign_lvar_offsets_assembly(Obj *fn)
+{
+    int top = 8;
+    int bottom = 0;
+
+    // If a function has many parameters, some parameters are
+    // inevitably passed by stack rather than by register.
+    // The first passed-by-stack parameter resides at RBP+16.
+
+    // Assign offsets to pass-by-stack parameters.
+    for (Obj *var = fn->params; var; var = var->next)
+    {
+      if (var->offset)
+        continue;
+      
+      top = align_to(top, 8);
+      var->offset = 0 - top - var->ty->size;
+      top += var->ty->size;
+      //printf("======variable %s %d\n", var->name, var->offset);
+    }
+
+    // Assign offsets to pass-by-register parameters and local variables.
+    for (Obj *var = fn->locals; var; var = var->next)
+    {
+      
+      if (var->offset)
+        continue;
+      
+      // AMD64 System V ABI has a special alignment rule for an array of
+      // length at least 16 bytes. We need to align such array to at least
+      // 16-byte boundaries. See p.14 of
+      // https://github.com/hjl-tools/x86-psABI/wiki/x86-64-psABI-draft.pdf.
+      int align = (var->ty->kind == TY_ARRAY && var->ty->size >= 16)
+                      ? MAX(16, var->align)
+                      : var->align;
+
+      bottom += var->ty->size;
+      bottom = align_to(bottom, align);
+      var->offset = -bottom;
+      //printf("======variable %s %d\n", var->name, var->offset);
+    }
+
+    fn->stack_size = align_to(bottom, 16);
+
+}
+
