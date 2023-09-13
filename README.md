@@ -353,7 +353,7 @@ Example of diagram generated with -dotfile parameter :
 ## release notes
 
 
-1.0.19    fixing extended assembly issue when a register is already used in the template, the variable should be stored in another register available.
+1.0.20    ISS-143 extended assembly doesn't manage well input with r. Removing assign1.c test doesn't work with gcc.
 
 ## old release notes
 
