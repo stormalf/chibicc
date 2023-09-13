@@ -161,6 +161,7 @@ static Token *skip_excess_element2(Token *tok);
 static bool check_old_style(Token **rest, Token *tok, Type *ty);
 static bool is_expression(Token **rest, Token *tok, Type *ty);
 
+
 static int align_down(int n, int align)
 {
   return align_to(n - align + 1, align);
@@ -378,6 +379,8 @@ static Obj *new_lvar(char *name, Type *ty, char *funcname)
   var->is_local = true;
   var->next = locals;
   var->order = order;
+  if (!funcname)
+    funcname = current_fn->name;
   var->funcname = funcname;
   locals = var;
   return var;
@@ -1047,6 +1050,7 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
       // Variable length arrays (VLAs) are translated to alloca() calls.
       // For example, `int x[n+2]` is translated to `tmp = n + 2,
       // x = alloca(tmp)`.
+      
       Obj *var = new_lvar(get_ident(ty->name), ty, NULL);
       Token *tok = ty->name;
       Node *expr = new_binary(ND_ASSIGN, new_vla_ptr(var, tok),
@@ -1056,7 +1060,7 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
       cur = cur->next = new_unary(ND_EXPR_STMT, expr, tok);
       continue;
     }
-
+    
     Obj *var = new_lvar(get_ident(ty->name), ty, NULL);
     if (attr && attr->align)
       var->align = attr->align;
@@ -1876,7 +1880,7 @@ static Node *asm_stmt(Token **rest, Token *tok)
   // extended assembly like asm ( assembler_template: output operands (optional) : input operands (optional) : list of clobbered registers (optional))
   if (equal(tok->next, ":"))
   {
-    node->asm_str = extended_asm(node, rest, tok);
+    node->asm_str = extended_asm(node, rest, tok, locals);
     if (!node->asm_str)
       error_tok(tok, "%s: in asm_stmt : error during extended_asm function null returned!", PARSE_C);
     return node;
@@ -2402,6 +2406,7 @@ static bool is_const_expr(Node *node)
   case ND_SUB:
   case ND_MUL:
   case ND_DIV:
+  case ND_MOD:
   case ND_BITAND:
   case ND_BITOR:
   case ND_BITXOR:
@@ -3930,6 +3935,8 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
 
   fn->body = compound_stmt(&tok, tok);
   fn->locals = locals;
+
+
   order = 0;
   leave_scope();
   resolve_goto_labels();
@@ -4329,3 +4336,4 @@ static bool is_expression(Token **rest, Token *tok, Type *ty)
 
   return false;
 }
+

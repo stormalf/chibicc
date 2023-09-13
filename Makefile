@@ -83,7 +83,16 @@ libchibicc.so: $(OBJS)
 	gcc $(CFLAGS) -o $@ $^ -shared
 
 clean:
-	rm -rf $(OBJECT) tmp* $(TESTS) test/*.s test/*.exe stage2 diagram/*.png test/*.dot $(OBJECTLIB)
+	rm -rf $(OBJECT) tmp* $(TESTS) issues/*.s issues/*.exe issues/*.dot test/*.s test/*.exe stage2 diagram/*.png test/*.dot $(OBJECTLIB)
 	find * -type f '(' -name '*~' -o -name '*.o' ')' -exec rm {} ';'
 
-.PHONY: test clean test-stage2 libchibicc projects projects-all test-all
+install:
+	test -d /usr/local/include/x86_64-linux-gnu/chibicc || \
+		sudo mkdir -p /usr/local/include/x86_64-linux-gnu/chibicc
+	sudo cp include/* /usr/local/include/x86_64-linux-gnu/chibicc/
+	sudo cp chibicc /usr/local/bin/chibicc
+
+uninstall:
+	sudo rm -rf	/usr/local/include/x86_64-linux-gnu/chibicc && sudo rm /usr/local/bin/chibicc
+
+.PHONY: test clean test-stage2 libchibicc projects projects-all test-all install uninstall

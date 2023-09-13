@@ -32,6 +32,7 @@ main (void)
 		vaddr = sizeof(void *) << 3;
 	}
 	fprintf(f, "%u", vaddr);
+	printf("%d, %d, %d, %d\n", r[0], r[1], r[2], r[3]);
 	fclose(f);
 	return 0;
 

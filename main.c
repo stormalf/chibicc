@@ -101,9 +101,11 @@ static void add_default_include_paths(char *argv0)
 
   // Add standard include paths.
   strarray_push(&include_paths, "/usr/local/include");
+  strarray_push(&include_paths, "/usr/local/include/x86_64-linux-gnu/chibicc");
   strarray_push(&include_paths, "/usr/include/x86_64-linux-gnu");
   strarray_push(&include_paths, "/usr/include");
-  strarray_push(&include_paths, "/usr/include/chibicc/include");
+  //strarray_push(&include_paths, "/usr/include/chibicc/include");
+  
 
   // Keep a copy of the standard include paths for -MMD option.
   for (int i = 0; i < include_paths.len; i++)
@@ -1062,8 +1064,6 @@ static void run_linker(StringArray *inputs, char *output)
 
 static FileType get_file_type(char *filename)
 {
-  if (opt_x != FILE_NONE)
-    return opt_x;
 
   if (endswith(filename, ".a"))
     return FILE_AR;
@@ -1079,6 +1079,10 @@ static FileType get_file_type(char *filename)
     return FILE_ASM;
   if (endswith(filename, ".so.4"))
     return FILE_DSO;
+
+  if (opt_x != FILE_NONE)
+    return opt_x;
+
 
   error("%s : in get_file_type <command line>: unknown file extension: %s", MAIN_C, filename);
 }
