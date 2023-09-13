@@ -1,8 +1,8 @@
 #include <stdio.h>
-#include "../test/test.h"
+#include "test.h"
 int main() {
     int a = 0;
-    //printf("a = %d\n", a);
+    printf("a = %d\n", a);
     int b;
     b = a;
     ASSERT(0, a);
@@ -13,12 +13,10 @@ int main() {
     );
 
     __asm__ ("movl %eax, %0;" : "=r" ( a ));
-    //printf("a = %d\n", a);
+    printf("a = %d\n", a);
     b = a;
     ASSERT(30, a);
     ASSERT(30, b);
-    //test/assign1.exe
-    // a = 0
-    // a => 30 expected but got 21948
-    // make: *** [Makefile:29: test] Error 1
+    printf("a = %d, b = %d \n", a, b);
+    return 0;
 }
