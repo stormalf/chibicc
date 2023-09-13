@@ -2,5 +2,6 @@
   "files.associations": {
     "chibicc.h": "c",
     "cassert": "c"
-  }
+  },
+  "C_Cpp.errorSquiggles": "disabled"
 }
