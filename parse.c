@@ -485,7 +485,8 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     if (equal(tok, "typedef") || equal(tok, "static") || equal(tok, "extern") ||
         equal(tok, "inline") || equal(tok, "_Thread_local") || equal(tok, "__thread"))
     {
-      if (!attr)
+      
+      if (!attr) 
         error_tok(tok, "%s : in declspec : storage class specifier is not allowed in this context", PARSE_C);
 
       if (equal(tok, "typedef"))
@@ -704,6 +705,7 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
       break;
     }
 
+    
     //  provisory fix for static_assert outside a function caused issue with chibicc
     //  issue #120 not sure why it works only inside a function, gcc compiles than even if static_assert is outside a function
     // fixing also #121 with equal(tok, "(")
@@ -792,7 +794,8 @@ static Type *type_suffix(Token **rest, Token *tok, Type *ty)
 {
   bool is_old_style = false;
   // fix issue =====#127 and issue =====#126 with old C style function
-  if (equal(tok, "(") && !is_typename(tok->next))
+  // fixing issue ISS-148
+  if (equal(tok, "(") && !is_typename(tok->next) && !ty)
   {
     is_old_style = check_old_style(rest, tok, ty);
     if (is_old_style)
@@ -3755,7 +3758,7 @@ static Node *primary(Token **rest, Token *tok)
       return node;
       // error_tok(tok, "%s: in primary : implicit declaration of a function", PARSE_C);
     }
-    printf("=======%s %p\n", tok->loc, sc);
+    //printf("=======%s %p\n", tok->loc, sc);
     error_tok(tok, "%s: in primary : error: undefined variable", PARSE_C);
   }
 
@@ -4250,6 +4253,7 @@ static Type *func_params2(Token **rest, Token *tok, Type *ty)
     // Token *name = ty2->name;
     Type *ty2 = declspec(&tok, tok, NULL);
     Type *backup = ty2;
+    
     ty2 = declarator(&tok, tok, ty2);
     if (ty2->kind == TY_PTR)
     {
@@ -4258,7 +4262,6 @@ static Type *func_params2(Token **rest, Token *tok, Type *ty)
     }
 
     Token *name = ty2->name;
-
     if (ty2->kind == TY_ARRAY)
     {
       // "array of T" is converted to "pointer to T" only in the parameter
@@ -4273,9 +4276,12 @@ static Type *func_params2(Token **rest, Token *tok, Type *ty)
       ty2 = pointer_to(ty2);
       ty2->name = name;
     }
+    
     cur = cur->next = copy_type(ty2);
+    
     // fixing ======issue#134 with wrong number of parameters when old C functions
     tok = tok->next;
+    
   }
 
   if (cur == &head)
