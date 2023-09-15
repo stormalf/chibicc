@@ -297,8 +297,10 @@ nmap: https://github.com/nmap/nmap.git
 
 util-linux : https://github.com/util-linux/util-linux.git
 
+    Manually fixing the config.status and removing D["HAVE_UNION_SEMUN"]=" 1"
     ./autogen.sh
     CC=chibicc CFLAGS=-fPIC ./configure
+    make
 
 
 ## Limits
@@ -353,7 +355,7 @@ Example of diagram generated with -dotfile parameter :
 ## release notes
 
 
-1.0.20    ISS-143 extended assembly doesn't manage well input with r. Removing assign1.c test doesn't work with gcc.
+1.0.20    Fixing ISS-143 extended assembly doesn't manage well input with r. Removing assign1.c test doesn't work with gcc. Fixing ISS-144 compiling util-linux failed with expression returning void is not supported. Fixing ISS-145 compiling util-linux failed with invalid initalizer2. Fixing ISS-147 compiling util-linux failed with undefined variable __BYTE_ORDER__
 
 ## old release notes
 

@@ -1026,7 +1026,7 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
       error_tok(tok, "%s: in declaration : variable declared void", PARSE_C);
     if (!ty->name)
       error_tok(ty->name_pos, "%s: in declaration : variable name omitted1", PARSE_C);
-
+    
     if (attr && attr->is_static)
     {
       // static local variable
@@ -1071,6 +1071,7 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
       cur = cur->next = new_unary(ND_EXPR_STMT, expr, tok);
     }
 
+    //ISS-146
     if (var->ty->size < 0)
       error_tok(ty->name, "%s: in declaration : variable has incomplete type", PARSE_C);
 
@@ -1412,7 +1413,6 @@ static void struct_initializer1(Token **rest, Token *tok, Initializer *init)
 static void struct_initializer2(Token **rest, Token *tok, Initializer *init, Member *mem)
 {
   bool first = true;
-  // printf("%d %d \n", init->ty->kind, equal(tok, ","));
   for (; mem && !is_end(tok); mem = mem->next)
   {
     Token *start = tok;
@@ -1587,7 +1587,10 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
     return;
   }
 
+
   init->expr = assign(rest, tok);
+ 
+
 }
 
 static Type *copy_struct_type(Type *ty)
@@ -1612,6 +1615,7 @@ static Type *copy_struct_type(Type *ty)
 static Initializer *initializer(Token **rest, Token *tok, Type *ty, Type **new_ty)
 {
   Initializer *init = new_initializer(ty, true);
+  
   initializer2(rest, tok, init);
 
   if ((ty->kind == TY_STRUCT || ty->kind == TY_UNION) && ty->is_flexible)
@@ -2365,8 +2369,12 @@ static int64_t eval2(Node *node, char ***label)
   case ND_VAR:
     if (!label)
       error_tok(node->tok, "%s: in eval2 : not a compile-time constant2", PARSE_C);
-    if (node->var->ty->kind != TY_ARRAY && node->var->ty->kind != TY_FUNC)
+      //trying to fix ======ISS-145 compiling util-linux failed with invalid initalizer2 
+    if (node->var->ty->kind != TY_ARRAY && node->var->ty->kind != TY_FUNC && node->var->ty->kind != TY_INT)
       error_tok(node->tok, "%s: in eval2 : invalid initializer2", PARSE_C);
+      //trying to fix ======ISS-145 compiling util-linux failed with invalid initalizer2 
+    if (node->var->ty->kind == TY_INT)
+      return 0;
     *label = &node->var->name;
     return 0;
   case ND_NUM:
@@ -3747,7 +3755,7 @@ static Node *primary(Token **rest, Token *tok)
       return node;
       // error_tok(tok, "%s: in primary : implicit declaration of a function", PARSE_C);
     }
-
+    printf("=======%s %p\n", tok->loc, sc);
     error_tok(tok, "%s: in primary : error: undefined variable", PARSE_C);
   }
 
