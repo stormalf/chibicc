@@ -314,7 +314,8 @@ void add_type(Node *node)
         return;
       }
     }
-    error_tok(node->tok, "%s statement expression returning void is not supported", TYPE_C);
+    //trying to fix =====ISS-144 compiling util-linux failed with expression returning void is not supported
+    //error_tok(node->tok, "%s statement expression returning void is not supported", TYPE_C);
     return;
   case ND_LABEL_VAL:
     node->ty = pointer_to(ty_void);
