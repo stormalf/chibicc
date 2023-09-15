@@ -301,7 +301,29 @@ util-linux : https://github.com/util-linux/util-linux.git
     ./autogen.sh
     CC=chibicc CFLAGS=-fPIC ./configure
     make
-
+    //to check if the compiled programs by chibicc work : 
+    make check-programs
+    cd tests
+    run.sh 
+    ---------------------------------------------------------------------
+      8 tests of 266 FAILED
+    
+          blkid/low-probe
+          blkid/lowprobe-pt
+          hardlink/options
+          libfdisk/gpt
+          libfdisk/mkpart
+          libfdisk/mkpart-full
+          misc/waitpid
+          partx/partx-image
+    ---------------------------------------------------------------------
+        
+    compiled with gcc and performing tests to compare : 
+    ---------------------------------------------------------------------
+      1 tests of 266 FAILED
+    
+          libfdisk/gpt
+    ---------------------------------------------------------------------
 
 ## Limits
 
@@ -309,7 +331,7 @@ Some C projects doesn't compile for now. It helps to find some bugs and to try t
 
 VLC : https://github.com/videolan/vlc.git 
 
-    ./boostrap
+    ./bootstrap
     CC=chibicc CFLAGS="-fPIC" DEFS="-DHAVE_CONFIG_H -DHAVE_ATTRIBUTE_PACKED -DVLC_USED -DVLC_API -DVLC_DEPRECATED -DVLC_MALLOC" ./configure --disable-lua --disable-a52 --disable-xcb --disable-qt --disable-po --target=linux
     make all
 
@@ -355,7 +377,7 @@ Example of diagram generated with -dotfile parameter :
 ## release notes
 
 
-1.0.20    Fixing ISS-143 extended assembly doesn't manage well input with r. Removing assign1.c test doesn't work with gcc. Fixing ISS-144 compiling util-linux failed with expression returning void is not supported. Fixing ISS-145 compiling util-linux failed with invalid initalizer2. Fixing ISS-147 compiling util-linux failed with undefined variable __BYTE_ORDER__
+1.0.20    Fixing ISS-143 extended assembly doesn't manage well input with r. Removing assign1.c test doesn't work with gcc. Fixing ISS-144 compiling util-linux failed with expression returning void is not supported. Fixing ISS-145 compiling util-linux failed with invalid initalizer2. Fixing ISS-147 compiling util-linux failed with undefined variable __BYTE_ORDER__. Fixing ISS-148 compiling VLC failed with storage class specifier not allowed caused by static_assert function.
 
 ## old release notes
 
