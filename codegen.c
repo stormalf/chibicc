@@ -11,11 +11,11 @@ static char *argreg16[] = {"%di", "%si", "%dx", "%cx", "%r8w", "%r9w"};
 static char *argreg32[] = {"%edi", "%esi", "%edx", "%ecx", "%r8d", "%r9d"};
 static char *argreg64[] = {"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"};
 
-static char *newargreg8[] = {"%cl","%bl", "%dl", "%r8b", "%r9b", "%al", "%ah", "%bh", "%ch", "%dh", "%dih", "%sih", "%r8h", "%r9h", "%dil", "%sil"};
-static char *newargreg16[] = {"%cx", "%bx", "%dx", "%r8w", "%r9w", "%ax", "%ax", "%bx", "%cx", "%dx", "%di", "%si", "%r8w", "%r9w", "%di", "%si"};
-static char *newargreg32[] = {"%ecx", "%ebx", "%edx", "%r8d", "%r9d", "%eax", "%eax", "%ebx", "%ecx", "%edx", "%edi", "%esi", "%r8d", "%r9d", "%edi", "%esi"};
-static char *newargreg64[] = {"%rcx", "%rbx", "%rdx", "%r8", "%r9", "%rax", "%rax", "%rbx", "%rcx", "%rdx", "%rdi", "%rsi", "%r8", "%r9", "%rdi", "%rsi" };
-static char *registerUsed[] = {"", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""};
+static char *newargreg8[] = {"%cl","%bl", "%dl", "%al", "%ah", "%bh", "%ch", "%dh", "%dih", "%sih", "%r8h", "%r9h", "%dil", "%sil",  "%r8b", "%r9b",};
+static char *newargreg16[] = {"%cx", "%bx", "%dx", "%ax", "%ax", "%bx", "%cx", "%dx", "%di", "%si", "%r8w", "%r9w", "%di", "%si", "%r8w", "%r9w" };
+static char *newargreg32[] = {"%ecx", "%ebx", "%edx", "%eax", "%eax", "%ebx", "%ecx", "%edx", "%edi", "%esi", "%r8d", "%r9d", "%edi", "%esi", "%r8d", "%r9d" };
+static char *newargreg64[] = {"%rcx", "%rbx", "%rdx", "%rax", "%rax", "%rbx", "%rcx", "%rdx", "%rdi", "%rsi", "%r8", "%r9", "%rdi", "%rsi", "%r8", "%r9" };
+static char *registerUsed[] = {"free", "free", "free", "free", "free", "free", "free", "free", "free", "free", "free", "free", "free", "free", "free", "free"};
 
 static Obj *current_fn;
 
@@ -201,6 +201,7 @@ char *reg_cx(int sz)
 
 char *reg_ax(int sz)
 {
+
   switch (sz)
   {
   case 1:
@@ -212,7 +213,7 @@ char *reg_ax(int sz)
   case 8:
     return "%rax";
   case 16:
-    return "%rdx";
+    return "%rax";
   }
   unreachable();
 }
@@ -2023,8 +2024,10 @@ char *register_available() {
       bool isFound = check_register_used(newargreg64[i]);
       if (isFound)
         continue;
-      else
+      else {
+        add_register_used(newargreg64[i]);
         return newargreg64[i];
+      }
   }
   //no registry available
   error("%s: in register_available : no register available!", CODEGEN_C);
@@ -2034,8 +2037,10 @@ char *register_available() {
 char *specific_register_available(char *regist) {
 
   int found = check_register_used(regist);
-  if (!found)
+  if (!found) {
+    add_register_used(regist);
     return regist;
+  }
   return register_available();
   
 }
@@ -2093,10 +2098,10 @@ int add_register_used(char *regist) {
 
 int len = sizeof(registerUsed)/sizeof(registerUsed[0]);
 int i;
-
+char *tmp = "free";
   for(i = 0; i < len; ++i)
   {
-      if(!strncmp(registerUsed[i], "", strlen("")))
+       if (!strncmp(registerUsed[i], tmp, strlen(registerUsed[i])))
       {
           registerUsed[i] = regist;
           return i;
