@@ -287,13 +287,6 @@ git: https://github.com/git/git.git
     CC=chibicc CFLAGS=-fPIC ./configure
     make
 
-nmap: https://github.com/nmap/nmap.git
-
-    CC=chibicc CFLAGS=-fPIC ./configure
-    make
-    ...
-    chibicc -o ncat -fPIC   ncat_main.o ncat_connect.o ncat_core.o ncat_posix.o ncat_listen.o ncat_proxy.o ncat_ssl.o base64.o http.o util.o sys_wrap.o http_digest.o ncat_lua.o ../nsock/src/libnsock.a ../nbase/libnbase.a -lssl -lcrypto -lpcap ./../liblua/liblua.a -lm
-    make[1]: Leaving directory '../nmap/ncat'
 
 util-linux : https://github.com/util-linux/util-linux.git
 

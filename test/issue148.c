@@ -1,13 +1,13 @@
-
+#include "test.h"
 
 static_assert(1 == 1, "channel count mismatch");
-//
 
-// typedef struct
-// {
-//     int remap[1];
+
+typedef struct
+{
+    int remap[1];
  
-// } aout_filters_cfg_t;
+} aout_filters_cfg_t;
 
 
 

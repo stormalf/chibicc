@@ -34,7 +34,7 @@ typedef struct
     int index;         // store the index
     char letter;       // store the letter corresponding to input
     int offset;         // store the offset
-    int size;          // store the size to determine the operation to do ex movl movb movw mov
+    int size;          // store the size to determine the operation to do ex movl movb movw movq
     bool isVariable;   // store true if it's a variable otherwise false for immediate value
     bool isAddress;    // store true if it's an address pointer
 } AsmInput;
@@ -237,7 +237,8 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
     asm_str = subst_asm(asm_str, " {", "%{");
     asm_str = subst_asm(asm_str, " |", "%|");
     asm_str = subst_asm(asm_str, " }", "%}");
-    //printf("=====%s\n", asm_str);
+    if (isDebug)
+        printf("=====%s\n", asm_str);
     *rest = tok;
     // free memory
     for (int i = 0; i < 10; i++)
@@ -317,6 +318,8 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 
                 
             }
+
+
             asmExt->output[nbOutput]->index = nbOutput;
         }
         // skip the comma
@@ -338,6 +341,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     error_tok(tok, "%s : in output_asm function : variable type unknown", EXTASM_C);
                 // retrieve the size of the variable to determine the register to use here we use RAX variation
                 asmExt->output[nbOutput]->size = sc->var->ty->size;
+                asmExt->output[nbOutput]->reg = update_register_size(asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->size);
                 asmExt->output[nbOutput]->isVariable = true;
                 asmExt->output[nbOutput]->output = tok;
                 
@@ -352,7 +356,6 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     
                 }
                 
-                asmExt->output[nbOutput]->reg = update_register_size(asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->size);
                 // skip the variable to go to next token that should be a ")"
                 // tok = tok->next;
                 tok = tok->next;
@@ -383,7 +386,6 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                             asmExt->output[nbOutput]->offset = 0;                        
 
                     }
-                    
                     asmExt->output[nbOutput]->reg = update_register_size(asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->size);
                     
                     tok = tok->next;
@@ -538,6 +540,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->input[nbInput]->size = sc->var->ty->size;
                     if (sc->var->funcname) {
                         update_offset(sc->var->funcname, locals);
+
                         asmExt->input[nbInput]->offset = sc->var->offset;
                     } 
                     asmExt->input[nbInput]->reg = update_register_size(asmExt->input[nbInput]->reg, asmExt->input[nbInput]->size);
@@ -720,21 +723,21 @@ void update_offset(char *funcname, Obj *locals)
 // update register following the size
 char *update_register_size(char *reg, int size)
 {
-    if (!strncmp(reg, "%rax", 5))
+    if (!strncmp(reg, "%rax", strlen(reg)) || !strncmp(reg, "%eax", strlen(reg)) || !strncmp(reg, "%ax", strlen(reg)) || !strncmp(reg, "%ah", strlen(reg)) || !strncmp(reg, "%al", strlen(reg)))
         return reg_ax(size);
-    else if (!strncmp(reg, "%rbx", 5))
+    else if (!strncmp(reg, "%rbx", strlen(reg)) || !strncmp(reg, "%ebx", strlen(reg)) || !strncmp(reg, "%bx", strlen(reg)) || !strncmp(reg, "%bh", strlen(reg)) || !strncmp(reg, "%bl", strlen(reg)))
         return reg_bx(size);
-    else if (!strncmp(reg, "%rcx", 5))
+    else if (!strncmp(reg, "%rcx", strlen(reg)) || !strncmp(reg, "%ecx", strlen(reg)) || !strncmp(reg, "%cx", strlen(reg)) || !strncmp(reg, "%ch", strlen(reg)) || !strncmp(reg, "%cl", strlen(reg)))
         return reg_cx(size);
-    else if (!strncmp(reg, "%rdx", 5))
+    else if (!strncmp(reg, "%rdx", strlen(reg)) || !strncmp(reg, "%edx", strlen(reg)) || !strncmp(reg, "%dx", strlen(reg)) || !strncmp(reg, "%dh", strlen(reg)) || !strncmp(reg, "%dl", strlen(reg)))
         return reg_dx(size);
-    else if (!strncmp(reg, "%rdi", 5))
+    else if (!strncmp(reg, "%rdi", strlen(reg)) || !strncmp(reg, "%edi", strlen(reg)) || !strncmp(reg, "%di", strlen(reg)) || !strncmp(reg, "%dih", strlen(reg)) || !strncmp(reg, "%dil", strlen(reg)))
         return reg_di(size);       
-    else if (!strncmp(reg, "%rsi", 5))
+    else if (!strncmp(reg, "%rsi", strlen(reg)) || !strncmp(reg, "%esi", strlen(reg)) || !strncmp(reg, "%si", strlen(reg)) || !strncmp(reg, "%sih", strlen(reg)) || !strncmp(reg, "%sil", strlen(reg)))
         return reg_si(size);       
-    else if (!strncmp(reg, "%r8", 5))
+    else if (!strncmp(reg, "%r8", strlen(reg)) || !strncmp(reg, "%r8d", strlen(reg)) || !strncmp(reg, "%r8w", strlen(reg)) || !strncmp(reg, "%r8h", strlen(reg)) || !strncmp(reg, "%r8b", strlen(reg)))
         return reg_si(size);                    
-    else if (!strncmp(reg, "%r9", 5))
+    else if (!strncmp(reg, "%r9", strlen(reg)) || !strncmp(reg, "%r9d", strlen(reg)) || !strncmp(reg, "%r9w", strlen(reg)) || !strncmp(reg, "%r9h", strlen(reg)) || !strncmp(reg, "%r9b", strlen(reg)))
         return reg_si(size);               
     else
         return reg;
