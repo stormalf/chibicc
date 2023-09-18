@@ -34,7 +34,7 @@ typedef struct
     int index;         // store the index
     char letter;       // store the letter corresponding to input
     int offset;         // store the offset
-    int size;          // store the size to determine the operation to do ex movl movb movw mov
+    int size;          // store the size to determine the operation to do ex movl movb movw movq
     bool isVariable;   // store true if it's a variable otherwise false for immediate value
     bool isAddress;    // store true if it's an address pointer
 } AsmInput;
@@ -59,7 +59,7 @@ typedef struct
 typedef struct
 {
     char *templatestr;
-    bool hasPercent;
+    //bool hasPercent;
 } AsmTemplate;
 
 typedef struct
@@ -117,6 +117,30 @@ static int asmtype = 0;
 
 char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
 {
+    char *input_asm_str;
+    char *output_loading;
+    asmtype = 0;
+    nbInput = 0;
+    nbOutput = 0;
+    nbClobber = 0;
+    nbLabel = 0;
+    char *template = tok->str;
+    char *asm_str = calloc(1, sizeof(char) * 400);
+    
+    //case __asm__ volatile ("" ::: "memory")
+    //we generate a nop operation for each memory border defined
+    if (strlen(template) == 0) {
+        while (!equal(tok->next, ")")) {
+            tok = tok->next;
+        }
+        *rest = tok->next;
+        *rest = skip(tok->next, ")");
+        tok = *rest;
+        asm_str = "\nnop;";
+        return asm_str;
+    }
+
+
     // allocate memory for all structs needed
     asmExt = calloc(1, sizeof(AsmExtended));
     asmExt->template = calloc(1, sizeof(AsmTemplate));
@@ -126,24 +150,19 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
         asmExt->output[i] = calloc(1, sizeof(AsmOutput));
     for (int i = 0; i < 10; i++)
         asmExt->clobber[i] = calloc(1, sizeof(AsmClobber));
+
+
+    strncpy(asm_str, "", strlen(asm_str) + 1);
     char *output_asm_str = calloc(1, sizeof(char) * 300);
-    char *input_final = calloc(1, sizeof(char) * 300);
-    char *asm_str = calloc(1, sizeof(char) * 500);
-    char *template = tok->str;
+    char *input_final = calloc(1, sizeof(char) * 400);
     asmExt->template->templatestr = template;
-    asmExt->template->hasPercent = check_template(template);
-    char *input_asm_str;
-    char *output_loading;
-    asmtype = 0;
-    nbInput = 0;
-    nbOutput = 0;
-    nbClobber = 0;
-    nbLabel = 0;
+    // asmExt->template->hasPercent = check_template(template);
+
     //clear the registerUsed array
     clear_register_used();
     //mark the register used if found in template
     check_register_in_template(template);
-    
+
     while (!equal(tok->next, ";") && !equal(tok, ";"))
     {
         switch (asmtype)
@@ -153,8 +172,14 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
         case AT_OUTPUT: // outputs
             output_asm(node, rest, tok, locals);
             // generate output instruction for each output variable
+            if (!asmExt->output[nbOutput]->variableNumber)
+                error("%s : in extended_asm function extended_asm :asmExt->output[nbOutput]->variableNumber is null!", EXTASM_C);
             output_loading = generate_output_asm(asmExt->output[nbOutput]->variableNumber);
             // replace %9 by the correct register
+            if (!output_loading)
+               error("%s : in extended_asm function extended_asm :output_loading is null!", EXTASM_C);
+            if (!asmExt->output[nbOutput]->reg)
+               error("%s : in extended_asm function extended_asm :asmExt->output[nbOutput]->reg is null!", EXTASM_C);                 
             output_loading = subst_asm(output_loading, asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->variableNumber);
             //generate the ouput instruction
             strncat(output_asm_str, output_loading, strlen(output_loading));
@@ -166,11 +191,18 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             // return %0, %1 or %x
             input_asm(node, rest, tok, locals);
             // generate input instruction to load the parameter into register
+            if (!asmExt->input[nbInput]->variableNumber)
+                error("%s : in extended_asm function extended_asm :asmExt->input[nbInput]->variableNumber is null!", EXTASM_C);
             input_asm_str = generate_input_asm(asmExt->input[nbInput]->variableNumber);
             //replace %9, by the correct
+            if (!input_asm_str)
+                error("%s : in extended_asm function extended_asm :input_asm_str is null!", EXTASM_C);
+            if (!asmExt->input[nbInput]->reg)
+                error("%s : in extended_asm function extended_asm :asmExt->input[nbInput]->reg is null!", EXTASM_C);
             input_asm_str = subst_asm(input_asm_str, asmExt->input[nbInput]->reg, asmExt->input[nbInput]->variableNumber);
             // concatenate the input final strings to add to the assembly
             strncat(input_final, input_asm_str, strlen(input_asm_str));
+
             nbInput++;
             tok = *rest;
             break;
@@ -192,24 +224,26 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
         tok = tok->next;
     }
 
+
     //replace each %9 by the correct output register
     for (int i = 0; i < nbOutput; i++)
     {
         asm_str = subst_asm(template, asmExt->output[i]->reg, asmExt->output[i]->variableNumber);
     }
-    
+
     //replace each %9 by the correct input register
     for (int i = 0; i < nbInput; i++)
     {
-        
         asm_str = subst_asm(template, asmExt->input[i]->reg, asmExt->input[i]->variableNumber);                
+
     }
 
     //generate the input instructions before the output 
     if (input_final != NULL)
-    {
+    {  
         strncat(input_final, asm_str, strlen(asm_str));
         asm_str = input_final;
+        
     }
     //generate the output instructions
     if (output_asm_str != NULL)
@@ -224,7 +258,8 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
     asm_str = subst_asm(asm_str, " {", "%{");
     asm_str = subst_asm(asm_str, " |", "%|");
     asm_str = subst_asm(asm_str, " }", "%}");
-    //printf("=====%s\n", asm_str);
+    if (isDebug)
+        printf("=====%s  =%s ==%s ===%s\n", template, asm_str, input_final, output_asm_str);
     *rest = tok;
     // free memory
     for (int i = 0; i < 10; i++)
@@ -233,6 +268,7 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
         free(asmExt->output[i]);
     for (int i = 0; i < 10; i++)
         free(asmExt->clobber[i]);
+
     return asm_str;
 }
 
@@ -243,6 +279,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
 
     while (!equal(tok->next, ":") && !equal(tok->next, ";"))
     {
+
         // register in write only mode
         // check if the register constraint is followed by a variable like "=r" (val)
         if (tok->kind == TK_STR)
@@ -256,7 +293,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->output[nbOutput]->prefix = "+";
                 asmExt->output[nbOutput]->reg = specific_register_available("%rax");
                 asmExt->output[nbOutput]->letter = 'r';
-                asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
+                //asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
                 
             }
             else if (!strncmp(tok->str, "=m", tok->len) || !strncmp(tok->str, "+m", tok->len))
@@ -268,7 +305,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->output[nbOutput]->prefix = "+";
                 asmExt->output[nbOutput]->reg = specific_register_available("%rax");
                 asmExt->output[nbOutput]->letter = 'm';
-                asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
+                //asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
                 
             }
             // assuming that it's =a =b ???
@@ -300,10 +337,12 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
 
                 asmExt->output[nbOutput]->isAlpha = true;
                 asmExt->output[nbOutput]->prefix = "=";
-                asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
+                //asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
                 
                 
             }
+
+            asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
             asmExt->output[nbOutput]->index = nbOutput;
         }
         // skip the comma
@@ -325,8 +364,10 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     error_tok(tok, "%s : in output_asm function : variable type unknown", EXTASM_C);
                 // retrieve the size of the variable to determine the register to use here we use RAX variation
                 asmExt->output[nbOutput]->size = sc->var->ty->size;
+                asmExt->output[nbOutput]->reg = update_register_size(asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->size);
                 asmExt->output[nbOutput]->isVariable = true;
                 asmExt->output[nbOutput]->output = tok;
+                asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
                 
                 if (sc->var->funcname) {
                     
@@ -339,7 +380,6 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     
                 }
                 
-                asmExt->output[nbOutput]->reg = update_register_size(asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->size);
                 // skip the variable to go to next token that should be a ")"
                 // tok = tok->next;
                 tok = tok->next;
@@ -370,9 +410,8 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                             asmExt->output[nbOutput]->offset = 0;                        
 
                     }
-                    
                     asmExt->output[nbOutput]->reg = update_register_size(asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->size);
-                    
+                    asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
                     tok = tok->next;
                     *rest = skip(tok, ")");
                     return;
@@ -464,12 +503,14 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
 
             asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(nbOutput + nbInput);
             asmExt->input[nbInput]->index = nbOutput + nbInput;
+            asmExt->input[nbInput]->reg = specific_register_available("%rax");
             asmExt->input[nbInput]->letter = 'm';
         }
         else if (tok->kind == TK_STR && !strncmp(tok->str, "r", tok->len))
         {
             asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(nbOutput + nbInput);
             asmExt->input[nbInput]->index = nbOutput + nbInput;
+            asmExt->input[nbInput]->reg = specific_register_available("%rax");
             asmExt->input[nbInput]->letter = 'r';
             
         }
@@ -489,7 +530,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     update_offset(sc->var->funcname, locals);
                     asmExt->input[nbInput]->offset = sc->var->offset;
                 } 
-
+                asmExt->input[nbInput]->reg = update_register_size(asmExt->input[nbInput]->reg, asmExt->input[nbInput]->size);
                 tok = tok->next;
                 *rest = skip(tok, ")");
                 return;
@@ -523,9 +564,10 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->input[nbInput]->size = sc->var->ty->size;
                     if (sc->var->funcname) {
                         update_offset(sc->var->funcname, locals);
+
                         asmExt->input[nbInput]->offset = sc->var->offset;
                     } 
-
+                    asmExt->input[nbInput]->reg = update_register_size(asmExt->input[nbInput]->reg, asmExt->input[nbInput]->size);
                     tok = tok->next;
                     *rest = skip(tok, ")");
                     return;
@@ -568,17 +610,17 @@ char *string_replace(char *str, char *oldstr, char *newstr)
         }
     }
 
-    strncpy(str, bstr, strlen(bstr));
+    strncpy(str, bstr, strlen(bstr) + 1);
     return str;
 }
 
 // generate input assembly instruction
 char *generate_input_asm(char *input_str)
 {
-    
     char *tmp = calloc(1, sizeof(char) * 100);
     if (asmExt->input[nbInput]->isVariable)
     {
+        strncat(tmp, "\n", 3);
         strncat(tmp, opcode(asmExt->input[nbInput]->size), strlen(opcode(asmExt->input[nbInput]->size)));
         strncat(tmp, load_variable(asmExt->input[nbInput]->offset), strlen(load_variable(asmExt->input[nbInput]->offset)));
         strncat(tmp, ", ", 3);
@@ -588,6 +630,7 @@ char *generate_input_asm(char *input_str)
     }
     else
     {
+        strncat(tmp, "\n", 3);
         strncat(tmp, opcode(asmExt->input[nbInput]->size), strlen(opcode(asmExt->input[nbInput]->size)));
         strncat(tmp, " $", 3);
         strncat(tmp, asmExt->input[nbInput]->input_value, strlen(asmExt->input[nbInput]->input_value));
@@ -596,7 +639,8 @@ char *generate_input_asm(char *input_str)
         strncat(tmp, ";\n", 3);
         return tmp;
     }
-    return NULL;
+    error("%s : in extended_asm function generate_input_asm : unexpected error!", EXTASM_C);
+    //return NULL;
 }
 
 // check if template contains %
@@ -608,11 +652,10 @@ bool check_template(char *template)
 // generate input assembly instruction
 char *generate_output_asm(char *output_str)
 {
-    
     char *tmp = calloc(1, sizeof(char) * 300);
     if (asmExt->output[nbOutput]->isVariable && !asmExt->output[nbOutput]->isAddress)
     {
-        
+        strncat(tmp, "\n", 3);
         strncat(tmp, opcode(asmExt->output[nbOutput]->size), strlen(opcode(asmExt->output[nbOutput]->size)));
         strncat(tmp, asmExt->output[nbOutput]->variableNumber, strlen(asmExt->output[nbOutput]->variableNumber));
         strncat(tmp, ", ", 3);
@@ -622,7 +665,6 @@ char *generate_output_asm(char *output_str)
     }
     else if (!asmExt->output[nbOutput]->isAddress)
     {
-        
         strncat(tmp, opcode(asmExt->output[nbOutput]->size), strlen(opcode(asmExt->output[nbOutput]->size)));
         strncat(tmp, " $", 3);
         strncat(tmp, asmExt->input[nbInput]->input_value, strlen(asmExt->input[nbInput]->input_value));
@@ -633,17 +675,19 @@ char *generate_output_asm(char *output_str)
     }
     else
     {
-        strncat(tmp, "\n", 2);
+        strncat(tmp, "\n", 3);
         strncat(tmp, "  movq ", 8);
         strncat(tmp, load_variable(asmExt->output[nbOutput]->offset), strlen(load_variable(asmExt->output[nbOutput]->offset)));
         strncat(tmp, ", %rsi\n", 8);
         strncat(tmp, opcode(asmExt->output[nbOutput]->size), strlen(opcode(asmExt->output[nbOutput]->size)));
         strncat(tmp, asmExt->output[nbOutput]->variableNumber, strlen(asmExt->output[nbOutput]->variableNumber));
-        strncat(tmp, ", (%rsi)\n", 10);
+        strncat(tmp, ", (%rsi)\n", 11);
         return tmp;
     }
-    
-    return NULL;
+
+    error("%s : in extended_asm function generate_output_asm : unexpected error!", EXTASM_C);
+
+    //return NULL;
 }
 
 //codegen.c generates correctly the offset but it's too late.
@@ -705,14 +749,22 @@ void update_offset(char *funcname, Obj *locals)
 // update register following the size
 char *update_register_size(char *reg, int size)
 {
-    if (!strncmp(reg, "%rax", 5))
+    if (!strncmp(reg, "%rax", strlen(reg)) || !strncmp(reg, "%eax", strlen(reg)) || !strncmp(reg, "%ax", strlen(reg)) || !strncmp(reg, "%ah", strlen(reg)) || !strncmp(reg, "%al", strlen(reg)))
         return reg_ax(size);
-    else if (!strncmp(reg, "%rbx", 5))
+    else if (!strncmp(reg, "%rbx", strlen(reg)) || !strncmp(reg, "%ebx", strlen(reg)) || !strncmp(reg, "%bx", strlen(reg)) || !strncmp(reg, "%bh", strlen(reg)) || !strncmp(reg, "%bl", strlen(reg)))
         return reg_bx(size);
-    else if (!strncmp(reg, "%rcx", 5))
+    else if (!strncmp(reg, "%rcx", strlen(reg)) || !strncmp(reg, "%ecx", strlen(reg)) || !strncmp(reg, "%cx", strlen(reg)) || !strncmp(reg, "%ch", strlen(reg)) || !strncmp(reg, "%cl", strlen(reg)))
         return reg_cx(size);
-    else if (!strncmp(reg, "%rdx", 5))
+    else if (!strncmp(reg, "%rdx", strlen(reg)) || !strncmp(reg, "%edx", strlen(reg)) || !strncmp(reg, "%dx", strlen(reg)) || !strncmp(reg, "%dh", strlen(reg)) || !strncmp(reg, "%dl", strlen(reg)))
         return reg_dx(size);
+    else if (!strncmp(reg, "%rdi", strlen(reg)) || !strncmp(reg, "%edi", strlen(reg)) || !strncmp(reg, "%di", strlen(reg)) || !strncmp(reg, "%dih", strlen(reg)) || !strncmp(reg, "%dil", strlen(reg)))
+        return reg_di(size);       
+    else if (!strncmp(reg, "%rsi", strlen(reg)) || !strncmp(reg, "%esi", strlen(reg)) || !strncmp(reg, "%si", strlen(reg)) || !strncmp(reg, "%sih", strlen(reg)) || !strncmp(reg, "%sil", strlen(reg)))
+        return reg_si(size);       
+    else if (!strncmp(reg, "%r8", strlen(reg)) || !strncmp(reg, "%r8d", strlen(reg)) || !strncmp(reg, "%r8w", strlen(reg)) || !strncmp(reg, "%r8h", strlen(reg)) || !strncmp(reg, "%r8b", strlen(reg)))
+        return reg_si(size);                    
+    else if (!strncmp(reg, "%r9", strlen(reg)) || !strncmp(reg, "%r9d", strlen(reg)) || !strncmp(reg, "%r9w", strlen(reg)) || !strncmp(reg, "%r9h", strlen(reg)) || !strncmp(reg, "%r9b", strlen(reg)))
+        return reg_si(size);               
     else
         return reg;
 }
@@ -733,6 +785,7 @@ int retrieve_output_index_from_letter(char letter)
 //retrieve the variable number string like M0, %1, %2...
 char * retrieveVariableNumber(int index) 
 {
+    
     if (index >=6)
         error("%s: in retrieveVariableNumber : index %d not managed yet!", EXTASM_C, index);    
     char *tmp;        

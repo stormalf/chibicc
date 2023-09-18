@@ -254,6 +254,12 @@ curl : https://github.com/curl/curl.git
         CC       ../lib/dynbuf.o
         CCLD     curl
 
+    make test
+    TESTDONE: 1635 tests were considered during 418 seconds.
+    TESTDONE: 1314 tests out of 1316 reported OK: 99%
+    TESTFAIL: These test cases failed: 557 1119
+
+
 openssl : https://github.com/openssl/openssl.git
 
     CC=chibicc ./Configure
@@ -267,6 +273,9 @@ openssl : https://github.com/openssl/openssl.git
     	my $section='.note.gnu.property';
 
     make
+
+    make test
+    
 
 
 openssh-portable : https://github.com/openssh/openssh-portable.git
@@ -287,18 +296,58 @@ git: https://github.com/git/git.git
     CC=chibicc CFLAGS=-fPIC ./configure
     make
 
-nmap: https://github.com/nmap/nmap.git
-
-    CC=chibicc CFLAGS=-fPIC ./configure
-    make
-    ...
-    chibicc -o ncat -fPIC   ncat_main.o ncat_connect.o ncat_core.o ncat_posix.o ncat_listen.o ncat_proxy.o ncat_ssl.o base64.o http.o util.o sys_wrap.o http_digest.o ncat_lua.o ../nsock/src/libnsock.a ../nbase/libnbase.a -lssl -lcrypto -lpcap ./../liblua/liblua.a -lm
-    make[1]: Leaving directory '../nmap/ncat'
 
 util-linux : https://github.com/util-linux/util-linux.git
 
+    Manually fixing the config.status and removing D["HAVE_UNION_SEMUN"]=" 1"
     ./autogen.sh
     CC=chibicc CFLAGS=-fPIC ./configure
+    make
+
+    //to check if the compiled programs by chibicc work : 
+    make check-programs
+    cd tests
+    run.sh 
+    ---------------------------------------------------------------------
+      8 tests of 266 FAILED
+    
+          blkid/low-probe
+          blkid/lowprobe-pt
+          hardlink/options
+          libfdisk/gpt
+          libfdisk/mkpart
+          libfdisk/mkpart-full
+          misc/waitpid
+          partx/partx-image
+    ---------------------------------------------------------------------
+        
+    compiled with gcc and performing tests to compare : 
+    ---------------------------------------------------------------------
+      1 tests of 266 FAILED
+    
+          libfdisk/gpt
+    ---------------------------------------------------------------------
+
+nginx: https://github.com/nginx/nginx.git 
+
+    CC=chibicc CFLAGS=-fPIC ./auto/configure
+    make
+    
+
+
+zlib: https://github.com/madler/zlib.git
+
+    CC=chibicc CFLAGS="-fPIC" ./configure
+    make
+
+    make test
+    ...
+    *** zlib test OK ***
+    ...
+    *** zlib shared test OK ***
+    ...
+    *** zlib 64-bit test OK ***
+    
 
 
 ## Limits
@@ -307,12 +356,11 @@ Some C projects doesn't compile for now. It helps to find some bugs and to try t
 
 VLC : https://github.com/videolan/vlc.git 
 
-    ./boostrap
+    ./bootstrap
     CC=chibicc CFLAGS="-fPIC" DEFS="-DHAVE_CONFIG_H -DHAVE_ATTRIBUTE_PACKED -DVLC_USED -DVLC_API -DVLC_DEPRECATED -DVLC_MALLOC" ./configure --disable-lua --disable-a52 --disable-xcb --disable-qt --disable-po --target=linux
     make all
 
-    VLC doesn't compile with chibicc because it has some extended assembly inline that are not managed yet. Even if for this part I'll try to use gcc it failed during linking with multiple definitions. If I use gcc to compile VLC it compiles fine. Perhaps mixing chibicc and gcc is not a great idea!
-    
+    VLC doesn't compile with chibicc some issues to fix later.
 
 ## TODO
 
@@ -353,7 +401,8 @@ Example of diagram generated with -dotfile parameter :
 ## release notes
 
 
-1.0.19    fixing extended assembly issue when a register is already used in the template, the variable should be stored in another register available.
+1.0.20    Fixing ISS-143 extended assembly doesn't manage well input with r. Removing assign1.c test doesn't work with gcc. Fixing ISS-144 compiling util-linux failed with expression returning void is not supported. Fixing ISS-145 compiling util-linux failed with invalid initalizer2. Fixing ISS-147 compiling util-linux failed with undefined variable __BYTE_ORDER__. Fixing ISS-148 compiling VLC failed with storage class specifier not allowed caused by static_assert function. Fixing also some issues with extended assembly not working in some cases. Fixing issue with extended assembly in string_replace that truncates the null terminated character and causing during nginx compile failure due to incorrect character. Generating "nop" instruction each time we found the memory barrier : __asm__ volatile ("" ::: "memory"). Compiling successfully some projects like curl, nginx, zlib, util-linux, openssl, openssh-portable. But some tests failed for util-linux, openssl and curl that means that probably we have some bugs somewhere.
+
 
 ## old release notes
 

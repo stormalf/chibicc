@@ -171,7 +171,7 @@ static void enter_scope(void)
 {
   Scope *sc = calloc(1, sizeof(Scope));
   if (sc == NULL)
-    error("%s: in enter_scope : sc pointer is null!", PARSE_C);
+    error("%s : in enter_scope : sc pointer is null!", PARSE_C );
   sc->next = scope;
   scope = sc;
 }
@@ -485,7 +485,8 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     if (equal(tok, "typedef") || equal(tok, "static") || equal(tok, "extern") ||
         equal(tok, "inline") || equal(tok, "_Thread_local") || equal(tok, "__thread"))
     {
-      if (!attr)
+      
+      if (!attr) 
         error_tok(tok, "%s : in declspec : storage class specifier is not allowed in this context", PARSE_C);
 
       if (equal(tok, "typedef"))
@@ -704,6 +705,7 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
       break;
     }
 
+    
     //  provisory fix for static_assert outside a function caused issue with chibicc
     //  issue #120 not sure why it works only inside a function, gcc compiles than even if static_assert is outside a function
     // fixing also #121 with equal(tok, "(")
@@ -792,7 +794,8 @@ static Type *type_suffix(Token **rest, Token *tok, Type *ty)
 {
   bool is_old_style = false;
   // fix issue =====#127 and issue =====#126 with old C style function
-  if (equal(tok, "(") && !is_typename(tok->next))
+  // fixing issue ISS-148
+  if (equal(tok, "(") && !is_typename(tok->next) && !ty)
   {
     is_old_style = check_old_style(rest, tok, ty);
     if (is_old_style)
@@ -1026,7 +1029,7 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
       error_tok(tok, "%s: in declaration : variable declared void", PARSE_C);
     if (!ty->name)
       error_tok(ty->name_pos, "%s: in declaration : variable name omitted1", PARSE_C);
-
+    
     if (attr && attr->is_static)
     {
       // static local variable
@@ -1071,6 +1074,7 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
       cur = cur->next = new_unary(ND_EXPR_STMT, expr, tok);
     }
 
+    //ISS-146
     if (var->ty->size < 0)
       error_tok(ty->name, "%s: in declaration : variable has incomplete type", PARSE_C);
 
@@ -1412,7 +1416,6 @@ static void struct_initializer1(Token **rest, Token *tok, Initializer *init)
 static void struct_initializer2(Token **rest, Token *tok, Initializer *init, Member *mem)
 {
   bool first = true;
-  // printf("%d %d \n", init->ty->kind, equal(tok, ","));
   for (; mem && !is_end(tok); mem = mem->next)
   {
     Token *start = tok;
@@ -1587,7 +1590,10 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
     return;
   }
 
+
   init->expr = assign(rest, tok);
+ 
+
 }
 
 static Type *copy_struct_type(Type *ty)
@@ -1612,6 +1618,7 @@ static Type *copy_struct_type(Type *ty)
 static Initializer *initializer(Token **rest, Token *tok, Type *ty, Type **new_ty)
 {
   Initializer *init = new_initializer(ty, true);
+  
   initializer2(rest, tok, init);
 
   if ((ty->kind == TY_STRUCT || ty->kind == TY_UNION) && ty->is_flexible)
@@ -2358,15 +2365,19 @@ static int64_t eval2(Node *node, char ***label)
     return 0;
   case ND_MEMBER:
     if (!label)
-      error_tok(node->tok, "%s: in eval2 : not a compile-time constant", PARSE_C);
+      error_tok(node->tok, "%s : in eval2 : not a compile-time constant", PARSE_C );
     if (node->ty->kind != TY_ARRAY)
       error_tok(node->tok, "%s: in eval2 : invalid initializer", PARSE_C);
     return eval_rval(node->lhs, label) + node->member->offset;
   case ND_VAR:
     if (!label)
       error_tok(node->tok, "%s: in eval2 : not a compile-time constant2", PARSE_C);
-    if (node->var->ty->kind != TY_ARRAY && node->var->ty->kind != TY_FUNC)
+      //trying to fix ======ISS-145 compiling util-linux failed with invalid initalizer2 
+    if (node->var->ty->kind != TY_ARRAY && node->var->ty->kind != TY_FUNC && node->var->ty->kind != TY_INT)
       error_tok(node->tok, "%s: in eval2 : invalid initializer2", PARSE_C);
+      //trying to fix ======ISS-145 compiling util-linux failed with invalid initalizer2 
+    if (node->var->ty->kind == TY_INT)
+      return 0;
     *label = &node->var->name;
     return 0;
   case ND_NUM:
@@ -3734,6 +3745,7 @@ static Node *primary(Token **rest, Token *tok)
 
     if (sc)
     {
+
       if (sc->var)
         return new_var_node(sc->var, tok);
       if (sc->enum_ty)
@@ -4242,6 +4254,7 @@ static Type *func_params2(Token **rest, Token *tok, Type *ty)
     // Token *name = ty2->name;
     Type *ty2 = declspec(&tok, tok, NULL);
     Type *backup = ty2;
+    
     ty2 = declarator(&tok, tok, ty2);
     if (ty2->kind == TY_PTR)
     {
@@ -4250,7 +4263,6 @@ static Type *func_params2(Token **rest, Token *tok, Type *ty)
     }
 
     Token *name = ty2->name;
-
     if (ty2->kind == TY_ARRAY)
     {
       // "array of T" is converted to "pointer to T" only in the parameter
@@ -4265,9 +4277,12 @@ static Type *func_params2(Token **rest, Token *tok, Type *ty)
       ty2 = pointer_to(ty2);
       ty2->name = name;
     }
+    
     cur = cur->next = copy_type(ty2);
+    
     // fixing ======issue#134 with wrong number of parameters when old C functions
     tok = tok->next;
+    
   }
 
   if (cur == &head)
