@@ -10,7 +10,12 @@ static char *argreg8[] = {"%dil", "%sil", "%dl", "%cl", "%r8b", "%r9b"};
 static char *argreg16[] = {"%di", "%si", "%dx", "%cx", "%r8w", "%r9w"};
 static char *argreg32[] = {"%edi", "%esi", "%edx", "%ecx", "%r8d", "%r9d"};
 static char *argreg64[] = {"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"};
-static char *registerUsed[] = {"", "", "", "", "", ""};
+
+static char *newargreg8[] = {"%cl","%bl", "%dl", "%al", "%ah", "%bh", "%ch", "%dh", "%dih", "%sih", "%r8h", "%r9h", "%dil", "%sil",  "%r8b", "%r9b",};
+static char *newargreg16[] = {"%cx", "%bx", "%dx", "%ax", "%ax", "%bx", "%cx", "%dx", "%di", "%si", "%r8w", "%r9w", "%di", "%si", "%r8w", "%r9w" };
+static char *newargreg32[] = {"%ecx", "%ebx", "%edx", "%eax", "%eax", "%ebx", "%ecx", "%edx", "%edi", "%esi", "%r8d", "%r9d", "%edi", "%esi", "%r8d", "%r9d" };
+static char *newargreg64[] = {"%rcx", "%rbx", "%rdx", "%rax", "%rax", "%rbx", "%rcx", "%rdx", "%rdi", "%rsi", "%r8", "%r9", "%rdi", "%rsi", "%r8", "%r9" };
+static char *registerUsed[] = {"free", "free", "free", "free", "free", "free", "free", "free", "free", "free", "free", "free", "free", "free", "free", "free"};
 
 static Obj *current_fn;
 
@@ -84,6 +89,80 @@ char *reg_dx(int sz)
   unreachable();
 }
 
+
+char *reg_di(int sz)
+{
+  switch (sz)
+  {
+  case 1:
+    return "%dil";
+  case 2:
+    return "%di";
+  case 4:
+    return "%edi";
+  case 8:
+    return "%rdi";
+  case 16:
+    return "%rdi";
+  }
+  unreachable();
+}
+
+char *reg_si(int sz)
+{
+  switch (sz)
+  {
+  case 1:
+    return "%sil";
+  case 2:
+    return "%si";
+  case 4:
+    return "%esi";
+  case 8:
+    return "%rsi";
+  case 16:
+    return "%rsi";
+  }
+  unreachable();
+}
+
+
+char *reg_r8w(int sz)
+{
+  switch (sz)
+  {
+  case 1:
+    return "%r8b";
+  case 2:
+    return "%r8w";
+  case 4:
+    return "%r8d";
+  case 8:
+    return "%r8";
+  case 16:
+    return "%r8";
+  }
+  unreachable();
+}
+
+char *reg_r9w(int sz)
+{
+  switch (sz)
+  {
+  case 1:
+    return "%r9b";
+  case 2:
+    return "%r9w";
+  case 4:
+    return "%r9d";
+  case 8:
+    return "%r9";
+  case 16:
+    return "%r9";
+  }
+  unreachable();
+}
+
 char *reg_bx(int sz)
 {
   switch (sz)
@@ -122,6 +201,7 @@ char *reg_cx(int sz)
 
 char *reg_ax(int sz)
 {
+
   switch (sz)
   {
   case 1:
@@ -133,7 +213,7 @@ char *reg_ax(int sz)
   case 8:
     return "%rax";
   case 16:
-    return "%rdx";
+    return "%rax";
   }
   unreachable();
 }
@@ -1903,7 +1983,7 @@ void assign_lvar_offsets_assembly(Obj *fn)
       top = align_to(top, 8);
       var->offset = 0 - top - var->ty->size;
       top += var->ty->size;
-      //printf("======variable %s %d\n", var->name, var->offset);
+      
     }
 
     // Assign offsets to pass-by-register parameters and local variables.
@@ -1924,7 +2004,7 @@ void assign_lvar_offsets_assembly(Obj *fn)
       bottom += var->ty->size;
       bottom = align_to(bottom, align);
       var->offset = -bottom;
-      //printf("======variable %s %d\n", var->name, var->offset);
+
     }
 
     fn->stack_size = align_to(bottom, 16);
@@ -1934,18 +2014,20 @@ void assign_lvar_offsets_assembly(Obj *fn)
 //check if a register is available
 char *register_available() {
 
-  int len = sizeof(argreg64)/sizeof(argreg64[0]);
+  int len = sizeof(newargreg64)/sizeof(newargreg64[0]);
   int i;
 
   
   for(i = 0; i < len; ++i)
   {
       //register already used
-      int found = check_register_used(argreg64[i]);
-      if (found)
+      bool isFound = check_register_used(newargreg64[i]);
+      if (isFound)
         continue;
-      else
-        return argreg64[i];
+      else {
+        add_register_used(newargreg64[i]);
+        return newargreg64[i];
+      }
   }
   //no registry available
   error("%s: in register_available : no register available!", CODEGEN_C);
@@ -1955,35 +2037,25 @@ char *register_available() {
 char *specific_register_available(char *regist) {
 
   int found = check_register_used(regist);
-  if (!found)
+  if (!found) {
+    add_register_used(regist);
     return regist;
-  
+  }
   return register_available();
-  // for(i = 0; i < len; ++i)
-  // {
-  //     //register already used
-  //     int found = check_register_used(argreg64[i]);
-  //     if (found)
-  //       continue;
-  //     else
-  //       return argreg64[i];
-  // }
-  // //no registry available
-  // error("%s: in specific_register_available : no register available!", CODEGEN_C);
   
 }
 
 //convert register 8 to register 64
 char *register8_to_64(char *regist) {
 
-int len = sizeof(argreg8)/sizeof(argreg8[0]);
+int len = sizeof(newargreg8)/sizeof(newargreg8[0]);
 int i;
 
   for(i = 0; i < len; ++i)
   {
-      if(!strncmp(argreg8[i], regist, strlen(regist)))
+      if(!strncmp(newargreg8[i], regist, strlen(regist)))
       {
-          return argreg64[i];
+          return newargreg64[i];
       }
   }
   error("%s: in register8_to_64 : unexpected error!", CODEGEN_C);
@@ -1992,14 +2064,14 @@ int i;
 //convert register 16 to register 64
 char *register16_to_64(char *regist) {
 
-int len = sizeof(argreg16)/sizeof(argreg16[0]);
+int len = sizeof(newargreg16)/sizeof(newargreg16[0]);
 int i;
 
   for(i = 0; i < len; ++i)
   {
-      if(!strncmp(argreg16[i], regist, strlen(regist)))
+      if(!strncmp(newargreg16[i], regist, strlen(regist)))
       {
-          return argreg64[i];
+          return newargreg64[i];
       }
   }
   error("%s: in register16_to_64 : unexpected error!", CODEGEN_C);
@@ -2008,14 +2080,14 @@ int i;
 //convert register 32 to register 64
 char *register32_to_64(char *regist) {
 
-int len = sizeof(argreg32)/sizeof(argreg32[0]);
+int len = sizeof(newargreg32)/sizeof(newargreg32[0]);
 int i;
 
   for(i = 0; i < len; ++i)
   {
-      if(!strncmp(argreg32[i], regist, strlen(regist)))
+      if(!strncmp(newargreg32[i], regist, strlen(regist)))
       {
-          return argreg64[i];
+          return newargreg64[i];
       }
   }
   error("%s: in register32_to_64 : unexpected error!", CODEGEN_C);
@@ -2026,10 +2098,10 @@ int add_register_used(char *regist) {
 
 int len = sizeof(registerUsed)/sizeof(registerUsed[0]);
 int i;
-
+char *tmp = "free";
   for(i = 0; i < len; ++i)
   {
-      if(!strncmp(registerUsed[i], "", strlen("")))
+       if (!strncmp(registerUsed[i], tmp, strlen(registerUsed[i])))
       {
           registerUsed[i] = regist;
           return i;
@@ -2041,24 +2113,27 @@ int i;
 
 
 //check if register used return 0 if not used
-int check_register_used(char *regist) {
+bool check_register_used(char *regist) {
 
+int isFound = false;
 int len = sizeof(registerUsed)/sizeof(registerUsed[0]);
 int i;
 
   for(i = 0; i < len; ++i)
   {
+      
       if(!strncmp(registerUsed[i], regist, strlen(regist)))
       {
-          return i;
+        isFound = true;
+        return isFound;
       }
   }
   //not found
-  return 0;
+  return isFound;
 }
 
 
-//clear the registerUsed
+//clear the registerUseds
 void clear_register_used() {
 
 int len = sizeof(registerUsed)/sizeof(registerUsed[0]);
@@ -2066,7 +2141,7 @@ int i;
 
   for(i = 0; i < len; ++i)
   {
-     registerUsed[i] = "";
+     registerUsed[i] = "free";
   }
 }
 
@@ -2076,36 +2151,37 @@ int i;
 
 void check_register_in_template(char *template) {
 
-int len = sizeof(argreg64)/sizeof(argreg64[0]);
+int len = sizeof(newargreg64)/sizeof(newargreg64[0]);
 
    //check if register 64 found in template and mark it as used
     for(int i = 0; i < len; ++i)
   {
-    if (strstr(template, argreg64[i]) != NULL)
-      add_register_used(argreg64[i]);
+    if (strstr(template, newargreg64[i]) != NULL)
+      add_register_used(newargreg64[i]);
   }
      //check if register 32 found in template and mark it as used
-  len = sizeof(argreg32)/sizeof(argreg32[0]);     
+  len = sizeof(newargreg32)/sizeof(newargreg32[0]);     
     for(int i = 0; i < len; ++i)
   {
-    if (strstr(template, argreg32[i]) != NULL)      
-      add_register_used(register32_to_64(argreg32[i]));
+
+    if (strstr(template, newargreg32[i]) != NULL)      
+      add_register_used(register32_to_64(newargreg32[i]));
   }
 
   //check if register 16 found in template and mark it as used
-  len = sizeof(argreg16)/sizeof(argreg16[0]);     
+  len = sizeof(newargreg16)/sizeof(newargreg16[0]);     
     for(int i = 0; i < len; ++i)
   {
-    if (strstr(template, argreg16[i]) != NULL)      
-      add_register_used(register16_to_64(argreg16[i]));
+    if (strstr(template, newargreg16[i]) != NULL)      
+      add_register_used(register16_to_64(newargreg16[i]));
   }
 
   //check if register 8 found in template and mark it as used
-  len = sizeof(argreg8)/sizeof(argreg8[0]);     
+  len = sizeof(newargreg8)/sizeof(newargreg8[0]);     
     for(int i = 0; i < len; ++i)
   {
-    if (strstr(template, argreg8[i]) != NULL)      
-      add_register_used(register8_to_64(argreg8[i]));
+    if (strstr(template, newargreg8[i]) != NULL)      
+      add_register_used(register8_to_64(newargreg8[i]));
   }
 
 }

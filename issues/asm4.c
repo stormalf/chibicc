@@ -1,5 +1,5 @@
 #include <stdint.h>
-
+#include <stdio.h>
 int main() {
     uint64_t msr;
 
