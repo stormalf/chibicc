@@ -254,6 +254,12 @@ curl : https://github.com/curl/curl.git
         CC       ../lib/dynbuf.o
         CCLD     curl
 
+    make test
+    TESTDONE: 1635 tests were considered during 418 seconds.
+    TESTDONE: 1314 tests out of 1316 reported OK: 99%
+    TESTFAIL: These test cases failed: 557 1119
+
+
 openssl : https://github.com/openssl/openssl.git
 
     CC=chibicc ./Configure
@@ -267,6 +273,9 @@ openssl : https://github.com/openssl/openssl.git
     	my $section='.note.gnu.property';
 
     make
+
+    make test
+    
 
 
 openssh-portable : https://github.com/openssh/openssh-portable.git
@@ -294,6 +303,7 @@ util-linux : https://github.com/util-linux/util-linux.git
     ./autogen.sh
     CC=chibicc CFLAGS=-fPIC ./configure
     make
+
     //to check if the compiled programs by chibicc work : 
     make check-programs
     cd tests
@@ -322,7 +332,22 @@ nginx: https://github.com/nginx/nginx.git
 
     CC=chibicc CFLAGS=-fPIC ./auto/configure
     make
+    
 
+
+zlib: https://github.com/madler/zlib.git
+
+    CC=chibicc CFLAGS="-fPIC" ./configure
+    make
+
+    make test
+    ...
+    *** zlib test OK ***
+    ...
+    *** zlib shared test OK ***
+    ...
+    *** zlib 64-bit test OK ***
+    
 
 
 ## Limits
@@ -376,7 +401,8 @@ Example of diagram generated with -dotfile parameter :
 ## release notes
 
 
-1.0.20    Fixing ISS-143 extended assembly doesn't manage well input with r. Removing assign1.c test doesn't work with gcc. Fixing ISS-144 compiling util-linux failed with expression returning void is not supported. Fixing ISS-145 compiling util-linux failed with invalid initalizer2. Fixing ISS-147 compiling util-linux failed with undefined variable __BYTE_ORDER__. Fixing ISS-148 compiling VLC failed with storage class specifier not allowed caused by static_assert function. Fixing also some issues with extended assembly not working in some cases. Fixing issue with extended assembly in string_replace that truncates the null terminated character and causing during nginx compile failure due to incorrect character. Generating "nop" instruction each time we found the memory barrier : __asm__ volatile ("" ::: "memory").
+1.0.20    Fixing ISS-143 extended assembly doesn't manage well input with r. Removing assign1.c test doesn't work with gcc. Fixing ISS-144 compiling util-linux failed with expression returning void is not supported. Fixing ISS-145 compiling util-linux failed with invalid initalizer2. Fixing ISS-147 compiling util-linux failed with undefined variable __BYTE_ORDER__. Fixing ISS-148 compiling VLC failed with storage class specifier not allowed caused by static_assert function. Fixing also some issues with extended assembly not working in some cases. Fixing issue with extended assembly in string_replace that truncates the null terminated character and causing during nginx compile failure due to incorrect character. Generating "nop" instruction each time we found the memory barrier : __asm__ volatile ("" ::: "memory"). Compiling successfully some projects like curl, nginx, zlib, util-linux, openssl, openssh-portable. But some tests failed for util-linux, openssl and curl that means that probably we have some bugs somewhere.
+
 
 ## old release notes
 

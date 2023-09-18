@@ -2133,7 +2133,7 @@ int i;
 }
 
 
-//clear the registerUsed
+//clear the registerUseds
 void clear_register_used() {
 
 int len = sizeof(registerUsed)/sizeof(registerUsed[0]);
