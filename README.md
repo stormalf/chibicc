@@ -318,6 +318,13 @@ util-linux : https://github.com/util-linux/util-linux.git
           libfdisk/gpt
     ---------------------------------------------------------------------
 
+nginx: https://github.com/nginx/nginx.git 
+
+    CC=chibicc CFLAGS=-fPIC ./auto/configure
+    make
+
+
+
 ## Limits
 
 Some C projects doesn't compile for now. It helps to find some bugs and to try to fix them!
@@ -328,8 +335,7 @@ VLC : https://github.com/videolan/vlc.git
     CC=chibicc CFLAGS="-fPIC" DEFS="-DHAVE_CONFIG_H -DHAVE_ATTRIBUTE_PACKED -DVLC_USED -DVLC_API -DVLC_DEPRECATED -DVLC_MALLOC" ./configure --disable-lua --disable-a52 --disable-xcb --disable-qt --disable-po --target=linux
     make all
 
-    VLC doesn't compile with chibicc because it has some extended assembly inline that are not managed yet. Even if for this part I'll try to use gcc it failed during linking with multiple definitions. If I use gcc to compile VLC it compiles fine. Perhaps mixing chibicc and gcc is not a great idea!
-    
+    VLC doesn't compile with chibicc some issues to fix later.
 
 ## TODO
 
@@ -370,7 +376,7 @@ Example of diagram generated with -dotfile parameter :
 ## release notes
 
 
-1.0.20    Fixing ISS-143 extended assembly doesn't manage well input with r. Removing assign1.c test doesn't work with gcc. Fixing ISS-144 compiling util-linux failed with expression returning void is not supported. Fixing ISS-145 compiling util-linux failed with invalid initalizer2. Fixing ISS-147 compiling util-linux failed with undefined variable __BYTE_ORDER__. Fixing ISS-148 compiling VLC failed with storage class specifier not allowed caused by static_assert function.
+1.0.20    Fixing ISS-143 extended assembly doesn't manage well input with r. Removing assign1.c test doesn't work with gcc. Fixing ISS-144 compiling util-linux failed with expression returning void is not supported. Fixing ISS-145 compiling util-linux failed with invalid initalizer2. Fixing ISS-147 compiling util-linux failed with undefined variable __BYTE_ORDER__. Fixing ISS-148 compiling VLC failed with storage class specifier not allowed caused by static_assert function. Fixing also some issues with extended assembly not working in some cases. Fixing issue with extended assembly in string_replace that truncates the null terminated character and causing during nginx compile failure due to incorrect character. Generating "nop" instruction each time we found the memory barrier : __asm__ volatile ("" ::: "memory").
 
 ## old release notes
 

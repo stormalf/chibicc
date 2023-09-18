@@ -59,7 +59,7 @@ typedef struct
 typedef struct
 {
     char *templatestr;
-    bool hasPercent;
+    //bool hasPercent;
 } AsmTemplate;
 
 typedef struct
@@ -117,6 +117,30 @@ static int asmtype = 0;
 
 char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
 {
+    char *input_asm_str;
+    char *output_loading;
+    asmtype = 0;
+    nbInput = 0;
+    nbOutput = 0;
+    nbClobber = 0;
+    nbLabel = 0;
+    char *template = tok->str;
+    char *asm_str = calloc(1, sizeof(char) * 400);
+    
+    //case __asm__ volatile ("" ::: "memory")
+    //we generate a nop operation for each memory border defined
+    if (strlen(template) == 0) {
+        while (!equal(tok->next, ")")) {
+            tok = tok->next;
+        }
+        *rest = tok->next;
+        *rest = skip(tok->next, ")");
+        tok = *rest;
+        asm_str = "\nnop;";
+        return asm_str;
+    }
+
+
     // allocate memory for all structs needed
     asmExt = calloc(1, sizeof(AsmExtended));
     asmExt->template = calloc(1, sizeof(AsmTemplate));
@@ -126,24 +150,19 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
         asmExt->output[i] = calloc(1, sizeof(AsmOutput));
     for (int i = 0; i < 10; i++)
         asmExt->clobber[i] = calloc(1, sizeof(AsmClobber));
+
+
+    strncpy(asm_str, "", strlen(asm_str) + 1);
     char *output_asm_str = calloc(1, sizeof(char) * 300);
-    char *input_final = calloc(1, sizeof(char) * 300);
-    char *asm_str = calloc(1, sizeof(char) * 500);
-    char *template = tok->str;
+    char *input_final = calloc(1, sizeof(char) * 400);
     asmExt->template->templatestr = template;
-    asmExt->template->hasPercent = check_template(template);
-    char *input_asm_str;
-    char *output_loading;
-    asmtype = 0;
-    nbInput = 0;
-    nbOutput = 0;
-    nbClobber = 0;
-    nbLabel = 0;
+    // asmExt->template->hasPercent = check_template(template);
+
     //clear the registerUsed array
     clear_register_used();
     //mark the register used if found in template
     check_register_in_template(template);
-    
+
     while (!equal(tok->next, ";") && !equal(tok, ";"))
     {
         switch (asmtype)
@@ -205,24 +224,26 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
         tok = tok->next;
     }
 
+
     //replace each %9 by the correct output register
     for (int i = 0; i < nbOutput; i++)
     {
         asm_str = subst_asm(template, asmExt->output[i]->reg, asmExt->output[i]->variableNumber);
     }
-    
+
     //replace each %9 by the correct input register
     for (int i = 0; i < nbInput; i++)
     {
-        
         asm_str = subst_asm(template, asmExt->input[i]->reg, asmExt->input[i]->variableNumber);                
+
     }
 
     //generate the input instructions before the output 
     if (input_final != NULL)
-    {
+    {  
         strncat(input_final, asm_str, strlen(asm_str));
         asm_str = input_final;
+        
     }
     //generate the output instructions
     if (output_asm_str != NULL)
@@ -238,7 +259,7 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
     asm_str = subst_asm(asm_str, " |", "%|");
     asm_str = subst_asm(asm_str, " }", "%}");
     if (isDebug)
-        printf("=====%s\n", asm_str);
+        printf("=====%s  =%s ==%s ===%s\n", template, asm_str, input_final, output_asm_str);
     *rest = tok;
     // free memory
     for (int i = 0; i < 10; i++)
@@ -247,6 +268,7 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
         free(asmExt->output[i]);
     for (int i = 0; i < 10; i++)
         free(asmExt->clobber[i]);
+
     return asm_str;
 }
 
@@ -257,6 +279,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
 
     while (!equal(tok->next, ":") && !equal(tok->next, ";"))
     {
+
         // register in write only mode
         // check if the register constraint is followed by a variable like "=r" (val)
         if (tok->kind == TK_STR)
@@ -270,7 +293,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->output[nbOutput]->prefix = "+";
                 asmExt->output[nbOutput]->reg = specific_register_available("%rax");
                 asmExt->output[nbOutput]->letter = 'r';
-                asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
+                //asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
                 
             }
             else if (!strncmp(tok->str, "=m", tok->len) || !strncmp(tok->str, "+m", tok->len))
@@ -282,7 +305,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->output[nbOutput]->prefix = "+";
                 asmExt->output[nbOutput]->reg = specific_register_available("%rax");
                 asmExt->output[nbOutput]->letter = 'm';
-                asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
+                //asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
                 
             }
             // assuming that it's =a =b ???
@@ -314,12 +337,12 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
 
                 asmExt->output[nbOutput]->isAlpha = true;
                 asmExt->output[nbOutput]->prefix = "=";
-                asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
+                //asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
                 
                 
             }
 
-
+            asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
             asmExt->output[nbOutput]->index = nbOutput;
         }
         // skip the comma
@@ -344,6 +367,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 asmExt->output[nbOutput]->reg = update_register_size(asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->size);
                 asmExt->output[nbOutput]->isVariable = true;
                 asmExt->output[nbOutput]->output = tok;
+                asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
                 
                 if (sc->var->funcname) {
                     
@@ -387,7 +411,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
 
                     }
                     asmExt->output[nbOutput]->reg = update_register_size(asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->size);
-                    
+                    asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
                     tok = tok->next;
                     *rest = skip(tok, ")");
                     return;
@@ -586,7 +610,7 @@ char *string_replace(char *str, char *oldstr, char *newstr)
         }
     }
 
-    strncpy(str, bstr, strlen(bstr));
+    strncpy(str, bstr, strlen(bstr) + 1);
     return str;
 }
 
@@ -596,7 +620,7 @@ char *generate_input_asm(char *input_str)
     char *tmp = calloc(1, sizeof(char) * 100);
     if (asmExt->input[nbInput]->isVariable)
     {
-        
+        strncat(tmp, "\n", 3);
         strncat(tmp, opcode(asmExt->input[nbInput]->size), strlen(opcode(asmExt->input[nbInput]->size)));
         strncat(tmp, load_variable(asmExt->input[nbInput]->offset), strlen(load_variable(asmExt->input[nbInput]->offset)));
         strncat(tmp, ", ", 3);
@@ -606,6 +630,7 @@ char *generate_input_asm(char *input_str)
     }
     else
     {
+        strncat(tmp, "\n", 3);
         strncat(tmp, opcode(asmExt->input[nbInput]->size), strlen(opcode(asmExt->input[nbInput]->size)));
         strncat(tmp, " $", 3);
         strncat(tmp, asmExt->input[nbInput]->input_value, strlen(asmExt->input[nbInput]->input_value));
@@ -630,6 +655,7 @@ char *generate_output_asm(char *output_str)
     char *tmp = calloc(1, sizeof(char) * 300);
     if (asmExt->output[nbOutput]->isVariable && !asmExt->output[nbOutput]->isAddress)
     {
+        strncat(tmp, "\n", 3);
         strncat(tmp, opcode(asmExt->output[nbOutput]->size), strlen(opcode(asmExt->output[nbOutput]->size)));
         strncat(tmp, asmExt->output[nbOutput]->variableNumber, strlen(asmExt->output[nbOutput]->variableNumber));
         strncat(tmp, ", ", 3);
@@ -649,13 +675,13 @@ char *generate_output_asm(char *output_str)
     }
     else
     {
-        strncat(tmp, "\n", 2);
+        strncat(tmp, "\n", 3);
         strncat(tmp, "  movq ", 8);
         strncat(tmp, load_variable(asmExt->output[nbOutput]->offset), strlen(load_variable(asmExt->output[nbOutput]->offset)));
         strncat(tmp, ", %rsi\n", 8);
         strncat(tmp, opcode(asmExt->output[nbOutput]->size), strlen(opcode(asmExt->output[nbOutput]->size)));
         strncat(tmp, asmExt->output[nbOutput]->variableNumber, strlen(asmExt->output[nbOutput]->variableNumber));
-        strncat(tmp, ", (%rsi)\n", 10);
+        strncat(tmp, ", (%rsi)\n", 11);
         return tmp;
     }
 
@@ -759,6 +785,7 @@ int retrieve_output_index_from_letter(char letter)
 //retrieve the variable number string like M0, %1, %2...
 char * retrieveVariableNumber(int index) 
 {
+    
     if (index >=6)
         error("%s: in retrieveVariableNumber : index %d not managed yet!", EXTASM_C, index);    
     char *tmp;        

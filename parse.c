@@ -171,7 +171,7 @@ static void enter_scope(void)
 {
   Scope *sc = calloc(1, sizeof(Scope));
   if (sc == NULL)
-    error("%s: in enter_scope : sc pointer is null!", PARSE_C);
+    error("%s : in enter_scope : sc pointer is null!", PARSE_C );
   sc->next = scope;
   scope = sc;
 }
@@ -2365,7 +2365,7 @@ static int64_t eval2(Node *node, char ***label)
     return 0;
   case ND_MEMBER:
     if (!label)
-      error_tok(node->tok, "%s: in eval2 : not a compile-time constant", PARSE_C);
+      error_tok(node->tok, "%s : in eval2 : not a compile-time constant", PARSE_C );
     if (node->ty->kind != TY_ARRAY)
       error_tok(node->tok, "%s: in eval2 : invalid initializer", PARSE_C);
     return eval_rval(node->lhs, label) + node->member->offset;
@@ -3745,6 +3745,7 @@ static Node *primary(Token **rest, Token *tok)
 
     if (sc)
     {
+
       if (sc->var)
         return new_var_node(sc->var, tok);
       if (sc->enum_ty)
@@ -3758,7 +3759,7 @@ static Node *primary(Token **rest, Token *tok)
       return node;
       // error_tok(tok, "%s: in primary : implicit declaration of a function", PARSE_C);
     }
-    //printf("=======%s %p\n", tok->loc, sc);
+
     error_tok(tok, "%s: in primary : error: undefined variable", PARSE_C);
   }
 
