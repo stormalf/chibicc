@@ -2141,7 +2141,7 @@ int i;
 
   for(i = 0; i < len; ++i)
   {
-     registerUsed[i] = "";
+     registerUsed[i] = "free";
   }
 }
 
