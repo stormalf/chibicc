@@ -81,8 +81,12 @@ static CondIncl *cond_incl;
 static HashMap pragma_once;
 static int include_next_idx;
 
+
+
 //ISS-142
 extern bool opt_E;
+
+extern Context *ctx;
 
 static Token *preprocess2(Token *tok);
 static Macro *find_macro(Token *tok);
@@ -310,8 +314,12 @@ static Token *read_const_expr(Token **rest, Token *tok)
       Macro *m = find_macro(tok);
       tok = tok->next;
 
-      if (has_paren)
-        tok = skip(tok, ")");
+      if (has_paren) {
+        ctx->filename = PREPROCESS_C;
+        ctx->funcname = "read_const_expr";        
+        ctx->line_no = __LINE__ + 1;           
+        tok = skip(tok, ")", ctx);
+      }
 
       cur = cur->next = new_num_token(m ? 1 : 0, start);
       continue;
@@ -328,6 +336,7 @@ static Token *read_const_expr(Token **rest, Token *tok)
 static long eval_const_expr(Token **rest, Token *tok)
 {
   Token *start = tok;
+  
   Token *expr = read_const_expr(rest, tok->next);
   expr = preprocess2(expr);
 
@@ -399,13 +408,20 @@ static MacroParam *read_macro_params(Token **rest, Token *tok, char **va_args_na
 
   while (!equal(tok, ")"))
   {
-    if (cur != &head)
-      tok = skip(tok, ",");
+    if (cur != &head) {
+      ctx->filename = PREPROCESS_C;
+      ctx->funcname = "read_macro_params";        
+      ctx->line_no = __LINE__ + 1;         
+      tok = skip(tok, ",", ctx);
+    }
 
     if (equal(tok, "..."))
     {
       *va_args_name = "__VA_ARGS__";
-      *rest = skip(tok->next, ")");
+      ctx->filename = PREPROCESS_C;
+      ctx->funcname = "read_macro_params";        
+      ctx->line_no = __LINE__ + 1;          
+      *rest = skip(tok->next, ")", ctx);
       return head.next;
     }
 
@@ -415,7 +431,10 @@ static MacroParam *read_macro_params(Token **rest, Token *tok, char **va_args_na
     if (equal(tok->next, "..."))
     {
       *va_args_name = strndup(tok->loc, tok->len);
-      *rest = skip(tok->next->next, ")");
+      ctx->filename = PREPROCESS_C;
+      ctx->funcname = "read_macro_params";        
+      ctx->line_no = __LINE__ + 1;          
+      *rest = skip(tok->next->next, ")", ctx);
       return head.next;
     }
 
@@ -505,8 +524,12 @@ read_macro_args(Token **rest, Token *tok, MacroParam *params, char *va_args_name
   MacroParam *pp = params;
   for (; pp; pp = pp->next)
   {
-    if (cur != &head)
-      tok = skip(tok, ",");
+    if (cur != &head) {
+      ctx->filename = PREPROCESS_C;
+      ctx->funcname = "read_macro_args";        
+      ctx->line_no = __LINE__ + 1;          
+      tok = skip(tok, ",", ctx);
+    }
     cur = cur->next = read_macro_arg_one(&tok, tok, false);
     cur->name = pp->name;
   }
@@ -524,8 +547,12 @@ read_macro_args(Token **rest, Token *tok, MacroParam *params, char *va_args_name
     }
     else
     {
-      if (pp != params)
-        tok = skip(tok, ",");
+      if (pp != params) {
+        ctx->filename = PREPROCESS_C;
+        ctx->funcname = "read_macro_args";        
+        ctx->line_no = __LINE__ + 1;           
+        tok = skip(tok, ",", ctx);
+      }
       arg = read_macro_arg_one(&tok, tok, true);
     }
     arg->name = va_args_name;
@@ -538,7 +565,10 @@ read_macro_args(Token **rest, Token *tok, MacroParam *params, char *va_args_name
     error_tok(start, "%s: in read_macro_args : too many arguments", PREPROCESS_C);
   }
 
-  skip(tok, ")");
+  ctx->filename = PREPROCESS_C;
+  ctx->funcname = "read_macro_args";        
+  ctx->line_no = __LINE__ + 1;   
+  skip(tok, ")",ctx);
   *rest = tok;
   return head.next;
 }
@@ -711,7 +741,10 @@ static Token *subst(Token *tok, MacroArg *args)
       if (has_varargs(args))
         for (Token *t = arg->tok; t->kind != TK_EOF; t = t->next)
           cur = cur->next = t;
-      tok = skip(tok, ")");
+      ctx->filename = PREPROCESS_C;
+      ctx->funcname = "subst";        
+      ctx->line_no = __LINE__ + 1;             
+      tok = skip(tok, ")", ctx);
       continue;
     }
 

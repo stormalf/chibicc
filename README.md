@@ -277,7 +277,6 @@ openssl : https://github.com/openssl/openssl.git
     make test
     
 
-
 openssh-portable : https://github.com/openssh/openssh-portable.git
 
     autoreconf -fi
@@ -309,24 +308,9 @@ util-linux : https://github.com/util-linux/util-linux.git
     cd tests
     run.sh 
     ---------------------------------------------------------------------
-      8 tests of 266 FAILED
-    
-          blkid/low-probe
-          blkid/lowprobe-pt
-          hardlink/options
-          libfdisk/gpt
-          libfdisk/mkpart
-          libfdisk/mkpart-full
-          misc/waitpid
-          partx/partx-image
+      All 280 tests PASSED
     ---------------------------------------------------------------------
         
-    compiled with gcc and performing tests to compare : 
-    ---------------------------------------------------------------------
-      1 tests of 266 FAILED
-    
-          libfdisk/gpt
-    ---------------------------------------------------------------------
 
 nginx: https://github.com/nginx/nginx.git 
 
@@ -349,6 +333,17 @@ zlib: https://github.com/madler/zlib.git
     *** zlib 64-bit test OK ***
     
 
+vim: https://github.com/vim/vim.git
+
+    CC=chibicc CFLAGS="-fPIC" ./configure
+    make
+    make test    
+    == SUMMARY ==
+    Test run on 2023 Sep 23 14:15:31
+    OK: 10
+    FAILED: 0: []
+    skipped: 0    
+
 
 ## Limits
 
@@ -357,7 +352,7 @@ Some C projects doesn't compile for now. It helps to find some bugs and to try t
 VLC : https://github.com/videolan/vlc.git 
 
     ./bootstrap
-    CC=chibicc CFLAGS="-fPIC" DEFS="-DHAVE_CONFIG_H -DHAVE_ATTRIBUTE_PACKED -DVLC_USED -DVLC_API -DVLC_DEPRECATED -DVLC_MALLOC" ./configure --disable-lua --disable-a52 --disable-xcb --disable-qt --disable-po --target=linux
+    CC=chibicc CFLAGS="-fPIC" DEFS="-DHAVE_CONFIG_H -DHAVE_ATTRIBUTE_PACKED -DVLC_USED -DVLC_API -DVLC_DEPRECATED -DVLC_MALLOC" ./configure --disable-lua --disable-a52 --disable-xcb --disable-qt --disable-po --disable-alsa --target=linux
     make all
 
     VLC doesn't compile with chibicc some issues to fix later.
@@ -365,7 +360,7 @@ VLC : https://github.com/videolan/vlc.git
 ## TODO
 
 - trying to compile other C projects from source to see what is missing or which bug we have with chibicc.
-- trying to manage other assembly functions like \_\_asm\_\_("xchgb %b0,%h0": "=Q"(x):"0"(x));
+
 
 ## issues and pull requests fixed
 
@@ -401,7 +396,8 @@ Example of diagram generated with -dotfile parameter :
 ## release notes
 
 
-1.0.20    Fixing ISS-143 extended assembly doesn't manage well input with r. Removing assign1.c test doesn't work with gcc. Fixing ISS-144 compiling util-linux failed with expression returning void is not supported. Fixing ISS-145 compiling util-linux failed with invalid initalizer2. Fixing ISS-147 compiling util-linux failed with undefined variable __BYTE_ORDER__. Fixing ISS-148 compiling VLC failed with storage class specifier not allowed caused by static_assert function. Fixing also some issues with extended assembly not working in some cases. Fixing issue with extended assembly in string_replace that truncates the null terminated character and causing during nginx compile failure due to incorrect character. Generating "nop" instruction each time we found the memory barrier : __asm__ volatile ("" ::: "memory"). Compiling successfully some projects like curl, nginx, zlib, util-linux, openssl, openssh-portable. But some tests failed for util-linux, openssl and curl that means that probably we have some bugs somewhere.
+1.0.21    Fixing ISS-154 extended assembly   __asm__ __volatile__ ("rep; nop" ::: "memory"). Fixing temporary ISS-153 error during struct initialization during neovim compilation.
+          Fixing ISS-156 STATIC_ASSERT(40 + 40 + 40 == sizeof(struct uv__io_uring_params)) causing issue (found during neovim compilation). Fixing temporary issue #40 about variable in parameter used for other parameter like issue40.c it causes other issue with VLC. 
 
 
 ## old release notes
