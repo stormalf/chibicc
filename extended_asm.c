@@ -114,6 +114,9 @@ static int nbOutput = 0;
 static int nbClobber = 0;
 static int nbLabel = 0;
 static int asmtype = 0;
+extern Context *ctx;
+
+
 
 char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
 {
@@ -126,7 +129,8 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
     nbLabel = 0;
     char *template = tok->str;
     char *asm_str = calloc(1, sizeof(char) * 400);
-    
+    ctx->filename = EXTASM_C;
+    ctx->funcname = "extended_asm";
     //case __asm__ volatile ("" ::: "memory")
     //we generate a nop operation for each memory border defined
     if (strlen(template) == 0) {
@@ -134,7 +138,8 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             tok = tok->next;
         }
         *rest = tok->next;
-        *rest = skip(tok->next, ")");
+        ctx->line_no = __LINE__ + 1;
+        *rest = skip(tok->next, ")", ctx);
         tok = *rest;
         asm_str = "\nnop;";
         return asm_str;
@@ -172,18 +177,17 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
         case AT_OUTPUT: // outputs
             output_asm(node, rest, tok, locals);
             // generate output instruction for each output variable
-            if (!asmExt->output[nbOutput]->variableNumber)
-                error("%s : in extended_asm function extended_asm :asmExt->output[nbOutput]->variableNumber is null!", EXTASM_C);
-            output_loading = generate_output_asm(asmExt->output[nbOutput]->variableNumber);
-            // replace %9 by the correct register
-            if (!output_loading)
-               error("%s : in extended_asm function extended_asm :output_loading is null!", EXTASM_C);
-            if (!asmExt->output[nbOutput]->reg)
-               error("%s : in extended_asm function extended_asm :asmExt->output[nbOutput]->reg is null!", EXTASM_C);                 
-            output_loading = subst_asm(output_loading, asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->variableNumber);
-            //generate the ouput instruction
-            strncat(output_asm_str, output_loading, strlen(output_loading));
-            
+            if (asmExt->output[nbOutput]->variableNumber) {
+                output_loading = generate_output_asm(asmExt->output[nbOutput]->variableNumber);
+                // replace %9 by the correct register
+                if (!output_loading)
+                error("%s : in extended_asm function extended_asm :output_loading is null!", EXTASM_C);
+                if (!asmExt->output[nbOutput]->reg)
+                error("%s : in extended_asm function extended_asm :asmExt->output[nbOutput]->reg is null!", EXTASM_C);                 
+                output_loading = subst_asm(output_loading, asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->variableNumber);
+                //generate the ouput instruction
+                strncat(output_asm_str, output_loading, strlen(output_loading));
+            }
             nbOutput++;
             tok = *rest;
             break;
@@ -191,18 +195,17 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             // return %0, %1 or %x
             input_asm(node, rest, tok, locals);
             // generate input instruction to load the parameter into register
-            if (!asmExt->input[nbInput]->variableNumber)
-                error("%s : in extended_asm function extended_asm :asmExt->input[nbInput]->variableNumber is null!", EXTASM_C);
-            input_asm_str = generate_input_asm(asmExt->input[nbInput]->variableNumber);
-            //replace %9, by the correct
-            if (!input_asm_str)
-                error("%s : in extended_asm function extended_asm :input_asm_str is null!", EXTASM_C);
-            if (!asmExt->input[nbInput]->reg)
-                error("%s : in extended_asm function extended_asm :asmExt->input[nbInput]->reg is null!", EXTASM_C);
-            input_asm_str = subst_asm(input_asm_str, asmExt->input[nbInput]->reg, asmExt->input[nbInput]->variableNumber);
-            // concatenate the input final strings to add to the assembly
-            strncat(input_final, input_asm_str, strlen(input_asm_str));
-
+            if (asmExt->input[nbInput]->variableNumber) {
+                input_asm_str = generate_input_asm(asmExt->input[nbInput]->variableNumber);
+                //replace %9, by the correct
+                if (!input_asm_str)
+                    error("%s : in extended_asm function extended_asm :input_asm_str is null!", EXTASM_C);
+                if (!asmExt->input[nbInput]->reg)
+                    error("%s : in extended_asm function extended_asm :asmExt->input[nbInput]->reg is null!", EXTASM_C);
+                input_asm_str = subst_asm(input_asm_str, asmExt->input[nbInput]->reg, asmExt->input[nbInput]->variableNumber);
+                // concatenate the input final strings to add to the assembly
+                strncat(input_final, input_asm_str, strlen(input_asm_str));
+            }
             nbInput++;
             tok = *rest;
             break;
@@ -276,7 +279,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
 {
     
     VarScope *sc;
-
+    ctx->funcname = "output_asm";
     while (!equal(tok->next, ":") && !equal(tok->next, ";"))
     {
 
@@ -332,8 +335,13 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->output[nbOutput]->reg = specific_register_available("%rdx");
                     asmExt->output[nbOutput]->letter = 'd';
                 }
-                else
-                    error_tok(tok, "%s : in output_asm function : not implemented yet!", EXTASM_C);
+                else {
+                tok = tok->next;
+                ctx->line_no = __LINE__ + 1;
+                *rest = skip(tok, ")", ctx);
+                return;
+                }
+                    
 
                 asmExt->output[nbOutput]->isAlpha = true;
                 asmExt->output[nbOutput]->prefix = "=";
@@ -346,12 +354,15 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             asmExt->output[nbOutput]->index = nbOutput;
         }
         // skip the comma
-        else if (equal(tok, ","))
-            tok = skip(tok, ",");
+        else if (equal(tok, ",")) {
+            ctx->line_no = __LINE__ + 1;
+            tok = skip(tok, ",", ctx);
+        }
         // manage the variable inside parenthesis
         else if (equal(tok, "("))
         {
-            tok = skip(tok, "(");
+            ctx->line_no = __LINE__ + 1;
+            tok = skip(tok, "(", ctx);
             // check if the variable is defined
             if (tok->kind == TK_IDENT)
             {
@@ -383,7 +394,8 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 // skip the variable to go to next token that should be a ")"
                 // tok = tok->next;
                 tok = tok->next;
-                *rest = skip(tok, ")");
+                ctx->line_no = __LINE__ + 1;
+                *rest = skip(tok, ")", ctx);
                 return;
             }
             // pointer
@@ -413,16 +425,19 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->output[nbOutput]->reg = update_register_size(asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->size);
                     asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
                     tok = tok->next;
-                    *rest = skip(tok, ")");
+
+                    ctx->funcname = "output_asm";
+                    ctx->line_no = __LINE__ + 1 ;
+                    *rest = skip(tok, ")", ctx);
                     return;
                 }
             }
-            else
-                error_tok(tok, "%s : in output_asm function : identifier expected!", EXTASM_C);
+            // else
+            //     error_tok(tok, "%s : in output_asm function : identifier expected!", EXTASM_C);
         }
 
-        else
-            error_tok(tok, "%s : in output_asm function : output constraint not managed yet!", EXTASM_C);
+        // else
+        //     error_tok(tok, "%s : in output_asm function : output constraint not managed yet!", EXTASM_C);
 
         tok = tok->next;
     }
@@ -431,7 +446,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
 
 void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
 {
-
+    ctx->funcname = "input_asm";
     VarScope *sc;
     char *input_value = calloc(1, sizeof(char) * 20);
     asmExt->input[nbInput]->offset = 0;
@@ -516,7 +531,8 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
         }
         else if (equal(tok, "("))
         {
-            tok = skip(tok, "(");
+            ctx->line_no = __LINE__ + 1;
+            tok = skip(tok, "(", ctx);
             // check if the variable is defined
             if (tok->kind == TK_IDENT)
             {
@@ -532,7 +548,8 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 } 
                 asmExt->input[nbInput]->reg = update_register_size(asmExt->input[nbInput]->reg, asmExt->input[nbInput]->size);
                 tok = tok->next;
-                *rest = skip(tok, ")");
+                ctx->line_no = __LINE__ + 1;
+                *rest = skip(tok, ")", ctx);
                 return;
             } // immediate value
             else if (tok->kind == TK_NUM)
@@ -547,7 +564,8 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 asmExt->input[nbInput]->input_value = input_value;
                 asmExt->input[nbInput]->size = tok->ty->size;
                 tok = tok->next;
-                *rest = skip(tok, ")");
+                ctx->line_no = __LINE__ + 1;
+                *rest = skip(tok, ")", ctx);
                 return;
             } // pointer
             else if (equal(tok, "*"))
@@ -569,15 +587,18 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     } 
                     asmExt->input[nbInput]->reg = update_register_size(asmExt->input[nbInput]->reg, asmExt->input[nbInput]->size);
                     tok = tok->next;
-                    *rest = skip(tok, ")");
+                    ctx->line_no = __LINE__ + 1;
+                    *rest = skip(tok, ")", ctx);
                     return;
                 }
             }
         }
-        else if (equal(tok, ","))
-            tok = skip(tok, ",");
-        else
-            error_tok(tok, "%s : in input_asm function : input complex constraint not managed yet!", EXTASM_C);
+        else if (equal(tok, ",")) {
+            ctx->line_no = __LINE__ + 1;
+            tok = skip(tok, ",", ctx);
+        }
+        // else
+        //     error_tok(tok, "%s : in input_asm function : input complex constraint not managed yet!", EXTASM_C);
 
         tok = tok->next;
     }

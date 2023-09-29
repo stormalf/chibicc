@@ -31,7 +31,7 @@
 #endif
 
 #define PRODUCT "chibicc"
-#define VERSION "1.0.20"
+#define VERSION "1.0.21"
 #define MAXLEN 101
 #define DEFAULT_TARGET_MACHINE "x86_64-linux-gnu"
 
@@ -93,6 +93,16 @@ typedef struct Node Node;
 typedef struct Member Member;
 typedef struct Relocation Relocation;
 typedef struct Hideset Hideset;
+
+
+typedef struct
+{
+  char *filename;
+  char *funcname;
+  int line_no;
+} Context;
+
+typedef Context Context;
 
 //
 // strings.c
@@ -163,7 +173,7 @@ noreturn void error_at(char *loc, char *fmt, ...) __attribute__((format(printf, 
 noreturn void error_tok(Token *tok, char *fmt, ...) __attribute__((format(printf, 2, 3)));
 void warn_tok(Token *tok, char *fmt, ...) __attribute__((format(printf, 2, 3)));
 bool equal(Token *tok, char *op);
-Token *skip(Token *tok, char *op);
+Token *skip(Token *tok, char *op, Context *ctx);
 bool consume(Token **rest, Token *tok, char *str);
 void convert_pp_tokens(Token *tok);
 File **get_input_files(void);

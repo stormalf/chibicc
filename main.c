@@ -51,6 +51,7 @@ char *dot_file;
 bool isDotfile = false;
 bool isDebug = false;
 char *previousfile = " ";
+Context *ctx;
 
 static char logFile[] = "/tmp/chibicc.log";
 static StringArray input_paths;
@@ -1028,11 +1029,15 @@ static void run_linker(StringArray *inputs, char *output)
     strarray_push(&arr, "/lib64/ld-linux-x86-64.so.2");
   }
 
-  for (int i = 0; i < ld_extra_args.len; i++)
+  for (int i = 0; i < ld_extra_args.len; i++) {
+    //printf("====%s\n", ld_extra_args.data[i]);
     strarray_push(&arr, ld_extra_args.data[i]);
+  }
 
-  for (int i = 0; i < inputs->len; i++)
+  for (int i = 0; i < inputs->len; i++) {
+    //printf("====%s\n", inputs->data[i]);
     strarray_push(&arr, inputs->data[i]);
+  }
 
   if (opt_static)
   {
@@ -1090,6 +1095,7 @@ static FileType get_file_type(char *filename)
 int main(int argc, char **argv)
 {
   atexit(cleanup);
+  ctx = calloc(1, sizeof(Context));
 
   parse_args(argc, argv);
 
