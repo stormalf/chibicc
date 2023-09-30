@@ -51,6 +51,7 @@ char *dot_file;
 bool isDotfile = false;
 bool isDebug = false;
 char *previousfile = " ";
+Context *ctx;
 
 static char logFile[] = "/tmp/chibicc.log";
 static StringArray input_paths;
@@ -101,9 +102,11 @@ static void add_default_include_paths(char *argv0)
 
   // Add standard include paths.
   strarray_push(&include_paths, "/usr/local/include");
+  strarray_push(&include_paths, "/usr/local/include/x86_64-linux-gnu/chibicc");
   strarray_push(&include_paths, "/usr/include/x86_64-linux-gnu");
   strarray_push(&include_paths, "/usr/include");
-  strarray_push(&include_paths, "/usr/include/chibicc/include");
+  //strarray_push(&include_paths, "/usr/include/chibicc/include");
+  
 
   // Keep a copy of the standard include paths for -MMD option.
   for (int i = 0; i < include_paths.len; i++)
@@ -1026,11 +1029,15 @@ static void run_linker(StringArray *inputs, char *output)
     strarray_push(&arr, "/lib64/ld-linux-x86-64.so.2");
   }
 
-  for (int i = 0; i < ld_extra_args.len; i++)
+  for (int i = 0; i < ld_extra_args.len; i++) {
+    //printf("====%s\n", ld_extra_args.data[i]);
     strarray_push(&arr, ld_extra_args.data[i]);
+  }
 
-  for (int i = 0; i < inputs->len; i++)
+  for (int i = 0; i < inputs->len; i++) {
+    //printf("====%s\n", inputs->data[i]);
     strarray_push(&arr, inputs->data[i]);
+  }
 
   if (opt_static)
   {
@@ -1062,8 +1069,6 @@ static void run_linker(StringArray *inputs, char *output)
 
 static FileType get_file_type(char *filename)
 {
-  if (opt_x != FILE_NONE)
-    return opt_x;
 
   if (endswith(filename, ".a"))
     return FILE_AR;
@@ -1080,12 +1085,17 @@ static FileType get_file_type(char *filename)
   if (endswith(filename, ".so.4"))
     return FILE_DSO;
 
+  if (opt_x != FILE_NONE)
+    return opt_x;
+
+
   error("%s : in get_file_type <command line>: unknown file extension: %s", MAIN_C, filename);
 }
 
 int main(int argc, char **argv)
 {
   atexit(cleanup);
+  ctx = calloc(1, sizeof(Context));
 
   parse_args(argc, argv);
 

@@ -18,6 +18,7 @@
 #include <time.h>
 #include <unistd.h>
 
+
 #ifndef __has_attribute
 #define __has_attribute(x) __GCC4_has_attribute_##x
 #endif
@@ -30,7 +31,7 @@
 #endif
 
 #define PRODUCT "chibicc"
-#define VERSION "1.0.17"
+#define VERSION "1.0.21"
 #define MAXLEN 101
 #define DEFAULT_TARGET_MACHINE "x86_64-linux-gnu"
 
@@ -92,6 +93,16 @@ typedef struct Node Node;
 typedef struct Member Member;
 typedef struct Relocation Relocation;
 typedef struct Hideset Hideset;
+
+
+typedef struct
+{
+  char *filename;
+  char *funcname;
+  int line_no;
+} Context;
+
+typedef Context Context;
 
 //
 // strings.c
@@ -162,7 +173,7 @@ noreturn void error_at(char *loc, char *fmt, ...) __attribute__((format(printf, 
 noreturn void error_tok(Token *tok, char *fmt, ...) __attribute__((format(printf, 2, 3)));
 void warn_tok(Token *tok, char *fmt, ...) __attribute__((format(printf, 2, 3)));
 bool equal(Token *tok, char *op);
-Token *skip(Token *tok, char *op);
+Token *skip(Token *tok, char *op, Context *ctx);
 bool consume(Token **rest, Token *tok, char *str);
 void convert_pp_tokens(Token *tok);
 File **get_input_files(void);
@@ -499,6 +510,7 @@ Type *enum_type(void);
 Type *struct_type(void);
 void add_type(Node *node);
 
+
 char *nodekind2str(NodeKind kind);
 
 //
@@ -518,6 +530,20 @@ char *reg_ax(int sz);
 char *reg_bx(int sz);
 char *reg_cx(int sz);
 char *reg_dx(int sz);
+char *reg_di(int sz);
+char *reg_si(int sz);
+char *reg_r8w(int sz);
+char *reg_r9w(int sz);
+void assign_lvar_offsets_assembly(Obj *fn);
+int add_register_used(char *regist);
+void clear_register_used();
+char *register32_to_64(char *regist);
+char *register16_to_64(char *regist);
+char *register8_to_64(char *regist);
+char *register_available();  
+char *specific_register_available(char *regist); 
+bool check_register_used(char *regist);
+void check_register_in_template(char *template); 
 
 //
 // unicode.c
@@ -581,19 +607,21 @@ extern char *extract_path(char *tmpl, char *basename);
 // extended_asm.c
 //
 
-char *extended_asm(Node *node, Token **rest, Token *tok);
-char *output_asm(Node *node, Token **rest, Token *tok);
-char *input_asm(Node *node, Token **rest, Token *tok);
+char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals);
+void output_asm(Node *node, Token **rest, Token *tok, Obj *locals);
+void input_asm(Node *node, Token **rest, Token *tok, Obj *locals);
 char *subst_asm(char *template, char *output_str, char *input_str);
 char *string_replace(char *str, char *oldstr, char *newstr);
 char *generate_input_asm(char *input_str);
 bool check_template(char *template);
 int search_output_index(char c);
 char *int_to_string(int i);
-int retrieve_parameter_order(int order, char *funcname);
+void update_offset(char *funcname, Obj *locals);
 char *load_variable(int order);
 char *generate_output_asm(char *output_str);
 char *opcode(int size);
 char *update_register_size(char *reg, int size);
 char *retrieve_output_index_str(char letter);
-int retrieve_output_index(char letter);
+int retrieve_output_index_from_letter(char letter);
+
+char *retrieveVariableNumber(int index);

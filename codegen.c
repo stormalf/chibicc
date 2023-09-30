@@ -10,10 +10,18 @@ static char *argreg8[] = {"%dil", "%sil", "%dl", "%cl", "%r8b", "%r9b"};
 static char *argreg16[] = {"%di", "%si", "%dx", "%cx", "%r8w", "%r9w"};
 static char *argreg32[] = {"%edi", "%esi", "%edx", "%ecx", "%r8d", "%r9d"};
 static char *argreg64[] = {"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"};
+
+static char *newargreg8[] = {"%cl","%bl", "%dl", "%al", "%ah", "%bh", "%ch", "%dh", "%dih", "%sih", "%r8h", "%r9h", "%dil", "%sil",  "%r8b", "%r9b",};
+static char *newargreg16[] = {"%cx", "%bx", "%dx", "%ax", "%ax", "%bx", "%cx", "%dx", "%di", "%si", "%r8w", "%r9w", "%di", "%si", "%r8w", "%r9w" };
+static char *newargreg32[] = {"%ecx", "%ebx", "%edx", "%eax", "%eax", "%ebx", "%ecx", "%edx", "%edi", "%esi", "%r8d", "%r9d", "%edi", "%esi", "%r8d", "%r9d" };
+static char *newargreg64[] = {"%rcx", "%rbx", "%rdx", "%rax", "%rax", "%rbx", "%rcx", "%rdx", "%rdi", "%rsi", "%r8", "%r9", "%rdi", "%rsi", "%r8", "%r9" };
+static char *registerUsed[] = {"free", "free", "free", "free", "free", "free", "free", "free", "free", "free", "free", "free", "free", "free", "free", "free"};
+
 static Obj *current_fn;
 
 static void gen_expr(Node *node);
 static void gen_stmt(Node *node);
+static void print_offset(Obj *prog);
 
 __attribute__((format(printf, 1, 2))) static void println(char *fmt, ...)
 {
@@ -81,6 +89,80 @@ char *reg_dx(int sz)
   unreachable();
 }
 
+
+char *reg_di(int sz)
+{
+  switch (sz)
+  {
+  case 1:
+    return "%dil";
+  case 2:
+    return "%di";
+  case 4:
+    return "%edi";
+  case 8:
+    return "%rdi";
+  case 16:
+    return "%rdi";
+  }
+  unreachable();
+}
+
+char *reg_si(int sz)
+{
+  switch (sz)
+  {
+  case 1:
+    return "%sil";
+  case 2:
+    return "%si";
+  case 4:
+    return "%esi";
+  case 8:
+    return "%rsi";
+  case 16:
+    return "%rsi";
+  }
+  unreachable();
+}
+
+
+char *reg_r8w(int sz)
+{
+  switch (sz)
+  {
+  case 1:
+    return "%r8b";
+  case 2:
+    return "%r8w";
+  case 4:
+    return "%r8d";
+  case 8:
+    return "%r8";
+  case 16:
+    return "%r8";
+  }
+  unreachable();
+}
+
+char *reg_r9w(int sz)
+{
+  switch (sz)
+  {
+  case 1:
+    return "%r9b";
+  case 2:
+    return "%r9w";
+  case 4:
+    return "%r9d";
+  case 8:
+    return "%r9";
+  case 16:
+    return "%r9";
+  }
+  unreachable();
+}
+
 char *reg_bx(int sz)
 {
   switch (sz)
@@ -119,6 +201,7 @@ char *reg_cx(int sz)
 
 char *reg_ax(int sz)
 {
+
   switch (sz)
   {
   case 1:
@@ -130,7 +213,7 @@ char *reg_ax(int sz)
   case 8:
     return "%rax";
   case 16:
-    return "%rdx";
+    return "%rax";
   }
   unreachable();
 }
@@ -1115,6 +1198,7 @@ static void gen_expr(Node *node)
     println("  call *%%r10");
     println("  add $%d, %%rsp", stack_args * 8);
 
+
     depth -= stack_args;
 
     // It looks like the most significant 48 or 56 bits in RAX may
@@ -1551,8 +1635,16 @@ static void assign_lvar_offsets(Obj *prog)
       {
       case TY_STRUCT:
       case TY_UNION:
-        if (ty->size <= 16)
-        {
+          if (ty->size <= 8) {
+            bool fp1 = has_flonum(ty, 0, 8, 0);
+            if (fp + fp1 < FP_MAX && gp + !fp1 < GP_MAX) {
+              fp = fp + fp1;
+              gp = gp + !fp1;
+              continue;
+            }
+          } else if (ty->size <= 16) {
+        //if (ty->size <= 16)
+        //{
           bool fp1 = has_flonum(ty, 0, 8, 0);
           bool fp2 = has_flonum(ty, 8, 16, 8);
           if (fp + fp1 + fp2 < FP_MAX && gp + !fp1 + !fp2 < GP_MAX)
@@ -1842,4 +1934,254 @@ void codegen(Obj *prog, FILE *out)
   assign_lvar_offsets(prog);
   emit_data(prog);
   emit_text(prog);
+  //print offset for each variable
+  if (isDebug)
+    print_offset(prog);
+}
+
+
+
+// Print offset.
+static void print_offset(Obj *prog)
+{
+  for (Obj *fn = prog; fn; fn = fn->next)
+  {
+
+      
+    for (Obj *var = fn->params; var; var = var->next)
+    {
+    printf("===== %s %s %d\n", fn->name, var->name, var->offset );
+    }
+    for (Obj *var = fn->locals; var; var = var->next)
+    {
+      printf("===== %s %s %d\n", fn->name, var->name, var->offset );
+      //update the function name if it's missing
+      if (!var->funcname)
+        var->funcname = fn->name;
+    }
+
+  }
+}
+
+
+//here the goal is to update offset for parameters and local variables to be able to use them when managing assembly inline
+void assign_lvar_offsets_assembly(Obj *fn)
+{
+    int top = 8;
+    int bottom = 0;
+
+    // If a function has many parameters, some parameters are
+    // inevitably passed by stack rather than by register.
+    // The first passed-by-stack parameter resides at RBP+16.
+
+    // Assign offsets to pass-by-stack parameters.
+    for (Obj *var = fn->params; var; var = var->next)
+    {
+      if (var->offset)
+        continue;
+      
+      top = align_to(top, 8);
+      var->offset = 0 - top - var->ty->size;
+      top += var->ty->size;
+      
+    }
+
+    // Assign offsets to pass-by-register parameters and local variables.
+    for (Obj *var = fn->locals; var; var = var->next)
+    {
+      
+      if (var->offset)
+        continue;
+      
+      // AMD64 System V ABI has a special alignment rule for an array of
+      // length at least 16 bytes. We need to align such array to at least
+      // 16-byte boundaries. See p.14 of
+      // https://github.com/hjl-tools/x86-psABI/wiki/x86-64-psABI-draft.pdf.
+      int align = (var->ty->kind == TY_ARRAY && var->ty->size >= 16)
+                      ? MAX(16, var->align)
+                      : var->align;
+
+      bottom += var->ty->size;
+      bottom = align_to(bottom, align);
+      var->offset = -bottom;
+
+    }
+
+    fn->stack_size = align_to(bottom, 16);
+
+}
+
+//check if a register is available
+char *register_available() {
+
+  int len = sizeof(newargreg64)/sizeof(newargreg64[0]);
+  int i;
+
+  
+  for(i = 0; i < len; ++i)
+  {
+      //register already used
+      bool isFound = check_register_used(newargreg64[i]);
+      if (isFound)
+        continue;
+      else {
+        add_register_used(newargreg64[i]);
+        return newargreg64[i];
+      }
+  }
+  //no registry available
+  error("%s: in register_available : no register available!", CODEGEN_C);
+}
+
+//check if a specific register is available in priority if not try to found a new available
+char *specific_register_available(char *regist) {
+
+  int found = check_register_used(regist);
+  if (!found) {
+    add_register_used(regist);
+    return regist;
+  }
+  return register_available();
+  
+}
+
+//convert register 8 to register 64
+char *register8_to_64(char *regist) {
+
+int len = sizeof(newargreg8)/sizeof(newargreg8[0]);
+int i;
+
+  for(i = 0; i < len; ++i)
+  {
+      if(!strncmp(newargreg8[i], regist, strlen(regist)))
+      {
+          return newargreg64[i];
+      }
+  }
+  error("%s: in register8_to_64 : unexpected error!", CODEGEN_C);
+}
+
+//convert register 16 to register 64
+char *register16_to_64(char *regist) {
+
+int len = sizeof(newargreg16)/sizeof(newargreg16[0]);
+int i;
+
+  for(i = 0; i < len; ++i)
+  {
+      if(!strncmp(newargreg16[i], regist, strlen(regist)))
+      {
+          return newargreg64[i];
+      }
+  }
+  error("%s: in register16_to_64 : unexpected error!", CODEGEN_C);
+}
+
+//convert register 32 to register 64
+char *register32_to_64(char *regist) {
+
+int len = sizeof(newargreg32)/sizeof(newargreg32[0]);
+int i;
+
+  for(i = 0; i < len; ++i)
+  {
+      if(!strncmp(newargreg32[i], regist, strlen(regist)))
+      {
+          return newargreg64[i];
+      }
+  }
+  error("%s: in register32_to_64 : unexpected error!", CODEGEN_C);
+}
+
+//add a register in the list of used registers
+int add_register_used(char *regist) {
+
+int len = sizeof(registerUsed)/sizeof(registerUsed[0]);
+int i;
+char *tmp = "free";
+  for(i = 0; i < len; ++i)
+  {
+       if (!strncmp(registerUsed[i], tmp, strlen(registerUsed[i])))
+      {
+          registerUsed[i] = regist;
+          return i;
+      }
+  }
+  //no free location
+  return -1;
+}
+
+
+//check if register used return 0 if not used
+bool check_register_used(char *regist) {
+
+int isFound = false;
+int len = sizeof(registerUsed)/sizeof(registerUsed[0]);
+int i;
+
+  for(i = 0; i < len; ++i)
+  {
+      
+      if(!strncmp(registerUsed[i], regist, strlen(regist)))
+      {
+        isFound = true;
+        return isFound;
+      }
+  }
+  //not found
+  return isFound;
+}
+
+
+//clear the registerUseds
+void clear_register_used() {
+
+int len = sizeof(registerUsed)/sizeof(registerUsed[0]);
+int i;
+
+  for(i = 0; i < len; ++i)
+  {
+     registerUsed[i] = "free";
+  }
+}
+
+//check if a register8 is used in a template
+//if yes retrieve the register64 and add it in the registerUsed array
+//if not check if a register 16 is found in a template
+
+void check_register_in_template(char *template) {
+
+int len = sizeof(newargreg64)/sizeof(newargreg64[0]);
+
+   //check if register 64 found in template and mark it as used
+    for(int i = 0; i < len; ++i)
+  {
+    if (strstr(template, newargreg64[i]) != NULL)
+      add_register_used(newargreg64[i]);
+  }
+     //check if register 32 found in template and mark it as used
+  len = sizeof(newargreg32)/sizeof(newargreg32[0]);     
+    for(int i = 0; i < len; ++i)
+  {
+
+    if (strstr(template, newargreg32[i]) != NULL)      
+      add_register_used(register32_to_64(newargreg32[i]));
+  }
+
+  //check if register 16 found in template and mark it as used
+  len = sizeof(newargreg16)/sizeof(newargreg16[0]);     
+    for(int i = 0; i < len; ++i)
+  {
+    if (strstr(template, newargreg16[i]) != NULL)      
+      add_register_used(register16_to_64(newargreg16[i]));
+  }
+
+  //check if register 8 found in template and mark it as used
+  len = sizeof(newargreg8)/sizeof(newargreg8[0]);     
+    for(int i = 0; i < len; ++i)
+  {
+    if (strstr(template, newargreg8[i]) != NULL)      
+      add_register_used(register8_to_64(newargreg8[i]));
+  }
+
 }

@@ -28,12 +28,13 @@
 typedef struct
 {
     Token *input;      // store the token corresponding to input
-    char *input_str;   // store the generated instruction
+    char *variableNumber;     //store the variable %0, %1...
     char *input_value; // store the immediate value
+    char *reg;        // store the register that corresponds to the variable size    
     int index;         // store the index
     char letter;       // store the letter corresponding to input
-    int order;         // store the parameter order
-    int size;          // store the size to determine the operation to do ex movl movb movw mov
+    int offset;         // store the offset
+    int size;          // store the size to determine the operation to do ex movl movb movw movq
     bool isVariable;   // store true if it's a variable otherwise false for immediate value
     bool isAddress;    // store true if it's an address pointer
 } AsmInput;
@@ -41,7 +42,7 @@ typedef struct
 typedef struct
 {
     Token *output;    // store the token corresponding to input
-    char *output_str; // store the generated instruction
+    char *variableNumber;     //store the variable %0, %1...
     char *prefix;     //= or +
     char *reg;        // store the register that corresponds to the variable size
     char letter;      // to store a b r
@@ -50,7 +51,7 @@ typedef struct
     bool isRegister;  // r
     bool isMemory;    // m
     bool isAlpha;     // if is not r neither m is considered Alpha
-    int order;        // order parameter
+    int offset;        // store the offset
     bool isVariable;  // store true if it's a variable otherwise false for immediate value
     bool isAddress;   // store true if it's an address pointer
 } AsmOutput;
@@ -58,7 +59,7 @@ typedef struct
 typedef struct
 {
     char *templatestr;
-    bool hasPercent;
+    //bool hasPercent;
 } AsmTemplate;
 
 typedef struct
@@ -89,13 +90,6 @@ typedef enum
     AT_LABEL,    // labels
 } AsmType;
 
-// typedef enum
-// {
-//     CT_REGISTER = 1,  // register
-//     CT_MEMORY = 2,    // memory
-//     CT_IMMEDIATE = 4, // immediate value, integer constant
-//     CT_ANY = 7,       // could be a register or a memory or an immediate value
-// } ConstraintType;
 
 //
 //+ means that the output is actually a read-write value.
@@ -119,9 +113,39 @@ static int nbInput = 0;
 static int nbOutput = 0;
 static int nbClobber = 0;
 static int nbLabel = 0;
+static int asmtype = 0;
+extern Context *ctx;
 
-char *extended_asm(Node *node, Token **rest, Token *tok)
+
+
+char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
 {
+    char *input_asm_str;
+    char *output_loading;
+    asmtype = 0;
+    nbInput = 0;
+    nbOutput = 0;
+    nbClobber = 0;
+    nbLabel = 0;
+    char *template = tok->str;
+    char *asm_str = calloc(1, sizeof(char) * 400);
+    ctx->filename = EXTASM_C;
+    ctx->funcname = "extended_asm";
+    //case __asm__ volatile ("" ::: "memory")
+    //we generate a nop operation for each memory border defined
+    if (strlen(template) == 0) {
+        while (!equal(tok->next, ")")) {
+            tok = tok->next;
+        }
+        *rest = tok->next;
+        ctx->line_no = __LINE__ + 1;
+        *rest = skip(tok->next, ")", ctx);
+        tok = *rest;
+        asm_str = "\nnop;";
+        return asm_str;
+    }
+
+
     // allocate memory for all structs needed
     asmExt = calloc(1, sizeof(AsmExtended));
     asmExt->template = calloc(1, sizeof(AsmTemplate));
@@ -131,22 +155,19 @@ char *extended_asm(Node *node, Token **rest, Token *tok)
         asmExt->output[i] = calloc(1, sizeof(AsmOutput));
     for (int i = 0; i < 10; i++)
         asmExt->clobber[i] = calloc(1, sizeof(AsmClobber));
+
+
+    strncpy(asm_str, "", strlen(asm_str) + 1);
     char *output_asm_str = calloc(1, sizeof(char) * 300);
-    char *input_final = calloc(1, sizeof(char) * 300);
-    char *asm_str = calloc(1, sizeof(char) * 500);
-    char *template = tok->str;
+    char *input_final = calloc(1, sizeof(char) * 400);
     asmExt->template->templatestr = template;
-    asmExt->template->hasPercent = check_template(template);
-    char *input_asm_str;
-    char *output_str;
-    char *output_loading;
-    char *input_str;
-    int asmtype = 0;
-    nbInput = 0;
-    nbOutput = 0;
-    nbClobber = 0;
-    nbLabel = 0;
-    // printf("======%s\n", tok->loc);
+    // asmExt->template->hasPercent = check_template(template);
+
+    //clear the registerUsed array
+    clear_register_used();
+    //mark the register used if found in template
+    check_register_in_template(template);
+
     while (!equal(tok->next, ";") && !equal(tok, ";"))
     {
         switch (asmtype)
@@ -154,38 +175,45 @@ char *extended_asm(Node *node, Token **rest, Token *tok)
         case AT_TEMPLATE: // assembler template
             break;
         case AT_OUTPUT: // outputs
-            output_str = output_asm(node, rest, tok);
+            output_asm(node, rest, tok, locals);
             // generate output instruction for each output variable
-            output_loading = generate_output_asm(output_str);
-            strncat(output_asm_str, output_loading, strlen(output_loading));
+            if (asmExt->output[nbOutput]->variableNumber) {
+                output_loading = generate_output_asm(asmExt->output[nbOutput]->variableNumber);
+                // replace %9 by the correct register
+                if (!output_loading)
+                error("%s : in extended_asm function extended_asm :output_loading is null!", EXTASM_C);
+                if (!asmExt->output[nbOutput]->reg)
+                error("%s : in extended_asm function extended_asm :asmExt->output[nbOutput]->reg is null!", EXTASM_C);                 
+                output_loading = subst_asm(output_loading, asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->variableNumber);
+                //generate the ouput instruction
+                strncat(output_asm_str, output_loading, strlen(output_loading));
+            }
             nbOutput++;
             tok = *rest;
             break;
         case AT_INPUT: // inputs
             // return %0, %1 or %x
-            input_str = input_asm(node, rest, tok);
+            input_asm(node, rest, tok, locals);
             // generate input instruction to load the parameter into register
-            input_asm_str = generate_input_asm(input_str);
-            // retrieve output index corresponding to letter
-            int regIndex = retrieve_output_index(asmExt->input[nbInput]->letter);
-            // if index not found it means that we have in inputs "0", "1"...
-            if (regIndex < 0)
-                regIndex = asmExt->input[nbInput]->index;
-            char *reg = asmExt->output[regIndex]->reg;
-            if (!reg)
-                error_tok(tok, "%s : in extended_asm function : register is null!", EXTASM_C);
-            // replace %x by the correct register
-            input_asm_str = subst_asm(input_asm_str, reg, input_str);
-            // concatenate the input final strings to add to the assembly
-            strncat(input_final, input_asm_str, strlen(input_asm_str));
+            if (asmExt->input[nbInput]->variableNumber) {
+                input_asm_str = generate_input_asm(asmExt->input[nbInput]->variableNumber);
+                //replace %9, by the correct
+                if (!input_asm_str)
+                    error("%s : in extended_asm function extended_asm :input_asm_str is null!", EXTASM_C);
+                if (!asmExt->input[nbInput]->reg)
+                    error("%s : in extended_asm function extended_asm :asmExt->input[nbInput]->reg is null!", EXTASM_C);
+                input_asm_str = subst_asm(input_asm_str, asmExt->input[nbInput]->reg, asmExt->input[nbInput]->variableNumber);
+                // concatenate the input final strings to add to the assembly
+                strncat(input_final, input_asm_str, strlen(input_asm_str));
+            }
             nbInput++;
             tok = *rest;
             break;
         case AT_CLOBBER: // clobbers
-            // asmExt->clobber[nbClobber]->clobber = tok->loc;
-            // tok = tok->next;
-            // nbClobber++;
-            error_tok(tok, "%s : in extended_asm function : clobber not managed yet!", EXTASM_C);
+            asmExt->clobber[nbClobber]->clobber = tok->loc;
+            tok = tok->next;
+            nbClobber++;
+            //error_tok(tok, "%s : in extended_asm function : clobber not managed yet!", EXTASM_C);
             break;
         case AT_LABEL: // labels
             nbLabel++;
@@ -199,22 +227,42 @@ char *extended_asm(Node *node, Token **rest, Token *tok)
         tok = tok->next;
     }
 
-    asm_str = subst_asm(template, output_str, input_str);
-    if (input_final != NULL)
+
+    //replace each %9 by the correct output register
+    for (int i = 0; i < nbOutput; i++)
     {
+        asm_str = subst_asm(template, asmExt->output[i]->reg, asmExt->output[i]->variableNumber);
+    }
+
+    //replace each %9 by the correct input register
+    for (int i = 0; i < nbInput; i++)
+    {
+        asm_str = subst_asm(template, asmExt->input[i]->reg, asmExt->input[i]->variableNumber);                
+
+    }
+
+    //generate the input instructions before the output 
+    if (input_final != NULL)
+    {  
         strncat(input_final, asm_str, strlen(asm_str));
         asm_str = input_final;
+        
     }
+    //generate the output instructions
     if (output_asm_str != NULL)
     {
         strncat(asm_str, output_asm_str, strlen(output_asm_str));
     }
+
+    //replace special characters
     // replace %% by %
     // replace ‘%{’ by '{', ‘%|’ by '|' and ‘%}’ by '}'
     asm_str = subst_asm(asm_str, " %", "%%");
     asm_str = subst_asm(asm_str, " {", "%{");
     asm_str = subst_asm(asm_str, " |", "%|");
     asm_str = subst_asm(asm_str, " }", "%}");
+    if (isDebug)
+        printf("=====%s  =%s ==%s ===%s\n", template, asm_str, input_final, output_asm_str);
     *rest = tok;
     // free memory
     for (int i = 0; i < 10; i++)
@@ -223,15 +271,18 @@ char *extended_asm(Node *node, Token **rest, Token *tok)
         free(asmExt->output[i]);
     for (int i = 0; i < 10; i++)
         free(asmExt->clobber[i]);
+
     return asm_str;
 }
 
-char *output_asm(Node *node, Token **rest, Token *tok)
+void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
 {
-    char *output_str;
+    
     VarScope *sc;
+    ctx->funcname = "output_asm";
     while (!equal(tok->next, ":") && !equal(tok->next, ";"))
     {
+
         // register in write only mode
         // check if the register constraint is followed by a variable like "=r" (val)
         if (tok->kind == TK_STR)
@@ -243,8 +294,10 @@ char *output_asm(Node *node, Token **rest, Token *tok)
                     asmExt->output[nbOutput]->prefix = "=";
                 else
                     asmExt->output[nbOutput]->prefix = "+";
-                asmExt->output[nbOutput]->reg = "%rax";
+                asmExt->output[nbOutput]->reg = specific_register_available("%rax");
                 asmExt->output[nbOutput]->letter = 'r';
+                //asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
+                
             }
             else if (!strncmp(tok->str, "=m", tok->len) || !strncmp(tok->str, "+m", tok->len))
             {
@@ -253,50 +306,68 @@ char *output_asm(Node *node, Token **rest, Token *tok)
                     asmExt->output[nbOutput]->prefix = "=";
                 else
                     asmExt->output[nbOutput]->prefix = "+";
-                asmExt->output[nbOutput]->reg = "%rax";
+                asmExt->output[nbOutput]->reg = specific_register_available("%rax");
                 asmExt->output[nbOutput]->letter = 'm';
+                //asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
+                
             }
             // assuming that it's =a =b ???
             else if (!strncmp(tok->str, "=a", tok->len) || !strncmp(tok->str, "=b", tok->len) || !strncmp(tok->str, "=c", tok->len) || !strncmp(tok->str, "=d", tok->len))
             {
                 if (!strncmp(tok->str, "=a", tok->len))
                 {
-                    asmExt->output[nbOutput]->reg = "%rax";
+                    asmExt->output[nbOutput]->reg = specific_register_available("%rax");
                     asmExt->output[nbOutput]->letter = 'a';
+
                 }
                 else if (!strncmp(tok->str, "=b", tok->len))
                 {
-                    asmExt->output[nbOutput]->reg = "%rbx";
+                    asmExt->output[nbOutput]->reg = specific_register_available("%rbx");
                     asmExt->output[nbOutput]->letter = 'b';
                 }
                 else if (!strncmp(tok->str, "=c", tok->len))
                 {
-                    asmExt->output[nbOutput]->reg = "%rcx";
+                    asmExt->output[nbOutput]->reg = specific_register_available("%rcx");
                     asmExt->output[nbOutput]->letter = 'c';
                 }
                 else if (!strncmp(tok->str, "=d", tok->len))
                 {
-                    asmExt->output[nbOutput]->reg = "%rdx";
+                    asmExt->output[nbOutput]->reg = specific_register_available("%rdx");
                     asmExt->output[nbOutput]->letter = 'd';
                 }
-                else
-                    error_tok(tok, "%s : in output_asm function : not implemented yet!", EXTASM_C);
+                else {
+                tok = tok->next;
+                ctx->line_no = __LINE__ + 1;
+                *rest = skip(tok, ")", ctx);
+                return;
+                }
+                    
 
                 asmExt->output[nbOutput]->isAlpha = true;
                 asmExt->output[nbOutput]->prefix = "=";
+                //asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
+                
+                
             }
+
+            asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
             asmExt->output[nbOutput]->index = nbOutput;
         }
         // skip the comma
-        else if (equal(tok, ","))
-            tok = skip(tok, ",");
+        else if (equal(tok, ",")) {
+            ctx->line_no = __LINE__ + 1;
+            tok = skip(tok, ",", ctx);
+        }
         // manage the variable inside parenthesis
         else if (equal(tok, "("))
         {
-            tok = skip(tok, "(");
+            ctx->line_no = __LINE__ + 1;
+            tok = skip(tok, "(", ctx);
             // check if the variable is defined
             if (tok->kind == TK_IDENT)
             {
+                //TODO potential issue if several variables with same name inside different functions.
+                //need to check if the variable is in the correct function
                 sc = find_var(tok);
                 if (!sc)
                     error_tok(tok, "%s : in output_asm function : variable undefined", EXTASM_C);
@@ -304,22 +375,28 @@ char *output_asm(Node *node, Token **rest, Token *tok)
                     error_tok(tok, "%s : in output_asm function : variable type unknown", EXTASM_C);
                 // retrieve the size of the variable to determine the register to use here we use RAX variation
                 asmExt->output[nbOutput]->size = sc->var->ty->size;
+                asmExt->output[nbOutput]->reg = update_register_size(asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->size);
                 asmExt->output[nbOutput]->isVariable = true;
                 asmExt->output[nbOutput]->output = tok;
-                if (sc->var->funcname)
-                    asmExt->output[nbOutput]->order = retrieve_parameter_order(sc->var->order, sc->var->funcname);
-                else
-                    asmExt->output[nbOutput]->order = 0;
-                asmExt->output[nbOutput]->reg = update_register_size(asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->size);
-                asmExt->output[nbOutput]->output_str = asmExt->output[nbOutput]->reg;
+                asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
+                
+                if (sc->var->funcname) {
+                    
+                    update_offset(sc->var->funcname, locals);
+                    asmExt->output[nbOutput]->offset = sc->var->offset;
+                
+                }
+                else {
+                    asmExt->output[nbOutput]->offset = 0;
+                    
+                }
+                
                 // skip the variable to go to next token that should be a ")"
                 // tok = tok->next;
                 tok = tok->next;
-                *rest = skip(tok, ")");
-                output_str = asmExt->output[nbOutput]->output_str;
-                if (!output_str)
-                    error_tok(tok, "%s : in output_asm function : output_str is null!", EXTASM_C);
-                return output_str;
+                ctx->line_no = __LINE__ + 1;
+                *rest = skip(tok, ")", ctx);
+                return;
             }
             // pointer
             else if (equal(tok, "*"))
@@ -337,98 +414,125 @@ char *output_asm(Node *node, Token **rest, Token *tok)
                     // retrieve the size of the variable to determine the register to use here we use RAX variation
                     // skip the variable to go to next token that should be a ")"
                     asmExt->output[nbOutput]->size = sc->var->ty->pointertype->size;
-                    asmExt->output[nbOutput]->order = retrieve_parameter_order(sc->var->order, sc->var->funcname);
-                    asmExt->output[nbOutput]->reg = update_register_size(asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->size);
-                    asmExt->output[nbOutput]->output_str = asmExt->output[nbOutput]->reg;
-                    tok = tok->next;
-                    *rest = skip(tok, ")");
-                    output_str = asmExt->output[nbOutput]->output_str;
-                    if (!output_str)
-                        error_tok(tok, "%s : in output_asm function : output_str is null!2", EXTASM_C);
+                    if (sc->var->funcname) {
+                        update_offset(sc->var->funcname, locals);
+                        asmExt->output[nbOutput]->offset = sc->var->offset;
 
-                    return output_str;
+                    } else {
+                            asmExt->output[nbOutput]->offset = 0;                        
+
+                    }
+                    asmExt->output[nbOutput]->reg = update_register_size(asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->size);
+                    asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
+                    tok = tok->next;
+
+                    ctx->funcname = "output_asm";
+                    ctx->line_no = __LINE__ + 1 ;
+                    *rest = skip(tok, ")", ctx);
+                    return;
                 }
             }
-            else
-                error_tok(tok, "%s : in output_asm function : identifier expected!", EXTASM_C);
+            // else
+            //     error_tok(tok, "%s : in output_asm function : identifier expected!", EXTASM_C);
         }
 
-        else
-            error_tok(tok, "%s : in output_asm function : output constraint not managed yet!", EXTASM_C);
+        // else
+        //     error_tok(tok, "%s : in output_asm function : output constraint not managed yet!", EXTASM_C);
 
         tok = tok->next;
     }
-    return NULL;
+    return;
 }
 
-char *input_asm(Node *node, Token **rest, Token *tok)
+void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
 {
-
+    ctx->funcname = "input_asm";
     VarScope *sc;
-    char *input_str = calloc(1, sizeof(char) * 20);
     char *input_value = calloc(1, sizeof(char) * 20);
+    asmExt->input[nbInput]->offset = 0;
     while (!equal(tok->next, ":") && !equal(tok->next, ";"))
     {
         // register in write only mode
         if (tok->kind == TK_STR && !strncmp(tok->str, "0", tok->len))
         {
-            input_str = "%0";
+            asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(0);
             asmExt->input[nbInput]->index = 0;
+            asmExt->input[nbInput]->reg = asmExt->output[0]->reg;
+            
         }
         else if (tok->kind == TK_STR && !strncmp(tok->str, "1", tok->len))
         {
-            input_str = "%1";
+
+            asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(1);
             asmExt->input[nbInput]->index = 1;
+            asmExt->input[nbInput]->reg = asmExt->output[1]->reg;
         }
         else if (tok->kind == TK_STR && !strncmp(tok->str, "2", tok->len))
         {
-            input_str = "%2";
+
+            asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(2);
             asmExt->input[nbInput]->index = 2;
+            asmExt->input[nbInput]->reg = asmExt->output[2]->reg;
         }
         else if (tok->kind == TK_STR && !strncmp(tok->str, "3", tok->len))
         {
-            input_str = "%3";
+
+            asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(3);
             asmExt->input[nbInput]->index = 3;
+            asmExt->input[nbInput]->reg = asmExt->output[3]->reg;
         }
         else if (tok->kind == TK_STR && !strncmp(tok->str, "a", tok->len))
         {
-            input_str = retrieve_output_index_str('a');
+            asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(retrieve_output_index_from_letter('a'));
             asmExt->input[nbInput]->index = nbOutput + nbInput;
             asmExt->input[nbInput]->letter = 'a';
+            asmExt->input[nbInput]->reg = asmExt->output[retrieve_output_index_from_letter('a')]->reg;
+            
         }
         else if (tok->kind == TK_STR && !strncmp(tok->str, "b", tok->len))
         {
-            input_str = retrieve_output_index_str('b');
+            asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(retrieve_output_index_from_letter('b'));
             asmExt->input[nbInput]->index = nbOutput + nbInput;
             asmExt->input[nbInput]->letter = 'b';
+            asmExt->input[nbInput]->reg = asmExt->output[retrieve_output_index_from_letter('b')]->reg;
         }
         else if (tok->kind == TK_STR && !strncmp(tok->str, "c", tok->len))
         {
-            input_str = retrieve_output_index_str('c');
+
+            asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(retrieve_output_index_from_letter('c'));
             asmExt->input[nbInput]->index = nbOutput + nbInput;
             asmExt->input[nbInput]->letter = 'c';
+            asmExt->input[nbInput]->reg = asmExt->output[retrieve_output_index_from_letter('c')]->reg;
+
         }
         else if (tok->kind == TK_STR && !strncmp(tok->str, "d", tok->len))
         {
-            input_str = retrieve_output_index_str('d');
+
+            asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(retrieve_output_index_from_letter('d'));
             asmExt->input[nbInput]->index = nbOutput + nbInput;
             asmExt->input[nbInput]->letter = 'd';
+            asmExt->input[nbInput]->reg = asmExt->output[retrieve_output_index_from_letter('d')]->reg;
         }
         else if (tok->kind == TK_STR && !strncmp(tok->str, "m", tok->len))
         {
-            input_str = retrieve_output_index_str('m');
+
+            asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(nbOutput + nbInput);
             asmExt->input[nbInput]->index = nbOutput + nbInput;
+            asmExt->input[nbInput]->reg = specific_register_available("%rax");
             asmExt->input[nbInput]->letter = 'm';
         }
         else if (tok->kind == TK_STR && !strncmp(tok->str, "r", tok->len))
         {
-            input_str = retrieve_output_index_str('r');
+            asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(nbOutput + nbInput);
             asmExt->input[nbInput]->index = nbOutput + nbInput;
+            asmExt->input[nbInput]->reg = specific_register_available("%rax");
             asmExt->input[nbInput]->letter = 'r';
+            
         }
         else if (equal(tok, "("))
         {
-            tok = skip(tok, "(");
+            ctx->line_no = __LINE__ + 1;
+            tok = skip(tok, "(", ctx);
             // check if the variable is defined
             if (tok->kind == TK_IDENT)
             {
@@ -437,11 +541,16 @@ char *input_asm(Node *node, Token **rest, Token *tok)
                     error_tok(tok, "%s : in input_asm function : variable undefined", EXTASM_C);
                 asmExt->input[nbInput]->input = tok;
                 asmExt->input[nbInput]->isVariable = true;
-                asmExt->input[nbInput]->input_str = input_str;
                 asmExt->input[nbInput]->size = sc->var->ty->size;
+                if (sc->var->funcname) {
+                    update_offset(sc->var->funcname, locals);
+                    asmExt->input[nbInput]->offset = sc->var->offset;
+                } 
+                asmExt->input[nbInput]->reg = update_register_size(asmExt->input[nbInput]->reg, asmExt->input[nbInput]->size);
                 tok = tok->next;
-                *rest = skip(tok, ")");
-                return input_str;
+                ctx->line_no = __LINE__ + 1;
+                *rest = skip(tok, ")", ctx);
+                return;
             } // immediate value
             else if (tok->kind == TK_NUM)
             {
@@ -452,12 +561,12 @@ char *input_asm(Node *node, Token **rest, Token *tok)
                     snprintf(input_value, length + 1, "%ld", tok->val);
                 asmExt->input[nbInput]->input = tok;
                 asmExt->input[nbInput]->isVariable = false;
-                asmExt->input[nbInput]->input_str = input_str;
                 asmExt->input[nbInput]->input_value = input_value;
                 asmExt->input[nbInput]->size = tok->ty->size;
                 tok = tok->next;
-                *rest = skip(tok, ")");
-                return input_str;
+                ctx->line_no = __LINE__ + 1;
+                *rest = skip(tok, ")", ctx);
+                return;
             } // pointer
             else if (equal(tok, "*"))
             {
@@ -470,22 +579,30 @@ char *input_asm(Node *node, Token **rest, Token *tok)
                     asmExt->input[nbInput]->input = tok;
                     asmExt->input[nbInput]->isVariable = true;
                     asmExt->input[nbInput]->isAddress = true;
-                    asmExt->input[nbInput]->input_str = input_str;
                     asmExt->input[nbInput]->size = sc->var->ty->size;
+                    if (sc->var->funcname) {
+                        update_offset(sc->var->funcname, locals);
+
+                        asmExt->input[nbInput]->offset = sc->var->offset;
+                    } 
+                    asmExt->input[nbInput]->reg = update_register_size(asmExt->input[nbInput]->reg, asmExt->input[nbInput]->size);
                     tok = tok->next;
-                    *rest = skip(tok, ")");
-                    return input_str;
+                    ctx->line_no = __LINE__ + 1;
+                    *rest = skip(tok, ")", ctx);
+                    return;
                 }
             }
         }
-        else if (equal(tok, ","))
-            tok = skip(tok, ",");
-        else
-            error_tok(tok, "%s : in input_asm function : input complex constraint not managed yet!", EXTASM_C);
+        else if (equal(tok, ",")) {
+            ctx->line_no = __LINE__ + 1;
+            tok = skip(tok, ",", ctx);
+        }
+        // else
+        //     error_tok(tok, "%s : in input_asm function : input complex constraint not managed yet!", EXTASM_C);
 
         tok = tok->next;
     }
-    return NULL;
+    return;
 }
 
 // do the susbtitution into the template
@@ -514,7 +631,7 @@ char *string_replace(char *str, char *oldstr, char *newstr)
         }
     }
 
-    strncpy(str, bstr, strlen(bstr));
+    strncpy(str, bstr, strlen(bstr) + 1);
     return str;
 }
 
@@ -524,24 +641,27 @@ char *generate_input_asm(char *input_str)
     char *tmp = calloc(1, sizeof(char) * 100);
     if (asmExt->input[nbInput]->isVariable)
     {
+        strncat(tmp, "\n", 3);
         strncat(tmp, opcode(asmExt->input[nbInput]->size), strlen(opcode(asmExt->input[nbInput]->size)));
-        strncat(tmp, load_variable(asmExt->input[nbInput]->order), strlen(load_variable(asmExt->input[nbInput]->order)));
+        strncat(tmp, load_variable(asmExt->input[nbInput]->offset), strlen(load_variable(asmExt->input[nbInput]->offset)));
         strncat(tmp, ", ", 3);
-        strncat(tmp, asmExt->input[nbInput]->input_str, strlen(asmExt->input[nbInput]->input_str));
+        strncat(tmp, asmExt->input[nbInput]->variableNumber, strlen(asmExt->input[nbInput]->variableNumber));
         strncat(tmp, ";\n", 3);
         return tmp;
     }
     else
     {
+        strncat(tmp, "\n", 3);
         strncat(tmp, opcode(asmExt->input[nbInput]->size), strlen(opcode(asmExt->input[nbInput]->size)));
         strncat(tmp, " $", 3);
         strncat(tmp, asmExt->input[nbInput]->input_value, strlen(asmExt->input[nbInput]->input_value));
         strncat(tmp, ", ", 3);
-        strncat(tmp, asmExt->input[nbInput]->input_str, strlen(asmExt->input[nbInput]->input_str));
+        strncat(tmp, asmExt->input[nbInput]->variableNumber, strlen(asmExt->input[nbInput]->variableNumber));
         strncat(tmp, ";\n", 3);
         return tmp;
     }
-    return NULL;
+    error("%s : in extended_asm function generate_input_asm : unexpected error!", EXTASM_C);
+    //return NULL;
 }
 
 // check if template contains %
@@ -556,10 +676,11 @@ char *generate_output_asm(char *output_str)
     char *tmp = calloc(1, sizeof(char) * 300);
     if (asmExt->output[nbOutput]->isVariable && !asmExt->output[nbOutput]->isAddress)
     {
+        strncat(tmp, "\n", 3);
         strncat(tmp, opcode(asmExt->output[nbOutput]->size), strlen(opcode(asmExt->output[nbOutput]->size)));
-        strncat(tmp, asmExt->output[nbOutput]->output_str, strlen(asmExt->output[nbOutput]->output_str));
+        strncat(tmp, asmExt->output[nbOutput]->variableNumber, strlen(asmExt->output[nbOutput]->variableNumber));
         strncat(tmp, ", ", 3);
-        strncat(tmp, load_variable(asmExt->output[nbOutput]->order), strlen(load_variable(asmExt->output[nbOutput]->order)));
+        strncat(tmp, load_variable(asmExt->output[nbOutput]->offset), strlen(load_variable(asmExt->output[nbOutput]->offset)));
         strncat(tmp, ";\n", 3);
         return tmp;
     }
@@ -569,41 +690,46 @@ char *generate_output_asm(char *output_str)
         strncat(tmp, " $", 3);
         strncat(tmp, asmExt->input[nbInput]->input_value, strlen(asmExt->input[nbInput]->input_value));
         strncat(tmp, ", ", 3);
-        strncat(tmp, asmExt->input[nbInput]->input_str, strlen(asmExt->input[nbInput]->input_str));
+        strncat(tmp, asmExt->input[nbInput]->variableNumber, strlen(asmExt->input[nbInput]->variableNumber));
         strncat(tmp, ";\n", 3);
         return tmp;
     }
     else
     {
-        strncat(tmp, "\n", 2);
+        strncat(tmp, "\n", 3);
         strncat(tmp, "  movq ", 8);
-        strncat(tmp, load_variable(asmExt->output[nbOutput]->order), strlen(load_variable(asmExt->output[nbOutput]->order)));
+        strncat(tmp, load_variable(asmExt->output[nbOutput]->offset), strlen(load_variable(asmExt->output[nbOutput]->offset)));
         strncat(tmp, ", %rsi\n", 8);
         strncat(tmp, opcode(asmExt->output[nbOutput]->size), strlen(opcode(asmExt->output[nbOutput]->size)));
-        strncat(tmp, asmExt->output[nbOutput]->output_str, strlen(asmExt->output[nbOutput]->output_str));
-        strncat(tmp, ", (%rsi)\n", 10);
+        strncat(tmp, asmExt->output[nbOutput]->variableNumber, strlen(asmExt->output[nbOutput]->variableNumber));
+        strncat(tmp, ", (%rsi)\n", 11);
         return tmp;
     }
-    return NULL;
+
+    error("%s : in extended_asm function generate_output_asm : unexpected error!", EXTASM_C);
+
+    //return NULL;
 }
 
-char *load_variable(int order)
+//codegen.c generates correctly the offset but it's too late.
+//two possibilities:
+// - write some specific value example %nameofvaroffset% that will be at the end after codegen.c replaced in assembly file
+// by the correct value.
+// - or trying to do the same job as codegen.c but here. It's the goal of assign_lvar_offsets_assembly in update_offset function
+// need to test in several cases
+char *load_variable(int offset)
 {
-    switch (order)
-    {
-    case 0:
-        return "-12(%rbp)";
-    case 1:
-        return "-24(%rbp)";
-    case 2:
-        return "-32(%rbp)";
-    case 3:
-        return "-40(%rbp)";
-    case 4:
-        return "-48(%rbp)";
-    default:
-        error("%s: in load_variable : nb of parameters > 5 not managed yet!", EXTASM_C);
-    }
+    //generic solution to handle all values of offset 
+    if (offset == 0)
+        error("%s %d: in load_variable : incorrect offset or not managed yet!", EXTASM_C, offset);
+    char *targetaddr = calloc(20, sizeof(char));
+    
+    int length = snprintf(targetaddr, sizeof(offset), "%d", offset);
+    if (length < 0)
+        error("%s %d %d: in load_variable : error during snprintf function!", EXTASM_C, offset, length);
+
+    strncat(targetaddr, "(%rbp)", 7);
+    return targetaddr;
 }
 
 char *opcode(int size)
@@ -623,62 +749,50 @@ char *opcode(int size)
     }
 }
 
-// retrieve the order parameter
-// chibicc stores them in descendent order the last one is 0, the previous one is 1...
-// we retrieve the number of parameters and convert the order in the ascendent order
-// the first one becomes 0, the second one becomes 1... the last one n-1
-int retrieve_parameter_order(int order, char *funcname)
-{
-    Obj *fn = find_func(funcname);
-    if (fn)
-        return (fn->nbparm - 1 - order);
 
-    return 0;
+// we need to update the offset to be able to use this information later for loading result into output variables.
+// TODO we can have an issue here if several functions with same name. Probably need to find in a better way to avoid this issue.
+void update_offset(char *funcname, Obj *locals)
+{
+    //printf(" function %s \n", funcname);
+    Obj *fn = find_func(funcname);
+    if (fn) {
+        if (!fn->locals)
+            fn->locals = locals;
+       assign_lvar_offsets_assembly(fn);
+    }
+
+    
 }
+
+
 
 // update register following the size
 char *update_register_size(char *reg, int size)
 {
-    if (!strncmp(reg, "%rax", 5))
+    if (!strncmp(reg, "%rax", strlen(reg)) || !strncmp(reg, "%eax", strlen(reg)) || !strncmp(reg, "%ax", strlen(reg)) || !strncmp(reg, "%ah", strlen(reg)) || !strncmp(reg, "%al", strlen(reg)))
         return reg_ax(size);
-    else if (!strncmp(reg, "%rbx", 5))
+    else if (!strncmp(reg, "%rbx", strlen(reg)) || !strncmp(reg, "%ebx", strlen(reg)) || !strncmp(reg, "%bx", strlen(reg)) || !strncmp(reg, "%bh", strlen(reg)) || !strncmp(reg, "%bl", strlen(reg)))
         return reg_bx(size);
-    else if (!strncmp(reg, "%rcx", 5))
+    else if (!strncmp(reg, "%rcx", strlen(reg)) || !strncmp(reg, "%ecx", strlen(reg)) || !strncmp(reg, "%cx", strlen(reg)) || !strncmp(reg, "%ch", strlen(reg)) || !strncmp(reg, "%cl", strlen(reg)))
         return reg_cx(size);
-    else if (!strncmp(reg, "%rdx", 5))
+    else if (!strncmp(reg, "%rdx", strlen(reg)) || !strncmp(reg, "%edx", strlen(reg)) || !strncmp(reg, "%dx", strlen(reg)) || !strncmp(reg, "%dh", strlen(reg)) || !strncmp(reg, "%dl", strlen(reg)))
         return reg_dx(size);
+    else if (!strncmp(reg, "%rdi", strlen(reg)) || !strncmp(reg, "%edi", strlen(reg)) || !strncmp(reg, "%di", strlen(reg)) || !strncmp(reg, "%dih", strlen(reg)) || !strncmp(reg, "%dil", strlen(reg)))
+        return reg_di(size);       
+    else if (!strncmp(reg, "%rsi", strlen(reg)) || !strncmp(reg, "%esi", strlen(reg)) || !strncmp(reg, "%si", strlen(reg)) || !strncmp(reg, "%sih", strlen(reg)) || !strncmp(reg, "%sil", strlen(reg)))
+        return reg_si(size);       
+    else if (!strncmp(reg, "%r8", strlen(reg)) || !strncmp(reg, "%r8d", strlen(reg)) || !strncmp(reg, "%r8w", strlen(reg)) || !strncmp(reg, "%r8h", strlen(reg)) || !strncmp(reg, "%r8b", strlen(reg)))
+        return reg_si(size);                    
+    else if (!strncmp(reg, "%r9", strlen(reg)) || !strncmp(reg, "%r9d", strlen(reg)) || !strncmp(reg, "%r9w", strlen(reg)) || !strncmp(reg, "%r9h", strlen(reg)) || !strncmp(reg, "%r9b", strlen(reg)))
+        return reg_si(size);               
     else
-        error("%s: in update_register_size : reg %s unexpected!", EXTASM_C, reg);
+        return reg;
 }
 
-char *retrieve_output_index_str(char letter)
-{
-    for (int i = 0; i < nbOutput; i++)
-    {
-        if (asmExt->output[i]->letter == letter)
-        {
-            switch (asmExt->output[i]->index)
-            {
-            case 0:
-                return "%0";
-            case 1:
-                return "%1";
-            case 2:
-                return "%2";
-            case 3:
-                return "%3";
-            case 4:
-                return "%4";
-            case 5:
-                return "%5";
-            }
-        }
-    }
 
-    return "%0";
-}
-
-int retrieve_output_index(char letter)
+//returns the index corresponding to the letter received in parameter
+int retrieve_output_index_from_letter(char letter)
 {
     for (int i = 0; i < nbOutput; i++)
     {
@@ -687,4 +801,22 @@ int retrieve_output_index(char letter)
     }
 
     return -1;
+}
+
+//retrieve the variable number string like M0, %1, %2...
+char * retrieveVariableNumber(int index) 
+{
+    
+    if (index >=6)
+        error("%s: in retrieveVariableNumber : index %d not managed yet!", EXTASM_C, index);    
+    char *tmp;        
+    char *variableNumberStr = calloc(20, sizeof(char));
+    char *indexstr = calloc(20, sizeof(char));
+    strncat(variableNumberStr, "%", 2);
+    int length = snprintf(indexstr, sizeof(index), "%d", index);
+    if (length < 0)
+        error("%s %d %d: in retrieveVariableNumber : error during snprintf function!", EXTASM_C, index, length);
+    strncat(variableNumberStr, indexstr, strlen(indexstr));
+    tmp = variableNumberStr;
+    return tmp;
 }
