@@ -254,6 +254,12 @@ curl : https://github.com/curl/curl.git
         CC       ../lib/dynbuf.o
         CCLD     curl
 
+    make test
+    TESTDONE: 1635 tests were considered during 418 seconds.
+    TESTDONE: 1314 tests out of 1316 reported OK: 99%
+    TESTFAIL: These test cases failed: 557 1119
+
+
 openssl : https://github.com/openssl/openssl.git
 
     CC=chibicc ./Configure
@@ -268,6 +274,8 @@ openssl : https://github.com/openssl/openssl.git
 
     make
 
+    make test
+    
 
 openssh-portable : https://github.com/openssh/openssh-portable.git
 
@@ -287,18 +295,54 @@ git: https://github.com/git/git.git
     CC=chibicc CFLAGS=-fPIC ./configure
     make
 
-nmap: https://github.com/nmap/nmap.git
-
-    CC=chibicc CFLAGS=-fPIC ./configure
-    make
-    ...
-    chibicc -o ncat -fPIC   ncat_main.o ncat_connect.o ncat_core.o ncat_posix.o ncat_listen.o ncat_proxy.o ncat_ssl.o base64.o http.o util.o sys_wrap.o http_digest.o ncat_lua.o ../nsock/src/libnsock.a ../nbase/libnbase.a -lssl -lcrypto -lpcap ./../liblua/liblua.a -lm
-    make[1]: Leaving directory '../nmap/ncat'
 
 util-linux : https://github.com/util-linux/util-linux.git
 
+    Manually fixing the config.status and removing D["HAVE_UNION_SEMUN"]=" 1"
     ./autogen.sh
     CC=chibicc CFLAGS=-fPIC ./configure
+    make
+
+    //to check if the compiled programs by chibicc work : 
+    make check-programs
+    cd tests
+    run.sh 
+    ---------------------------------------------------------------------
+      All 280 tests PASSED
+    ---------------------------------------------------------------------
+        
+
+nginx: https://github.com/nginx/nginx.git 
+
+    CC=chibicc CFLAGS=-fPIC ./auto/configure
+    make
+    
+
+
+zlib: https://github.com/madler/zlib.git
+
+    CC=chibicc CFLAGS="-fPIC" ./configure
+    make
+
+    make test
+    ...
+    *** zlib test OK ***
+    ...
+    *** zlib shared test OK ***
+    ...
+    *** zlib 64-bit test OK ***
+    
+
+vim: https://github.com/vim/vim.git
+
+    CC=chibicc CFLAGS="-fPIC" ./configure
+    make
+    make test    
+    == SUMMARY ==
+    Test run on 2023 Sep 23 14:15:31
+    OK: 10
+    FAILED: 0: []
+    skipped: 0    
 
 
 ## Limits
@@ -307,17 +351,16 @@ Some C projects doesn't compile for now. It helps to find some bugs and to try t
 
 VLC : https://github.com/videolan/vlc.git 
 
-    ./boostrap
-    CC=chibicc CFLAGS="-fPIC" DEFS="-DHAVE_CONFIG_H -DHAVE_ATTRIBUTE_PACKED -DVLC_USED -DVLC_API -DVLC_DEPRECATED -DVLC_MALLOC" ./configure --disable-lua --disable-a52 --disable-xcb --disable-qt --disable-po --target=linux
+    ./bootstrap
+    CC=chibicc CFLAGS="-fPIC" DEFS="-DHAVE_CONFIG_H -DHAVE_ATTRIBUTE_PACKED -DVLC_USED -DVLC_API -DVLC_DEPRECATED -DVLC_MALLOC" ./configure --disable-lua --disable-a52 --disable-xcb --disable-qt --disable-po --disable-alsa --target=linux
     make all
 
-    VLC doesn't compile with chibicc because it has some extended assembly inline that are not managed yet. Even if for this part I'll try to use gcc it failed during linking with multiple definitions. If I use gcc to compile VLC it compiles fine. Perhaps mixing chibicc and gcc is not a great idea!
-    
+    VLC doesn't compile with chibicc some issues to fix later.
 
 ## TODO
 
 - trying to compile other C projects from source to see what is missing or which bug we have with chibicc.
-- trying to manage other assembly functions like \_\_asm\_\_("xchgb %b0,%h0": "=Q"(x):"0"(x));
+
 
 ## issues and pull requests fixed
 
@@ -352,7 +395,9 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.17 Fixing ISS-129 need to manage output other than "=r". Fixing ISS-139 extended assembly compiling but execution doesn't return the correct result. Fixing temporary ISS-142 caused by join_adjacent_string_literals function.
+
+1.0.21    Fixing ISS-154 extended assembly   __asm__ __volatile__ ("rep; nop" ::: "memory"). Fixing temporary ISS-153 error during struct initialization during neovim compilation.
+          Fixing ISS-156 STATIC_ASSERT(40 + 40 + 40 == sizeof(struct uv__io_uring_params)) causing issue (found during neovim compilation). Fixing temporary issue #40 about variable in parameter used for other parameter like issue40.c it causes other issue with VLC. 
 
 
 ## old release notes

@@ -53,25 +53,28 @@ test-stage2: $(TESTS:test/%=stage2/test/%)
 	for i in $^; do echo $$i; ./$$i || exit 1; echo; done
 	test/driver.sh ./stage2/$(OBJECT)
 
-projects-all: projects openssl 
+projects-all: projects openssl nmap
 
-projects: curl zlib nmap util-linux
+projects: curl zlib util-linux nginx
 
 
 curl:
-	cd ../curl && make clean && make
+	cd ../curl && make clean && make && make test
 
 zlib:
-	cd ../curl && make clean && make
+	cd ../zlib && make clean && make && make test
 
 nmap:
-	cd ../nmap && make clean && make	
+	cd ../nmap && make clean && make
 
 openssl:
-	cd ../openssl && make clean && make
+	cd ../openssl && make clean && make && make test
 
 util-linux:
-	cd ../util-linux && make clean && make
+	cd ../util-linux && make clean && make && make check-programs && cd tests && ./run.sh
+
+nginx:
+	cd ../nginx && make clean && CC=chibicc CFLAGS=-fPIC ./auto/configure && make 
 
 # Misc.
 
@@ -83,7 +86,16 @@ libchibicc.so: $(OBJS)
 	gcc $(CFLAGS) -o $@ $^ -shared
 
 clean:
-	rm -rf $(OBJECT) tmp* $(TESTS) test/*.s test/*.exe stage2 diagram/*.png test/*.dot $(OBJECTLIB)
+	rm -rf $(OBJECT) tmp* $(TESTS) issues/*.s issues/*.exe issues/*.dot test/*.s test/*.exe stage2 diagram/*.png test/*.dot $(OBJECTLIB)
 	find * -type f '(' -name '*~' -o -name '*.o' ')' -exec rm {} ';'
 
-.PHONY: test clean test-stage2 libchibicc projects projects-all test-all
+install:
+	test -d /usr/local/include/x86_64-linux-gnu/chibicc || \
+		sudo mkdir -p /usr/local/include/x86_64-linux-gnu/chibicc
+	sudo cp include/* /usr/local/include/x86_64-linux-gnu/chibicc/
+	sudo cp chibicc /usr/local/bin/chibicc
+
+uninstall:
+	sudo rm -rf	/usr/local/include/x86_64-linux-gnu/chibicc && sudo rm /usr/local/bin/chibicc
+
+.PHONY: test clean test-stage2 libchibicc projects projects-all test-all install uninstall

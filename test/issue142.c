@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include "test.h"
 #define WITH_LIBGC
 
 #define PRINT_ERROR(...) ((void)fprintf(stderr, __VA_ARGS__))

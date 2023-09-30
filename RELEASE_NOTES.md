@@ -48,3 +48,13 @@ Fixing issue #119 about cmathcalls. Removing fix for #119 caused an infinite loo
 
 1.0.16  Fixing issue #133 with old C style function declaration when using comma separator for same variable type parameter declaration. Fixing also issue #136 (ISS-136) zlib project error with unknown extension. Fixing issue #134 (ISS-134) with parameter expression during zlib project.
 Fixing issue #131 (ISS-131) parsing issue when trying to compile nginx project caused by fix #121. Adding some projects to test in Makefile because sometimes some fixes cause side effects!
+
+1.0.17 Fixing ISS-129 need to manage output other than "=r". Fixing ISS-139 extended assembly compiling but execution doesn't return the correct result. Fixing temporary ISS-142 caused by join_adjacent_string_literals function.
+
+1.0.18    adding install and uninstall in makefile (#PR24 from rurban). Adding ND_MOD in is_const_expr(#issue 134 from matthewsot). Fixing incorrect small struct passing in 5th argument position (issue #127 from sgraham). Fixing ISS-140 compiling chibicc with chibicc tests failed with trying to parse the object.o file instead of linking only. Fixing some issues with extended assembly (ISS-141) and reformating some but still have one issue with ASSERT used after assembly inline in some case (see ./issues/assign1.c)
+
+
+1.0.19    fixing extended assembly issue when a register is already used in the template, the variable should be stored in another register available.
+
+
+1.0.20    Fixing ISS-143 extended assembly doesn't manage well input with r. Removing assign1.c test doesn't work with gcc. Fixing ISS-144 compiling util-linux failed with expression returning void is not supported. Fixing ISS-145 compiling util-linux failed with invalid initalizer2. Fixing ISS-147 compiling util-linux failed with undefined variable __BYTE_ORDER__. Fixing ISS-148 compiling VLC failed with storage class specifier not allowed caused by static_assert function. Fixing also some issues with extended assembly not working in some cases. Fixing issue with extended assembly in string_replace that truncates the null terminated character and causing during nginx compile failure due to incorrect character. Generating "nop" instruction each time we found the memory barrier : __asm__ volatile ("" ::: "memory"). Compiling successfully some projects like curl, nginx, zlib, util-linux, openssl, openssh-portable. But some tests failed for util-linux, openssl and curl that means that probably we have some bugs somewhere.
