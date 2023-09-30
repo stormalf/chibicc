@@ -396,7 +396,7 @@ Example of diagram generated with -dotfile parameter :
 ## release notes
 
 
-1.0.21    Fixing ISS-154 extended assembly   __asm__ __volatile__ ("rep; nop" ::: "memory"). Fixing temporary ISS-153 error during struct initialization during neovim compilation.
+1.0.21    Fixing ISS-154 extended assembly   __asm__ __volatile__ ("rep; nop" ::: "memory"). 
           Fixing ISS-156 STATIC_ASSERT(40 + 40 + 40 == sizeof(struct uv__io_uring_params)) causing issue (found during neovim compilation). Fixing temporary issue #40 about variable in parameter used for other parameter like issue40.c it causes other issue with VLC. 
 
 
