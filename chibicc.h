@@ -86,6 +86,7 @@ this " PRODUCT " contains only some differences for now like new parameters\n"
     which are needed by shared objects explicitly included in the link. \n \
 -dumpmachine it's required by some projects returns x86_64-linux-gnu\n \
 -dotfile generates a file with .dot extension that can be visualized using graphviz package \n \
+-dM Print macro definitions in -E mode instead of normal output\n \
 chibicc [ -o <path> ] <file>\n"
 
 typedef struct Type Type;
@@ -93,6 +94,16 @@ typedef struct Node Node;
 typedef struct Member Member;
 typedef struct Relocation Relocation;
 typedef struct Hideset Hideset;
+
+
+typedef struct
+{
+  char *filename;
+  char *funcname;
+  int line_no;
+} Context;
+
+typedef Context Context;
 
 //
 // strings.c
@@ -163,7 +174,7 @@ noreturn void error_at(char *loc, char *fmt, ...) __attribute__((format(printf, 
 noreturn void error_tok(Token *tok, char *fmt, ...) __attribute__((format(printf, 2, 3)));
 void warn_tok(Token *tok, char *fmt, ...) __attribute__((format(printf, 2, 3)));
 bool equal(Token *tok, char *op);
-Token *skip(Token *tok, char *op);
+Token *skip(Token *tok, char *op, Context *ctx);
 bool consume(Token **rest, Token *tok, char *str);
 void convert_pp_tokens(Token *tok);
 File **get_input_files(void);
@@ -186,6 +197,7 @@ void define_macro(char *name, char *buf);
 void undef_macro(char *name);
 Token *preprocess(Token *tok, bool isReadLine);
 Token *preprocess3(Token *tok);
+
 
 //
 // parse.c
@@ -590,6 +602,7 @@ extern FILE *dotf;
 extern FILE *f;
 extern bool isDotfile;
 extern bool isDebug;
+extern bool isPrintMacro;
 extern char *extract_filename(char *tmpl);
 extern char *extract_path(char *tmpl, char *basename);
 

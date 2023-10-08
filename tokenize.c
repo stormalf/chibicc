@@ -91,10 +91,10 @@ bool equal(Token *tok, char *op)
 }
 
 // Ensure that the current token is `op`.
-Token *skip(Token *tok, char *op)
+Token *skip(Token *tok, char *op, Context *ctx)
 {
   if (!equal(tok, op))
-    error_tok(tok, "%s: in skip : expected '%s'", TOKENIZE_C, op);
+    error_tok(tok, "%s %s %s %d: in skip : expected '%s'", TOKENIZE_C, ctx->filename, ctx->funcname, ctx->line_no, op );
   return tok->next;
 }
 
@@ -821,7 +821,7 @@ Token *tokenize(File *file)
 
   // for debug needs print all the tokens with values
   // if (isDebug && f != NULL)
-  //   print_debug_tokens(TOKENIZE_C, "tokenize", head.next);
+  //    print_debug_tokens(TOKENIZE_C, "tokenize", head.next);
   return head.next;
 }
 
