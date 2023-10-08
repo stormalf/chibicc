@@ -50,7 +50,9 @@ FILE *dotf;
 char *dot_file;
 bool isDotfile = false;
 bool isDebug = false;
+bool isPrintMacro = false;
 char *previousfile = " ";
+Context *ctx;
 
 static char logFile[] = "/tmp/chibicc.log";
 static StringArray input_paths;
@@ -239,6 +241,12 @@ static void parse_args(int argc, char **argv)
     if (!strcmp(argv[i], "-debug"))
     {
       isDebug = true;
+      continue;
+    }
+
+    if (!strcmp(argv[i], "-dM"))
+    {
+      isPrintMacro = true;
       continue;
     }
 
@@ -577,6 +585,8 @@ static void parse_args(int argc, char **argv)
         !strncmp(argv[i], "-std", 4) ||
         !strcmp(argv[i], "-ffreestanding") ||
         !strcmp(argv[i], "-fno-omit-frame-pointer") ||
+        !strcmp(argv[i], "-fomit-frame-pointer") ||   
+        !strcmp(argv[i], "-funwind-tables") ||   
         !strcmp(argv[i], "-fno-stack-protector") ||
         !strcmp(argv[i], "-fno-strict-aliasing") ||
         !strcmp(argv[i], "-m64") ||
@@ -895,6 +905,12 @@ static void cc1(void)
       return;
   }
 
+  //print macro in preprocess.c
+  if (isPrintMacro)
+  {
+    return;
+  }
+
   // If -E is given, print out preprocessed C code as a result.
   if (opt_E)
   {
@@ -1028,11 +1044,15 @@ static void run_linker(StringArray *inputs, char *output)
     strarray_push(&arr, "/lib64/ld-linux-x86-64.so.2");
   }
 
-  for (int i = 0; i < ld_extra_args.len; i++)
+  for (int i = 0; i < ld_extra_args.len; i++) {
+    //printf("====%s\n", ld_extra_args.data[i]);
     strarray_push(&arr, ld_extra_args.data[i]);
+  }
 
-  for (int i = 0; i < inputs->len; i++)
+  for (int i = 0; i < inputs->len; i++) {
+    //printf("====%s\n", inputs->data[i]);
     strarray_push(&arr, inputs->data[i]);
+  }
 
   if (opt_static)
   {
@@ -1090,6 +1110,7 @@ static FileType get_file_type(char *filename)
 int main(int argc, char **argv)
 {
   atexit(cleanup);
+  ctx = calloc(1, sizeof(Context));
 
   parse_args(argc, argv);
 

@@ -52,3 +52,8 @@ Fixing issue #131 (ISS-131) parsing issue when trying to compile nginx project c
 1.0.17 Fixing ISS-129 need to manage output other than "=r". Fixing ISS-139 extended assembly compiling but execution doesn't return the correct result. Fixing temporary ISS-142 caused by join_adjacent_string_literals function.
 
 1.0.18    adding install and uninstall in makefile (#PR24 from rurban). Adding ND_MOD in is_const_expr(#issue 134 from matthewsot). Fixing incorrect small struct passing in 5th argument position (issue #127 from sgraham). Fixing ISS-140 compiling chibicc with chibicc tests failed with trying to parse the object.o file instead of linking only. Fixing some issues with extended assembly (ISS-141) and reformating some but still have one issue with ASSERT used after assembly inline in some case (see ./issues/assign1.c)
+
+
+1.0.19    fixing extended assembly issue when a register is already used in the template, the variable should be stored in another register available.
+
+
