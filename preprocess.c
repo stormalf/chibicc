@@ -398,6 +398,7 @@ static Macro *add_macro(char *name, bool is_objlike, Token *body)
   m->is_objlike = is_objlike;
   m->body = body;
   hashmap_put(&macros, name, m);
+
   return m;
 }
 
@@ -447,6 +448,7 @@ static MacroParam *read_macro_params(Token **rest, Token *tok, char **va_args_na
     tok = tok->next;
   }
 
+
   *rest = tok->next;
   return head.next;
 }
@@ -467,12 +469,15 @@ static void read_macro_definition(Token **rest, Token *tok)
     Macro *m = add_macro(name, false, copy_line(rest, tok));
     m->params = params;
     m->va_args_name = va_args_name;
+
   }
   else
   {
     // Object-like macro
     add_macro(name, true, copy_line(rest, tok));
   }
+
+
 }
 
 static MacroArg *read_macro_arg_one(Token **rest, Token *tok, bool read_rest)
@@ -783,6 +788,8 @@ static bool expand_macro(Token **rest, Token *tok)
   if (!m)
     return false;
 
+
+
   // Built-in dynamic macro application such as __LINE__
   if (m->handler)
   {
@@ -1019,7 +1026,7 @@ static Token *preprocess2(Token *tok)
   {
 
     // // // If it is a macro, expand it.
-    if (expand_macro(&tok, tok))
+    if (expand_macro(&tok, tok)) 
       continue;
 
     // Pass through if it is not a "#".
@@ -1064,7 +1071,10 @@ static Token *preprocess2(Token *tok)
     }
     if (equal(tok, "define"))
     {
+      if (isPrintMacro)
+        printf("%s\n", tok->loc);
       read_macro_definition(&tok, tok->next);
+
       continue;
     }
 
@@ -1197,6 +1207,8 @@ void define_macro(char *name, char *buf)
   {
     Token *tok = tokenize(new_file("<built-in>", 1, buf));
     add_macro(name, true, tok);
+    if (isPrintMacro)
+      printf("#define %s %s\n", name, buf);
   }
 }
 
@@ -1322,6 +1334,7 @@ void init_macros(void)
   define_macro("__volatile__", "volatile");
   define_macro("__x86_64", "1");
   define_macro("__x86_64__", "1");
+  
   define_macro("linux", "1");
   define_macro("unix", "1");
   define_macro("nonnull", "1");
@@ -1455,6 +1468,7 @@ static void join_adjacent_string_literals(Token *tok)
 Token *preprocess(Token *tok, bool isReadLine)
 {
   tok = preprocess2(tok);
+
   // to manage issue with macro used before its definition. gcc allows it
   tok = preprocess3(tok);
 
@@ -1482,11 +1496,13 @@ Token *preprocess3(Token *tok)
   while (tok->kind != TK_EOF)
   {
     Macro *m = find_macro(tok);
+
     if (m != NULL && m->body->len == 0)
     {
       if (expand_macro(&tok, tok))
         continue;
     }
+
     cur = cur->next = tok;
     tok = tok->next;
   }
@@ -1494,3 +1510,4 @@ Token *preprocess3(Token *tok)
   cur->next = tok;
   return head.next;
 }
+

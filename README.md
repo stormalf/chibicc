@@ -396,9 +396,7 @@ Example of diagram generated with -dotfile parameter :
 ## release notes
 
 
-1.0.21    Fixing ISS-154 extended assembly   __asm__ __volatile__ ("rep; nop" ::: "memory"). Fixing temporary ISS-153 error during struct initialization during neovim compilation.
-          Fixing ISS-156 STATIC_ASSERT(40 + 40 + 40 == sizeof(struct uv__io_uring_params)) causing issue (found during neovim compilation). Fixing temporary issue #40 about variable in parameter used for other parameter like issue40.c it causes other issue with VLC. 
-
+1.0.20    Fixing ISS-143 extended assembly doesn't manage well input with r. Removing assign1.c test doesn't work with gcc. Fixing ISS-144 compiling util-linux failed with expression returning void is not supported. Fixing ISS-145 compiling util-linux failed with invalid initalizer2. Fixing ISS-147 compiling util-linux failed with undefined variable __BYTE_ORDER__. Fixing ISS-148 compiling VLC failed with storage class specifier not allowed caused by static_assert function. Fixing also some issues with extended assembly not working in some cases. Fixing issue with extended assembly in string_replace that truncates the null terminated character and causing during nginx compile failure due to incorrect character. Generating "nop" instruction each time we found the memory barrier : __asm__ volatile ("" ::: "memory"). Compiling successfully some projects like curl, nginx, zlib, util-linux, openssl, openssh-portable. But some tests failed for util-linux, openssl and curl that means that probably we have some bugs somewhere. Fixing ISS-152 extended assembly   __asm__ __volatile__ ("rep; nop" ::: "memory"). Fixing ISS-150 fix on issue 40 caused other failures during VLC compilation. Fixing ISS-151 compiling neovim failed in struct_initializer2. Fixing ISS-153 -fomit-frame-pointer, -funwind-tables caused failure during neovim compilation. Adding -dM option to print the macro definition (it's not exactly the same result given by gcc) needed for compile neovim project.
 
 ## old release notes
 

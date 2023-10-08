@@ -235,10 +235,11 @@ static Node *new_binary(NodeKind kind, Node *lhs, Node *rhs, Token *tok)
     fprintf(dotf, "%s%d -> %s%d\n", nodekind2str(node->kind), node->unique_number, nodekind2str(rhs->kind), rhs->unique_number);
     fprintf(dotf, "%s%d -> %s%d\n", nodekind2str(node->kind), node->unique_number, nodekind2str(lhs->kind), lhs->unique_number);
   }
+
   node->lhs = lhs;
   node->rhs = rhs;
   add_type(node->rhs);
-  if (kind == ND_ASSIGN && node->rhs->ty->kind == TY_VOID)
+  if (kind == ND_ASSIGN && node->rhs->ty->kind == TY_VOID  )
   {
     error_tok(node->rhs->tok, "%s: in new_binary : Cannot assign void type expression", PARSE_C);
   }
@@ -342,6 +343,7 @@ static Initializer *new_initializer(Type *ty, bool is_flexible)
 
   if (ty->kind == TY_STRUCT || ty->kind == TY_UNION)
   {
+
     // Count the number of struct members.
     int len = 0;
     for (Member *mem = ty->members; mem; mem = mem->next)
@@ -746,7 +748,7 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
     // but fix 121 caused other issues with other function and not only _Static_assert function
     // if (equal(tok->next, "==") || (equal(tok, "(") && is_expression(rest, tok, ty)) || equal(tok, "sizeof") || equal(tok, "_Alignof") || equal(tok->next, "+") || equal(tok->next, "<"))
     // {
-    if (equal(tok->next, "==") || (equal(tok, "(") && is_expression(rest, tok, ty)) || equal(tok, "sizeof") || equal(tok, "_Alignof"))
+    if (equal(tok->next, "==") || (equal(tok, "(") && is_expression(rest, tok, ty)) || equal(tok, "sizeof") || equal(tok, "_Alignof") || equal(tok->next, "+") || equal(tok->next, "<"))
      {
     //   printf("2=======%p %s\n", ty->kind, tok->loc);
        Node *node = expr(&tok, tok);
@@ -934,7 +936,7 @@ static Type *typename(Token **rest, Token *tok)
 
 static bool is_end(Token *tok)
 {
-  return equal(tok, "}") || (equal(tok, ",") && equal(tok->next, "}"));
+  return equal(tok, "}") || (equal(tok, ",") && equal(tok->next, "}")) || equal(tok, ";");
 }
 
 static bool consume_end(Token **rest, Token *tok)
@@ -1043,8 +1045,11 @@ static Type *typeof_specifier(Token **rest, Token *tok)
 static Node *compute_vla_size(Type *ty, Token *tok)
 {
   Node *node = new_node(ND_NULL_EXPR, tok);
-  if (ty->base)
+
+  if (ty->base) {
     node = new_binary(ND_COMMA, node, compute_vla_size(ty->base, tok), tok);
+
+  }
 
   if (ty->kind != TY_VLA)
     return node;
@@ -1090,6 +1095,7 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
     }
 
     Type *ty = declarator(&tok, tok, basety);
+
     if (ty->kind == TY_VOID)
       error_tok(tok, "%s: in declaration : variable declared void", PARSE_C);
     if (!ty->name)
@@ -1453,6 +1459,7 @@ static void array_initializer1(Token **rest, Token *tok, Initializer *init)
 // array-initializer2 = initializer ("," initializer)*
 static void array_initializer2(Token **rest, Token *tok, Initializer *init, int i)
 {
+
   if (init->is_flexible)
   {
     int len = count_array_init_elements(tok, init->ty);
@@ -1710,11 +1717,12 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
   }
 
 
-  if (init->ty->kind == TY_UNION)
+  if (init->ty->kind == TY_UNION )
   {
-   
+
     union_initializer(rest, tok, init);
     return;
+
   }
 
   if (equal(tok, "{"))
@@ -1728,7 +1736,8 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
     *rest = skip(tok, "}", ctx);
     return;
   }
-
+  // if (init->ty->base)
+  //   printf("========%d %d %s\n", init->ty->kind, init->ty->base->kind, tok->loc);
 
   init->expr = assign(rest, tok);
  
@@ -2077,7 +2086,6 @@ static Node *stmt(Token **rest, Token *tok)
     ctx->funcname = "stmt";        
     ctx->line_no = __LINE__ + 1;       
     *rest = skip(tok, ";", ctx);
-
     add_type(exp);
     // Type *ty = current_fn->ty->return_ty;
     // if (ty->kind != TY_STRUCT && ty->kind != TY_UNION)
@@ -2093,7 +2101,6 @@ static Node *stmt(Token **rest, Token *tok)
     }
     if (ret_ty->kind != TY_STRUCT && ret_ty->kind != TY_UNION)
       exp = new_cast(exp, ret_ty);
-
     node->lhs = exp;
     return node;
   }
@@ -2594,6 +2601,7 @@ static int64_t eval2(Node *node, char ***label)
     return node->val;
     // fixing issue #115
   case ND_DEREF:
+
     return eval2(node->lhs, label);
   }
   error_tok(node->tok, "%s: in eval2 : not a compile-time constant3", PARSE_C);
@@ -4094,7 +4102,7 @@ static Node *primary(Token **rest, Token *tok)
       // error_tok(tok, "%s: in primary : implicit declaration of a function", PARSE_C);
     }
 
-    printf("=======%s\n", tok->loc);
+    //printf("=======%s\n", tok->loc);
     error_tok(tok, "%s: in primary : error: undefined variable", PARSE_C);
   }
 
@@ -4220,7 +4228,6 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   if (!ty->name)
     error_tok(ty->name_pos, "%s: in function : function name omitted", PARSE_C);
   char *name_str = get_ident(ty->name);
-
   Obj *fn = find_func(name_str);
   if (fn)
   {

@@ -31,7 +31,7 @@
 #endif
 
 #define PRODUCT "chibicc"
-#define VERSION "1.0.21"
+#define VERSION "1.0.20"
 #define MAXLEN 101
 #define DEFAULT_TARGET_MACHINE "x86_64-linux-gnu"
 
@@ -86,6 +86,7 @@ this " PRODUCT " contains only some differences for now like new parameters\n"
     which are needed by shared objects explicitly included in the link. \n \
 -dumpmachine it's required by some projects returns x86_64-linux-gnu\n \
 -dotfile generates a file with .dot extension that can be visualized using graphviz package \n \
+-dM Print macro definitions in -E mode instead of normal output\n \
 chibicc [ -o <path> ] <file>\n"
 
 typedef struct Type Type;
@@ -196,6 +197,7 @@ void define_macro(char *name, char *buf);
 void undef_macro(char *name);
 Token *preprocess(Token *tok, bool isReadLine);
 Token *preprocess3(Token *tok);
+
 
 //
 // parse.c
@@ -600,6 +602,7 @@ extern FILE *dotf;
 extern FILE *f;
 extern bool isDotfile;
 extern bool isDebug;
+extern bool isPrintMacro;
 extern char *extract_filename(char *tmpl);
 extern char *extract_path(char *tmpl, char *basename);
 
