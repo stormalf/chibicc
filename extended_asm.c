@@ -132,8 +132,9 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
     ctx->filename = EXTASM_C;
     ctx->funcname = "extended_asm";
     //case __asm__ volatile ("" ::: "memory")
+    //case __asm__ __volatile__ ("rep; nop" ::: "memory");  
     //we generate a nop operation for each memory border defined
-    if (strlen(template) == 0) {
+    if (strlen(template) == 0 || !strncmp(template, "rep; nop", 9)) {
         while (!equal(tok->next, ")")) {
             tok = tok->next;
         }
@@ -141,11 +142,10 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
         ctx->line_no = __LINE__ + 1;
         *rest = skip(tok->next, ")", ctx);
         tok = *rest;
-        asm_str = "\nnop;";
+        asm_str = "\nrep;\nnop;\n";
         return asm_str;
     }
-
-
+    //printf("======%s %s\n", template, tok->loc);
     // allocate memory for all structs needed
     asmExt = calloc(1, sizeof(AsmExtended));
     asmExt->template = calloc(1, sizeof(AsmTemplate));

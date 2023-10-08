@@ -50,6 +50,7 @@ FILE *dotf;
 char *dot_file;
 bool isDotfile = false;
 bool isDebug = false;
+bool isPrintMacro = false;
 char *previousfile = " ";
 Context *ctx;
 
@@ -240,6 +241,12 @@ static void parse_args(int argc, char **argv)
     if (!strcmp(argv[i], "-debug"))
     {
       isDebug = true;
+      continue;
+    }
+
+    if (!strcmp(argv[i], "-dM"))
+    {
+      isPrintMacro = true;
       continue;
     }
 
@@ -578,6 +585,8 @@ static void parse_args(int argc, char **argv)
         !strncmp(argv[i], "-std", 4) ||
         !strcmp(argv[i], "-ffreestanding") ||
         !strcmp(argv[i], "-fno-omit-frame-pointer") ||
+        !strcmp(argv[i], "-fomit-frame-pointer") ||   
+        !strcmp(argv[i], "-funwind-tables") ||   
         !strcmp(argv[i], "-fno-stack-protector") ||
         !strcmp(argv[i], "-fno-strict-aliasing") ||
         !strcmp(argv[i], "-m64") ||
@@ -894,6 +903,12 @@ static void cc1(void)
     print_dependencies();
     if (opt_M)
       return;
+  }
+
+  //print macro in preprocess.c
+  if (isPrintMacro)
+  {
+    return;
   }
 
   // If -E is given, print out preprocessed C code as a result.

@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+
 #define Array(T)       \
   struct {             \
     T *contents;       \
