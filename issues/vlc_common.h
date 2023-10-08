@@ -23,20 +23,10 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston MA 02110-1301, USA.
  *****************************************************************************/
-// #  define VLC_MALLOC
-// #  define VLC_USED
-// #  define VLC_EXTERN
-// #  define VLC_API
-// #  define VLC_DEPRECATED
 
 #ifndef VLC_COMMON_H
 # define VLC_COMMON_H 1
 
-// #  define VLC_USED
-// #  define VLC_MALLOC
-// #  define VLC_DEPRECATED
-// #  define VLC_NOINLINE_FUNC
-// #  define VLC_UNUSED_FUNC
 /**
  * \defgroup vlc VLC plug-in programming interface
  * \file
@@ -47,7 +37,7 @@
 /*****************************************************************************
  * Required vlc headers
  *****************************************************************************/
-//#include "vlc_config.h"
+#include "vlc_config.h"
 
 /*****************************************************************************
  * Required system headers
@@ -80,23 +70,6 @@
 #else
 /** GCC version check */
 # define VLC_GCC_VERSION(maj,min) (0)
-#endif
-
-/* Try to fix format strings for all versions of mingw and mingw64 */
-#if defined( _WIN32 ) && defined( __USE_MINGW_ANSI_STDIO )
- #undef PRId64
- #define PRId64 "lld"
- #undef PRIi64
- #define PRIi64 "lli"
- #undef PRIu64
- #define PRIu64 "llu"
- #undef PRIo64
- #define PRIo64 "llo"
- #undef PRIx64
- #define PRIx64 "llx"
- #define snprintf __mingw_snprintf
- #define vsnprintf __mingw_vsnprintf
- #define swprintf _snwprintf
 #endif
 
 /* Function attributes for compiler warnings */
@@ -180,6 +153,16 @@
  */
 #  define VLC_USED
 # endif
+#elif defined(_MSC_VER)
+# define VLC_USED _Check_return_
+// # define VLC_MALLOC __declspec(allocator)
+# define VLC_MALLOC
+// # define VLC_DEPRECATED __declspec(deprecated)
+# define VLC_DEPRECATED
+#else // !GCC && !MSVC
+# define VLC_USED
+# define VLC_MALLOC
+# define VLC_DEPRECATED
 #endif
 
 
@@ -304,7 +287,7 @@
  *
  * This macro performs a run-time assertion if C assertions are enabled
  * and the following preprocessor symbol is defined:
- * @verbatim __LIBVLC__ @endverbatim
+ * @verbatim LIBVLC_INTERNAL_ @endverbatim
  * That restriction ensures that assertions in public header files are not
  * unwittingly <i>leaked</i> to externally-compiled plug-ins
  * including those header files.
@@ -312,7 +295,7 @@
  * Within the LibVLC code base, this is exactly the same as assert(), which can
  * and probably should be used directly instead.
  */
-#ifdef __LIBVLC__
+#ifdef LIBVLC_INTERNAL_
 # define vlc_assert(pred) assert(pred)
 #else
 # define vlc_assert(pred) ((void)0)
@@ -325,7 +308,7 @@
 # define VLC_EXTERN
 #endif
 
-#if defined (_WIN32) && defined (DLL_EXPORT)
+#if defined (_WIN32) && defined (VLC_DLL_EXPORT)
 # define VLC_EXPORT __declspec(dllexport)
 #elif defined (__GNUC__)
 # define VLC_EXPORT __attribute__((visibility("default")))
@@ -474,6 +457,16 @@ typedef struct vlc_frame_t  block_t;
 typedef struct vlc_fifo_t vlc_fifo_t;
 typedef struct vlc_fifo_t block_fifo_t;
 
+typedef struct vlc_hash_md5_ctx
+{
+    struct md5_s {
+        uint32_t A, B, C, D; /* chaining variables */
+        uint32_t nblocks;
+        uint8_t buf[64];
+        int count;
+    } priv; /**< \internal Private */
+} vlc_hash_md5_t;
+
 /* Hashing */
 typedef struct vlc_hash_md5_ctx vlc_hash_md5_t;
 
@@ -558,9 +551,6 @@ typedef int ( * vlc_list_callback_t ) ( vlc_object_t *,      /* variable's objec
  *****************************************************************************/
 #if defined( _WIN32 )
 #   include <malloc.h>
-#   ifndef PATH_MAX
-#       define PATH_MAX MAX_PATH
-#   endif
 #   include <windows.h>
 #endif
 
@@ -577,8 +567,8 @@ typedef int ( * vlc_list_callback_t ) ( vlc_object_t *,      /* variable's objec
 #   include <os2.h>
 #endif
 
-// #include "vlc_tick.h"
-// #include "vlc_threads.h"
+#include "vlc_tick.h"
+#include "vlc_threads.h"
 
 /**
  * \defgroup intops Integer operations
@@ -609,10 +599,12 @@ static inline size_t vlc_align(size_t v, size_t align)
     return (v + (align - 1)) & ~(align - 1);
 }
 
-#if defined(__clang__) && __has_attribute(diagnose_if)
+#if defined __has_attribute
+# if __has_attribute(diagnose_if)
 static inline size_t vlc_align(size_t v, size_t align)
     __attribute__((diagnose_if(((align & (align - 1)) || (align == 0)),
         "align must be power of 2", "error")));
+# endif
 #endif
 
 /** Greatest common divisor */
@@ -1011,7 +1003,7 @@ static inline bool mul_overflow(unsigned long long a, unsigned long long b,
 
 #define EMPTY_STR(str) (!str || !*str)
 
-// #include <vlc_arrays.h>
+#include "vlc_arrays.h"
 
 /* MSB (big endian)/LSB (little endian) conversions - network order is always
  * MSB, and should be used for both network communications and files. */
@@ -1157,26 +1149,13 @@ static inline void SetQWLE (void *p, uint64_t qw)
 
 #if defined(_WIN32)
 /* several type definitions */
-#   if defined( __MINGW32__ )
-#       if !defined( _OFF_T_ )
-            typedef long long _off_t;
-            typedef _off_t off_t;
-#           define _OFF_T_
-#       else
-#           ifdef off_t
-#               undef off_t
-#           endif
-#           define off_t long long
-#       endif
-#   endif
-
 #   ifndef O_NONBLOCK
 #       define O_NONBLOCK 0
 #   endif
 
 /* the mingw32 swab() and win32 _swab() prototypes expect a char* instead of a
    const void* */
-#  define swab(a,b,c)  swab((char*) (a), (char*) (b), (c))
+#  define swab(a,b,c)  _swab((char*) (a), (char*) (b), (c))
 
 #endif /* _WIN32 */
 
@@ -1189,7 +1168,7 @@ VLC_API bool vlc_ureduce( unsigned *, unsigned *, uint64_t, uint64_t, uint64_t )
 #define container_of(ptr, type, member) \
     ((type *)(((char *)(ptr)) - offsetof(type, member)))
 
-VLC_USED VLC_MALLOC 
+VLC_USED VLC_MALLOC
 static inline void *vlc_alloc(size_t count, size_t size)
 {
     return mul_overflow(count, size, &size) ? NULL : malloc(size);
@@ -1255,10 +1234,10 @@ VLC_API const char * VLC_Compiler( void ) VLC_USED;
 /*****************************************************************************
  * Additional vlc stuff
  *****************************************************************************/
-// #include "vlc_messages.h"
-// #include "vlc_objects.h"
-// #include "vlc_variables.h"
-// #include "vlc_configuration.h"
+#include "vlc_messages.h"
+#include "vlc_objects.h"
+#include "vlc_variables.h"
+#include "vlc_configuration.h"
 
 #if defined( _WIN32 ) || defined( __OS2__ )
 #   define DIR_SEP_CHAR '\\'

@@ -191,8 +191,10 @@ static Type *get_common_type(Type *ty1, Type *ty2)
 static void usual_arith_conv(Node **lhs, Node **rhs)
 {
   Type *ty = get_common_type((*lhs)->ty, (*rhs)->ty);
+  
   *lhs = new_cast(*lhs, ty);
   *rhs = new_cast(*rhs, ty);
+  
 }
 
 void add_type(Node *node)
@@ -239,7 +241,7 @@ void add_type(Node *node)
   case ND_ASSIGN:
     if (node->lhs->ty->kind == TY_ARRAY)
       error_tok(node->lhs->tok, "%s not an lvalue", TYPE_C);
-    if (node->lhs->ty->kind != TY_STRUCT)
+    if (node->lhs->ty->kind != TY_STRUCT && node->lhs->ty->kind != TY_UNION)
       node->rhs = new_cast(node->rhs, node->lhs->ty);
     node->ty = node->lhs->ty;
     return;
@@ -268,7 +270,9 @@ void add_type(Node *node)
     node->ty = node->var->ty;
     return;
   case ND_COND:
-    if (node->then->ty->kind == TY_VOID || node->els->ty->kind == TY_VOID)
+    //======ISS-154 trying to fix deferencing pointer issue when we have a macro that can return a pointer or null  (self) ? NULL
+    //printf("======%d %d %s\n", node->then->ty->kind, node->els->ty->kind,  node->tok->loc);
+    if (node->then->ty->kind == TY_VOID && node->els->ty->kind == TY_VOID)
     {
       node->ty = ty_void;
     }
@@ -296,8 +300,12 @@ void add_type(Node *node)
   case ND_DEREF:
     if (!node->lhs->ty->base)
       error_tok(node->tok, "%s invalid pointer dereference", TYPE_C);
-    if (node->lhs->ty->base->kind == TY_VOID)
+    //======ISS-154 trying to fix deferencing pointer issue when we have a macro that can return a pointer or null  (self) ? NULL      
+    if (node->lhs->ty->base->kind == TY_VOID && node->lhs->ty->kind == TY_VOID)
       error_tok(node->tok, "%s dereferencing a void pointer", TYPE_C);
+    if (node->lhs->ty->base->kind == TY_VOID)
+      node->lhs->ty->base = node->lhs->ty;
+
     node->ty = node->lhs->ty->base;
     return;
   case ND_STMT_EXPR:
