@@ -115,6 +115,8 @@ static int nbClobber = 0;
 static int nbLabel = 0;
 static int asmtype = 0;
 extern Context *ctx;
+static bool hasInput = false;
+static bool hasOutput = false;
 
 
 
@@ -127,6 +129,8 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
     nbOutput = 0;
     nbClobber = 0;
     nbLabel = 0;
+    hasInput = false;
+    hasOutput = false;
     char *template = tok->str;
     char *asm_str = calloc(1, sizeof(char) * 400);
     ctx->filename = EXTASM_C;
@@ -134,7 +138,8 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
     //case __asm__ volatile ("" ::: "memory")
     //case __asm__ __volatile__ ("rep; nop" ::: "memory");  
     //we generate a nop operation for each memory border defined
-    if (strlen(template) == 0 || !strncmp(template, "rep; nop", 9)) {
+    //if (strlen(template) == 0 || !strncmp(template, "rep; nop", 9)) {
+    if (strlen(template) == 0) {        
         while (!equal(tok->next, ")")) {
             tok = tok->next;
         }
@@ -142,10 +147,11 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
         ctx->line_no = __LINE__ + 1;
         *rest = skip(tok->next, ")", ctx);
         tok = *rest;
-        asm_str = "\nrep;\nnop;\n";
+        asm_str = "\nnop;\n";
         return asm_str;
     }
-    //printf("======%s %s\n", template, tok->loc);
+    if (isDebug)
+      printf("======%s ==%s\n", template, tok->loc);
     // allocate memory for all structs needed
     asmExt = calloc(1, sizeof(AsmExtended));
     asmExt->template = calloc(1, sizeof(AsmTemplate));
@@ -157,7 +163,7 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
         asmExt->clobber[i] = calloc(1, sizeof(AsmClobber));
 
 
-    strncpy(asm_str, "", strlen(asm_str) + 1);
+    //strncpy(asm_str, "", strlen(asm_str) + 1);
     char *output_asm_str = calloc(1, sizeof(char) * 300);
     char *input_final = calloc(1, sizeof(char) * 400);
     asmExt->template->templatestr = template;
@@ -167,7 +173,6 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
     clear_register_used();
     //mark the register used if found in template
     check_register_in_template(template);
-
     while (!equal(tok->next, ";") && !equal(tok, ";"))
     {
         switch (asmtype)
@@ -178,6 +183,7 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             output_asm(node, rest, tok, locals);
             // generate output instruction for each output variable
             if (asmExt->output[nbOutput]->variableNumber) {
+                hasOutput = true;
                 output_loading = generate_output_asm(asmExt->output[nbOutput]->variableNumber);
                 // replace %9 by the correct register
                 if (!output_loading)
@@ -187,6 +193,9 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 output_loading = subst_asm(output_loading, asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->variableNumber);
                 //generate the ouput instruction
                 strncat(output_asm_str, output_loading, strlen(output_loading));
+            } else { //to manage the case of no output
+                tok = tok->next;
+                *rest = tok;
             }
             nbOutput++;
             tok = *rest;
@@ -196,6 +205,7 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             input_asm(node, rest, tok, locals);
             // generate input instruction to load the parameter into register
             if (asmExt->input[nbInput]->variableNumber) {
+                hasInput = true;
                 input_asm_str = generate_input_asm(asmExt->input[nbInput]->variableNumber);
                 //replace %9, by the correct
                 if (!input_asm_str)
@@ -205,6 +215,9 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 input_asm_str = subst_asm(input_asm_str, asmExt->input[nbInput]->reg, asmExt->input[nbInput]->variableNumber);
                 // concatenate the input final strings to add to the assembly
                 strncat(input_final, input_asm_str, strlen(input_asm_str));
+            }  else { //to manage the case of no input
+                tok = tok->next;
+                *rest = tok;
             }
             nbInput++;
             tok = *rest;
@@ -212,12 +225,15 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
         case AT_CLOBBER: // clobbers
             asmExt->clobber[nbClobber]->clobber = tok->loc;
             tok = tok->next;
+            *rest = tok;
             nbClobber++;
             //error_tok(tok, "%s : in extended_asm function : clobber not managed yet!", EXTASM_C);
             break;
         case AT_LABEL: // labels
-            nbLabel++;
-            error_tok(tok, "%s : in extended_asm function : label not managed yet!", EXTASM_C);
+            //nbLabel++;
+            tok = tok->next;
+            *rest = tok;
+            //error_tok(tok, "%s : in extended_asm function : label not managed yet!", EXTASM_C);
             break;
         default: // error
             error_tok(tok, "%s : in extended_asm function : too much parameters or complex extended assembly not managed!", EXTASM_C);
@@ -227,29 +243,32 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
         tok = tok->next;
     }
 
+    if (hasOutput) {
+        //replace each %9 by the correct output register
+        for (int i = 0; i < nbOutput; i++)
+        {
+            asm_str = subst_asm(template, asmExt->output[i]->reg, asmExt->output[i]->variableNumber);
+        }
+    }
+    if (hasInput) {
+        //replace each %9 by the correct input register
+        for (int i = 0; i < nbInput; i++)
+        {
+            asm_str = subst_asm(template, asmExt->input[i]->reg, asmExt->input[i]->variableNumber);                
+        }
 
-    //replace each %9 by the correct output register
-    for (int i = 0; i < nbOutput; i++)
-    {
-        asm_str = subst_asm(template, asmExt->output[i]->reg, asmExt->output[i]->variableNumber);
+        //generate the input instructions before the output 
+        if (input_final != NULL)
+        {  
+            strncat(input_final, asm_str, strlen(asm_str));
+            asm_str = input_final;
+            
+        }
     }
 
-    //replace each %9 by the correct input register
-    for (int i = 0; i < nbInput; i++)
-    {
-        asm_str = subst_asm(template, asmExt->input[i]->reg, asmExt->input[i]->variableNumber);                
 
-    }
-
-    //generate the input instructions before the output 
-    if (input_final != NULL)
-    {  
-        strncat(input_final, asm_str, strlen(asm_str));
-        asm_str = input_final;
-        
-    }
     //generate the output instructions
-    if (output_asm_str != NULL)
+    if (hasOutput && output_asm_str != NULL)
     {
         strncat(asm_str, output_asm_str, strlen(output_asm_str));
     }
@@ -271,7 +290,8 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
         free(asmExt->output[i]);
     for (int i = 0; i < 10; i++)
         free(asmExt->clobber[i]);
-
+    free(asmExt->template);
+    free(asmExt);
     return asm_str;
 }
 
@@ -440,6 +460,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
         //     error_tok(tok, "%s : in output_asm function : output constraint not managed yet!", EXTASM_C);
 
         tok = tok->next;
+        *rest = tok;
     }
     return;
 }
@@ -601,6 +622,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
         //     error_tok(tok, "%s : in input_asm function : input complex constraint not managed yet!", EXTASM_C);
 
         tok = tok->next;
+        *rest = tok;
     }
     return;
 }
