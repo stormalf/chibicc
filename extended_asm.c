@@ -31,6 +31,7 @@ typedef struct
     char *variableNumber;     //store the variable %0, %1...
     char *input_value; // store the immediate value
     char *reg;        // store the register that corresponds to the variable size    
+    char *reg64;        //store the register 64 bits
     int index;         // store the index
     char letter;       // store the letter corresponding to input
     int offset;         // store the offset
@@ -47,6 +48,7 @@ typedef struct
     char *variableNumber;     //store the variable %0, %1...
     char *prefix;     //= or +
     char *reg;        // store the register that corresponds to the variable size
+    char *reg64;        //store the register 64 bits
     char letter;      // to store a b r
     int index;        // order in output
     int size;         // store the size to determine the operation to do
@@ -253,6 +255,7 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
         {
             asm_str = subst_asm(template, asmExt->output[i]->reg, asmExt->output[i]->variableNumber);
         }
+
     }
     if (hasInput) {
         //replace each %9 by the correct input register
@@ -319,6 +322,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 else
                     asmExt->output[nbOutput]->prefix = "+";
                 asmExt->output[nbOutput]->reg = specific_register_available("%rax");
+                asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg;
                 asmExt->output[nbOutput]->letter = 'r';
                 //asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
                 
@@ -331,6 +335,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 else
                     asmExt->output[nbOutput]->prefix = "+";
                 asmExt->output[nbOutput]->reg = specific_register_available("%rax");
+                asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg;                
                 asmExt->output[nbOutput]->letter = 'm';
                 //asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
                 
@@ -341,22 +346,26 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 if (!strncmp(tok->str, "=a", tok->len))
                 {
                     asmExt->output[nbOutput]->reg = specific_register_available("%rax");
+                    asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg;  
                     asmExt->output[nbOutput]->letter = 'a';
 
                 }
                 else if (!strncmp(tok->str, "=b", tok->len))
                 {
                     asmExt->output[nbOutput]->reg = specific_register_available("%rbx");
+                    asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg; 
                     asmExt->output[nbOutput]->letter = 'b';
                 }
                 else if (!strncmp(tok->str, "=c", tok->len))
                 {
                     asmExt->output[nbOutput]->reg = specific_register_available("%rcx");
+                    asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg; 
                     asmExt->output[nbOutput]->letter = 'c';
                 }
                 else if (!strncmp(tok->str, "=d", tok->len))
                 {
                     asmExt->output[nbOutput]->reg = specific_register_available("%rdx");
+                    asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg; 
                     asmExt->output[nbOutput]->letter = 'd';
                 }
                 else {
@@ -501,6 +510,8 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(0);
             asmExt->input[nbInput]->index = 0;
             asmExt->input[nbInput]->reg = asmExt->output[0]->reg;
+            asmExt->input[nbInput]->reg64 = asmExt->output[0]->reg64;
+
             
         }
         else if (tok->kind == TK_STR && !strncmp(tok->str, "1", tok->len))
@@ -509,6 +520,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(1);
             asmExt->input[nbInput]->index = 1;
             asmExt->input[nbInput]->reg = asmExt->output[1]->reg;
+            asmExt->input[nbInput]->reg64 = asmExt->output[1]->reg64;
         }
         else if (tok->kind == TK_STR && !strncmp(tok->str, "2", tok->len))
         {
@@ -516,6 +528,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(2);
             asmExt->input[nbInput]->index = 2;
             asmExt->input[nbInput]->reg = asmExt->output[2]->reg;
+            asmExt->input[nbInput]->reg64 = asmExt->output[2]->reg64;
         }
         else if (tok->kind == TK_STR && !strncmp(tok->str, "3", tok->len))
         {
@@ -523,6 +536,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(3);
             asmExt->input[nbInput]->index = 3;
             asmExt->input[nbInput]->reg = asmExt->output[3]->reg;
+            asmExt->input[nbInput]->reg64 = asmExt->output[3]->reg64;
         }
         else if (tok->kind == TK_STR && !strncmp(tok->str, "a", tok->len))
         {
@@ -530,6 +544,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             asmExt->input[nbInput]->index = nbOutput + nbInput;
             asmExt->input[nbInput]->letter = 'a';
             asmExt->input[nbInput]->reg = asmExt->output[retrieve_output_index_from_letter('a')]->reg;
+            asmExt->input[nbInput]->reg64 = asmExt->output[retrieve_output_index_from_letter('a')]->reg64;
             
         }
         else if (tok->kind == TK_STR && !strncmp(tok->str, "b", tok->len))
@@ -538,6 +553,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             asmExt->input[nbInput]->index = nbOutput + nbInput;
             asmExt->input[nbInput]->letter = 'b';
             asmExt->input[nbInput]->reg = asmExt->output[retrieve_output_index_from_letter('b')]->reg;
+            asmExt->input[nbInput]->reg64 = asmExt->output[retrieve_output_index_from_letter('b')]->reg64;
         }
         else if (tok->kind == TK_STR && !strncmp(tok->str, "c", tok->len))
         {
@@ -546,6 +562,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             asmExt->input[nbInput]->index = nbOutput + nbInput;
             asmExt->input[nbInput]->letter = 'c';
             asmExt->input[nbInput]->reg = asmExt->output[retrieve_output_index_from_letter('c')]->reg;
+            asmExt->input[nbInput]->reg64 = asmExt->output[retrieve_output_index_from_letter('c')]->reg64;
 
         }
         else if (tok->kind == TK_STR && !strncmp(tok->str, "d", tok->len))
@@ -555,6 +572,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             asmExt->input[nbInput]->index = nbOutput + nbInput;
             asmExt->input[nbInput]->letter = 'd';
             asmExt->input[nbInput]->reg = asmExt->output[retrieve_output_index_from_letter('d')]->reg;
+            asmExt->input[nbInput]->reg64 = asmExt->output[retrieve_output_index_from_letter('d')]->reg64;
         }
         else if (tok->kind == TK_STR && !strncmp(tok->str, "m", tok->len))
         {
@@ -562,6 +580,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(nbOutput + nbInput);
             asmExt->input[nbInput]->index = nbOutput + nbInput;
             asmExt->input[nbInput]->reg = specific_register_available("%rax");
+            asmExt->input[nbInput]->reg64 = asmExt->input[nbInput]->reg;
             asmExt->input[nbInput]->letter = 'm';
         }
         else if (tok->kind == TK_STR && !strncmp(tok->str, "r", tok->len))
@@ -569,6 +588,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(nbOutput + nbInput);
             asmExt->input[nbInput]->index = nbOutput + nbInput;
             asmExt->input[nbInput]->reg = specific_register_available("%rax");
+            asmExt->input[nbInput]->reg64 = asmExt->input[nbInput]->reg;
             asmExt->input[nbInput]->letter = 'r';
             
         }
@@ -733,6 +753,7 @@ bool check_template(char *template)
 {
     return strchr(template, '%') != NULL;
 }
+
 
 // generate input assembly instruction
 char *generate_output_asm(char *output_str)

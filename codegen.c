@@ -1675,8 +1675,13 @@ static void assign_lvar_offsets(Obj *prog)
     // Assign offsets to pass-by-register parameters and local variables.
     for (Obj *var = fn->locals; var; var = var->next)
     {
-      if (var->offset)
+
+      //trying to fix ISS-154 Extended assembly compiled with chibicc failed with ASSERT and works fine without assert function 
+      //the bottom value need to take in account the size of parameters and local variables to avoid issue with extended assembly
+      if (var->offset) {
+        bottom += var->ty->size;
         continue;
+      }
 
       // AMD64 System V ABI has a special alignment rule for an array of
       // length at least 16 bytes. We need to align such array to at least
@@ -1692,6 +1697,7 @@ static void assign_lvar_offsets(Obj *prog)
     }
 
     fn->stack_size = align_to(bottom, 16);
+
   }
 }
 
@@ -1822,12 +1828,15 @@ static void emit_text(Obj *prog)
     println("  .type %s, @function", fn->name);
     println("%s:", fn->name);
     current_fn = fn;
+    if (isDebug)
+      printf("4=====%d %d %s\n", fn->alloca_bottom->offset, fn->stack_size, fn->name);
 
     // Prologue
     println("  push %%rbp");
     println("  mov %%rsp, %%rbp");
     println("  sub $%d, %%rsp", fn->stack_size);
-    println("  mov %%rsp, %d(%%rbp)", fn->alloca_bottom->offset);
+    if (fn->alloca_bottom->offset)
+      println("  mov %%rsp, %d(%%rbp)", fn->alloca_bottom->offset);
 
     // Save arg registers if function is variadic
     if (fn->va_area)
