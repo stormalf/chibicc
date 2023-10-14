@@ -395,7 +395,7 @@ static Obj *new_lvar(char *name, Type *ty, char *funcname)
   var->next = locals;
   var->order = order;
   if (!funcname)
-    funcname = current_fn->name;
+    funcname = current_fn->funcname;
   var->funcname = funcname;
   locals = var;
   return var;
@@ -4243,6 +4243,7 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   else
   {
     fn = new_gvar(name_str, ty);
+    fn->funcname = name_str;
     fn->is_function = true;
     fn->is_definition = equal(tok, "{");
     fn->is_static = attr->is_static || (attr->is_inline && !attr->is_extern);

@@ -37,6 +37,8 @@ typedef struct
     int size;          // store the size to determine the operation to do ex movl movb movw movq
     bool isVariable;   // store true if it's a variable otherwise false for immediate value
     bool isAddress;    // store true if it's an address pointer
+    bool isArray;       //true if it's an array variable
+    int indexArray;     //store the index element of array
 } AsmInput;
 
 typedef struct
@@ -54,6 +56,8 @@ typedef struct
     int offset;        // store the offset
     bool isVariable;  // store true if it's a variable otherwise false for immediate value
     bool isAddress;   // store true if it's an address pointer
+    bool isArray;       //true if it's an array variable
+    int indexArray;     //store the index element of array
 } AsmOutput;
 
 typedef struct
@@ -399,7 +403,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 asmExt->output[nbOutput]->isVariable = true;
                 asmExt->output[nbOutput]->output = tok;
                 asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
-                
+
                 if (sc->var->funcname) {
                     
                     update_offset(sc->var->funcname, locals);
@@ -410,7 +414,25 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->output[nbOutput]->offset = 0;
                     
                 }
-                
+                               
+                //managing specific case of arrays
+                if (sc->var->ty->kind == TY_ARRAY) {
+                    ctx->line_no = __LINE__ + 1;
+                    tok = skip(tok->next, "[", ctx);
+                    asmExt->output[nbOutput]->isArray = true;
+                    asmExt->output[nbOutput]->indexArray = tok->val;
+                    asmExt->output[nbOutput]->size = sc->var->ty->base->size;
+                    asmExt->output[nbOutput]->reg = update_register_size(asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->size);
+                    //calculate the offset for each element from the bottom to the top r[0] has the lowest offset example -48, r[1] - 44, r[2] -40, r[3] - 36
+                    asmExt->output[nbOutput]->offset = (sc->var->offset ) + (asmExt->output[nbOutput]->indexArray * asmExt->output[nbOutput]->size);
+                    //printf("======%d %d %d %d %d %d %s %s\n", sc->var->order , sc->var->ty->kind, sc->var->ty->size, sc->var->ty->base->kind, sc->var->ty->base->size ,  asmExt->output[nbOutput]->offset, asmExt->output[nbOutput]->reg, tok->loc); 
+                    tok = tok->next;
+                    ctx->line_no = __LINE__ + 1;
+                    tok = skip(tok, "]", ctx);
+                    ctx->line_no = __LINE__ + 1;
+                    *rest = skip(tok, ")", ctx);
+                    return;
+                }                
                 // skip the variable to go to next token that should be a ")"
                 // tok = tok->next;
                 tok = tok->next;
@@ -560,6 +582,8 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 sc = find_var(tok);
                 if (!sc)
                     error_tok(tok, "%s : in input_asm function : variable undefined", EXTASM_C);
+                if (!sc->var->ty)
+                    error_tok(tok, "%s : in input_asm function : variable type unknown", EXTASM_C);                    
                 asmExt->input[nbInput]->input = tok;
                 asmExt->input[nbInput]->isVariable = true;
                 asmExt->input[nbInput]->size = sc->var->ty->size;
@@ -568,6 +592,24 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->input[nbInput]->offset = sc->var->offset;
                 } 
                 asmExt->input[nbInput]->reg = update_register_size(asmExt->input[nbInput]->reg, asmExt->input[nbInput]->size);
+                //managing specific case of arrays
+                if (sc->var->ty->kind == TY_ARRAY) {
+                    ctx->line_no = __LINE__ + 1;
+                    tok = skip(tok->next, "[", ctx);
+                    asmExt->input[nbInput]->isArray = true;
+                    asmExt->input[nbInput]->indexArray = tok->val;
+                    asmExt->input[nbInput]->size = sc->var->ty->base->size;
+                    asmExt->input[nbInput]->reg = update_register_size(asmExt->input[nbInput]->reg, asmExt->input[nbInput]->size);
+                    //calculate the offset for each element from the bottom to the top r[0] has the lowest offset example -48, r[1] - 44, r[2] -40, r[3] - 36
+                    asmExt->input[nbInput]->offset = (sc->var->offset ) + (asmExt->input[nbInput]->indexArray * asmExt->input[nbInput]->size);
+                    //printf("======%d %d %d %d %d %d %s %s\n", sc->var->order , sc->var->ty->kind, sc->var->ty->size, sc->var->ty->base->kind, sc->var->ty->base->size ,  asmExt->input[nbInput]->offset, asmExt->input[nbInput]->reg, tok->loc); 
+                    tok = tok->next;
+                    ctx->line_no = __LINE__ + 1;
+                    tok = skip(tok, "]", ctx);
+                    ctx->line_no = __LINE__ + 1;
+                    *rest = skip(tok, ")", ctx);
+                    return;
+                }        
                 tok = tok->next;
                 ctx->line_no = __LINE__ + 1;
                 *rest = skip(tok, ")", ctx);
