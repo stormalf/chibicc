@@ -400,7 +400,8 @@ Example of diagram generated with -dotfile parameter :
 ## release notes
 
 
-1.0.21    fixing missing information on README (about help and ignored options).
+1.0.21    fixing missing information on README (about help and ignored options). Fixing ISS-149 some extended assembly not taken in account (arrays). Fixing ISS-153 extended assembly giving different results when compiling with gcc or with chibicc.
+
 
 ## old release notes
 
