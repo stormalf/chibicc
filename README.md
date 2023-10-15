@@ -213,6 +213,8 @@ List of options ignored :
     "-z"
     "defs"
     "-flto"
+    "-flto=8"
+    "-fvisibility=default"
     "-pedantic"
     "-nostdinc"
     "-mno-red-zone"
@@ -348,6 +350,11 @@ vim: https://github.com/vim/vim.git
     FAILED: 0: []
     skipped: 0    
 
+lxc: https://github.com/lxc/lxc.git
+
+    CC=chibicc CFLAGS=-fpic LDFLAGS=-fpic meson build
+    cd build
+    meson compile
 
 ## Limits
 

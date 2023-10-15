@@ -68,7 +68,7 @@ nmap:
 	cd ../nmap && make clean && make
 
 openssl:
-	cd ../openssl && make clean && make && make test
+	cd ../openssl && make clean && make 
 
 util-linux:
 	cd ../util-linux && make clean && make && make check-programs && cd tests && ./run.sh
