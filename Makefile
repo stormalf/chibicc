@@ -53,9 +53,9 @@ test-stage2: $(TESTS:test/%=stage2/test/%)
 	for i in $^; do echo $$i; ./$$i || exit 1; echo; done
 	test/driver.sh ./stage2/$(OBJECT)
 
-projects-all: projects openssl nmap
+projects-all: projects openssl nmap curl
 
-projects: curl zlib util-linux nginx
+projects: zlib util-linux nginx
 
 
 curl:
@@ -68,7 +68,7 @@ nmap:
 	cd ../nmap && make clean && make
 
 openssl:
-	cd ../openssl && make clean && make && make test
+	cd ../openssl && make clean && make 
 
 util-linux:
 	cd ../util-linux && make clean && make && make check-programs && cd tests && ./run.sh

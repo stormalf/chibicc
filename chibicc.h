@@ -31,7 +31,7 @@
 #endif
 
 #define PRODUCT "chibicc"
-#define VERSION "1.0.20"
+#define VERSION "1.0.21"
 #define MAXLEN 101
 #define DEFAULT_TARGET_MACHINE "x86_64-linux-gnu"
 
