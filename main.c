@@ -136,6 +136,7 @@ static FileType parse_opt_x(char *s)
   error("%s : in parse_opt_x <command line>: unknown argument for -x: %s", MAIN_C, s);
 }
 
+
 static char *quote_makefile(char *s)
 {
   char *buf = calloc(1, strlen(s) * 2 + 1);
@@ -567,6 +568,7 @@ static void parse_args(int argc, char **argv)
       continue;
     }
 
+
     if (!strcmp(argv[i], "-rpath"))
     {
       char *tmp = argv[++i];
@@ -581,6 +583,7 @@ static void parse_args(int argc, char **argv)
     if (!strncmp(argv[i], "-O", 2) ||
         !strncmp(argv[i], "-W", 2) ||
         !strncmp(argv[i], "-g", 2) ||
+        !strncmp(argv[i], "-P", 2) || 
         !strncmp(argv[i], "-std=", 5) ||
         !strncmp(argv[i], "-std", 4) ||
         !strcmp(argv[i], "-ffreestanding") ||
@@ -598,9 +601,11 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-z") ||
         !strcmp(argv[i], "defs") ||
         !strcmp(argv[i], "-flto") ||
+        !strcmp(argv[i], "-flto=8") ||
         !strcmp(argv[i], "-pedantic") ||
         !strcmp(argv[i], "-nostdinc") ||
         !strcmp(argv[i], "-mno-red-zone") ||
+        !strcmp(argv[i], "-fvisibility=default") ||
         !strcmp(argv[i], "-w"))
       continue;
 
@@ -1178,6 +1183,7 @@ int main(int argc, char **argv)
 
     FileType type = get_file_type(input);
 
+ 
     // Handle .o or .a
     if (type == FILE_OBJ || type == FILE_AR || type == FILE_DSO)
     {
@@ -1238,3 +1244,4 @@ int main(int argc, char **argv)
 
   return 0;
 }
+

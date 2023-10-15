@@ -1828,8 +1828,6 @@ static void emit_text(Obj *prog)
     println("  .type %s, @function", fn->name);
     println("%s:", fn->name);
     current_fn = fn;
-    if (isDebug)
-      printf("4=====%d %d %s\n", fn->alloca_bottom->offset, fn->stack_size, fn->name);
 
     // Prologue
     println("  push %%rbp");
@@ -2084,15 +2082,10 @@ void assign_lvar_offsets_assembly(Obj *fn)
       bottom += var->ty->size;
       bottom = align_to(bottom, align);
       var->offset = -bottom;
-      if (isDebug)
-        printf("2======%d %d %s\n", var->offset, var->stack_size, var->name);
+
     }
 
     fn->stack_size = align_to(bottom, 16);
-    if (isDebug)
-      printf("3======%d %d %s\n", fn->stack_size, fn->alloca_bottom->offset, fn->funcname);
-
-
 
 }
 

@@ -3,6 +3,8 @@
 **/*.o
 **/*.s
 **/a.out
+**/*.exe
+.vscode/
 /tmp*
 /thirdparty
 /chibicc
