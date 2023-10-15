@@ -1622,7 +1622,7 @@ static void assign_lvar_offsets(Obj *prog)
     // inevitably passed by stack rather than by register.
     // The first passed-by-stack parameter resides at RBP+16.
     int top = 16;
-    int bottom = 0;
+    int bottom = 16;
 
     int gp = 0, fp = 0;
 
@@ -1675,8 +1675,13 @@ static void assign_lvar_offsets(Obj *prog)
     // Assign offsets to pass-by-register parameters and local variables.
     for (Obj *var = fn->locals; var; var = var->next)
     {
-      if (var->offset)
+
+      //trying to fix ISS-154 Extended assembly compiled with chibicc failed with ASSERT and works fine without assert function 
+      //the bottom value need to take in account the size of parameters and local variables to avoid issue with extended assembly
+      if (var->offset) {
+        bottom += var->ty->size;
         continue;
+      }
 
       // AMD64 System V ABI has a special alignment rule for an array of
       // length at least 16 bytes. We need to align such array to at least
@@ -1692,6 +1697,7 @@ static void assign_lvar_offsets(Obj *prog)
     }
 
     fn->stack_size = align_to(bottom, 16);
+
   }
 }
 
@@ -1950,11 +1956,11 @@ static void print_offset(Obj *prog)
       
     for (Obj *var = fn->params; var; var = var->next)
     {
-    printf("===== %s %s %d\n", fn->name, var->name, var->offset );
+    printf("===== %s %s %d %d\n", fn->name, var->name, var->offset, fn->stack_size );
     }
     for (Obj *var = fn->locals; var; var = var->next)
     {
-      printf("===== %s %s %d\n", fn->name, var->name, var->offset );
+      printf("===== %s %s %d %d\n", fn->name, var->name, var->offset, fn->stack_size );
       //update the function name if it's missing
       if (!var->funcname)
         var->funcname = fn->name;
@@ -1967,32 +1973,104 @@ static void print_offset(Obj *prog)
 //here the goal is to update offset for parameters and local variables to be able to use them when managing assembly inline
 void assign_lvar_offsets_assembly(Obj *fn)
 {
-    int top = 8;
-    int bottom = 0;
+    // int top = 16;
+    // int bottom = 0;
+
+    // // If a function has many parameters, some parameters are
+    // // inevitably passed by stack rather than by register.
+    // // The first passed-by-stack parameter resides at RBP+16.
+
+    // // Assign offsets to pass-by-stack parameters.
+    // for (Obj *var = fn->params; var; var = var->next)
+    // {
+    //   //printf("1======%d %s\n", var->offset, var->name);
+    //   top = align_to(top, 8);
+    //   var->offset = 0 - top - var->ty->size;
+    //   top += var->ty->size;
+      
+    // }
+
+    // // Assign offsets to pass-by-register parameters and local variables.
+    // for (Obj *var = fn->locals; var; var = var->next)
+    // {
+    //   //printf("2======%d %s\n", var->offset, var->name);
+      
+    //   // AMD64 System V ABI has a special alignment rule for an array of
+    //   // length at least 16 bytes. We need to align such array to at least
+    //   // 16-byte boundaries. See p.14 of
+    //   // https://github.com/hjl-tools/x86-psABI/wiki/x86-64-psABI-draft.pdf.
+    //   int align = (var->ty->kind == TY_ARRAY && var->ty->size >= 16)
+    //                   ? MAX(16, var->align)
+    //                   : var->align;
+ 
+    //   bottom += var->ty->size;
+    //   bottom = align_to(bottom, align);
+    //   var->offset = -bottom;
+
+    // }
+
+    // fn->stack_size = align_to(bottom, 16);
 
     // If a function has many parameters, some parameters are
     // inevitably passed by stack rather than by register.
     // The first passed-by-stack parameter resides at RBP+16.
+    int top = 16;
+    int bottom = 16;
+
+    int gp = 0, fp = 0;
 
     // Assign offsets to pass-by-stack parameters.
     for (Obj *var = fn->params; var; var = var->next)
     {
-      if (var->offset)
-        continue;
-      
+      Type *ty = var->ty;
+
+      switch (ty->kind)
+      {
+      case TY_STRUCT:
+      case TY_UNION:
+          if (ty->size <= 8) {
+            bool fp1 = has_flonum(ty, 0, 8, 0);
+            if (fp + fp1 < FP_MAX && gp + !fp1 < GP_MAX) {
+              fp = fp + fp1;
+              gp = gp + !fp1;
+              continue;
+            }
+          } else if (ty->size <= 16) {
+        //if (ty->size <= 16)
+        //{
+          bool fp1 = has_flonum(ty, 0, 8, 0);
+          bool fp2 = has_flonum(ty, 8, 16, 8);
+          if (fp + fp1 + fp2 < FP_MAX && gp + !fp1 + !fp2 < GP_MAX)
+          {
+            fp = fp + fp1 + fp2;
+            gp = gp + !fp1 + !fp2;
+            continue;
+          }
+        }
+        break;
+      case TY_FLOAT:
+      case TY_DOUBLE:
+        if (fp++ < FP_MAX)
+          continue;
+        break;
+      case TY_LDOUBLE:
+        break;
+      default:
+        if (gp++ < GP_MAX)
+          continue;
+      }
+
       top = align_to(top, 8);
-      var->offset = 0 - top - var->ty->size;
+      var->offset = top;
       top += var->ty->size;
-      
     }
 
     // Assign offsets to pass-by-register parameters and local variables.
     for (Obj *var = fn->locals; var; var = var->next)
     {
-      
-      if (var->offset)
-        continue;
-      
+      // if (var->offset)
+      //   continue;
+
       // AMD64 System V ABI has a special alignment rule for an array of
       // length at least 16 bytes. We need to align such array to at least
       // 16-byte boundaries. See p.14 of

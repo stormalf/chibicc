@@ -1,4 +1,3 @@
-#include <stdio.h>
 #include "test.h"
 
 void someasm(void) {
@@ -8,12 +7,14 @@ void someasm(void) {
     __asm__ ( "movl $10, %eax;"
                 "movl $20, %ebx;"
                 "addl %ebx, %eax;"
+                
     );
 
     __asm__ ("movl %%eax, %0;" : "=r" ( eax ));
+    ASSERT(30, eax);   
     printf("eax = %d\n", eax);
-     
-    //ASSERT(30, eax);    
+    printf("eax = %d\n", eax);
+ 
 
     /* Subtract 20 from 10 and store result into register %eax */
     __asm__ ( "movl $10, %eax;"
@@ -22,8 +23,8 @@ void someasm(void) {
     );
     __asm__ ("movl %%eax, %0;" : "=r" ( eax ));
     printf("eax = %d\n", eax);
-    
-    //ASSERT(-10, eax);
+    printf("eax = %d\n", eax);
+    ASSERT(-10, eax);
     
 
     /* Multiply 10 and 20 and store result into register %eax */
@@ -33,8 +34,8 @@ void someasm(void) {
     );
     __asm__ ("movl %%eax, %0;" : "=r" ( eax ));
     printf("eax = %d\n", eax);
-    
-    //ASSERT(200, eax); 
+    printf("eax = %d\n", eax);
+    ASSERT(200, eax); 
 
 }
 
