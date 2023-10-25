@@ -1980,6 +1980,7 @@ void assign_lvar_offsets(Obj *prog)
     // The first passed-by-stack parameter resides at RBP+16.
     int top = 16;
     int bottom = 16;
+    //trying to fix =====ISS-149 causing segmentation fault when having assembly instructions
     if (fn->alloca_bottom && fn->alloca_bottom->offset)
       bottom =  abs(fn->alloca_bottom->offset);
 
