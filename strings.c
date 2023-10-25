@@ -2,6 +2,7 @@
 #define STRINGS_C "strings.c"
 
 void strarray_push(StringArray *arr, char *s) {
+
   if (!arr->data) {
     arr->data = calloc(8, sizeof(char *));
     arr->capacity = 8;
@@ -14,8 +15,9 @@ void strarray_push(StringArray *arr, char *s) {
       error("%s: in strarray_push reallocation of arr->data failed!", STRINGS_C);
     arr->data = tmp;
     arr->capacity *= 2;
-    for (int i = arr->len; i < arr->capacity; i++)
+    for (int i = arr->len; i < arr->capacity; i++) {
       arr->data[i] = NULL;
+    }
   }
 
   arr->data[arr->len++] = s;

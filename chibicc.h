@@ -17,6 +17,7 @@
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
+#include <math.h>
 
 
 #ifndef __has_attribute
@@ -31,7 +32,7 @@
 #endif
 
 #define PRODUCT "chibicc"
-#define VERSION "1.0.21"
+#define VERSION "1.0.22"
 #define MAXLEN 101
 #define DEFAULT_TARGET_MACHINE "x86_64-linux-gnu"
 
@@ -311,7 +312,8 @@ typedef enum
 } NodeKind;
 
 // AST node type
-struct Node
+struct 
+Node
 {
   NodeKind kind; // Node kind
   Node *next;    // Next node
@@ -536,7 +538,7 @@ char *reg_di(int sz);
 char *reg_si(int sz);
 char *reg_r8w(int sz);
 char *reg_r9w(int sz);
-void assign_lvar_offsets_assembly(Obj *fn);
+void assign_lvar_offsets(Obj *prog);
 int add_register_used(char *regist);
 void clear_register_used();
 char *register32_to_64(char *regist);
