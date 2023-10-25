@@ -355,6 +355,20 @@ lxc: https://github.com/lxc/lxc.git
     CC=chibicc CFLAGS=-fpic LDFLAGS=-fpic meson build
     cd build
     meson compile
+    failed with __label__ not managed yet
+
+
+libwepb: https://github.com/webmproject/libwebp.git
+
+    CC=chibicc CFLAGS="-fpic" LDFLAGS="-fpic -lpng -ljpeg" cmake -S . -B ./build
+    cd build
+    cmake --build .
+    ~/libwebp/build$ ./img2webp -version
+    WebP Encoder version: 1.3.2
+    WebP Mux version: 1.3.2
+    libsharpyuv: 0.4.0
+    [no output file specified]   [0 frames, 0 bytes].
+
 
 ## Limits
 
@@ -407,7 +421,7 @@ Example of diagram generated with -dotfile parameter :
 ## release notes
 
 
-1.0.21    fixing missing information on README (about help and ignored options). Fixing ISS-149 some extended assembly not taken in account (arrays). Fixing ISS-153 extended assembly giving different results when compiling with gcc or with chibicc. Fixing ISS-154 Extended assembly compiled with chibicc failed with ASSERT and works fine without assert function. Ignoring some parameters like -fvisibility=default or -flto=8.
+1.0.22    Fixing ISS-149 some extended assembly not taken in account during libwebp compilation.
 
 
 ## old release notes
