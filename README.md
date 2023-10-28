@@ -452,7 +452,7 @@ Example of diagram generated with -dotfile parameter :
 ## release notes
 
 
-1.0.22    Fixing ISS-149 some extended assembly not taken in account during libwebp compilation. Fixing ISS-156 fpie/pie/-fPIE not recognized by chibicc. Adding other parameters in ingored list. 
+1.0.22    Fixing ISS-149 some extended assembly not taken in account during libwebp compilation. Fixing ISS-156 fpie/pie/-fPIE not recognized by chibicc. Adding other parameters in ingored list. Fixing ISS-157 about union empty initializer like union string_value lval = {}, rval = {};
 
 
 ## old release notes
