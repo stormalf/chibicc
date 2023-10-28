@@ -498,6 +498,18 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
   bool is_atomic = false;
   while (is_typename(tok))
   {
+
+    //fixing =====ISS-155 __label__ out;  
+    if (equal(tok, "__label__")) {
+      consume(&tok, tok, "__label__");
+      //skip the label identifier
+      tok = tok->next;
+      ctx->filename = PARSE_C;
+      ctx->funcname = "declspec";          
+      ctx->line_no = __LINE__ + 1;  
+      tok = skip(tok, ";", ctx);
+    }
+
     // Handle storage class specifiers.
     if (equal(tok, "typedef") || equal(tok, "static") || equal(tok, "extern") ||
         equal(tok, "inline") || equal(tok, "_Thread_local") || equal(tok, "__thread"))
@@ -525,6 +537,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
       tok = tok->next;
       continue;
     }
+
     // These keywords are recognized but ignored.
     // fixing issue #119 _Complex
     if (consume(&tok, tok, "const") || consume(&tok, tok, "volatile") ||
@@ -2010,7 +2023,7 @@ static bool is_typename(Token *tok)
         "typedef", "enum", "static", "extern", "_Alignas", "signed", "unsigned",
         "const", "volatile", "auto", "register", "restrict", "__restrict",
         "__restrict__", "_Noreturn", "float", "double", "typeof", "inline",
-        "_Thread_local", "__thread", "_Atomic", "_Complex"};
+        "_Thread_local", "__thread", "_Atomic", "_Complex", "__label__"};
 
     for (int i = 0; i < sizeof(kw) / sizeof(*kw); i++)
       hashmap_put(&map, kw[i], (void *)1);

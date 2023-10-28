@@ -1719,6 +1719,8 @@ static void store_gp(int r, int offset, int sz)
 
 static void emit_text(Obj *prog)
 {
+  
+
   for (Obj *fn = prog; fn; fn = fn->next)
   {
     if (!fn->is_function || !fn->is_definition)
@@ -1731,12 +1733,15 @@ static void emit_text(Obj *prog)
 
     if (fn->is_static)
       println("  .local %s", fn->name);
-    else
+    else 
       println("  .globl %s", fn->name);
+
 
     println("  .text");
     println("  .type %s, @function", fn->name);
     println("%s:", fn->name);
+
+    
     current_fn = fn;
 
     // Prologue
