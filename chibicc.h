@@ -67,6 +67,9 @@ this " PRODUCT " contains only some differences for now like new parameters\n"
     used to automate file dependency management\n \
 -fpic or -fPIC Generate position-independent code (PIC)\n \
 -fno-pic disables the generation of position-independent code with relative address references\n \
+-pie Create a dynamically linked position independent \n \
+-fpie Create a dynamically linked position independent\n \
+-fPIE Create a dynamically linked position independent\n \
 -fcommon is the default if not specified, it's mainly useful to enable legacy code to link without errors\n \
 -fno-common specifies that the compiler places uninitialized global variables in the BSS section of the object file.\n \
 -static  pass to the linker to link a program statically\n \
@@ -595,6 +598,7 @@ void dump_machine(void);
 
 extern StringArray include_paths;
 extern bool opt_fpic;
+extern bool opt_fpie;
 extern bool opt_fcommon;
 extern char *base_file;
 extern char *dot_file;

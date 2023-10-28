@@ -15,6 +15,7 @@ StringArray include_paths;
 bool opt_fcommon = true;
 bool opt_fbuiltin = true;
 bool opt_fpic;
+bool opt_fpie;
 
 static FileType opt_x;
 static StringArray opt_include;
@@ -474,6 +475,14 @@ static void parse_args(int argc, char **argv)
       continue;
     }
 
+    //trying to fix -fpie parameter =====ISS-156 forcing shared if -pie is received
+    if (!strcmp(argv[i], "-fpie") || !strcmp(argv[i], "-fPIE") || !strcmp(argv[i], "-pie"))
+    {
+      opt_fpie = true;
+      strarray_push(&ld_extra_args, "-pie");
+      continue;
+    }
+
     if (!strcmp(argv[i], "-fno-pic"))
     {
       opt_fpic = false;
@@ -606,6 +615,30 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-nostdinc") ||
         !strcmp(argv[i], "-mno-red-zone") ||
         !strcmp(argv[i], "-fvisibility=default") ||
+        !strcmp(argv[i], "-Werror=invalid-command-line-argument") ||
+        !strcmp(argv[i], "-Werror=unknown-warning-option") ||
+        !strcmp(argv[i], "-Wsign-compare") ||
+        !strcmp(argv[i], "-Wundef") ||
+        !strcmp(argv[i], "-Wpointer-arith") ||
+        !strcmp(argv[i], "-Wvolatile-register-var") ||
+        !strcmp(argv[i], "-Wformat") ||
+        !strcmp(argv[i], "-Wformat-security") ||
+        !strcmp(argv[i], "-Wduplicated-branches") ||
+        !strcmp(argv[i], "-Wduplicated-cond") ||
+        !strcmp(argv[i], "-Wbad-function-cast") ||
+        !strcmp(argv[i], "-Wwrite-strings") || 
+        !strcmp(argv[i], "-Wlogical-op") || 
+        !strcmp(argv[i], "-Wshadow=local") || 
+        !strcmp(argv[i], "-Wmultistatement-macros") || 
+        !strcmp(argv[i], "-fstack-protector") || 
+        !strcmp(argv[i], "-fstack-protector-strong") || 
+        !strcmp(argv[i], "-fstack-clash-protection") || 
+        !strcmp(argv[i], "-fdiagnostics-show-option") || 
+        !strcmp(argv[i], "-fasynchronous-unwind-tables") || 
+        !strcmp(argv[i], "-fexceptions") || 
+        !strcmp(argv[i], "-fsanitize=cfi") || 
+        !strcmp(argv[i], "--print-search-dirs") || 
+        !strcmp(argv[i], "-fdiagnostics-show-option") || 
         !strcmp(argv[i], "-w"))
       continue;
 
@@ -1017,6 +1050,9 @@ static void run_linker(StringArray *inputs, char *output)
   strarray_push(&arr, output);
   strarray_push(&arr, "-m");
   strarray_push(&arr, "elf_x86_64");
+  //enabling verbose mode for linker in case of debug
+  if (isDebug)
+    strarray_push(&arr, "--verbose=1");
 
   char *libpath = find_libpath();
   char *gcc_libpath = find_gcc_libpath();
@@ -1026,11 +1062,19 @@ static void run_linker(StringArray *inputs, char *output)
     strarray_push(&arr, format("%s/crti.o", libpath));
     strarray_push(&arr, format("%s/crtbeginS.o", gcc_libpath));
   }
+  //trying to fix ====ISS-156 fpie parameter
+  else if (opt_fpie) {
+    strarray_push(&arr, format("%s/Scrt1.o", libpath));
+    strarray_push(&arr, format("%s/crti.o", libpath));
+    strarray_push(&arr, format("%s/crtbeginS.o", gcc_libpath));
+    strarray_push(&arr, format("%s/crtendS.o", gcc_libpath));
+  }
   else
   {
     strarray_push(&arr, format("%s/crt1.o", libpath));
     strarray_push(&arr, format("%s/crti.o", libpath));
     strarray_push(&arr, format("%s/crtbegin.o", gcc_libpath));
+    
   }
   strarray_push(&arr, "-L.");
   strarray_push(&arr, format("-L%s", gcc_libpath));
@@ -1067,7 +1111,7 @@ static void run_linker(StringArray *inputs, char *output)
     strarray_push(&arr, "-lc");
     strarray_push(&arr, "--end-group");
   }
-  else
+  else 
   {
     strarray_push(&arr, "-lc");
     strarray_push(&arr, "-lgcc");
@@ -1078,7 +1122,7 @@ static void run_linker(StringArray *inputs, char *output)
 
   if (opt_shared)
     strarray_push(&arr, format("%s/crtendS.o", gcc_libpath));
-  else
+  else if(!opt_fpie)
     strarray_push(&arr, format("%s/crtend.o", gcc_libpath));
 
   strarray_push(&arr, format("%s/crtn.o", libpath));
