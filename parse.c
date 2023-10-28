@@ -1605,6 +1605,16 @@ static void union_initializer(Token **rest, Token *tok, Initializer *init)
 
   if (equal(tok, "{"))
   {
+    //trying to fix =====ISS-157 about union empty initializer like union string_value lval = {}, rval = {};
+    if (equal(tok->next, "}")) {
+      consume(&tok, tok, "{");
+      ctx->filename = PARSE_C;
+      ctx->funcname = "union_initializer";        
+      ctx->line_no = __LINE__ + 1;   
+      *rest = skip(tok, "}", ctx);
+      return;
+    }
+
     initializer2(&tok, tok->next, init->children[0]);
     if (equal(tok, ",") && equal(tok->next, "}"))
       consume(&tok, tok, ",");
