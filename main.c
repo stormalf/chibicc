@@ -16,6 +16,7 @@ bool opt_fcommon = true;
 bool opt_fbuiltin = true;
 bool opt_fpic;
 bool opt_fpie;
+bool opt_shared;
 
 static FileType opt_x;
 static StringArray opt_include;
@@ -29,7 +30,6 @@ static bool opt_c;
 static bool opt_cc1;
 static bool opt_hash_hash_hash;
 static bool opt_static;
-static bool opt_shared;
 static bool isCc1input = false;
 static bool isCc1output = false;
 static char *opt_MF;
@@ -221,6 +221,28 @@ static void parse_args(int argc, char **argv)
       check_parms_length(opt_linker);
       continue;
     }
+
+    if (startsWith(argv[i], "-march="))
+    {
+      continue;
+    }
+
+    if (startsWith(argv[i], "-flto"))
+    {
+      continue;
+    }
+
+    if (startsWith(argv[i], "-std="))
+    {
+      continue;
+    }
+
+    if (startsWith(argv[i], "-mtune="))
+    {
+      continue;
+    }
+
+
     if (!strcmp(argv[i], "-o"))
     {
       opt_o = argv[++i];
@@ -380,17 +402,6 @@ static void parse_args(int argc, char **argv)
       continue;
     }
 
-    // not sure what this linker option means
-    // if (!strcmp(argv[i], "-z"))
-    // {
-    //   char *tmp = argv[++i];
-    //   printf("%s\n", argv[i]);
-    //   check_parms_length(tmp);
-    //   strarray_push(&ld_extra_args, "-z");
-    //   strarray_push(&ld_extra_args, tmp);
-    //   // strarray_push(&ld_extra_args, argv[++i]);
-    //   continue;
-    // }
 
     // not sure why the --version-script is interpreted as -version-script ?
     if (!strcmp(argv[i], "-version-script") || !strcmp(argv[i], "--version-script"))
@@ -524,6 +535,7 @@ static void parse_args(int argc, char **argv)
     if (!strcmp(argv[i], "-shared"))
     {
       opt_shared = true;
+      opt_fpic = true;
       strarray_push(&ld_extra_args, "-shared");
       continue;
     }
@@ -593,8 +605,6 @@ static void parse_args(int argc, char **argv)
         !strncmp(argv[i], "-W", 2) ||
         !strncmp(argv[i], "-g", 2) ||
         !strncmp(argv[i], "-P", 2) || 
-        !strncmp(argv[i], "-std=", 5) ||
-        !strncmp(argv[i], "-std", 4) ||
         !strcmp(argv[i], "-ffreestanding") ||
         !strcmp(argv[i], "-fno-omit-frame-pointer") ||
         !strcmp(argv[i], "-fomit-frame-pointer") ||   
@@ -609,8 +619,6 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-Bsymbolic") ||
         !strcmp(argv[i], "-z") ||
         !strcmp(argv[i], "defs") ||
-        !strcmp(argv[i], "-flto") ||
-        !strcmp(argv[i], "-flto=8") ||
         !strcmp(argv[i], "-pedantic") ||
         !strcmp(argv[i], "-nostdinc") ||
         !strcmp(argv[i], "-mno-red-zone") ||
@@ -1289,3 +1297,14 @@ int main(int argc, char **argv)
   return 0;
 }
 
+
+bool startsWith(const char *restrict string, const char *restrict prefix)
+{
+    while(*prefix)
+    {
+        if(*prefix++ != *string++)
+            return 0;
+    }
+
+    return 1;
+}

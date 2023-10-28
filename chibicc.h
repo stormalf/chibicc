@@ -595,10 +595,12 @@ void hashmap_test(void);
 
 bool file_exists(char *path);
 void dump_machine(void);
+bool startsWith(const char *restrict string, const char *restrict prefix);
 
 extern StringArray include_paths;
 extern bool opt_fpic;
 extern bool opt_fpie;
+extern bool opt_shared;
 extern bool opt_fcommon;
 extern char *base_file;
 extern char *dot_file;

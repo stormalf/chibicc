@@ -1334,6 +1334,7 @@ void init_macros(void)
   define_macro("__volatile__", "volatile");
   define_macro("__x86_64", "1");
   define_macro("__x86_64__", "1");
+  define_macro("__GNU__", "1");
   
   define_macro("linux", "1");
   define_macro("unix", "1");
