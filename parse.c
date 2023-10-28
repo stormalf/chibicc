@@ -763,7 +763,6 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
     // {
     if (equal(tok->next, "==") || (equal(tok, "(") && is_expression(rest, tok, ty)) || equal(tok, "sizeof") || equal(tok, "_Alignof") || equal(tok->next, "+") || equal(tok->next, "<"))
      {
-    //   printf("2=======%p %s\n", ty->kind, tok->loc);
        Node *node = expr(&tok, tok);
        *rest = tok;
        break;
@@ -1759,11 +1758,8 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
     *rest = skip(tok, "}", ctx);
     return;
   }
-  // if (init->ty->base)
-  //   printf("========%d %d %s\n", init->ty->kind, init->ty->base->kind, tok->loc);
 
   init->expr = assign(rest, tok);
- 
 
 }
 
@@ -3619,7 +3615,7 @@ static Member *get_struct_member(Type *ty, Token *tok)
 static Node *struct_ref(Node *node, Token *tok)
 {
   add_type(node);
-  if (node->ty->kind != TY_STRUCT && node->ty->kind != TY_UNION)
+  if (node->ty->kind != TY_STRUCT && node->ty->kind != TY_UNION) 
     error_tok(node->tok, "%s: in struct_ref : not a struct nor a union", PARSE_C);
 
   Type *ty = node->ty;
