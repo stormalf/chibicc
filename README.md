@@ -389,6 +389,15 @@ libwepb: https://github.com/webmproject/libwebp.git
     libsharpyuv: 0.4.0
     [no output file specified]   [0 frames, 0 bytes].
 
+
+memcached: https://github.com/memcached/memcached.git
+    
+    autoreconf -fi
+    CC=chibicc CFLAGS=-fpic LDFLAGS=-fpic ./configure
+    make
+    make test
+
+
 ## meson
 
 to be able to use meson with chibicc (meson doesn't know chibicc compiler), I changed the detect.py file in /usr/lib/python3/dist-packages/mesonbuild/compilers/detect.py to add support for chibicc. After that I can now using meson for some projects that are configured to use it.
@@ -452,7 +461,7 @@ Example of diagram generated with -dotfile parameter :
 ## release notes
 
 
-1.0.22    Fixing ISS-149 some extended assembly not taken in account during libwebp compilation. Fixing ISS-156 fpie/pie/-fPIE not recognized by chibicc. Adding other parameters in ingored list. Fixing ISS-157 about union empty initializer like "union string_value lval = {}, rval = {};". Fixing ISS-158 during neovim compilation failure with not a struct nor a union.
+1.0.22    Fixing ISS-149 some extended assembly not taken in account during libwebp compilation. Fixing ISS-156 fpie/pie/-fPIE not recognized by chibicc. Adding other parameters in ingored list. Fixing ISS-157 about union empty initializer like "union string_value lval = {}, rval = {};". Fixing ISS-158 during neovim compilation failure with not a struct nor a union. Fixing ISS-160 memcached compilation failed with IOV_MAX undefined (adding __GNU__ macro). Fixing ISS-161 trying to compile memcached failed with incorrect offset or not managed yet.
 
 
 ## old release notes

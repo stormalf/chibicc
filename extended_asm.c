@@ -938,8 +938,9 @@ void update_offset(char *funcname, Obj *locals)
     //printf(" function %s \n", funcname);
     Obj *fn = find_func(funcname);
     if (fn) {
-        if (!fn->locals)
-            fn->locals = locals;
+        //fixing ====ISS-161 issue with some locals missing in fn->locals
+        //if (!fn->locals)
+        fn->locals = locals;
         assign_lvar_offsets(fn);
     }
 

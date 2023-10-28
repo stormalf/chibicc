@@ -720,7 +720,6 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
 static Type *func_params(Token **rest, Token *tok, Type *ty)
 {
 
-
   if (equal(tok, "void") && equal(tok->next, ")"))
   {
     *rest = tok->next->next;
@@ -3094,9 +3093,10 @@ static Node *new_add(Node *lhs, Node *rhs, Token *tok)
   // num + num
   if (is_numeric(lhs->ty) && is_numeric(rhs->ty))
     return new_binary(ND_ADD, lhs, rhs, tok);
-
-  if ((lhs->ty->base == NULL && rhs->ty->base == NULL) || (lhs->ty->base != NULL && rhs->ty->base != NULL))
+  
+  if ((lhs->ty->base == NULL && rhs->ty->base == NULL) || (lhs->ty->base != NULL && rhs->ty->base != NULL)) {
     error_tok(tok, "%s: in new_add : invalid operands", PARSE_C);
+  }
 
   // Canonicalize `num + ptr` to `ptr + num`.
   if (!lhs->ty->base && rhs->ty->base)
@@ -3889,6 +3889,7 @@ static Node *generic_selection(Token **rest, Token *tok)
 static Node *primary(Token **rest, Token *tok)
 {
   Token *start = tok;
+
 
   if ((equal(tok, "(") && equal(tok->next, "{")))
   {

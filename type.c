@@ -303,8 +303,9 @@ void add_type(Node *node)
     return;
   }
   case ND_DEREF:
-    if (!node->lhs->ty->base)
+    if (!node->lhs->ty->base) {
       error_tok(node->tok, "%s invalid pointer dereference", TYPE_C);
+    }
     //======ISS-154 trying to fix deferencing pointer issue when we have a macro that can return a pointer or null  (self) ? NULL      
     //printf("======%d %d %s\n", node->lhs->ty->base->kind, node->lhs->ty->kind, node->lhs->tok->loc);
     if (node->lhs->ty->base->kind == TY_VOID && node->lhs->ty->kind == TY_VOID)
