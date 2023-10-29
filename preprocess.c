@@ -1231,6 +1231,7 @@ static Token *file_macro(Token *tmpl)
   return new_str_token(tmpl->file->display_name, tmpl);
 }
 
+
 static Token *line_macro(Token *tmpl)
 {
   while (tmpl->origin)
@@ -1335,6 +1336,7 @@ void init_macros(void)
   define_macro("__x86_64", "1");
   define_macro("__x86_64__", "1");
   define_macro("__GNU__", "1");
+  define_macro("__INTEL_COMPILER", "1");
   
   define_macro("linux", "1");
   define_macro("unix", "1");

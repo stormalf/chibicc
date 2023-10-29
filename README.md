@@ -461,7 +461,9 @@ Example of diagram generated with -dotfile parameter :
 ## release notes
 
 
-1.0.22    Fixing ISS-149 some extended assembly not taken in account during libwebp compilation. Fixing ISS-156 fpie/pie/-fPIE not recognized by chibicc. Adding other parameters in ingored list. Fixing ISS-157 about union empty initializer like "union string_value lval = {}, rval = {};". Fixing ISS-158 during neovim compilation failure with not a struct nor a union. Fixing ISS-160 memcached compilation failed with IOV_MAX undefined (adding __GNU__ macro). Fixing ISS-161 trying to compile memcached failed with incorrect offset or not managed yet.
+1.0.22    Fixing ISS-149 some extended assembly not taken in account during libwebp compilation. Fixing ISS-156 fpie/pie/-fPIE not recognized by chibicc. Adding other parameters in ingored list. Fixing ISS-157 about union empty initializer like "union string_value lval = {}, rval = {};". Fixing ISS-158 during neovim compilation failure with not a struct nor a union. Fixing ISS-160 memcached compilation failed with IOV_MAX undefined (adding __GNU__ macro). Fixing ISS-161 trying to compile memcached failed with incorrect offset or not managed yet. Fixing ISS-163 during postgres compile failure withe "invalid pointer dereference". Fixing ISS-162 during postgres compile failure with __typeof not recognized. Adding macro __INTEL_COMPILER. Adding include path to gcc that has many includes needed for some projects (adding in chibicc/include some of them like emmintrin.h, omp.h...). Adding some builtin void functions like _builtin_ia32_emms.  
+
+
 
 
 ## old release notes

@@ -107,6 +107,7 @@ static void add_default_include_paths(char *argv0)
   strarray_push(&include_paths, "/usr/local/include/x86_64-linux-gnu/chibicc");
   strarray_push(&include_paths, "/usr/include/x86_64-linux-gnu");
   strarray_push(&include_paths, "/usr/include");
+  strarray_push(&include_paths, "/usr/lib/gcc/x86_64-linux-gnu/11/include");
   //strarray_push(&include_paths, "/usr/include/chibicc/include");
   
 
@@ -209,7 +210,7 @@ static void parse_args(int argc, char **argv)
       continue;
     }
 
-    if (!strcmp(argv[i], "--version") || !strcmp(argv[i], "-v"))
+    if (!strcmp(argv[i], "--version") || !strcmp(argv[i], "-v")  || !strcmp(argv[i], "-V") || !strcmp(argv[i], "-version"))
     {
       printVersion(0);
       continue;
@@ -226,6 +227,12 @@ static void parse_args(int argc, char **argv)
     {
       continue;
     }
+
+    if (startsWith(argv[i], "-A"))
+    {
+      continue;
+    }
+
 
     if (startsWith(argv[i], "-flto"))
     {
@@ -647,6 +654,8 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-fsanitize=cfi") || 
         !strcmp(argv[i], "--print-search-dirs") || 
         !strcmp(argv[i], "-fdiagnostics-show-option") || 
+        !strcmp(argv[i], "-Xc") || 
+        !strcmp(argv[i], "-std") || 
         !strcmp(argv[i], "-w"))
       continue;
 
@@ -1090,10 +1099,13 @@ static void run_linker(StringArray *inputs, char *output)
   strarray_push(&arr, "-L/usr/lib64");
   strarray_push(&arr, "-L/lib64");
   strarray_push(&arr, "-L/usr/lib/x86_64-linux-gnu");
+  strarray_push(&arr, "-L/lib/x86_64-linux-gnu");
   strarray_push(&arr, "-L/usr/lib/x86_64-pc-linux-gnu");
   strarray_push(&arr, "-L/usr/lib/x86_64-redhat-linux");
   strarray_push(&arr, "-L/usr/lib");
   strarray_push(&arr, "-L/lib");
+  //strarray_push(&arr, "-L/usr/lib/gcc/x86_64-linux-gnu/11/x86_64-linux-gnu");
+
 
   if (!opt_static)
   {
@@ -1184,7 +1196,7 @@ int main(int argc, char **argv)
 
   // init_macros can call tokenize functions moving here to be able to print debug values
   init_macros();
-
+  
   if (opt_cc1 && !isCc1input)
   {
     error("%s : in main with -cc1 parameter -cc1-input is mandatory!", MAIN_C);

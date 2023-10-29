@@ -304,7 +304,11 @@ void add_type(Node *node)
   }
   case ND_DEREF:
     if (!node->lhs->ty->base) {
-      error_tok(node->tok, "%s invalid pointer dereference", TYPE_C);
+      //ISS-163 trying to fix issue with pointer dereference
+      if (node->lhs->ty)
+        node->lhs->ty->base = node->lhs->ty;
+      else
+        error_tok(node->tok, "%s invalid pointer dereference", TYPE_C);
     }
     //======ISS-154 trying to fix deferencing pointer issue when we have a macro that can return a pointer or null  (self) ? NULL      
     //printf("======%d %d %s\n", node->lhs->ty->base->kind, node->lhs->ty->kind, node->lhs->tok->loc);

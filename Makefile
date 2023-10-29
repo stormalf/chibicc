@@ -1,6 +1,6 @@
 CC=gcc
 CFLAGS =-std=c11 -g -fno-common -Wall -Wno-switch 
-CFLAGS_DIAG=-dotfile
+CFLAGS_DIAG=-dotfile 
 OBJECT=chibicc
 OBJECTLIB=libchibicc
 SRCS=$(wildcard *.c)

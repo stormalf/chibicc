@@ -343,6 +343,19 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 //asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
                 
             }
+            else if (!strncmp(tok->str, "=q", tok->len) || !strncmp(tok->str, "+q", tok->len))
+            {
+                asmExt->output[nbOutput]->isMemory = true;
+                if (!strncmp(tok->str, "=q", tok->len))
+                    asmExt->output[nbOutput]->prefix = "=";
+                else
+                    asmExt->output[nbOutput]->prefix = "+";
+                asmExt->output[nbOutput]->reg = specific_register_available("%rax");
+                asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg;                
+                asmExt->output[nbOutput]->letter = 'q';
+                //asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
+                
+            }
             // assuming that it's =a =b ???
             else if (!strncmp(tok->str, "=a", tok->len) || !strncmp(tok->str, "=b", tok->len) || !strncmp(tok->str, "=c", tok->len) || !strncmp(tok->str, "=d", tok->len))
             {
@@ -403,7 +416,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             // check if the variable is defined
             if (tok->kind == TK_IDENT)
             {
-
+                
                 //TODO potential issue if several variables with same name inside different functions.
                 //need to check if the variable is in the correct function
                 sc = find_var(tok);
@@ -413,6 +426,9 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     error_tok(tok, "%s : in output_asm function : variable type unknown", EXTASM_C);
                 // retrieve the size of the variable to determine the register to use here we use RAX variation
                 asmExt->output[nbOutput]->size = sc->var->ty->size;
+                if (!asmExt->output[nbOutput]->reg)
+                    error_tok(tok, "%s : in output_asm function : reg is null extended assembly not managed yet", EXTASM_C);
+                
                 asmExt->output[nbOutput]->reg = update_register_size(asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->size);
                 asmExt->output[nbOutput]->isVariable = true;
                 asmExt->output[nbOutput]->output = tok;
@@ -425,6 +441,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 else {
                     asmExt->output[nbOutput]->offset = 0;
                 }
+                printf("66======%d %s\n", sc->var->ty->kind, tok->loc);
                 //managing specific case of arrays
                 if (sc->var->ty->kind == TY_ARRAY) {
                     ctx->line_no = __LINE__ + 1;
@@ -467,6 +484,8 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 // tok = tok->next;
                 tok = tok->next;
                 ctx->line_no = __LINE__ + 1;
+                if (!equal(tok, ")"))
+                    error_tok(tok, "%s : in output_asm function : extended assembly not managed yet", EXTASM_C);
                 *rest = skip(tok, ")", ctx);
                 return;
             }
@@ -632,6 +651,15 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             asmExt->input[nbInput]->reg64 = asmExt->input[nbInput]->reg;
             asmExt->input[nbInput]->letter = 'm';
         }
+        else if (tok->kind == TK_STR && !strncmp(tok->str, "q", tok->len))
+        {
+
+            asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(nbOutput + nbInput);
+            asmExt->input[nbInput]->index = nbOutput + nbInput;
+            asmExt->input[nbInput]->reg = specific_register_available("%rax");
+            asmExt->input[nbInput]->reg64 = asmExt->input[nbInput]->reg;
+            asmExt->input[nbInput]->letter = 'q';
+        }        
         else if (tok->kind == TK_STR && !strncmp(tok->str, "r", tok->len))
         {
             asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(nbOutput + nbInput);
@@ -669,6 +697,9 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->input[nbInput]->indexArray = tok->val;
                     asmExt->input[nbInput]->isAddress = false;
                     asmExt->input[nbInput]->size = sc->var->ty->base->size;
+                    if (!asmExt->input[nbInput]->reg)
+                        error_tok(tok, "%s : in input_asm function : reg is null extended assembly not managed yet", EXTASM_C);
+                
                     asmExt->input[nbInput]->reg = update_register_size(asmExt->input[nbInput]->reg, asmExt->input[nbInput]->size);
                     //calculate the offset for each element from the bottom to the top r[0] has the lowest offset example -48, r[1] - 44, r[2] -40, r[3] - 36
                     asmExt->input[nbInput]->offset = (sc->var->offset ) + (asmExt->input[nbInput]->indexArray * asmExt->input[nbInput]->size);

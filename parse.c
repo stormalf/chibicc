@@ -585,7 +585,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     // Handle user-defined types.
     Type *ty2 = find_typedef(tok);
     if (equal(tok, "struct") || equal(tok, "union") || equal(tok, "enum") ||
-        equal(tok, "typeof") || ty2)
+        equal(tok, "typeof") || equal(tok, "__typeof") || ty2)
     {
       if (counter)
         break;
@@ -602,7 +602,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
       {
         ty = enum_specifier(&tok, tok->next);
       }
-      else if (equal(tok, "typeof"))
+      else if (equal(tok, "typeof") || equal(tok, "__typeof"))
       {
         ty = typeof_specifier(&tok, tok->next);
       }
@@ -1661,6 +1661,7 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
   if (equal(tok, ","))
     return;
 
+
   if (init->ty->kind == TY_ARRAY && tok->kind == TK_STR)
   {
     string_initializer(rest, tok, init);
@@ -1750,7 +1751,9 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
   {
     // An initializer for a scalar variable can be surrounded by
     // braces. E.g. `int x = {3};`. Handle that case.
+    while (!equal(tok, "}")) {
     initializer2(&tok, tok->next, init);
+    }
     ctx->filename = PARSE_C;
     ctx->funcname = "initializer2";        
     ctx->line_no = __LINE__ + 1;       
@@ -2028,7 +2031,7 @@ static bool is_typename(Token *tok)
         "typedef", "enum", "static", "extern", "_Alignas", "signed", "unsigned",
         "const", "volatile", "auto", "register", "restrict", "__restrict",
         "__restrict__", "_Noreturn", "float", "double", "typeof", "inline",
-        "_Thread_local", "__thread", "_Atomic", "_Complex", "__label__"};
+        "_Thread_local", "__thread", "_Atomic", "_Complex", "__label__", "__typeof"};
 
     for (int i = 0; i < sizeof(kw) / sizeof(*kw); i++)
       hashmap_put(&map, kw[i], (void *)1);
@@ -2105,9 +2108,10 @@ static Node *stmt(Token **rest, Token *tok)
     ctx->line_no = __LINE__ + 1;       
     *rest = skip(tok, ";", ctx);
     add_type(exp);
-    // Type *ty = current_fn->ty->return_ty;
-    // if (ty->kind != TY_STRUCT && ty->kind != TY_UNION)
-    //   exp = new_cast(exp, current_fn->ty->return_ty);
+    Type *ty = current_fn->ty->return_ty;
+    if (ty->kind != TY_STRUCT && ty->kind != TY_UNION)
+      exp = new_cast(exp, current_fn->ty->return_ty);
+
     if (ret_ty->kind == TY_VOID && exp->ty->kind != TY_VOID)
     {
       error_tok(exp->tok, "%s: in stmt : Void function must return void type expression", PARSE_C);
@@ -3982,7 +3986,27 @@ static Node *primary(Token **rest, Token *tok)
     ctx->funcname = "primary";        
     ctx->line_no = __LINE__ + 1;      
     *rest = skip(tok, ")", ctx);
+
     return new_num(is_compatible(t1, t2), start);
+  }
+
+  //trying to fix some builtin functions linked to mmx/emms
+  if (equal(tok, "__builtin_ia32_emms") || equal(tok, "__builtin_ia32_stmxcsr") || 
+      equal(tok, "__builtin_ia32_sfence") || equal(tok, "__builtin_ia32_pause") ||
+      equal(tok, "__builtin_ia32_lfence") || equal(tok, "__builtin_ia32_mfence") 
+      ) {
+    Type *t1 = typename(&tok, tok);        
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";        
+    ctx->line_no = __LINE__ + 1;      
+    tok = skip(tok->next, "(", ctx);
+    Node *node = new_node(ND_NULL_EXPR, tok);
+    node->ty = t1;
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";        
+    ctx->line_no = __LINE__ + 1;      
+    *rest = skip(tok, ")", ctx);    
+    return node;
   }
 
   if (equal(tok, "__builtin_reg_class"))
@@ -4003,6 +4027,7 @@ static Node *primary(Token **rest, Token *tok)
       return new_num(1, start);
     return new_num(2, start);
   }
+
 
   if (equal(tok, "__builtin_compare_and_swap"))
   {
