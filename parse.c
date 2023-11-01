@@ -289,6 +289,7 @@ static Node *new_var_node(Obj *var, Token *tok)
 
 static Node *new_vla_ptr(Obj *var, Token *tok)
 {
+
   Node *node = new_node(ND_VLA_PTR, tok);
   node->var = var;
   return node;
@@ -760,7 +761,10 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
     // but fix 121 caused other issues with other function and not only _Static_assert function
     // if (equal(tok->next, "==") || (equal(tok, "(") && is_expression(rest, tok, ty)) || equal(tok, "sizeof") || equal(tok, "_Alignof") || equal(tok->next, "+") || equal(tok->next, "<"))
     // {
-    if (equal(tok->next, "==") || (equal(tok, "(") && is_expression(rest, tok, ty)) || equal(tok, "sizeof") || equal(tok, "_Alignof") || equal(tok->next, "+") || equal(tok->next, "<"))
+    // printf("999======%s\n", tok->loc);
+    // if (equal(tok->next, "==") || (equal(tok, "(") && is_expression(rest, tok, ty)) || equal(tok, "sizeof") || equal(tok, "_Alignof") || equal(tok->next, "+") ||
+    //   equal(tok->next, "<") || equal(tok->next, ">=") || equal(tok->next, "<="))
+    if (is_expression(rest, tok, ty) || equal(tok, "sizeof") || equal(tok, "_Alignof") )
      {
        Node *node = expr(&tok, tok);
        *rest = tok;
@@ -835,7 +839,6 @@ static Type *array_dimensions(Token **rest, Token *tok, Type *ty)
   ctx->line_no = __LINE__ + 1;
   tok = skip(tok, "]", ctx);
   ty = type_suffix(rest, tok, ty);
-
   if (ty->kind == TY_VLA || !is_const_expr(expr))
     return vla_of(ty, expr);
   return array_of(ty, eval(expr));
@@ -2108,10 +2111,13 @@ static Node *stmt(Token **rest, Token *tok)
     ctx->line_no = __LINE__ + 1;       
     *rest = skip(tok, ";", ctx);
     add_type(exp);
-    Type *ty = current_fn->ty->return_ty;
-    if (ty->kind != TY_STRUCT && ty->kind != TY_UNION)
-      exp = new_cast(exp, current_fn->ty->return_ty);
+    // Type *ty = current_fn->ty->return_ty;
+    // if (ty->kind != TY_STRUCT && ty->kind != TY_UNION)
+    //   exp = new_cast(exp, current_fn->ty->return_ty);
 
+    if (!exp->ty)
+      error_tok(exp->tok, "%s: in stmt : exp->ty is null", PARSE_C);
+      
     if (ret_ty->kind == TY_VOID && exp->ty->kind != TY_VOID)
     {
       error_tok(exp->tok, "%s: in stmt : Void function must return void type expression", PARSE_C);
@@ -3062,7 +3068,6 @@ static Node *relational(Token **rest, Token *tok)
 static Node *shift(Token **rest, Token *tok)
 {
   Node *node = add(&tok, tok);
-
   for (;;)
   {
     Token *start = tok;
@@ -3778,6 +3783,7 @@ static Node *funcall(Token **rest, Token *tok, Node *fn)
     Node *arg = assign(&tok, tok);
     add_type(arg);
 
+
     if (!param_ty && !ty->is_variadic)
       error_tok(tok, "%s: in funcall : too many arguments", PARSE_C);
 
@@ -3918,6 +3924,7 @@ static Node *primary(Token **rest, Token *tok)
     return node;
   }
 
+
   if (equal(tok, "sizeof") && equal(tok->next, "(") && is_typename(tok->next->next))
   {
     Type *ty = typename(&tok, tok->next->next);
@@ -3941,12 +3948,25 @@ static Node *primary(Token **rest, Token *tok)
 
   if (equal(tok, "sizeof"))
   {
+
     Node *node = unary(rest, tok->next);
     add_type(node);
+    //trying to fix =====ISS-166 segmentation fault 
     if (node->ty->kind == TY_VLA)
-      return new_var_node(node->ty->vla_size, tok);
+    {
+      if (node->ty->vla_size)
+        return new_var_node(node->ty->vla_size, tok);
+
+      Node *lhs = compute_vla_size(node->ty, tok);
+      Node *rhs = new_var_node(node->ty->vla_size, tok);
+      return new_binary(ND_COMMA, lhs, rhs, tok);
+    }
+
+    // if (node->ty->kind == TY_VLA)
+    //   return new_var_node(node->ty->vla_size, tok);
     return new_ulong(node->ty->size, tok);
   }
+
 
   if (equal(tok, "_Alignof") && equal(tok->next, "(") && is_typename(tok->next->next))
   {
@@ -3990,7 +4010,29 @@ static Node *primary(Token **rest, Token *tok)
     return new_num(is_compatible(t1, t2), start);
   }
 
-  //trying to fix some builtin functions linked to mmx/emms
+  // if (equal(tok, "__builtin_offsetof"))
+  // {
+  //   ctx->filename = PARSE_C;
+  //   ctx->funcname = "primary";        
+  //   ctx->line_no = __LINE__ + 1;      
+  //   tok = skip(tok->next, "(", ctx);
+  //   Type *t1 = typename(&tok, tok);
+  //   if (equal(tok, ",")) {
+  //     ctx->filename = PARSE_C;
+  //     ctx->funcname = "primary";        
+  //     ctx->line_no = __LINE__ + 1;        
+  //     tok = skip(tok, ",", ctx);
+  //   }
+  //   Type *t2 = typename(&tok, tok);
+  //   ctx->filename = PARSE_C;
+  //   ctx->funcname = "primary";        
+  //   ctx->line_no = __LINE__ + 1;      
+  //   *rest = skip(tok, ")", ctx);
+
+  //   return new_num(is_compatible(t1, t2), start);
+  // }
+
+  //trying to fix ===== some builtin functions linked to mmx/emms
   if (equal(tok, "__builtin_ia32_emms") || equal(tok, "__builtin_ia32_stmxcsr") || 
       equal(tok, "__builtin_ia32_sfence") || equal(tok, "__builtin_ia32_pause") ||
       equal(tok, "__builtin_ia32_lfence") || equal(tok, "__builtin_ia32_mfence") 
@@ -4649,7 +4691,7 @@ static bool check_old_style(Token **rest, Token *tok, Type *ty)
 // returns true if it's an expression
 static bool is_expression(Token **rest, Token *tok, Type *ty)
 {
-  while (!equal(tok, "{"))
+  while (!equal(tok, "{") && !equal(tok, ";") )
   {
     if (equal(tok, "&"))
       return true;
@@ -4677,6 +4719,19 @@ static bool is_expression(Token **rest, Token *tok, Type *ty)
 
     if (equal(tok, "^"))
       return true;
+
+    if (equal(tok, "*") && tok->next->kind == TK_NUM)
+      return true;   
+
+    if (equal(tok, "+"))
+      return true;  
+
+    if (equal(tok, "<="))
+      return true;  
+
+    if (equal(tok, ">="))
+      return true;  
+
     tok = tok->next;
   }
 

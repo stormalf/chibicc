@@ -271,6 +271,9 @@ void add_type(Node *node)
     node->ty = node->lhs->ty;
     return;
   case ND_VAR:
+      if (!node->var) {
+        error_tok(node->tok, "%s %d %d variable undefined ", TYPE_C, __LINE__, node->kind);
+      }
   case ND_VLA_PTR:
     node->ty = node->var->ty;
     return;
