@@ -23,7 +23,6 @@
 
 /* Implemented from the specification included in the Intel C++ Compiler
    User Guide and Reference, version 9.0.  */
-
 #ifndef _MMINTRIN_H_INCLUDED
 #define _MMINTRIN_H_INCLUDED
 

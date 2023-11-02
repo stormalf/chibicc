@@ -23,7 +23,6 @@
 
 /* Implemented from the specification included in the Intel C++ Compiler
    User Guide and Reference, version 9.0.  */
-#pragma once
 #ifndef _XMMINTRIN_H_INCLUDED
 #define _XMMINTRIN_H_INCLUDED
 

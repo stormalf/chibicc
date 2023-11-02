@@ -511,6 +511,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
       tok = skip(tok, ";", ctx);
     }
 
+
     // Handle storage class specifiers.
     if (equal(tok, "typedef") || equal(tok, "static") || equal(tok, "extern") ||
         equal(tok, "inline") || equal(tok, "_Thread_local") || equal(tok, "__thread"))
@@ -761,7 +762,6 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
     // but fix 121 caused other issues with other function and not only _Static_assert function
     // if (equal(tok->next, "==") || (equal(tok, "(") && is_expression(rest, tok, ty)) || equal(tok, "sizeof") || equal(tok, "_Alignof") || equal(tok->next, "+") || equal(tok->next, "<"))
     // {
-    // printf("999======%s\n", tok->loc);
     // if (equal(tok->next, "==") || (equal(tok, "(") && is_expression(rest, tok, ty)) || equal(tok, "sizeof") || equal(tok, "_Alignof") || equal(tok->next, "+") ||
     //   equal(tok->next, "<") || equal(tok->next, ">=") || equal(tok->next, "<="))
     if (is_expression(rest, tok, ty) || equal(tok, "sizeof") || equal(tok, "_Alignof") )
@@ -2610,16 +2610,16 @@ static int64_t eval2(Node *node, char ***label)
     return 0;
   case ND_MEMBER:
     if (!label)
-      error_tok(node->tok, "%s : in eval2 : not a compile-time constant", PARSE_C );
+      error_tok(node->tok, "%s  %d: in eval2 : not a compile-time constant", PARSE_C, __LINE__ );
     if (node->ty->kind != TY_ARRAY)
       error_tok(node->tok, "%s: in eval2 : invalid initializer", PARSE_C);
     return eval_rval(node->lhs, label) + node->member->offset;
   case ND_VAR:
     if (!label)
-      error_tok(node->tok, "%s: in eval2 : not a compile-time constant2", PARSE_C);
+      error_tok(node->tok, "%s %d: in eval2 : not a compile-time constant", PARSE_C, __LINE__);
       //trying to fix ======ISS-145 compiling util-linux failed with invalid initalizer2 
     if (node->var->ty->kind != TY_ARRAY && node->var->ty->kind != TY_FUNC && node->var->ty->kind != TY_INT)
-      error_tok(node->tok, "%s: in eval2 : invalid initializer2", PARSE_C);
+      error_tok(node->tok, "%s %d: in eval2 : invalid initializer2", PARSE_C, __LINE__);
       //trying to fix ======ISS-145 compiling util-linux failed with invalid initalizer2 
     if (node->var->ty->kind == TY_INT)
       return 0;

@@ -1338,10 +1338,11 @@ void init_macros(void)
   define_macro("__GNU__", "1");
   define_macro("__INTEL_COMPILER", "1");
   
+  
   define_macro("linux", "1");
   define_macro("unix", "1");
   define_macro("nonnull", "1");
-  //=======fixing temporary ISS-147 defining the two macros for the linux platform
+  //====fixing ISS-147 defining the two macros for the linux platform
   define_macro("__ORDER_LITTLE_ENDIAN__", "1234");
   define_macro("__ORDER_BIG_ENDIAN__", "5678");
   define_macro("__BYTE_ORDER__", "__ORDER_LITTLE_ENDIAN__");

@@ -1067,6 +1067,7 @@ static void run_linker(StringArray *inputs, char *output)
   strarray_push(&arr, output);
   strarray_push(&arr, "-m");
   strarray_push(&arr, "elf_x86_64");
+  strarray_push(&arr, "-allow-multiple-definition");
   //enabling verbose mode for linker in case of debug
   if (isDebug)
     strarray_push(&arr, "--verbose=1");
