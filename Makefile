@@ -53,7 +53,7 @@ test-stage2: $(TESTS:test/%=stage2/test/%)
 	for i in $^; do echo $$i; ./$$i || exit 1; echo; done
 	test/driver.sh ./stage2/$(OBJECT)
 
-projects-all: projects openssl nmap curl
+projects-all: projects openssl nmap curl vim
 
 projects: zlib util-linux nginx
 
@@ -75,6 +75,9 @@ util-linux:
 
 nginx:
 	cd ../nginx && make clean && CC=chibicc CFLAGS=-fPIC ./auto/configure && make 
+
+vim:
+	cd ../vim && make clean && CC=chibicc CFLAGS=-fPIC ./configure && make && make test
 
 # Misc.
 

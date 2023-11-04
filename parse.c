@@ -4696,11 +4696,6 @@ static bool is_expression(Token **rest, Token *tok, Type *ty)
     if (equal(tok, "=="))
       return true;
 
-    if (equal(tok, "+"))
-      return true;
-
-    if (equal(tok, "-"))
-      return true;
 
     if (equal(tok, "<"))
       return true;
@@ -4717,11 +4712,8 @@ static bool is_expression(Token **rest, Token *tok, Type *ty)
     if (equal(tok, "^"))
       return true;
 
-    if (equal(tok, "*") && tok->next->kind == TK_NUM)
-      return true;   
-
-    if (equal(tok, "+"))
-      return true;  
+    // if (equal(tok, "*") && tok->next->kind == TK_NUM)
+    //   return true;   
 
     if (equal(tok, "<="))
       return true;  
