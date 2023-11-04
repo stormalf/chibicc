@@ -398,18 +398,18 @@ memcached: https://github.com/memcached/memcached.git
     make test
 
 
-postgres: https://github.com/postgres/postgres.git
 
-    CC=chibicc meson build
-    cd build && meson compile
-    meson test
-    Ok:                 1
-    Expected Fail:      0
-    Fail:               75
-    Unexpected Pass:    0
-    Skipped:            0
-    Timeout:            0
-        
+vim: https://github.com/vim/vim.git
+
+    CC=chibicc CFLAGS=-fPIC ./configure
+    make
+    make test
+    == SUMMARY ==
+    Test run on 2023 Nov 04 17:31:29
+    OK: 10
+    FAILED: 0: []
+    skipped: 0        
+    
 
 ## meson
 
@@ -433,6 +433,21 @@ lxc: https://github.com/lxc/lxc.git
     cd build
     meson compile
     failed on lxc-attach compile for now
+
+
+postgres: https://github.com/postgres/postgres.git 
+
+    CC=chibicc CFLAGS="-fPIC" LDFLAGS="-fPIC" ./configure --host x86_64-linux-gnu
+    cd build && meson compile
+    meson test
+    Ok:                 1
+    Expected Fail:      0
+    Fail:               75
+    Unexpected Pass:    0
+    Skipped:            0
+    Timeout:            0
+    
+    the initdb command produced by chibicc failed with segmentation fault.
 
 
 ## TODO
@@ -474,7 +489,7 @@ Example of diagram generated with -dotfile parameter :
 ## release notes
 
 
-1.0.22    Fixing ISS-149 some extended assembly not taken in account during libwebp compilation. Fixing ISS-156 fpie/pie/-fPIE not recognized by chibicc. Adding other parameters in ingored list. Fixing ISS-157 about union empty initializer like "union string_value lval = {}, rval = {};". Fixing ISS-158 during neovim compilation failure with not a struct nor a union. Fixing ISS-160 memcached compilation failed with IOV_MAX undefined (adding __GNU__ macro). Fixing ISS-161 trying to compile memcached failed with incorrect offset or not managed yet. Fixing ISS-163 during postgres compile failure withe "invalid pointer dereference". Fixing ISS-162 during postgres compile failure with __typeof not recognized. Adding macro __INTEL_COMPILER. Adding include path to gcc that has many includes needed for some projects (adding in chibicc/include some of them like emmintrin.h, omp.h...). Adding some builtin void functions like _builtin_ia32_emms. Fixing ISS-165 during postgres compile failure due to staticAssertDecl function. Fixing ISS-166 during postgres compile segmentation fault (caused by VLA type in sizeof function). Fixing ISS-167 during postgres compile failure with bad register. Adding _Static_Assert definition but only to avoid issue during linkage with undefined _Static_Assert during postgres compilation. Fixing ISS-168 during postgres compile failure with expected an expression due to incorrect previous fix(ISS-121). Adding by default to the linker "-allow-multiple-definition".
+1.0.22    Fixing ISS-149 some extended assembly not taken in account during libwebp compilation. Fixing ISS-156 fpie/pie/-fPIE not recognized by chibicc. Adding other parameters in ingored list. Fixing ISS-157 about union empty initializer like "union string_value lval = {}, rval = {};". Fixing ISS-158 during neovim compilation failure with not a struct nor a union. Fixing ISS-160 memcached compilation failed with IOV_MAX undefined (adding __GNU__ macro). Fixing ISS-161 trying to compile memcached failed with incorrect offset or not managed yet. Fixing ISS-163 during postgres compile failure withe "invalid pointer dereference". Fixing ISS-162 during postgres compile failure with __typeof not recognized. Adding macro __INTEL_COMPILER. Adding include path to gcc that has many includes needed for some projects (adding in chibicc/include some of them like emmintrin.h, omp.h...). Adding some builtin void functions like _builtin_ia32_emms. Fixing ISS-165 during postgres compile failure due to staticAssertDecl function. Fixing ISS-166 during postgres compile segmentation fault (caused by VLA type in sizeof function). Fixing ISS-167 during postgres compile failure with bad register. Adding _Static_Assert definition but only to avoid issue during linkage with undefined _Static_Assert during postgres compilation. Fixing ISS-168 during postgres compile failure with expected an expression due to incorrect previous fix(ISS-121). Adding by default to the linker "-allow-multiple-definition". Fixing issue with tgmath.h and ignoring .rsp files.
 
 
 
@@ -482,4 +497,5 @@ Example of diagram generated with -dotfile parameter :
 ## old release notes
 
 <https://github.com/stormalf/chibicc/blob/main/RELEASE_NOTES.md>
+
 

@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <stddef.h>
 
 #define CDTEXT_MAX_TRACKS 0x7f
 
