@@ -108,8 +108,6 @@ static Obj *builtin_alloca;
 
 extern Context *ctx;
 
-static bool is_variable_function = false;
-
 static bool is_typename(Token *tok);
 static Type *declspec(Token **rest, Token *tok, VarAttr *attr);
 static Type *typename(Token **rest, Token *tok);
@@ -763,9 +761,11 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
     // but fix 121 caused other issues with other function and not only _Static_assert function
     if (is_expression(rest, tok, ty) || equal(tok, "sizeof") || equal(tok, "_Alignof") )
      {
+      if (!current_fn) {
        Node *node = expr(&tok, tok);
        *rest = tok;
        break;
+      }
      }
 
     Type *ty2 = declspec(&tok, tok, NULL);
