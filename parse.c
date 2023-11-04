@@ -108,6 +108,7 @@ static Obj *builtin_alloca;
 
 extern Context *ctx;
 
+static bool is_variable_function = false;
 
 static bool is_typename(Token *tok);
 static Type *declspec(Token **rest, Token *tok, VarAttr *attr);
@@ -511,7 +512,6 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
       tok = skip(tok, ";", ctx);
     }
 
-
     // Handle storage class specifiers.
     if (equal(tok, "typedef") || equal(tok, "static") || equal(tok, "extern") ||
         equal(tok, "inline") || equal(tok, "_Thread_local") || equal(tok, "__thread"))
@@ -706,6 +706,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     }
 
     tok = tok->next;
+
   }
 
   if (is_atomic)
@@ -755,15 +756,11 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
       break;
     }
 
-    
+
     //  provisory fix for static_assert outside a function caused issue with chibicc
     //  issue #120 not sure why it works only inside a function, gcc compiles than even if static_assert is outside a function
     // fixing also #121 with equal(tok, "(")
     // but fix 121 caused other issues with other function and not only _Static_assert function
-    // if (equal(tok->next, "==") || (equal(tok, "(") && is_expression(rest, tok, ty)) || equal(tok, "sizeof") || equal(tok, "_Alignof") || equal(tok->next, "+") || equal(tok->next, "<"))
-    // {
-    // if (equal(tok->next, "==") || (equal(tok, "(") && is_expression(rest, tok, ty)) || equal(tok, "sizeof") || equal(tok, "_Alignof") || equal(tok->next, "+") ||
-    //   equal(tok->next, "<") || equal(tok->next, ">=") || equal(tok->next, "<="))
     if (is_expression(rest, tok, ty) || equal(tok, "sizeof") || equal(tok, "_Alignof") )
      {
        Node *node = expr(&tok, tok);
@@ -796,6 +793,7 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
       ty2 = pointer_to(ty2);
       ty2->name = name;
     }
+
 
     cur = cur->next = copy_type(ty2);
   }
@@ -850,7 +848,6 @@ static Type *array_dimensions(Token **rest, Token *tok, Type *ty)
 static Type *type_suffix(Token **rest, Token *tok, Type *ty)
 {
   bool is_old_style = false;
-
   // fix issue =====#127 and issue =====#126 with old C style function
   // fixing issue ISS-148
   if (equal(tok, "(") && !is_typename(tok->next) && !ty)
@@ -913,6 +910,7 @@ static Type *declarator(Token **rest, Token *tok, Type *ty)
     name = tok;
     tok = tok->next;
   }
+
   ty = type_suffix(rest, tok, ty);
   ty->name = name;
   ty->name_pos = name_pos;
@@ -1099,17 +1097,18 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
   Node head = {};
   Node *cur = &head;
   int i = 0;
+
+
   while (!equal(tok, ";"))
   {
     if (i++ > 0) {
       ctx->filename = PARSE_C;
       ctx->funcname = "declaration";      
-      ctx->line_no = __LINE__ + 1;
+      ctx->line_no = __LINE__ + 2;  
       tok = skip(tok, ",", ctx);
     }
 
     Type *ty = declarator(&tok, tok, basety);
-
     if (ty->kind == TY_VOID)
       error_tok(tok, "%s: in declaration : variable declared void", PARSE_C);
     if (!ty->name)
@@ -2418,8 +2417,9 @@ static Node *stmt(Token **rest, Token *tok)
     labels = node;
     return node;
   }
-  if (equal(tok, "{"))
+  if (equal(tok, "{")) 
     return compound_stmt(rest, tok->next);
+
 
   return expr_stmt(rest, tok);
 }
@@ -2430,7 +2430,6 @@ static Node *compound_stmt(Token **rest, Token *tok)
   Node *node = new_node(ND_BLOCK, tok);
   Node head = {};
   Node *cur = &head;
-
   enter_scope();
 
   while (!equal(tok, "}"))
@@ -2439,7 +2438,6 @@ static Node *compound_stmt(Token **rest, Token *tok)
     {
       VarAttr attr = {};
       Type *basety = declspec(&tok, tok, &attr);
-
       if (attr.is_typedef)
       {
         tok = parse_typedef(tok, basety);
@@ -2457,7 +2455,6 @@ static Node *compound_stmt(Token **rest, Token *tok)
         tok = global_variable(tok, basety, &attr);
         continue;
       }
-
       cur = cur->next = declaration(&tok, tok, basety, &attr);
     }
     else
@@ -2861,6 +2858,7 @@ static Node *to_assign(Node *binary)
 //           | "<<=" | ">>="
 static Node *assign(Token **rest, Token *tok)
 {
+
   Node *node = conditional(&tok, tok);
 
   if (equal(tok, "="))
@@ -3309,7 +3307,6 @@ static Node *unary(Token **rest, Token *tok)
     *rest = tok->next->next;
     return node;
   }
-
   return postfix(rest, tok);
 }
 
@@ -3900,10 +3897,8 @@ static Node *primary(Token **rest, Token *tok)
 {
   Token *start = tok;
 
-
   if ((equal(tok, "(") && equal(tok->next, "{")))
   {
- 
     // This is a GNU statement expresssion.
     Node *node = new_node(ND_STMT_EXPR, tok);
     node->body = compound_stmt(&tok, tok->next->next)->body;
@@ -3913,7 +3908,7 @@ static Node *primary(Token **rest, Token *tok)
     *rest = skip(tok, ")", ctx);
     return node;
   }
-
+  
   if (equal(tok, "("))
   {
     Node *node = expr(&tok, tok->next);
@@ -4189,8 +4184,8 @@ static Node *primary(Token **rest, Token *tok)
       // error_tok(tok, "%s: in primary : implicit declaration of a function", PARSE_C);
     }
 
-    //printf("=======%s\n", tok->loc);
-    error_tok(tok, "%s: in primary : error: undefined variable", PARSE_C);
+    //printf("=======%s %d\n", tok->loc, __LINE__);
+    error_tok(tok, "%s %d: in primary : error: undefined variable", PARSE_C, __LINE__);
   }
 
   if (tok->kind == TK_STR)
@@ -4218,7 +4213,7 @@ static Node *primary(Token **rest, Token *tok)
     return node;
   }
 
-  error_tok(tok, "%s: in primary : expected an expression", PARSE_C);
+  error_tok(tok, "%s %d: in primary : expected an expression", PARSE_C, __LINE__);
 }
 
 static Token *parse_typedef(Token *tok, Type *basety)
@@ -4310,7 +4305,6 @@ static void mark_live(Obj *var)
 
 static Token *function(Token *tok, Type *basety, VarAttr *attr)
 {
-
   Type *ty = declarator(&tok, tok, basety);
   if (!ty->name)
     error_tok(ty->name_pos, "%s: in function : function name omitted", PARSE_C);
@@ -4383,7 +4377,6 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   // [GNU] __FUNCTION__ is yet another name of __func__.
   push_scope("__FUNCTION__")->var =
       new_string_literal(fn->name, array_of(ty_char, strlen(fn->name) + 1));
-
   fn->body = compound_stmt(&tok, tok);
   fn->locals = locals;
 
@@ -4431,10 +4424,12 @@ static Token *global_variable(Token *tok, Type *basety, VarAttr *attr)
 // of a function definition or declaration.
 static bool is_function(Token *tok)
 {
+
   if (equal(tok, ";"))
     return false;
   Type dummy = {};
   Type *ty = declarator(&tok, tok, &dummy);
+
   return ty->kind == TY_FUNC;
 }
 
@@ -4663,6 +4658,7 @@ static Token *skip_excess_element2(Token *tok)
   return tok;
 }
 
+
 // this function checks if we have an old C style function declaration
 static bool check_old_style(Token **rest, Token *tok, Type *ty)
 {
@@ -4691,7 +4687,8 @@ static bool check_old_style(Token **rest, Token *tok, Type *ty)
 // returns true if it's an expression
 static bool is_expression(Token **rest, Token *tok, Type *ty)
 {
-  while (!equal(tok, "{") && !equal(tok, ";") )
+  //fixing =====ISS-168
+  while (!equal(tok, "{") && !equal(tok, ";") && !equal(tok, "=") )
   {
     if (equal(tok, "&"))
       return true;
@@ -4737,4 +4734,3 @@ static bool is_expression(Token **rest, Token *tok, Type *ty)
 
   return false;
 }
-
