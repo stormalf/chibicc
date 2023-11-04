@@ -33,7 +33,7 @@
 
 #define PRODUCT "chibicc"
 #define VERSION "1.0.22"
-#define MAXLEN 101
+#define MAXLEN 501
 #define DEFAULT_TARGET_MACHINE "x86_64-linux-gnu"
 
 #define HELP PRODUCT " is a C compiler based on " PRODUCT " created by Rui Ueyama.\n \

@@ -398,6 +398,19 @@ memcached: https://github.com/memcached/memcached.git
     make test
 
 
+postgres: https://github.com/postgres/postgres.git
+
+    CC=chibicc meson build
+    cd build && meson compile
+    meson test
+    Ok:                 1
+    Expected Fail:      0
+    Fail:               75
+    Unexpected Pass:    0
+    Skipped:            0
+    Timeout:            0
+        
+
 ## meson
 
 to be able to use meson with chibicc (meson doesn't know chibicc compiler), I changed the detect.py file in /usr/lib/python3/dist-packages/mesonbuild/compilers/detect.py to add support for chibicc. After that I can now using meson for some projects that are configured to use it.
@@ -409,7 +422,7 @@ Some C projects doesn't compile for now. It helps to find some bugs and to try t
 VLC : https://github.com/videolan/vlc.git 
 
     ./bootstrap
-    CC=chibicc CFLAGS="-fPIC" DEFS="-DHAVE_CONFIG_H -DHAVE_ATTRIBUTE_PACKED -DVLC_USED -DVLC_API -DVLC_DEPRECATED -DVLC_MALLOC" ./configure --disable-lua --disable-a52 --disable-xcb --disable-qt --disable-po --disable-alsa --target=linux
+    CC=chibicc CFLAGS="-fPIC" DEFS="-DHAVE_CONFIG_H -DHAVE_ATTRIBUTE_PACKED -DVLC_USED -DVLC_API -DVLC_DEPRECATED -DVLC_MALLOC" LDFLAGS="-fPIC" ./configure  --disable-xcb --disable-qt --disable-a52
     make all
 
     VLC doesn't compile with chibicc some issues to fix later.

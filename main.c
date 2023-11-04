@@ -9,6 +9,7 @@ typedef enum
   FILE_OBJ,
   FILE_AR,
   FILE_DSO,
+  FILE_RSP,
 } FileType;
 
 StringArray include_paths;
@@ -235,11 +236,6 @@ static void parse_args(int argc, char **argv)
 
 
     if (startsWith(argv[i], "-flto"))
-    {
-      continue;
-    }
-
-    if (startsWith(argv[i], "-std="))
     {
       continue;
     }
@@ -655,9 +651,14 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "--print-search-dirs") || 
         !strcmp(argv[i], "-fdiagnostics-show-option") || 
         !strcmp(argv[i], "-Xc") || 
-        !strcmp(argv[i], "-std") || 
         !strcmp(argv[i], "-w"))
       continue;
+
+    if (startsWith(argv[i], "-std"))
+    {
+      continue;
+    }
+
 
     if (argv[i][0] == '-' && argv[i][1] != '\0')
       error("%s in parse_args unknown argument: %s", MAIN_C, argv[i]);
@@ -1169,6 +1170,8 @@ static FileType get_file_type(char *filename)
     return FILE_ASM;
   if (endswith(filename, ".so.4"))
     return FILE_DSO;
+  if (endswith(filename, ".rsp"))
+    return FILE_RSP;
 
   if (opt_x != FILE_NONE)
     return opt_x;
@@ -1261,6 +1264,11 @@ int main(int argc, char **argv)
     {
       if (!opt_S)
         assemble(input, output);
+      continue;
+    }
+
+    if (type == FILE_RSP)
+    {
       continue;
     }
 
