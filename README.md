@@ -399,7 +399,41 @@ memcached: https://github.com/memcached/memcached.git
 
 
    
-    
+cpython: git clone git@github.com:python/cpython.git
+        
+        CC=chibicc ./configure
+        make && make test
+        == Tests result: SUCCESS ==
+        
+        10 slowest tests:
+        - test_imaplib: 52.3 sec
+        - test_signal: 49.1 sec
+        - test.test_concurrent_futures.test_wait: 48.4 sec
+        - test.test_multiprocessing_forkserver.test_processes: 41.1 sec
+        - test.test_multiprocessing_spawn.test_processes: 40.1 sec
+        - test.test_multiprocessing_spawn.test_misc: 36.5 sec
+        - test_io: 33.8 sec
+        - test.test_gdb.test_pretty_print: 33.4 sec
+        - test_socket: 33.4 sec
+        - test_xmlrpc: 29.1 sec
+        
+        22 tests skipped:
+            test.test_asyncio.test_windows_events
+            test.test_asyncio.test_windows_utils test_bz2 test_dbm_gnu
+            test_dbm_ndbm test_devpoll test_idle test_ioctl test_kqueue
+            test_launcher test_msvcrt test_startfile test_tcl test_tkinter
+            test_ttk test_ttk_textonly test_turtle test_winapi
+            test_winconsoleio test_winreg test_winsound test_wmi
+        
+        2 tests skipped (resource denied):
+            test_peg_generator test_zipfile64
+        
+        448 tests OK.
+        
+        Total duration: 2 min 41 sec
+        Total tests: run=42,576 skipped=1,689
+        Total test files: run=470/472 skipped=22 resource_denied=2
+        Result: SUCCESS
 
 ## meson
 
@@ -475,7 +509,7 @@ Example of diagram generated with -dotfile parameter :
 ## release notes
 
 
-1.0.22    Fixing ISS-149 some extended assembly not taken in account during libwebp compilation. Fixing ISS-156 fpie/pie/-fPIE not recognized by chibicc. Adding other parameters in ingored list. Fixing ISS-157 about union empty initializer like "union string_value lval = {}, rval = {};". Fixing ISS-158 during neovim compilation failure with not a struct nor a union. Fixing ISS-160 memcached compilation failed with IOV_MAX undefined (adding __GNU__ macro). Fixing ISS-161 trying to compile memcached failed with incorrect offset or not managed yet. Fixing ISS-163 during postgres compile failure withe "invalid pointer dereference". Fixing ISS-162 during postgres compile failure with __typeof not recognized. Adding macro __INTEL_COMPILER. Adding include path to gcc that has many includes needed for some projects (adding in chibicc/include some of them like emmintrin.h, omp.h...). Adding some builtin void functions like _builtin_ia32_emms. Fixing ISS-165 during postgres compile failure due to staticAssertDecl function. Fixing ISS-166 during postgres compile segmentation fault (caused by VLA type in sizeof function). Fixing ISS-167 during postgres compile failure with bad register. Adding _Static_Assert definition but only to avoid issue during linkage with undefined _Static_Assert during postgres compilation. Fixing ISS-168 during postgres compile failure with expected an expression due to incorrect previous fix(ISS-121). Adding by default to the linker "-allow-multiple-definition". Fixing issue with tgmath.h and ignoring .rsp files. Adding -dumpversion support provided by Urs Janssen. 
+1.0.22    Fixing ISS-149 some extended assembly not taken in account during libwebp compilation. Fixing ISS-156 fpie/pie/-fPIE not recognized by chibicc. Adding other parameters in ingored list. Fixing ISS-157 about union empty initializer like "union string_value lval = {}, rval = {};". Fixing ISS-158 during neovim compilation failure with not a struct nor a union. Fixing ISS-160 memcached compilation failed with IOV_MAX undefined (adding __GNU__ macro). Fixing ISS-161 trying to compile memcached failed with incorrect offset or not managed yet. Fixing ISS-163 during postgres compile failure withe "invalid pointer dereference". Fixing ISS-162 during postgres compile failure with __typeof not recognized. Adding macro __INTEL_COMPILER. Adding include path to gcc that has many includes needed for some projects (adding in chibicc/include some of them like emmintrin.h, omp.h...). Adding some builtin void functions like _builtin_ia32_emms. Fixing ISS-165 during postgres compile failure due to staticAssertDecl function. Fixing ISS-166 during postgres compile segmentation fault (caused by VLA type in sizeof function). Fixing ISS-167 during postgres compile failure with bad register. Adding _Static_Assert definition but only to avoid issue during linkage with undefined _Static_Assert during postgres compilation. Fixing ISS-168 during postgres compile failure with expected an expression due to incorrect previous fix(ISS-121). Adding by default to the linker "-allow-multiple-definition". Fixing issue with tgmath.h and ignoring .rsp files. Adding -dumpversion support provided by Urs Janssen.  Added Xcode SDK path (from MarcusJohnson91). Fixing issue on extract_path function that caused corrupt malloc (ISS-170)
 
 
 

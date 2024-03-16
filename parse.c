@@ -4477,6 +4477,8 @@ Obj *parse(Token *tok)
 
 
   char *path;
+  char *fullpath = calloc(1, sizeof(char) * 400);;
+  char *filename;
   if (isDotfile && dotf == NULL)
   {
     if (base_file == NULL && opt_o == NULL)
@@ -4487,21 +4489,20 @@ Obj *parse(Token *tok)
     path = replace_extn(opt_o ? opt_o : base_file, ".dot");
     if (opt_o != NULL)
     {
-      char *fullpath;
-      char *filename;
+
       filename = extract_filename(opt_o);
       fullpath = extract_path(opt_o, filename);
       strncat(fullpath, path, strlen(path));
-      path = fullpath;
     }
 
-    dotf = fopen(path, "w");
+    dotf = fopen(fullpath, "w");
     if (dotf == NULL)
     {
       fprintf(stderr, "%s: in parse dot file cannot be opend\n", PARSE_C);
       exit(4);
-    }
-    fprintf(dotf, "digraph A {\n");
+    } 
+    fprintf(dotf, "digraph A { \n");
+    
   }
 
   if (opt_fbuiltin)
