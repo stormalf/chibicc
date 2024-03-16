@@ -110,7 +110,10 @@ static void add_default_include_paths(char *argv0)
   strarray_push(&include_paths, "/usr/include");
   strarray_push(&include_paths, "/usr/lib/gcc/x86_64-linux-gnu/11/include");
   //strarray_push(&include_paths, "/usr/include/chibicc/include");
-  
+  #if defined(__APPLE__) && defined(__MACH__)
+  strarray_push(&include_paths, "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include");
+  define_macro("__GNUC__", "5"); // for MacOS SDK compatibility
+  #endif
 
   // Keep a copy of the standard include paths for -MMD option.
   for (int i = 0; i < include_paths.len; i++)
@@ -719,7 +722,7 @@ char *extract_path(char *tmpl, char *basename)
   int length = total_length - basename_length + 1;
   char pathonly[length];
   memset(pathonly, 0, sizeof(pathonly));
-  strncpy(pathonly, tmpl, sizeof(pathonly) - 1);
+  strncpy(pathonly, tmpl, strlen(pathonly));
   return format("%s", pathonly);
 }
 
