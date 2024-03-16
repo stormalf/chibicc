@@ -581,6 +581,13 @@ static void parse_args(int argc, char **argv)
       exit(0);
     }
 
+    if (!strcmp(argv[i], "-dumpversion"))
+    {
+      dump_version();
+      exit(0);
+    }
+
+
     //-soname create a symbolic link before calling the linker like in gcc -Wl,-soname,libcurl.so.4 -o libcurl.so.4.8.0
     if (!strcmp(argv[i], "-soname"))
     {
@@ -650,7 +657,9 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-fsanitize=cfi") || 
         !strcmp(argv[i], "--print-search-dirs") || 
         !strcmp(argv[i], "-fdiagnostics-show-option") || 
-        !strcmp(argv[i], "-Xc") || 
+        !strcmp(argv[i], "-Xc") ||
+        !strcmp(argv[i], "-Aa") ||
+        !strcmp(argv[i], "-rdynamic") ||        
         !strcmp(argv[i], "-w"))
       continue;
 
@@ -1006,6 +1015,13 @@ void dump_machine(void)
 {
   fprintf(stdout, DEFAULT_TARGET_MACHINE "\n");
 }
+
+void dump_version(void)
+{
+  fprintf(stdout, VERSION "\n");
+}
+
+
 
 static char *find_file(char *pattern)
 {
