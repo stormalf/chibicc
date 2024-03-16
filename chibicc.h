@@ -595,6 +595,7 @@ void hashmap_test(void);
 
 bool file_exists(char *path);
 void dump_machine(void);
+void dump_version(void);
 bool startsWith(const char *restrict string, const char *restrict prefix);
 
 extern StringArray include_paths;

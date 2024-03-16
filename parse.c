@@ -761,11 +761,10 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
     // but fix 121 caused other issues with other function and not only _Static_assert function
     if (is_expression(rest, tok, ty) || equal(tok, "sizeof") || equal(tok, "_Alignof") )
      {
-      if (!current_fn) {
        Node *node = expr(&tok, tok);
        *rest = tok;
        break;
-      }
+
      }
 
     Type *ty2 = declspec(&tok, tok, NULL);
@@ -897,8 +896,9 @@ static Type *declarator(Token **rest, Token *tok, Type *ty)
     declarator(&tok, start->next, &dummy);
     ctx->filename = PARSE_C;
     ctx->funcname = "declarator";    
-    ctx->line_no = __LINE__ + 1;
-    tok = skip(tok, ")", ctx);
+    ctx->line_no = __LINE__ + 2;
+    if (equal(tok, ")"))
+      tok = skip(tok, ")", ctx);
     ty = type_suffix(rest, tok, ty);
     return declarator(&tok, start->next, ty);
   }
