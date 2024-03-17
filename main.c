@@ -714,17 +714,35 @@ char *extract_filename(char *tmpl)
   return format("%s", filename);
 }
 
-// return path without filename example : ./test/hello.c returns ./test
-char *extract_path(char *tmpl, char *basename)
+char * extract_path(char* tmpl)
 {
-  int total_length = strlen(tmpl);
-  int basename_length = strlen(basename);
-  int length = total_length - basename_length + 1;
-  char pathonly[length];
-  memset(pathonly, 0, sizeof(pathonly));
-  strncpy(pathonly, tmpl, strlen(pathonly));
-  return format("%s", pathonly);
+    char* parent = calloc(1, sizeof(char) * 300);
+    int parentLen;
+    char* last = strrchr(tmpl, '/');
+
+    if (last != NULL) {
+
+        parentLen = strlen(tmpl) - strlen(last + 1);
+        if (parentLen > 300)
+          error("%s : no enough size for parent in getParent function %d expected ", MAIN_C, parentLen);
+        strncpy(parent, tmpl, parentLen);
+    } 
+
+return parent;
 }
+
+// return path without filename example : ./test/hello.c returns ./test
+// char *extract_path(char *tmpl, char *basename)
+// {
+//   // int total_length = strlen(tmpl);
+//   // int basename_length = strlen(basename);
+//   // int length = total_length - basename_length + 1;
+//   // char *pathonly;
+//   // memset(pathonly, 0, length);
+//   // strncpy(pathonly, tmpl, length);
+//   // return format("%s", pathonly);
+//   return getParent(tmpl);
+// }
 
 // Replace file extension
 char *replace_extn(char *tmpl, char *extn)
@@ -876,7 +894,7 @@ static void print_dependencies(void)
       char *fullpath;
       char *filename;
       filename = extract_filename(opt_o);
-      fullpath = extract_path(opt_o, filename);
+      fullpath = extract_path(opt_o);
       strncat(fullpath, path, strlen(path));
       path = fullpath;
     }
