@@ -499,6 +499,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
   while (is_typename(tok))
   {
 
+
     //fixing =====ISS-155 __label__ out;  
     if (equal(tok, "__label__")) {
       consume(&tok, tok, "__label__");
@@ -3920,6 +3921,7 @@ static Node *primary(Token **rest, Token *tok)
   }
 
 
+
   if (equal(tok, "sizeof") && equal(tok->next, "(") && is_typename(tok->next->next))
   {
     Type *ty = typename(&tok, tok->next->next);
@@ -4309,6 +4311,7 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   if (!ty->name)
     error_tok(ty->name_pos, "%s: in function : function name omitted", PARSE_C);
   char *name_str = get_ident(ty->name);
+
   Obj *fn = find_func(name_str);
   if (fn)
   {
@@ -4430,6 +4433,7 @@ static bool is_function(Token *tok)
   Type dummy = {};
   Type *ty = declarator(&tok, tok, &dummy);
 
+
   return ty->kind == TY_FUNC;
 }
 
@@ -4491,10 +4495,10 @@ Obj *parse(Token *tok)
     {
 
       filename = extract_filename(opt_o);
-      fullpath = extract_path(opt_o, filename);
+      fullpath = extract_path(opt_o);
       strncat(fullpath, path, strlen(path));
     }
-
+    printf("%s %s %s\n", fullpath, filename, path);
     dotf = fopen(fullpath, "w");
     if (dotf == NULL)
     {

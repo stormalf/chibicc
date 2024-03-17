@@ -1304,9 +1304,11 @@ void init_macros(void)
   define_macro("__SIZEOF_DOUBLE__", "8");
   define_macro("__SIZEOF_FLOAT__", "4");
   define_macro("__SIZEOF_INT__", "4");
+  define_macro("SIZEOF_INT", "4");
   define_macro("__SIZEOF_LONG_DOUBLE__", "8");
   define_macro("__SIZEOF_LONG_LONG__", "8");
   define_macro("__SIZEOF_LONG__", "8");
+  define_macro("SIZEOF_LONG", "8");
   define_macro("__SIZEOF_POINTER__", "8");
   define_macro("__SIZEOF_PTRDIFF_T__", "8");
   define_macro("__SIZEOF_SHORT__", "2");
@@ -1342,6 +1344,7 @@ void init_macros(void)
   define_macro("unix", "1");
   define_macro("nonnull", "1");
   define_macro("__GNUC_PREREQ", "(2, 7)");
+  define_macro("__LONG_MAX__", "9223372036854775807L");
 
   //====fixing ISS-147 defining the two macros for the linux platform
   define_macro("__ORDER_LITTLE_ENDIAN__", "1234");

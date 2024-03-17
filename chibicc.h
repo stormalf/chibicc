@@ -613,7 +613,7 @@ extern bool isDotfile;
 extern bool isDebug;
 extern bool isPrintMacro;
 extern char *extract_filename(char *tmpl);
-extern char *extract_path(char *tmpl, char *basename);
+extern char *extract_path(char *tmpl);
 
 //
 // extended_asm.c
