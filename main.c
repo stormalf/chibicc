@@ -19,6 +19,8 @@ bool opt_fpic;
 bool opt_fpie;
 bool opt_shared;
 
+bool opt_ignore_assert = false;
+
 static FileType opt_x;
 static StringArray opt_include;
 bool opt_E;
@@ -297,6 +299,13 @@ static void parse_args(int argc, char **argv)
       opt_fcommon = false;
       continue;
     }
+
+    if (!strcmp(argv[i], "-ignore-assert"))
+    {
+      opt_ignore_assert = true;
+      continue;
+    }
+
 
     if (!strcmp(argv[i], "-fno-builtin"))
     {

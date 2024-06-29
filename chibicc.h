@@ -91,6 +91,7 @@ this " PRODUCT " contains only some differences for now like new parameters\n"
 -dumpmachine it's required by some projects returns x86_64-linux-gnu\n \
 -dotfile generates a file with .dot extension that can be visualized using graphviz package \n \
 -dM Print macro definitions in -E mode instead of normal output\n \
+-ignore-assert  ingore static_assert and StaticAssertDecl functions if omit, the static assertions are not omitted \
 chibicc [ -o <path> ] <file>\n"
 
 typedef struct Type Type;
