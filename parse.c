@@ -4336,7 +4336,7 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
 
   fn->is_root = !(fn->is_static && fn->is_inline);
 
-  if (consume(&tok, tok, ";"))
+  if (consume(&tok, tok, ";") || consume(&tok, tok, ","))
     return tok;
 
   current_fn = fn;
