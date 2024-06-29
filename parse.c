@@ -19,6 +19,8 @@
 #include "chibicc.h"
 #define PARSE_C "parse.c"
 
+extern bool opt_ignore_assert;
+
 // Scope for local variables, global variables, typedefs
 // or enum constants
 
@@ -760,12 +762,11 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
     //  issue #120 not sure why it works only inside a function, gcc compiles than even if static_assert is outside a function
     // fixing also #121 with equal(tok, "(")
     // but fix 121 caused other issues with other function and not only _Static_assert function
-    if (is_expression(rest, tok, ty) || equal(tok, "sizeof") || equal(tok, "_Alignof") )
+    if (!opt_ignore_assert &&  (is_expression(rest, tok, ty) || equal(tok, "sizeof") || equal(tok, "_Alignof") ))
      {
        Node *node = expr(&tok, tok);
        *rest = tok;
        break;
-
      }
 
     Type *ty2 = declspec(&tok, tok, NULL);
@@ -847,6 +848,7 @@ static Type *array_dimensions(Token **rest, Token *tok, Type *ty)
 //             | ε
 static Type *type_suffix(Token **rest, Token *tok, Type *ty)
 {
+
   bool is_old_style = false;
   // fix issue =====#127 and issue =====#126 with old C style function
   // fixing issue ISS-148
@@ -1108,6 +1110,7 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
       ctx->line_no = __LINE__ + 2;  
       tok = skip(tok, ",", ctx);
     }
+
 
     Type *ty = declarator(&tok, tok, basety);
     if (ty->kind == TY_VOID)
@@ -2092,6 +2095,8 @@ static Node *asm_stmt(Token **rest, Token *tok)
 //      | expr-stmt
 static Node *stmt(Token **rest, Token *tok)
 {
+
+
   if (equal(tok, "return"))
   {
     Type *ret_ty = current_fn->ty->return_ty;

@@ -25,6 +25,8 @@
 #include "chibicc.h"
 #define PREPROCESS_C "preprocess.c"
 
+extern bool opt_ignore_assert;
+
 typedef struct MacroParam MacroParam;
 struct MacroParam
 {
@@ -1510,6 +1512,17 @@ Token *preprocess3(Token *tok)
       if (expand_macro(&tok, tok))
         continue;
     }
+
+    //for now ignoring static_assert and staticassertdecl (found in postgres project). It's a temporary fix 
+    //Need to think a way to manage static_assert by the chibicc compiler and sending error messages if the condition is false 
+    //during compile.
+    if (opt_ignore_assert && ((startswith(tok->loc,"static_assert(") && !tok->origin) || (startswith(tok->loc,"StaticAssertDecl(") && !tok->origin))) {
+      while (!equal(tok, ";"))
+        tok = tok->next;
+      tok = tok->next;
+      continue;
+    }
+    
 
     cur = cur->next = tok;
     tok = tok->next;
