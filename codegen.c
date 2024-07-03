@@ -913,7 +913,7 @@ static void builtin_alloca(void)
 // Generate code for a given node.
 static void gen_expr(Node *node)
 {
-  println("  .loc %d %d", node->tok->file->file_no, node->tok->line_no);
+  println("  .loc %d %u", node->tok->file->file_no, node->tok->line_no);
 
   switch (node->kind)
   {
@@ -1192,6 +1192,8 @@ static void gen_expr(Node *node)
           pop(argreg64[gp++]);
       }
     }
+
+
 
     println("  mov %%rax, %%r10");
     println("  mov $%d, %%rax", fp);
@@ -1481,7 +1483,7 @@ static void gen_expr(Node *node)
 
 static void gen_stmt(Node *node)
 {
-  println("  .loc %d %d", node->tok->file->file_no, node->tok->line_no);
+  println("  .loc %d %u", node->tok->file->file_no, node->tok->line_no);
 
   switch (node->kind)
   {

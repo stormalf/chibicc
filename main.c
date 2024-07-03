@@ -992,6 +992,7 @@ static void cc1(void)
   tok = append_tokens(tok, tok2);
   tok = preprocess(tok, isReadLine);
 
+
   // If -M or -MD are given, print file dependencies.
   if (opt_M || opt_MD)
   {
@@ -1212,7 +1213,8 @@ static FileType get_file_type(char *filename)
     return FILE_OBJ;
   if (endswith(filename, ".c"))
     return FILE_C;
-  if (endswith(filename, ".s"))
+  if (endswith(filename, ".s") || endswith(filename, ".S") ||
+      endswith(filename, ".asm"))
     return FILE_ASM;
   if (endswith(filename, ".so.4"))
     return FILE_DSO;
@@ -1305,7 +1307,7 @@ int main(int argc, char **argv)
       continue;
     }
 
-    // Handle .s
+    // Handle .s, -S, .asm
     if (type == FILE_ASM)
     {
       if (!opt_S)

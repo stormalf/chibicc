@@ -122,7 +122,7 @@ typedef struct
 } StringArray;
 
 void strarray_push(StringArray *arr, char *s);
-char *format(char *fmt, ...) __attribute__((format(printf, 1, 2)));
+char *format(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 
 //
 // tokenize.c
@@ -143,7 +143,7 @@ typedef enum
 typedef struct
 {
   char *name;
-  int file_no;
+  unsigned int file_no;
   char *contents;
 
   // For #line directive
@@ -183,7 +183,7 @@ Token *skip(Token *tok, char *op, Context *ctx);
 bool consume(Token **rest, Token *tok, char *str);
 void convert_pp_tokens(Token *tok);
 File **get_input_files(void);
-File *new_file(char *name, int file_no, char *contents);
+File *new_file(char *name, unsigned int file_no, char *contents);
 Token *tokenize_string_literal(Token *tok, Type *basety);
 Token *tokenize(File *file);
 Token *tokenize_file(char *filename);

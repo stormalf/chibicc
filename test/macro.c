@@ -409,6 +409,34 @@ int main() {
 #define M31(x, y) (1, ##x y)
   ASSERT(3, M31(, 3));
 
+#define M32 3 ## 4 ## 5
+  ASSERT(345, M32);
+
+#define M33(...) # \
+    __VA_ARGS__
+#define M34(x, ...) # \
+    __VA_ARGS__
+
+  ASSERT(0, strcmp(M33(1,2,3,4), "1,2,3,4"));
+  ASSERT(0, strcmp(M34(1,2,3,4), "2,3,4"));
+
+#define M35(x, y, z) x ## y ## z
+
+  ASSERT(123, M35(1,2,3));
+  ASSERT(45, M35(,4,5));
+  ASSERT(67, M35(6,,7));
+  ASSERT(89, M35(8,9,));
+  ASSERT(10, M35(10,,));
+  ASSERT(11, M35(,11,));
+  ASSERT(12, M35(,,12));
+  
+#define M36 -
+  int p = 2;
+  int q = p M36-p;
+  ASSERT(4, q);
+
+
+
   printf("OK\n");
   return 0;
 }
