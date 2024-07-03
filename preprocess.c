@@ -93,10 +93,22 @@ extern Context *ctx;
 static Token *preprocess2(Token *tok);
 static Macro *find_macro(Token *tok);
 static void join_adjacent_string_literals(Token *tok);
+static Token *paste(Token *lhs, Token *rhs);
 
 static bool is_hash(Token *tok)
+  // [https://www.sigbus.info/n1570#6.10.3.4p3] tok->origin is checked here
+  // because "#" can appear in object-like macro, and after expansion of that
+  // macro, it's not a preprocessing directive even it resembles one.
+  // For example:
+  //    1. #define H #
+  //    2. #define I include
+  //    3.
+  //    4. H I <stdio.h>
+  // Line 4 produces these tokens:
+  //    {#} {include} {<stdio.h>}
+  // which are not treated as preprocessing directive.
 {
-  return tok->at_bol && equal(tok, "#");
+  return tok->at_bol && equal(tok, "#") && !tok->origin;
 }
 
 // Some preprocessor directives such as #include allow extraneous
@@ -124,6 +136,7 @@ static Token *copy_token(Token *tok)
 static Token *new_eof(Token *tok)
 {
   Token *t = copy_token(tok);
+  t->at_bol = true;
   t->kind = TK_EOF;
   t->len = 0;
   return t;
@@ -362,6 +375,8 @@ static long eval_const_expr(Token **rest, Token *tok)
 
   // Convert pp-numbers to regular numbers
   convert_pp_tokens(expr);
+  if (expr->ty && is_flonum(expr->ty))
+    error_tok(expr, "%s: in eval_const_expr :  floating constant in preprocessor expression", PREPROCESS_C);
 
   Token *rest2;
   long val = const_expr(&rest2, expr);
@@ -457,7 +472,8 @@ static MacroParam *read_macro_params(Token **rest, Token *tok, char **va_args_na
 
 static void read_macro_definition(Token **rest, Token *tok)
 {
-
+  Token head = {};
+  Token *cur = &head;
   if (tok->kind != TK_IDENT)
     error_tok(tok, "%s: in read_macro_definition : macro name must be an identifier", PREPROCESS_C);
 
@@ -468,7 +484,26 @@ static void read_macro_definition(Token **rest, Token *tok)
     // Function-like macro
     char *va_args_name = NULL;
     MacroParam *params = read_macro_params(&tok, tok->next, &va_args_name);
-    Macro *m = add_macro(name, false, copy_line(rest, tok));
+    //Macro *m = add_macro(name, false, copy_line(rest, tok));
+    while (!tok->at_bol) {
+      if (equal(tok, "##")) {
+        if (cur == &head)
+          error_tok(tok, "%s: in read_macro_definition : '##' cannot appear at start of replacement list", PREPROCESS_C);
+        if (tok->next->at_bol)
+          error_tok(tok, "%s : in read_macro_definition : '##' cannot appear at end of replacement list", PREPROCESS_C);
+        cur = cur->next = copy_token(tok); // ##
+        cur = cur->next = copy_token(tok->next); // rhs
+        tok = tok->next->next;
+        continue;
+      }
+      cur = cur->next = copy_token(tok);
+      tok = tok->next;
+    }
+
+    cur->next = new_eof(tok);
+    *rest = tok;
+
+    Macro *m = add_macro(name, false, head.next);
     m->params = params;
     m->va_args_name = va_args_name;
 
@@ -476,7 +511,24 @@ static void read_macro_definition(Token **rest, Token *tok)
   else
   {
     // Object-like macro
-    add_macro(name, true, copy_line(rest, tok));
+        while (!tok->at_bol) {
+      if (equal(tok, "##")) {
+        if (cur == &head)
+          error_tok(tok, "%s: in read_macro_definition : '##' cannot appear at start of replacement list", PREPROCESS_C);
+        if (tok->next->at_bol)
+          error_tok(tok, "%s: in read_macro_definition : '##' cannot appear at end of replacement list", PREPROCESS_C);
+        *cur = *paste(cur, tok->next);
+        tok = tok->next->next;
+        continue;
+      }
+      cur = cur->next = copy_token(tok);
+      tok = tok->next;
+    }
+
+    cur->next = new_eof(tok);
+    *rest = tok;
+    add_macro(name, true, head.next);
+    //add_macro(name, true, copy_line(rest, tok));
   }
 
 
@@ -635,8 +687,13 @@ static Token *paste(Token *lhs, Token *rhs)
   char *buf = format("%.*s%.*s", lhs->len, lhs->loc, rhs->len, rhs->loc);
   // Tokenize the resulting string.
   Token *tok = tokenize(new_file(lhs->file->name, lhs->file->file_no, buf));
-  if (tok->next->kind != TK_EOF)
-    error_tok(lhs, "%s: in paste : pasting forms '%s', an invalid token", PREPROCESS_C, buf);
+  // if (tok->next->kind != TK_EOF)
+  //   error_tok(lhs, "%s: in paste : pasting forms '%s', an invalid token", PREPROCESS_C, buf);
+  if (tok->kind == TK_EOF || tok->next->kind != TK_EOF) {
+    error_tok(lhs, "%s: in paste : invalid preprocessing token '%s' produced by pasting "
+                   "'%.*s' and '%.*s'",  PREPROCESS_C, buf, lhs->len, lhs->loc, rhs->len,
+                   rhs->loc);
+    }
   return tok;
 }
 
@@ -649,10 +706,11 @@ static bool has_varargs(MacroArg *args)
 }
 
 // Replace func-like macro parameters with given arguments.
-static Token *subst(Token *tok, MacroArg *args)
+static Token *subst(Macro *m, MacroArg *args)
 {
   Token head = {};
   Token *cur = &head;
+  Token *tok = m->body;
 
   while (tok->kind != TK_EOF)
   {
@@ -690,18 +748,22 @@ static Token *subst(Token *tok, MacroArg *args)
 
     if (equal(tok, "##"))
     {
-      if (cur == &head)
-        error_tok(tok, "%s: in subst : '##' cannot appear at start of macro expansion", PREPROCESS_C);
+      // if (cur == &head)
+      //   error_tok(tok, "%s: in subst : '##' cannot appear at start of macro expansion", PREPROCESS_C);
 
-      if (tok->next->kind == TK_EOF)
-        error_tok(tok, "%s: in subst : '##' cannot appear at end of macro expansion", PREPROCESS_C);
+      // if (tok->next->kind == TK_EOF)
+      //   error_tok(tok, "%s: in subst : '##' cannot appear at end of macro expansion", PREPROCESS_C);
 
       MacroArg *arg = find_arg(args, tok->next);
       if (arg)
       {
         if (arg->tok->kind != TK_EOF)
         {
-          *cur = *paste(cur, arg->tok);
+          //*cur = *paste(cur, arg->tok);
+          if (cur == &head)
+            cur = cur->next = copy_token(arg->tok);
+          else
+            *cur = *paste(cur, arg->tok);
           for (Token *t = arg->tok->next; t->kind != TK_EOF; t = t->next)
             cur = cur->next = copy_token(t);
         }
@@ -831,18 +893,29 @@ static bool expand_macro(Token **rest, Token *tok)
   // as explained in the Dave Prossor's algorithm.
   Hideset *hs = hideset_intersection(macro_token->hideset, rparen->hideset);
   hs = hideset_union(hs, new_hideset(m->name));
-  Token *body = subst(m->body, args);
-  body = add_hideset(body, hs);
+  // Token *body = subst(m->body, args);
+  // body = add_hideset(body, hs);
   
-  for (Token *t = body; t->kind != TK_EOF; t = t->next)
-  {
-    t->origin = macro_token;
+  // for (Token *t = body; t->kind != TK_EOF; t = t->next)
+  // {
+  //   t->origin = macro_token;
 
-  }
-  *rest = append(body, tok->next);
-  //#issue 108 not sure why but this corrupts some tokens "#" that are not recognized starting at beginning of the line.
-  // (*rest)->at_bol = macro_token->at_bol;
+  // }
+  // *rest = append(body, tok->next);
+  // //#issue 108 not sure why but this corrupts some tokens "#" that are not recognized starting at beginning of the line.
+  // // (*rest)->at_bol = macro_token->at_bol;
   // (*rest)->has_space = macro_token->has_space;
+   if (m->body->kind != TK_EOF) { // If replacement list is not empty
+    Token *body = subst(m, args);
+    body = add_hideset(body, hs);
+    for (Token *t = body; t->kind != TK_EOF; t = t->next)
+      t->origin = macro_token;
+    *rest = append(body, tok->next);
+    (*rest)->at_bol = macro_token->at_bol;
+    (*rest)->has_space = macro_token->has_space;
+  } else {
+    *rest = tok->next;
+  }
   return true;
 }
 
@@ -1028,7 +1101,8 @@ static Token *preprocess2(Token *tok)
   {
 
     // // // If it is a macro, expand it.
-    if (expand_macro(&tok, tok)) 
+    //if (expand_macro(&tok, tok)) 
+    if (tok->kind == TK_IDENT && expand_macro(&tok, tok))
       continue;
 
     // Pass through if it is not a "#".
@@ -1085,7 +1159,10 @@ static Token *preprocess2(Token *tok)
       tok = tok->next;
       if (tok->kind != TK_IDENT)
         error_tok(tok, "%s: in preprocess2 : macro name must be an identifier", PREPROCESS_C);
-      undef_macro(strndup(tok->loc, tok->len));
+      Macro *m = find_macro(tok);
+      if (m)
+        undef_macro(m->name);  
+      //undef_macro(strndup(tok->loc, tok->len));
       tok = skip_line(tok->next);
       continue;
     }
@@ -1101,8 +1178,12 @@ static Token *preprocess2(Token *tok)
 
     if (equal(tok, "ifdef"))
     {
-      bool defined = find_macro(tok->next);
-      push_cond_incl(tok, defined);
+      if (tok->next->kind != TK_IDENT)
+        error_tok(tok->next, "%s: in preprocess2 : no macro name given in #ifdef directive", PREPROCESS_C);
+      // bool defined = find_macro(tok->next);
+      // push_cond_incl(tok, defined);
+      Macro *defined = find_macro(tok->next);
+      push_cond_incl(tok, !!defined);
       tok = skip_line(tok->next->next);
       if (!defined)
         tok = skip_cond_incl(tok);
@@ -1111,7 +1192,10 @@ static Token *preprocess2(Token *tok)
 
     if (equal(tok, "ifndef"))
     {
-      bool defined = find_macro(tok->next);
+      //bool defined = find_macro(tok->next);
+     if (tok->next->kind != TK_IDENT)
+        error_tok(tok->next, "%s: in preprocess2 : no macro name given in #ifndef directive", PREPROCESS_C);
+      Macro *defined = find_macro(tok->next);
       push_cond_incl(tok, !defined);
       tok = skip_line(tok->next->next);
       if (defined)
@@ -1350,7 +1434,7 @@ void init_macros(void)
 
   //====fixing ISS-147 defining the two macros for the linux platform
   define_macro("__ORDER_LITTLE_ENDIAN__", "1234");
-  define_macro("__ORDER_BIG_ENDIAN__", "5678");
+  define_macro("__ORDER_BIG_ENDIAN__", "4321");
   define_macro("__BYTE_ORDER__", "__ORDER_LITTLE_ENDIAN__");
   
 
@@ -1484,10 +1568,12 @@ Token *preprocess(Token *tok, bool isReadLine)
 
   if (cond_incl && !isReadLine)
     error_tok(cond_incl->tok, "%s: in preprocess : unterminated conditional directive", PREPROCESS_C);
+
   convert_pp_tokens(tok);
   //ISS-142 temp fix 
-  if (!opt_E)
+  if (!opt_E) {
     join_adjacent_string_literals(tok);
+  }
 
   
   for (Token *t = tok; t; t = t->next)
@@ -1509,7 +1595,8 @@ Token *preprocess3(Token *tok)
 
     if (m != NULL && m->body->len == 0)
     {
-      if (expand_macro(&tok, tok))
+      //if (expand_macro(&tok, tok))
+      if (tok->kind == TK_IDENT && expand_macro(&tok, tok))
         continue;
     }
 
