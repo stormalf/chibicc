@@ -70,6 +70,18 @@ or
     -dM Print macro definitions in -E mode instead of normal output
     chibicc [ -o <path> ] <file>
 
+## compile
+
+To compile chibicc with make :
+
+    make
+
+To compile chibicc with cmake you need to install boost library. Then you can compile it with cmake :
+
+    cmake -S . -B ./build  
+    cd build
+    make
+
 ## Examples
 
 Note that probably you need to define the include parameter and lib parameter to be able to execute these examples outside the chibicc directory. If you forgot you will have similar error message :
@@ -509,7 +521,7 @@ Example of diagram generated with -dotfile parameter :
 ## release notes
 
 
-1.0.22    Fixing ISS-149 some extended assembly not taken in account during libwebp compilation. Fixing ISS-156 fpie/pie/-fPIE not recognized by chibicc. Adding other parameters in ingored list. Fixing ISS-157 about union empty initializer like "union string_value lval = {}, rval = {};". Fixing ISS-158 during neovim compilation failure with not a struct nor a union. Fixing ISS-160 memcached compilation failed with IOV_MAX undefined (adding __GNU__ macro). Fixing ISS-161 trying to compile memcached failed with incorrect offset or not managed yet. Fixing ISS-163 during postgres compile failure withe "invalid pointer dereference". Fixing ISS-162 during postgres compile failure with __typeof not recognized. Adding macro __INTEL_COMPILER. Adding include path to gcc that has many includes needed for some projects (adding in chibicc/include some of them like emmintrin.h, omp.h...). Adding some builtin void functions like _builtin_ia32_emms. Fixing ISS-165 during postgres compile failure due to staticAssertDecl function. Fixing ISS-166 during postgres compile segmentation fault (caused by VLA type in sizeof function). Fixing ISS-167 during postgres compile failure with bad register. Adding _Static_Assert definition but only to avoid issue during linkage with undefined _Static_Assert during postgres compilation. Fixing ISS-168 during postgres compile failure with expected an expression due to incorrect previous fix(ISS-121). Adding by default to the linker "-allow-multiple-definition". Fixing issue with tgmath.h and ignoring .rsp files. Adding -dumpversion support provided by Urs Janssen.  Added Xcode SDK path (from MarcusJohnson91). Fixing issue on extract_path function that caused corrupt malloc (ISS-170). Adding -ignore-assert to ignore static assertions (not managed at compile time now). Merge pull request #64 from arbruijn/multiple-funFix function declarations with shared return type.  Fix assembler error on large files #119 by @rurban. Integrating many fixes from @n0tknowing.
+1.0.22    Fixing ISS-149 some extended assembly not taken in account during libwebp compilation. Fixing ISS-156 fpie/pie/-fPIE not recognized by chibicc. Adding other parameters in ingored list. Fixing ISS-157 about union empty initializer like "union string_value lval = {}, rval = {};". Fixing ISS-158 during neovim compilation failure with not a struct nor a union. Fixing ISS-160 memcached compilation failed with IOV_MAX undefined (adding __GNU__ macro). Fixing ISS-161 trying to compile memcached failed with incorrect offset or not managed yet. Fixing ISS-163 during postgres compile failure withe "invalid pointer dereference". Fixing ISS-162 during postgres compile failure with __typeof not recognized. Adding macro __INTEL_COMPILER. Adding include path to gcc that has many includes needed for some projects (adding in chibicc/include some of them like emmintrin.h, omp.h...). Adding some builtin void functions like _builtin_ia32_emms. Fixing ISS-165 during postgres compile failure due to staticAssertDecl function. Fixing ISS-166 during postgres compile segmentation fault (caused by VLA type in sizeof function). Fixing ISS-167 during postgres compile failure with bad register. Adding _Static_Assert definition but only to avoid issue during linkage with undefined _Static_Assert during postgres compilation. Fixing ISS-168 during postgres compile failure with expected an expression due to incorrect previous fix(ISS-121). Adding by default to the linker "-allow-multiple-definition". Fixing issue with tgmath.h and ignoring .rsp files. Adding -dumpversion support provided by Urs Janssen.  Added Xcode SDK path (from MarcusJohnson91). Fixing issue on extract_path function that caused corrupt malloc (ISS-170). Adding -ignore-assert to ignore static assertions (not managed at compile time now). Merge pull request #64 from arbruijn/multiple-funFix function declarations with shared return type.  Fix assembler error on large files #119 by @rurban. Integrating many fixes from @n0tknowing. Adding CMakeLists.txt and using BOOST library to generate chibicc (from @Seeingu).
 
 
 
