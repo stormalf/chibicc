@@ -1,6 +1,6 @@
 CC=gcc
 CFLAGS =-std=c11 -g -fno-common -Wall -Wno-switch 
-CFLAGS_DIAG=-dotfile
+CFLAGS_DIAG=-dotfile 
 OBJECT=chibicc
 OBJECTLIB=libchibicc
 SRCS=$(wildcard *.c)
@@ -53,9 +53,9 @@ test-stage2: $(TESTS:test/%=stage2/test/%)
 	for i in $^; do echo $$i; ./$$i || exit 1; echo; done
 	test/driver.sh ./stage2/$(OBJECT)
 
-projects-all: projects openssl nmap
+projects-all: projects openssl nmap curl vim
 
-projects: curl zlib util-linux nginx
+projects: zlib util-linux nginx
 
 
 curl:
@@ -68,13 +68,16 @@ nmap:
 	cd ../nmap && make clean && make
 
 openssl:
-	cd ../openssl && make clean && make && make test
+	cd ../openssl && make clean && make 
 
 util-linux:
 	cd ../util-linux && make clean && make && make check-programs && cd tests && ./run.sh
 
 nginx:
 	cd ../nginx && make clean && CC=chibicc CFLAGS=-fPIC ./auto/configure && make 
+
+vim:
+	cd ../vim && make clean && CC=chibicc CFLAGS=-fPIC ./configure && make && make test
 
 # Misc.
 
@@ -86,7 +89,7 @@ libchibicc.so: $(OBJS)
 	gcc $(CFLAGS) -o $@ $^ -shared
 
 clean:
-	rm -rf $(OBJECT) tmp*  *.ll $(TESTS) issues/*.s issues/*.exe issues/*.dot test/*.s test/*.exe stage2 diagram/*.png test/*.dot $(OBJECTLIB)
+	rm -rf $(OBJECT) tmp* $(TESTS) issues/*.s issues/*.exe issues/*.dot test/*.s test/*.exe stage2 diagram/*.png test/*.dot $(OBJECTLIB)
 	find * -type f '(' -name '*~' -o -name '*.o' ')' -exec rm {} ';'
 
 install:

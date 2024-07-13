@@ -44,6 +44,9 @@ or
         used to automate file dependency management
     -fpic or -fPIC Generate position-independent code (PIC)
     -fno-pic disables the generation of position-independent code with relative address references
+    -pie Create a dynamically linked position independent
+    -fpie Create a dynamically linked position independent
+    -fPIE Create a dynamically linked position independent
     -fcommon is the default if not specified, it's mainly useful to enable legacy code to link without errors
     -fno-common specifies that the compiler places uninitialized global variables in the BSS section of the object file.
     -static  pass to the linker to link a program statically
@@ -64,7 +67,20 @@ or
         which are needed by shared objects explicitly included in the link.
     -dumpmachine it's required by some projects returns x86_64-linux-gnu
     -dotfile generates a file with .dot extension that can be visualized using graphviz package
+    -dM Print macro definitions in -E mode instead of normal output
     chibicc [ -o <path> ] <file>
+
+## compile
+
+To compile chibicc with make :
+
+    make
+
+To compile chibicc with cmake you need to install boost library. Then you can compile it with cmake :
+
+    cmake -S . -B ./build  
+    cd build
+    make
 
 ## Examples
 
@@ -199,19 +215,48 @@ List of options ignored :
     "-std"
     "-ffreestanding"
     "-fno-omit-frame-pointer"
+    "-fomit-frame-pointer"
+    "-funwind-tables"
     "-fno-stack-protector"
     "-fno-strict-aliasing"
     "-m64"
     "-m32"
     "--whole-archive"
     "--no-whole-archive"
+    "-fsigned-char"
     "-Bsymbolic"
     "-z"
     "defs"
     "-flto"
+    "-flto=8"
     "-pedantic"
     "-nostdinc"
     "-mno-red-zone"
+    "-fvisibility=default"
+    "-Werror=invalid-command-line-argument"
+    "-Werror=unknown-warning-option"
+    "-Wsign-compare"
+    "-Wundef"
+    "-Wpointer-arith"
+    "-Wvolatile-register-var"
+    "-Wformat"
+    "-Wformat-security"
+    "-Wduplicated-branches"
+    "-Wduplicated-cond"
+    "-Wbad-function-cast"
+    "-Wwrite-strings"
+    "-Wlogical-op"
+    "-Wshadow=local"
+    "-Wmultistatement-macros"
+    "-fstack-protector"
+    "-fstack-protector-strong"
+    "-fstack-clash-protection"
+    "-fdiagnostics-show-option"
+    "-fasynchronous-unwind-tables"
+    "-fexceptions"
+    "-fsanitize=cfi"
+    "--print-search-dirs"
+    "-fdiagnostics-show-option"
     "-w"
 
 
@@ -345,6 +390,67 @@ vim: https://github.com/vim/vim.git
     skipped: 0    
 
 
+libwepb: https://github.com/webmproject/libwebp.git
+
+    CC=chibicc CFLAGS="-fpic" LDFLAGS="-fpic -lpng -ljpeg" cmake -S . -B ./build
+    cd build
+    cmake --build .
+    ~/libwebp/build$ ./img2webp -version
+    WebP Encoder version: 1.3.2
+    WebP Mux version: 1.3.2
+    libsharpyuv: 0.4.0
+    [no output file specified]   [0 frames, 0 bytes].
+
+
+memcached: https://github.com/memcached/memcached.git
+    
+    autoreconf -fi
+    CC=chibicc CFLAGS=-fpic LDFLAGS=-fpic ./configure
+    make
+    make test
+
+
+   
+cpython: git clone git@github.com:python/cpython.git
+        
+        CC=chibicc ./configure
+        make && make test
+        == Tests result: SUCCESS ==
+        
+        10 slowest tests:
+        - test_imaplib: 52.3 sec
+        - test_signal: 49.1 sec
+        - test.test_concurrent_futures.test_wait: 48.4 sec
+        - test.test_multiprocessing_forkserver.test_processes: 41.1 sec
+        - test.test_multiprocessing_spawn.test_processes: 40.1 sec
+        - test.test_multiprocessing_spawn.test_misc: 36.5 sec
+        - test_io: 33.8 sec
+        - test.test_gdb.test_pretty_print: 33.4 sec
+        - test_socket: 33.4 sec
+        - test_xmlrpc: 29.1 sec
+        
+        22 tests skipped:
+            test.test_asyncio.test_windows_events
+            test.test_asyncio.test_windows_utils test_bz2 test_dbm_gnu
+            test_dbm_ndbm test_devpoll test_idle test_ioctl test_kqueue
+            test_launcher test_msvcrt test_startfile test_tcl test_tkinter
+            test_ttk test_ttk_textonly test_turtle test_winapi
+            test_winconsoleio test_winreg test_winsound test_wmi
+        
+        2 tests skipped (resource denied):
+            test_peg_generator test_zipfile64
+        
+        448 tests OK.
+        
+        Total duration: 2 min 41 sec
+        Total tests: run=42,576 skipped=1,689
+        Total test files: run=470/472 skipped=22 resource_denied=2
+        Result: SUCCESS
+
+## meson
+
+to be able to use meson with chibicc (meson doesn't know chibicc compiler), I changed the detect.py file in /usr/lib/python3/dist-packages/mesonbuild/compilers/detect.py to add support for chibicc. After that I can now using meson for some projects that are configured to use it.
+
 ## Limits
 
 Some C projects doesn't compile for now. It helps to find some bugs and to try to fix them!
@@ -352,14 +458,34 @@ Some C projects doesn't compile for now. It helps to find some bugs and to try t
 VLC : https://github.com/videolan/vlc.git 
 
     ./bootstrap
-    CC=chibicc CFLAGS="-fPIC" DEFS="-DHAVE_CONFIG_H -DHAVE_ATTRIBUTE_PACKED -DVLC_USED -DVLC_API -DVLC_DEPRECATED -DVLC_MALLOC" ./configure --disable-lua --disable-a52 --disable-xcb --disable-qt --disable-po --disable-alsa --target=linux
+    CC=chibicc CFLAGS="-fPIC" DEFS="-DHAVE_CONFIG_H -DHAVE_ATTRIBUTE_PACKED -DVLC_USED -DVLC_API -DVLC_DEPRECATED -DVLC_MALLOC" LDFLAGS="-fPIC" ./configure  --disable-xcb --disable-qt --disable-a52
     make all
 
     VLC doesn't compile with chibicc some issues to fix later.
 
+lxc: https://github.com/lxc/lxc.git
+
+    CC=chibicc CFLAGS=-fpic LDFLAGS=-fpic meson build
+    cd build
+    meson compile
+    failed on lxc-attach compile for now
+
+
+postgres: https://github.com/postgres/postgres.git 
+
+    CC=chibicc CFLAGS="-fPIC" LDFLAGS="-fPIC" ./configure --host x86_64-linux-gnu
+    make
+    make check
+    Program received signal SIGSEGV, Segmentation fault.
+    #0  MemoryChunkSetHdrMask () at ../../../../src/include/utils/memutils_memorychunk.h:164
+    #1  0x0000000001f001b9 in AllocSetAlloc () at aset.c:885
+    the initdb command produced by chibicc failed with segmentation fault.
+
+
 ## TODO
 
 - trying to compile other C projects from source to see what is missing or which bug we have with chibicc.
+- Trying to find the root cause of segmentation fault with postgres initdb command.
 
 
 ## issues and pull requests fixed
@@ -396,11 +522,13 @@ Example of diagram generated with -dotfile parameter :
 ## release notes
 
 
-1.0.21    Fixing ISS-154 extended assembly   __asm__ __volatile__ ("rep; nop" ::: "memory"). 
-          Fixing ISS-156 STATIC_ASSERT(40 + 40 + 40 == sizeof(struct uv__io_uring_params)) causing issue (found during neovim compilation). Fixing temporary issue #40 about variable in parameter used for other parameter like issue40.c it causes other issue with VLC. 
+1.0.22    Fixing ISS-149 some extended assembly not taken in account during libwebp compilation. Fixing ISS-156 fpie/pie/-fPIE not recognized by chibicc. Adding other parameters in ignored list. Fixing ISS-157 about union empty initializer like "union string_value lval = {}, rval = {};". Fixing ISS-158 during neovim compilation failure with not a struct nor a union. Fixing ISS-160 memcached compilation failed with IOV_MAX undefined (adding __GNU__ macro). Fixing ISS-161 trying to compile memcached failed with incorrect offset or not managed yet. Fixing ISS-163 during postgres compile failure with "invalid pointer dereference". Fixing ISS-162 during postgres compile failure with __typeof not recognized. Adding macro __INTEL_COMPILER. Adding include path to gcc that has many includes needed for some projects (adding in chibicc/include some of them like emmintrin.h, omp.h...). Adding some builtin void functions like _builtin_ia32_emms. Fixing ISS-165 during postgres compile failure due to staticAssertDecl function. Fixing ISS-166 during postgres compile segmentation fault (caused by VLA type in sizeof function). Fixing ISS-167 during postgres compile failure with bad register. Fixing ISS-168 during postgres compile failure with expected an expression due to incorrect previous fix(ISS-121). Adding by default to the linker "-allow-multiple-definition". Fixing issue with tgmath.h and ignoring .rsp files. Adding -dumpversion support provided by Urs Janssen.  Added Xcode SDK path (from MarcusJohnson91). Fixing issue on extract_path function that caused corrupt malloc (ISS-170). Adding -ignore-assert to ignore static assertions (not managed at compile time now). Merge pull request #64 from arbruijn/multiple-funFix function declarations with shared return type.  Fix assembler error on large files #119 by @rurban. Integrating many fixes from @n0tknowing. Adding CMakeLists.txt and using BOOST library to generate chibicc (from @Seeingu). Removing fix about old C style that causes other issue, it means that old C style doesn't compile anymore with chibicc.
+
+
 
 
 ## old release notes
 
 <https://github.com/stormalf/chibicc/blob/main/RELEASE_NOTES.md>
+
 

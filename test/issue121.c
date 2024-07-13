@@ -6,7 +6,13 @@
 #include <stdalign.h>
 
 // test
-
+typedef struct PodTag
+{
+   int i;
+   double d;
+   char c;
+} PodType;
+ 
 struct vcddev_s
 {
     char *psz_dev; /* vcd device name */
@@ -48,6 +54,8 @@ static_assert(alignof(atomic_uint) <= alignof(struct vlc_suuint),
 
 int main(void)
 {
+
+    printf("%llu\n", offsetof(PodType, c));
 
     return 0;
 }

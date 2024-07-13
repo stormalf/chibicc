@@ -1,9 +1,10 @@
 #include <stdio.h>
 #include <stdint.h>
+#include <stddef.h>
 
 #include <omp.h>
 
-//typedef __UINTPTR_TYPE__ omp_uintptr_t;
+typedef __UINTPTR_TYPE__ omp_uintptr_t;
 
 int main(int argc, char **argv) {
     int num_threads,tid;

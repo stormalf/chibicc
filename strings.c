@@ -2,6 +2,7 @@
 #define STRINGS_C "strings.c"
 
 void strarray_push(StringArray *arr, char *s) {
+
   if (!arr->data) {
     arr->data = calloc(8, sizeof(char *));
     arr->capacity = 8;
@@ -14,19 +15,22 @@ void strarray_push(StringArray *arr, char *s) {
       error("%s: in strarray_push reallocation of arr->data failed!", STRINGS_C);
     arr->data = tmp;
     arr->capacity *= 2;
-    for (int i = arr->len; i < arr->capacity; i++)
+    for (int i = arr->len; i < arr->capacity; i++) {
       arr->data[i] = NULL;
+    }
   }
 
   arr->data[arr->len++] = s;
 }
 
 // Takes a printf-style format string and returns a formatted string.
-char *format(char *fmt, ...) {
+char *format(const char *fmt, ...) {
   char *buf;
   size_t buflen;
   FILE *out = open_memstream(&buf, &buflen);
-
+  if (out == NULL)
+    error("%s: in strarray_push out is null", STRINGS_C);
+     
   va_list ap;
   va_start(ap, fmt);
   vfprintf(out, fmt, ap);

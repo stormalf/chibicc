@@ -88,6 +88,8 @@ unsigned short ushort_fn();
 char schar_fn();
 short sshort_fn();
 
+int multiple1(), multiple2();
+
 int add_all(int n, ...);
 
 typedef struct
