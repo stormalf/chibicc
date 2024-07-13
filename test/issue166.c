@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <stddef.h>
+#include <stdio.h>
 
 
 #define MAXIMUM_ALIGNOF 8
@@ -87,7 +88,8 @@ typedef struct PageHeaderData
 #define MaxHeapTuplesPerPage	\
 	((int) ((BLCKSZ - SizeOfPageHeaderData) / \
 			(MAXALIGN(SizeofHeapTupleHeader) + sizeof(ItemIdData))))
-
+// #define myvalue 190
+// #define MaxHeapTuplesPerPage myvalue + 100
 
 #define MAX_TUPLES_PER_PAGE  MaxHeapTuplesPerPage
 
@@ -113,11 +115,13 @@ heap_page_prune()
 {
 	PruneState	prstate;
 	memset(prstate.marked, 0, sizeof(prstate.marked));
-	printf("====%d\n", sizeof(prstate.marked));
+	printf("====%ld\n", sizeof(prstate.marked));
+	printf("====%d\n", MaxHeapTuplesPerPage + 1);
 
     return 0;
 }
 
 int main() {
+	heap_page_prune();
     return 0;
 }

@@ -4,7 +4,7 @@
 
 
 
-int main(void)
+int main()
 
 {
     int myarr[SIZE]  = { 11, 34, 0, 0, 0, 0, 0, 0, 0, 0};
