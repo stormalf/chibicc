@@ -134,11 +134,16 @@ Type *array_of(Type *base, int len)
 
 Type *vla_of(Type *base, Node *len)
 {
+
   Type *ty = new_type(TY_VLA, 8, 8);
   ty->base = base;
   ty->vla_len = len;
   return ty;
+
 }
+
+
+
 
 Type *enum_type(void)
 {
@@ -153,8 +158,14 @@ Type *struct_type(void)
 static Type *get_common_type(Type *ty1, Type *ty2)
 {
 
-  if (ty1->base)
+  //======ISS-158 trying to fix issue with "parse.c: in struct_ref : not a struct nor a union" when in a macro definition we have (size_t)-1 ? NULL : (n) - 1
+  //assuming that if one is void it returns the second type that could be void also or different type.
+  if (ty1->base) {
+    if (ty1->base->kind == TY_VOID)
+      if (ty2->base)
+        return pointer_to(ty2->base);  
     return pointer_to(ty1->base);
+  }
 
   if (ty1->kind == TY_FUNC)
     return pointer_to(ty1);
@@ -191,7 +202,6 @@ static Type *get_common_type(Type *ty1, Type *ty2)
 static void usual_arith_conv(Node **lhs, Node **rhs)
 {
   Type *ty = get_common_type((*lhs)->ty, (*rhs)->ty);
-  
   *lhs = new_cast(*lhs, ty);
   *rhs = new_cast(*rhs, ty);
   
@@ -266,6 +276,9 @@ void add_type(Node *node)
     node->ty = node->lhs->ty;
     return;
   case ND_VAR:
+      if (!node->var) {
+        error_tok(node->tok, "%s %d %d variable undefined ", TYPE_C, __LINE__, node->kind);
+      }
   case ND_VLA_PTR:
     node->ty = node->var->ty;
     return;
@@ -298,14 +311,19 @@ void add_type(Node *node)
     return;
   }
   case ND_DEREF:
-    if (!node->lhs->ty->base)
-      error_tok(node->tok, "%s invalid pointer dereference", TYPE_C);
+    if (!node->lhs->ty->base) {
+      //ISS-163 trying to fix issue with pointer dereference
+      if (node->lhs->ty)
+        node->lhs->ty->base = node->lhs->ty;
+      else
+        error_tok(node->tok, "%s invalid pointer dereference", TYPE_C);
+    }
     //======ISS-154 trying to fix deferencing pointer issue when we have a macro that can return a pointer or null  (self) ? NULL      
+    //printf("======%d %d %s\n", node->lhs->ty->base->kind, node->lhs->ty->kind, node->lhs->tok->loc);
     if (node->lhs->ty->base->kind == TY_VOID && node->lhs->ty->kind == TY_VOID)
       error_tok(node->tok, "%s dereferencing a void pointer", TYPE_C);
     if (node->lhs->ty->base->kind == TY_VOID)
       node->lhs->ty->base = node->lhs->ty;
-
     node->ty = node->lhs->ty->base;
     return;
   case ND_STMT_EXPR:

@@ -9,12 +9,17 @@ typedef enum
   FILE_OBJ,
   FILE_AR,
   FILE_DSO,
+  FILE_RSP,
 } FileType;
 
 StringArray include_paths;
 bool opt_fcommon = true;
 bool opt_fbuiltin = true;
 bool opt_fpic;
+bool opt_fpie;
+bool opt_shared;
+
+bool opt_ignore_assert = false;
 
 static FileType opt_x;
 static StringArray opt_include;
@@ -28,7 +33,6 @@ static bool opt_c;
 static bool opt_cc1;
 static bool opt_hash_hash_hash;
 static bool opt_static;
-static bool opt_shared;
 static bool isCc1input = false;
 static bool isCc1output = false;
 static char *opt_MF;
@@ -106,8 +110,12 @@ static void add_default_include_paths(char *argv0)
   strarray_push(&include_paths, "/usr/local/include/x86_64-linux-gnu/chibicc");
   strarray_push(&include_paths, "/usr/include/x86_64-linux-gnu");
   strarray_push(&include_paths, "/usr/include");
+  strarray_push(&include_paths, "/usr/lib/gcc/x86_64-linux-gnu/11/include");
   //strarray_push(&include_paths, "/usr/include/chibicc/include");
-  
+  #if defined(__APPLE__) && defined(__MACH__)
+  strarray_push(&include_paths, "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include");
+  define_macro("__GNUC__", "5"); // for MacOS SDK compatibility
+  #endif
 
   // Keep a copy of the standard include paths for -MMD option.
   for (int i = 0; i < include_paths.len; i++)
@@ -208,7 +216,7 @@ static void parse_args(int argc, char **argv)
       continue;
     }
 
-    if (!strcmp(argv[i], "--version") || !strcmp(argv[i], "-v"))
+    if (!strcmp(argv[i], "--version") || !strcmp(argv[i], "-v")  || !strcmp(argv[i], "-V") || !strcmp(argv[i], "-version"))
     {
       printVersion(0);
       continue;
@@ -220,6 +228,29 @@ static void parse_args(int argc, char **argv)
       check_parms_length(opt_linker);
       continue;
     }
+
+    if (startsWith(argv[i], "-march="))
+    {
+      continue;
+    }
+
+    if (startsWith(argv[i], "-A"))
+    {
+      continue;
+    }
+
+
+    if (startsWith(argv[i], "-flto"))
+    {
+      continue;
+    }
+
+    if (startsWith(argv[i], "-mtune="))
+    {
+      continue;
+    }
+
+
     if (!strcmp(argv[i], "-o"))
     {
       opt_o = argv[++i];
@@ -268,6 +299,13 @@ static void parse_args(int argc, char **argv)
       opt_fcommon = false;
       continue;
     }
+
+    if (!strcmp(argv[i], "-ignore-assert"))
+    {
+      opt_ignore_assert = true;
+      continue;
+    }
+
 
     if (!strcmp(argv[i], "-fno-builtin"))
     {
@@ -379,17 +417,6 @@ static void parse_args(int argc, char **argv)
       continue;
     }
 
-    // not sure what this linker option means
-    // if (!strcmp(argv[i], "-z"))
-    // {
-    //   char *tmp = argv[++i];
-    //   printf("%s\n", argv[i]);
-    //   check_parms_length(tmp);
-    //   strarray_push(&ld_extra_args, "-z");
-    //   strarray_push(&ld_extra_args, tmp);
-    //   // strarray_push(&ld_extra_args, argv[++i]);
-    //   continue;
-    // }
 
     // not sure why the --version-script is interpreted as -version-script ?
     if (!strcmp(argv[i], "-version-script") || !strcmp(argv[i], "--version-script"))
@@ -474,6 +501,14 @@ static void parse_args(int argc, char **argv)
       continue;
     }
 
+    //trying to fix -fpie parameter =====ISS-156 forcing shared if -pie is received
+    if (!strcmp(argv[i], "-fpie") || !strcmp(argv[i], "-fPIE") || !strcmp(argv[i], "-pie"))
+    {
+      opt_fpie = true;
+      strarray_push(&ld_extra_args, "-pie");
+      continue;
+    }
+
     if (!strcmp(argv[i], "-fno-pic"))
     {
       opt_fpic = false;
@@ -515,6 +550,7 @@ static void parse_args(int argc, char **argv)
     if (!strcmp(argv[i], "-shared"))
     {
       opt_shared = true;
+      opt_fpic = true;
       strarray_push(&ld_extra_args, "-shared");
       continue;
     }
@@ -557,6 +593,13 @@ static void parse_args(int argc, char **argv)
       exit(0);
     }
 
+    if (!strcmp(argv[i], "-dumpversion"))
+    {
+      dump_version();
+      exit(0);
+    }
+
+
     //-soname create a symbolic link before calling the linker like in gcc -Wl,-soname,libcurl.so.4 -o libcurl.so.4.8.0
     if (!strcmp(argv[i], "-soname"))
     {
@@ -584,8 +627,6 @@ static void parse_args(int argc, char **argv)
         !strncmp(argv[i], "-W", 2) ||
         !strncmp(argv[i], "-g", 2) ||
         !strncmp(argv[i], "-P", 2) || 
-        !strncmp(argv[i], "-std=", 5) ||
-        !strncmp(argv[i], "-std", 4) ||
         !strcmp(argv[i], "-ffreestanding") ||
         !strcmp(argv[i], "-fno-omit-frame-pointer") ||
         !strcmp(argv[i], "-fomit-frame-pointer") ||   
@@ -600,14 +641,45 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-Bsymbolic") ||
         !strcmp(argv[i], "-z") ||
         !strcmp(argv[i], "defs") ||
-        !strcmp(argv[i], "-flto") ||
-        !strcmp(argv[i], "-flto=8") ||
         !strcmp(argv[i], "-pedantic") ||
         !strcmp(argv[i], "-nostdinc") ||
         !strcmp(argv[i], "-mno-red-zone") ||
         !strcmp(argv[i], "-fvisibility=default") ||
+        !strcmp(argv[i], "-Werror=invalid-command-line-argument") ||
+        !strcmp(argv[i], "-Werror=unknown-warning-option") ||
+        !strcmp(argv[i], "-Wsign-compare") ||
+        !strcmp(argv[i], "-Wundef") ||
+        !strcmp(argv[i], "-Wpointer-arith") ||
+        !strcmp(argv[i], "-Wvolatile-register-var") ||
+        !strcmp(argv[i], "-Wformat") ||
+        !strcmp(argv[i], "-Wformat-security") ||
+        !strcmp(argv[i], "-Wduplicated-branches") ||
+        !strcmp(argv[i], "-Wduplicated-cond") ||
+        !strcmp(argv[i], "-Wbad-function-cast") ||
+        !strcmp(argv[i], "-Wwrite-strings") || 
+        !strcmp(argv[i], "-Wlogical-op") || 
+        !strcmp(argv[i], "-Wshadow=local") || 
+        !strcmp(argv[i], "-Wmultistatement-macros") || 
+        !strcmp(argv[i], "-fstack-protector") || 
+        !strcmp(argv[i], "-fstack-protector-strong") || 
+        !strcmp(argv[i], "-fstack-clash-protection") || 
+        !strcmp(argv[i], "-fdiagnostics-show-option") || 
+        !strcmp(argv[i], "-fasynchronous-unwind-tables") || 
+        !strcmp(argv[i], "-fexceptions") || 
+        !strcmp(argv[i], "-fsanitize=cfi") || 
+        !strcmp(argv[i], "--print-search-dirs") || 
+        !strcmp(argv[i], "-fdiagnostics-show-option") || 
+        !strcmp(argv[i], "-Xc") ||
+        !strcmp(argv[i], "-Aa") ||
+        !strcmp(argv[i], "-rdynamic") ||        
         !strcmp(argv[i], "-w"))
       continue;
+
+    if (startsWith(argv[i], "-std"))
+    {
+      continue;
+    }
+
 
     if (argv[i][0] == '-' && argv[i][1] != '\0')
       error("%s in parse_args unknown argument: %s", MAIN_C, argv[i]);
@@ -651,23 +723,28 @@ char *extract_filename(char *tmpl)
   return format("%s", filename);
 }
 
-// return path without filename example : ./test/hello.c returns ./test
-char *extract_path(char *tmpl, char *basename)
+char * extract_path(char* tmpl)
 {
-  int total_length = strlen(tmpl);
-  int basename_length = strlen(basename);
-  int length = total_length - basename_length + 1;
-  char pathonly[length];
-  memset(pathonly, 0, sizeof(pathonly));
-  strncpy(pathonly, tmpl, sizeof(pathonly) - 1);
-  return format("%s", pathonly);
+    char* parent = calloc(1, sizeof(char) * 300);
+    int parentLen;
+    char* last = strrchr(tmpl, '/');
+
+    if (last != NULL) {
+
+        parentLen = strlen(tmpl) - strlen(last + 1);
+        if (parentLen > 300)
+          error("%s : no enough size for parent in getParent function %d expected ", MAIN_C, parentLen);
+        strncpy(parent, tmpl, parentLen);
+    } 
+
+return parent;
 }
+
 
 // Replace file extension
 char *replace_extn(char *tmpl, char *extn)
 {
   char *filename = extract_filename(tmpl);
-  // char *filename = basename(strdup(tmpl));
   char *dot = strrchr(filename, '.');
   if (dot)
     *dot = '\0';
@@ -811,9 +888,9 @@ static void print_dependencies(void)
     if (opt_o != NULL)
     {
       char *fullpath;
-      char *filename;
-      filename = extract_filename(opt_o);
-      fullpath = extract_path(opt_o, filename);
+      //char *filename;
+      //filename = extract_filename(opt_o);
+      fullpath = extract_path(opt_o);
       strncat(fullpath, path, strlen(path));
       path = fullpath;
     }
@@ -902,6 +979,7 @@ static void cc1(void)
   tok = append_tokens(tok, tok2);
   tok = preprocess(tok, isReadLine);
 
+
   // If -M or -MD are given, print file dependencies.
   if (opt_M || opt_MD)
   {
@@ -955,6 +1033,13 @@ void dump_machine(void)
 {
   fprintf(stdout, DEFAULT_TARGET_MACHINE "\n");
 }
+
+void dump_version(void)
+{
+  fprintf(stdout, VERSION "\n");
+}
+
+
 
 static char *find_file(char *pattern)
 {
@@ -1017,6 +1102,10 @@ static void run_linker(StringArray *inputs, char *output)
   strarray_push(&arr, output);
   strarray_push(&arr, "-m");
   strarray_push(&arr, "elf_x86_64");
+  strarray_push(&arr, "-allow-multiple-definition");
+  //enabling verbose mode for linker in case of debug
+  if (isDebug)
+    strarray_push(&arr, "--verbose=1");
 
   char *libpath = find_libpath();
   char *gcc_libpath = find_gcc_libpath();
@@ -1026,11 +1115,20 @@ static void run_linker(StringArray *inputs, char *output)
     strarray_push(&arr, format("%s/crti.o", libpath));
     strarray_push(&arr, format("%s/crtbeginS.o", gcc_libpath));
   }
+  //trying to fix ====ISS-156 fpie parameter
+  else if (opt_fpie) {
+    strarray_push(&arr, format("%s/Scrt1.o", libpath));
+    strarray_push(&arr, format("%s/crti.o", libpath));
+    strarray_push(&arr, format("%s/crtbeginS.o", gcc_libpath));
+    strarray_push(&arr, format("%s/crtendS.o", gcc_libpath));
+
+  }
   else
   {
     strarray_push(&arr, format("%s/crt1.o", libpath));
     strarray_push(&arr, format("%s/crti.o", libpath));
     strarray_push(&arr, format("%s/crtbegin.o", gcc_libpath));
+    
   }
   strarray_push(&arr, "-L.");
   strarray_push(&arr, format("-L%s", gcc_libpath));
@@ -1038,15 +1136,19 @@ static void run_linker(StringArray *inputs, char *output)
   strarray_push(&arr, "-L/usr/lib64");
   strarray_push(&arr, "-L/lib64");
   strarray_push(&arr, "-L/usr/lib/x86_64-linux-gnu");
+  strarray_push(&arr, "-L/lib/x86_64-linux-gnu");
   strarray_push(&arr, "-L/usr/lib/x86_64-pc-linux-gnu");
   strarray_push(&arr, "-L/usr/lib/x86_64-redhat-linux");
   strarray_push(&arr, "-L/usr/lib");
   strarray_push(&arr, "-L/lib");
+  //strarray_push(&arr, "-L/usr/lib/gcc/x86_64-linux-gnu/11/x86_64-linux-gnu");
+
 
   if (!opt_static)
   {
     strarray_push(&arr, "-dynamic-linker");
     strarray_push(&arr, "/lib64/ld-linux-x86-64.so.2");
+
   }
 
   for (int i = 0; i < ld_extra_args.len; i++) {
@@ -1067,18 +1169,18 @@ static void run_linker(StringArray *inputs, char *output)
     strarray_push(&arr, "-lc");
     strarray_push(&arr, "--end-group");
   }
-  else
+  else 
   {
     strarray_push(&arr, "-lc");
     strarray_push(&arr, "-lgcc");
     strarray_push(&arr, "--as-needed");
     strarray_push(&arr, "-lgcc_s");
-    strarray_push(&arr, "--no-as-needed");
+    //strarray_push(&arr, "--no-as-needed");
   }
 
   if (opt_shared)
     strarray_push(&arr, format("%s/crtendS.o", gcc_libpath));
-  else
+  else if(!opt_fpie)
     strarray_push(&arr, format("%s/crtend.o", gcc_libpath));
 
   strarray_push(&arr, format("%s/crtn.o", libpath));
@@ -1100,10 +1202,13 @@ static FileType get_file_type(char *filename)
     return FILE_OBJ;
   if (endswith(filename, ".c"))
     return FILE_C;
-  if (endswith(filename, ".s"))
+  if (endswith(filename, ".s") || endswith(filename, ".S") ||
+      endswith(filename, ".asm"))
     return FILE_ASM;
   if (endswith(filename, ".so.4"))
     return FILE_DSO;
+  if (endswith(filename, ".rsp"))
+    return FILE_RSP;
 
   if (opt_x != FILE_NONE)
     return opt_x;
@@ -1132,7 +1237,7 @@ int main(int argc, char **argv)
 
   // init_macros can call tokenize functions moving here to be able to print debug values
   init_macros();
-
+  
   if (opt_cc1 && !isCc1input)
   {
     error("%s : in main with -cc1 parameter -cc1-input is mandatory!", MAIN_C);
@@ -1191,11 +1296,16 @@ int main(int argc, char **argv)
       continue;
     }
 
-    // Handle .s
+    // Handle .s, -S, .asm
     if (type == FILE_ASM)
     {
       if (!opt_S)
         assemble(input, output);
+      continue;
+    }
+
+    if (type == FILE_RSP)
+    {
       continue;
     }
 
@@ -1245,3 +1355,14 @@ int main(int argc, char **argv)
   return 0;
 }
 
+
+bool startsWith(const char *restrict string, const char *restrict prefix)
+{
+    while(*prefix)
+    {
+        if(*prefix++ != *string++)
+            return 0;
+    }
+
+    return 1;
+}

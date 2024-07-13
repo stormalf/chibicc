@@ -28,7 +28,7 @@ void error(char *fmt, ...)
 //
 // foo.c:10: x = y + 1;
 //               ^ <error message here>
-static void verror_at(char *filename, char *input, int line_no,
+static void verror_at(char *filename, char *input, unsigned int line_no,
                       char *loc, char *fmt, va_list ap)
 {
   // Find a line containing `loc`.
@@ -41,7 +41,7 @@ static void verror_at(char *filename, char *input, int line_no,
     end++;
 
   // Print out the line.
-  int indent = fprintf(stderr, "%s:%d: ", filename, line_no);
+  int indent = fprintf(stderr, "%s:%u: ", filename, line_no);
   fprintf(stderr, "%.*s\n", (int)(end - line), line);
 
   // Show the error message.
@@ -55,7 +55,7 @@ static void verror_at(char *filename, char *input, int line_no,
 
 void error_at(char *loc, char *fmt, ...)
 {
-  int line_no = 1;
+  unsigned int line_no = 1;
   for (char *p = current_file->contents; p < loc; p++)
     if (*p == '\n')
       line_no++;
@@ -87,14 +87,15 @@ void warn_tok(Token *tok, char *fmt, ...)
 // Consumes the current token if it matches `op`.
 bool equal(Token *tok, char *op)
 {
-  return strncmp(tok->loc, op, tok->len) == 0 && op[tok->len] == '\0';
+  //return strncmp(tok->loc, op, tok->len) == 0 && op[tok->len] == '\0';
+  return tok->len == strlen(op) && strncmp(tok->loc, op, tok->len) == 0 && op[tok->len] == '\0';
 }
 
 // Ensure that the current token is `op`.
 Token *skip(Token *tok, char *op, Context *ctx)
 {
   if (!equal(tok, op))
-    error_tok(tok, "%s %s %s %d: in skip : expected '%s'", TOKENIZE_C, ctx->filename, ctx->funcname, ctx->line_no, op );
+    error_tok(tok, "%s %s %s %u: in skip : expected '%s'", TOKENIZE_C, ctx->filename, ctx->funcname, ctx->line_no, op );
   return tok->next;
 }
 
@@ -255,6 +256,7 @@ static bool is_keyword(Token *tok)
         "__thread",
         "_Atomic",
         "__attribute__",
+        "__label__",
     };
 
     for (int i = 0; i < sizeof(kw) / sizeof(*kw); i++)
@@ -611,7 +613,7 @@ void convert_pp_tokens(Token *tok)
 static void add_line_numbers(Token *tok)
 {
   char *p = current_file->contents;
-  int n = 1;
+  unsigned int n = 1;
 
   do
   {
@@ -656,7 +658,8 @@ Token *tokenize(File *file)
     if (startswith(p, "//"))
     {
       p += 2;
-      while (*p != '\n')
+      //while (*p != '\n')
+      while (*p && *p != '\n')
         p++;
       has_space = true;
       continue;
@@ -873,7 +876,7 @@ File **get_input_files(void)
   return input_files;
 }
 
-File *new_file(char *name, int file_no, char *contents)
+File *new_file(char *name, unsigned int file_no, char *contents)
 {
   File *file = calloc(1, sizeof(File));
   if (file == NULL)
@@ -1022,7 +1025,7 @@ Token *tokenize_file(char *path)
   convert_universal_chars(p);
 
   // Save the filename for assembler .file directive.
-  static int file_no;
+  static unsigned int file_no;
   File *file = new_file(path, file_no + 1, p);
 
   // Save the filename for assembler .file directive.
