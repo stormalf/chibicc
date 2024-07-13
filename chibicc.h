@@ -17,6 +17,7 @@
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
+#include <math.h>
 
 
 #ifndef __has_attribute
@@ -31,8 +32,8 @@
 #endif
 
 #define PRODUCT "chibicc"
-#define VERSION "1.0.21"
-#define MAXLEN 101
+#define VERSION "1.0.22"
+#define MAXLEN 501
 #define DEFAULT_TARGET_MACHINE "x86_64-linux-gnu"
 
 #define HELP PRODUCT " is a C compiler based on " PRODUCT " created by Rui Ueyama.\n \
@@ -66,6 +67,9 @@ this " PRODUCT " contains only some differences for now like new parameters\n"
     used to automate file dependency management\n \
 -fpic or -fPIC Generate position-independent code (PIC)\n \
 -fno-pic disables the generation of position-independent code with relative address references\n \
+-pie Create a dynamically linked position independent \n \
+-fpie Create a dynamically linked position independent\n \
+-fPIE Create a dynamically linked position independent\n \
 -fcommon is the default if not specified, it's mainly useful to enable legacy code to link without errors\n \
 -fno-common specifies that the compiler places uninitialized global variables in the BSS section of the object file.\n \
 -static  pass to the linker to link a program statically\n \
@@ -86,6 +90,8 @@ this " PRODUCT " contains only some differences for now like new parameters\n"
     which are needed by shared objects explicitly included in the link. \n \
 -dumpmachine it's required by some projects returns x86_64-linux-gnu\n \
 -dotfile generates a file with .dot extension that can be visualized using graphviz package \n \
+-dM Print macro definitions in -E mode instead of normal output\n \
+-ignore-assert  ingore static_assert and StaticAssertDecl functions if omit, the static assertions are not omitted \
 chibicc [ -o <path> ] <file>\n"
 
 typedef struct Type Type;
@@ -116,7 +122,7 @@ typedef struct
 } StringArray;
 
 void strarray_push(StringArray *arr, char *s);
-char *format(char *fmt, ...) __attribute__((format(printf, 1, 2)));
+char *format(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 
 //
 // tokenize.c
@@ -137,7 +143,7 @@ typedef enum
 typedef struct
 {
   char *name;
-  int file_no;
+  unsigned int file_no;
   char *contents;
 
   // For #line directive
@@ -177,7 +183,7 @@ Token *skip(Token *tok, char *op, Context *ctx);
 bool consume(Token **rest, Token *tok, char *str);
 void convert_pp_tokens(Token *tok);
 File **get_input_files(void);
-File *new_file(char *name, int file_no, char *contents);
+File *new_file(char *name, unsigned int file_no, char *contents);
 Token *tokenize_string_literal(Token *tok, Type *basety);
 Token *tokenize(File *file);
 Token *tokenize_file(char *filename);
@@ -196,6 +202,7 @@ void define_macro(char *name, char *buf);
 void undef_macro(char *name);
 Token *preprocess(Token *tok, bool isReadLine);
 Token *preprocess3(Token *tok);
+
 
 //
 // parse.c
@@ -309,7 +316,8 @@ typedef enum
 } NodeKind;
 
 // AST node type
-struct Node
+struct 
+Node
 {
   NodeKind kind; // Node kind
   Node *next;    // Next node
@@ -393,6 +401,7 @@ int64_t const_expr(Token **rest, Token *tok);
 Obj *parse(Token *tok);
 VarScope *find_var(Token *tok);
 Obj *find_func(char *name);
+
 
 extern bool opt_fbuiltin;
 //
@@ -534,7 +543,7 @@ char *reg_di(int sz);
 char *reg_si(int sz);
 char *reg_r8w(int sz);
 char *reg_r9w(int sz);
-void assign_lvar_offsets_assembly(Obj *fn);
+void assign_lvar_offsets(Obj *prog);
 int add_register_used(char *regist);
 void clear_register_used();
 char *register32_to_64(char *regist);
@@ -588,9 +597,13 @@ void hashmap_test(void);
 
 bool file_exists(char *path);
 void dump_machine(void);
+void dump_version(void);
+bool startsWith(const char *restrict string, const char *restrict prefix);
 
 extern StringArray include_paths;
 extern bool opt_fpic;
+extern bool opt_fpie;
+extern bool opt_shared;
 extern bool opt_fcommon;
 extern char *base_file;
 extern char *dot_file;
@@ -600,8 +613,9 @@ extern FILE *dotf;
 extern FILE *f;
 extern bool isDotfile;
 extern bool isDebug;
+extern bool isPrintMacro;
 extern char *extract_filename(char *tmpl);
-extern char *extract_path(char *tmpl, char *basename);
+extern char *extract_path(char *tmpl);
 
 //
 // extended_asm.c

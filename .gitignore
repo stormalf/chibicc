@@ -3,8 +3,12 @@
 **/*.o
 **/*.s
 **/a.out
+**/*.exe
+.vscode/
 /tmp*
 /thirdparty
 /chibicc
 /test/*.exe
 /stage2
+/build
+/cmake-build-debug
