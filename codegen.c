@@ -239,6 +239,7 @@ static void gen_addr(Node *node)
       return;
     }
 
+
     if (opt_fpic)
     {
       // Thread-local variable

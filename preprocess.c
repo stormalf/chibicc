@@ -470,6 +470,9 @@ static MacroParam *read_macro_params(Token **rest, Token *tok, char **va_args_na
   return head.next;
 }
 
+
+
+
 static void read_macro_definition(Token **rest, Token *tok)
 {
   Token head = {};
@@ -853,7 +856,7 @@ static bool expand_macro(Token **rest, Token *tok)
     return false;
 
 
-
+  
   // Built-in dynamic macro application such as __LINE__
   if (m->handler)
   {
@@ -870,6 +873,7 @@ static bool expand_macro(Token **rest, Token *tok)
     for (Token *t = body; t->kind != TK_EOF; t = t->next)
     {
       t->origin = tok;
+
     }
     *rest = append(body, tok->next);
     //(*rest)->at_bol = tok->at_bol;
@@ -908,8 +912,9 @@ static bool expand_macro(Token **rest, Token *tok)
    if (m->body->kind != TK_EOF) { // If replacement list is not empty
     Token *body = subst(m, args);
     body = add_hideset(body, hs);
-    for (Token *t = body; t->kind != TK_EOF; t = t->next)
+    for (Token *t = body; t->kind != TK_EOF; t = t->next) {
       t->origin = macro_token;
+    }
     *rest = append(body, tok->next);
     (*rest)->at_bol = macro_token->at_bol;
     (*rest)->has_space = macro_token->has_space;
@@ -1410,7 +1415,7 @@ void init_macros(void)
   define_macro("__alignof__", "_Alignof");
   define_macro("__amd64", "1");
   define_macro("__amd64__", "1");
-  define_macro("__chibicc__", "1");
+  define_macro("__CHIBICC__", "1");
   define_macro("__const__", "const");
   define_macro("__gnu_linux__", "1");
   define_macro("__inline__", "inline");
@@ -1429,14 +1434,10 @@ void init_macros(void)
   define_macro("linux", "1");
   define_macro("unix", "1");
   define_macro("nonnull", "1");
-  define_macro("__GNUC_PREREQ", "(2, 7)");
-  define_macro("__LONG_MAX__", "9223372036854775807L");
-
   //====fixing ISS-147 defining the two macros for the linux platform
   define_macro("__ORDER_LITTLE_ENDIAN__", "1234");
   define_macro("__ORDER_BIG_ENDIAN__", "4321");
   define_macro("__BYTE_ORDER__", "__ORDER_LITTLE_ENDIAN__");
-  
 
   add_builtin("__FILE__", file_macro);
   add_builtin("__LINE__", line_macro);

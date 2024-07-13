@@ -161,9 +161,6 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr);
 static Token *global_variable(Token *tok, Type *basety, VarAttr *attr);
 //static Type *func_params2(Token **rest, Token *tok, Type *ty);
 static void initializer3(Token **rest, Token *tok, Initializer *init);
-static Token *skip_excess_element2(Token *tok);
-static bool check_old_style(Token **rest, Token *tok, Type *ty);
-static bool is_expression(Token **rest, Token *tok, Type *ty);
 
 
 static int align_down(int n, int align)
@@ -743,6 +740,16 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
       ctx->filename = PARSE_C;
       ctx->funcname = "func_params";      
       ctx->line_no = __LINE__ + 1;
+      //fix for Static assert declaration ISS-165/ISS-166
+      if (!equal(tok, ",")) {
+        Node *node = expr(&tok, tok);
+        if (eval(node->lhs) == 0) { 
+          error("%s:  Static assert error : %s",  PARSE_C, node->rhs->tok->loc);
+        }
+        while(!equal(tok->next, ";"))
+          tok = tok->next;
+        break;
+    }
       tok = skip(tok, ",", ctx);
     }
 
@@ -757,17 +764,6 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
       break;
     }
 
-
-    //  provisory fix for static_assert outside a function caused issue with chibicc
-    //  issue #120 not sure why it works only inside a function, gcc compiles than even if static_assert is outside a function
-    // fixing also #121 with equal(tok, "(")
-    // but fix 121 caused other issues with other function and not only _Static_assert function
-    if (!opt_ignore_assert &&  (is_expression(rest, tok, ty) || equal(tok, "sizeof") || equal(tok, "_Alignof") ))
-     {
-       Node *node = expr(&tok, tok);
-       *rest = tok;
-       break;
-     }
 
     Type *ty2 = declspec(&tok, tok, NULL);
     Type *backup = ty2;
@@ -794,7 +790,6 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
       ty2 = pointer_to(ty2);
       ty2->name = name;
     }
-
 
     cur = cur->next = copy_type(ty2);
   }
@@ -838,6 +833,7 @@ static Type *array_dimensions(Token **rest, Token *tok, Type *ty)
   ctx->line_no = __LINE__ + 1;
   tok = skip(tok, "]", ctx);
   ty = type_suffix(rest, tok, ty);
+
   if (ty->kind == TY_VLA || !is_const_expr(expr))
     return vla_of(ty, expr);
   return array_of(ty, eval(expr));
@@ -849,15 +845,6 @@ static Type *array_dimensions(Token **rest, Token *tok, Type *ty)
 static Type *type_suffix(Token **rest, Token *tok, Type *ty)
 {
 
-  bool is_old_style = false;
-  // fix issue =====#127 and issue =====#126 with old C style function
-  // fixing issue ISS-148
-  if (equal(tok, "(") && !is_typename(tok->next) && !ty)
-  {
-    is_old_style = check_old_style(rest, tok, ty);
-    if (is_old_style)
-      return func_params(rest, tok->next, ty);
-  }
 
   if (equal(tok, "("))
   {
@@ -2359,7 +2346,7 @@ static Node *stmt(Token **rest, Token *tok)
     return node;
   }
 
-  if (equal(tok, "asm") || equal(tok, "__asm__"))
+  if (equal(tok, "asm") || equal(tok, "__asm__")) 
     return asm_stmt(rest, tok);
 
   if (equal(tok, "goto"))
@@ -2522,6 +2509,7 @@ static int64_t eval(Node *node)
   return eval2(node, NULL);
 }
 
+
 // Evaluate a given node as a constant expression.
 //
 // A constant expression is either just a number or ptr+n where ptr
@@ -2612,17 +2600,22 @@ static int64_t eval2(Node *node, char ***label)
     *label = &node->unique_label;
     return 0;
   case ND_MEMBER:
-    if (!label)
+    
+    if (!label) {
       error_tok(node->tok, "%s  %d: in eval2 : not a compile-time constant", PARSE_C, __LINE__ );
-    if (node->ty->kind != TY_ARRAY)
+    }
+    if (node->ty->kind != TY_ARRAY) {
       error_tok(node->tok, "%s: in eval2 : invalid initializer", PARSE_C);
+    }
     return eval_rval(node->lhs, label) + node->member->offset;
   case ND_VAR:
-    if (!label)
-      error_tok(node->tok, "%s %d: in eval2 : not a compile-time constant", PARSE_C, __LINE__);
+    if (!label) {
+      error_tok(node->tok, "%s %d : in eval2 : not a compile-time constant", PARSE_C, __LINE__);
+    }
       //trying to fix ======ISS-145 compiling util-linux failed with invalid initalizer2 
-    if (node->var->ty->kind != TY_ARRAY && node->var->ty->kind != TY_FUNC && node->var->ty->kind != TY_INT)
+    if (node->var->ty->kind != TY_ARRAY && node->var->ty->kind != TY_FUNC && node->var->ty->kind != TY_INT) {
       error_tok(node->tok, "%s %d: in eval2 : invalid initializer2", PARSE_C, __LINE__);
+    }
       //trying to fix ======ISS-145 compiling util-linux failed with invalid initalizer2 
     if (node->var->ty->kind == TY_INT)
       return 0;
@@ -2637,6 +2630,7 @@ static int64_t eval2(Node *node, char ***label)
   }
   error_tok(node->tok, "%s: in eval2 : not a compile-time constant3", PARSE_C);
 }
+
 
 static int64_t eval_rval(Node *node, char ***label)
 {
@@ -2678,7 +2672,8 @@ static bool is_const_expr(Node *node)
   case ND_LE:
   case ND_LOGAND:
   case ND_LOGOR:
-    return is_const_expr(node->lhs) && is_const_expr(node->rhs);
+      //trying to fix issue #166 about wrong VLA for complex constant expression in macro expanded
+      return is_const_expr(node->lhs) && (is_const_expr(node->rhs)|| eval(node));
   case ND_COND:
     if (!is_const_expr(node->cond))
       return false;
@@ -2693,7 +2688,7 @@ static bool is_const_expr(Node *node)
   case ND_NUM:
     return true;
   }
-
+  
   return false;
 }
 
@@ -3435,6 +3430,7 @@ static Token *attribute_list(Token *tok, Type *ty)
         ty->is_packed = true;
         continue;
       }
+
 
       if (consume(&tok, tok, "aligned"))
       {
@@ -4364,12 +4360,6 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
     fn->va_area = new_lvar("__va_area__", array_of(ty_char, 136), name_str);
   fn->alloca_bottom = new_lvar("__alloca_size__", pointer_to(ty_char), name_str);
 
-  // old c style with type parameters declared before the beginning of the function body "{"
-  // issue =====#126 we ignored the extra tokens they are dealt by func_params2 function
-  while (!equal(tok, "{"))
-  {
-    tok = skip_excess_element2(tok);
-  }
 
   ctx->filename = PARSE_C;
   ctx->funcname = "function";        
@@ -4655,84 +4645,3 @@ char *nodekind2str(NodeKind kind)
   }
 }
 
-
-// to skip old C style extra tokens
-// fix =====#126
-static Token *skip_excess_element2(Token *tok)
-{
-  if (!equal(tok, "{"))
-  {
-    tok = skip_excess_element2(tok->next);
-  }
-
-  return tok;
-}
-
-
-// this function checks if we have an old C style function declaration
-static bool check_old_style(Token **rest, Token *tok, Type *ty)
-{
-
-  if (equal(tok->next, ")"))
-    return false;
-
-  while (!equal(tok, "{"))
-  {
-
-    if (equal(tok, "..."))
-      break;
-
-    if (is_typename(tok))
-      break;
-
-    if (equal(tok, ")"))
-      if (!equal(tok->next, "{"))
-        return true;
-
-    tok = tok->next;
-  }
-  return false;
-}
-
-// returns true if it's an expression
-static bool is_expression(Token **rest, Token *tok, Type *ty)
-{
-  //fixing =====ISS-168
-  while (!equal(tok, "{") && !equal(tok, ";") && !equal(tok, "=") )
-  {
-    if (equal(tok, "&"))
-      return true;
-    
-    if (equal(tok, "=="))
-      return true;
-
-
-    if (equal(tok, "<"))
-      return true;
-
-    if (equal(tok, ">"))
-      return true;
-
-    if (equal(tok, "<<"))
-      return true;
-
-    if (equal(tok, ">>"))
-      return true;
-
-    if (equal(tok, "^"))
-      return true;
-
-    // if (equal(tok, "*") && tok->next->kind == TK_NUM)
-    //   return true;   
-
-    if (equal(tok, "<="))
-      return true;  
-
-    if (equal(tok, ">="))
-      return true;  
-
-    tok = tok->next;
-  }
-
-  return false;
-}

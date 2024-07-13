@@ -740,24 +740,11 @@ char * extract_path(char* tmpl)
 return parent;
 }
 
-// return path without filename example : ./test/hello.c returns ./test
-// char *extract_path(char *tmpl, char *basename)
-// {
-//   // int total_length = strlen(tmpl);
-//   // int basename_length = strlen(basename);
-//   // int length = total_length - basename_length + 1;
-//   // char *pathonly;
-//   // memset(pathonly, 0, length);
-//   // strncpy(pathonly, tmpl, length);
-//   // return format("%s", pathonly);
-//   return getParent(tmpl);
-// }
 
 // Replace file extension
 char *replace_extn(char *tmpl, char *extn)
 {
   char *filename = extract_filename(tmpl);
-  // char *filename = basename(strdup(tmpl));
   char *dot = strrchr(filename, '.');
   if (dot)
     *dot = '\0';
@@ -901,8 +888,8 @@ static void print_dependencies(void)
     if (opt_o != NULL)
     {
       char *fullpath;
-      char *filename;
-      filename = extract_filename(opt_o);
+      //char *filename;
+      //filename = extract_filename(opt_o);
       fullpath = extract_path(opt_o);
       strncat(fullpath, path, strlen(path));
       path = fullpath;
@@ -1134,6 +1121,7 @@ static void run_linker(StringArray *inputs, char *output)
     strarray_push(&arr, format("%s/crti.o", libpath));
     strarray_push(&arr, format("%s/crtbeginS.o", gcc_libpath));
     strarray_push(&arr, format("%s/crtendS.o", gcc_libpath));
+
   }
   else
   {
@@ -1160,6 +1148,7 @@ static void run_linker(StringArray *inputs, char *output)
   {
     strarray_push(&arr, "-dynamic-linker");
     strarray_push(&arr, "/lib64/ld-linux-x86-64.so.2");
+
   }
 
   for (int i = 0; i < ld_extra_args.len; i++) {
@@ -1186,7 +1175,7 @@ static void run_linker(StringArray *inputs, char *output)
     strarray_push(&arr, "-lgcc");
     strarray_push(&arr, "--as-needed");
     strarray_push(&arr, "-lgcc_s");
-    strarray_push(&arr, "--no-as-needed");
+    //strarray_push(&arr, "--no-as-needed");
   }
 
   if (opt_shared)

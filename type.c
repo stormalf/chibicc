@@ -134,11 +134,16 @@ Type *array_of(Type *base, int len)
 
 Type *vla_of(Type *base, Node *len)
 {
+
   Type *ty = new_type(TY_VLA, 8, 8);
   ty->base = base;
   ty->vla_len = len;
   return ty;
+
 }
+
+
+
 
 Type *enum_type(void)
 {

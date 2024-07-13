@@ -402,6 +402,7 @@ Obj *parse(Token *tok);
 VarScope *find_var(Token *tok);
 Obj *find_func(char *name);
 
+
 extern bool opt_fbuiltin;
 //
 // type.c
