@@ -10,3 +10,5 @@
 /chibicc
 /test/*.exe
 /stage2
+/build
+/cmake-build-debug

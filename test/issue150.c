@@ -5,7 +5,7 @@
 
 int main() {
 printf("%d\n", __ORDER_BIG_ENDIAN__ );
-ASSERT(5678, __ORDER_BIG_ENDIAN__);
+ASSERT(4321, __ORDER_BIG_ENDIAN__);
 return 0;
 
 }
