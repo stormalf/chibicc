@@ -68,7 +68,8 @@ static void popf(int reg)
 // align_to(5, 8) returns 8 and align_to(11, 8) returns 16.
 int align_to(int n, int align)
 {
-  return (n + align - 1) / align * align;
+  //fix suggested by @bztsrc on issue #124
+  return (int)((n + align - 1) / align) * align;
 }
 
 char *reg_dx(int sz)
