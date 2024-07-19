@@ -68,7 +68,7 @@ static void popf(int reg)
 // align_to(5, 8) returns 8 and align_to(11, 8) returns 16.
 int align_to(int n, int align)
 {
-  return (n + align - 1) / align * align;
+  return (int)((n + align - 1) / align) * align;
 }
 
 char *reg_dx(int sz)
@@ -336,7 +336,7 @@ static void gen_addr(Node *node)
 }
 
 // Load a value from where %rax is pointing to.
-static void load(Type *ty)
+static void load(chibiccType *ty)
 {
   switch (ty->kind)
   {
@@ -381,7 +381,7 @@ static void load(Type *ty)
 }
 
 // Store %rax to an address that the stack top is pointing to.
-static void store(Type *ty)
+static void store(chibiccType *ty)
 {
   pop("%rdi");
 
@@ -416,7 +416,7 @@ static void store(Type *ty)
     println("  mov %%rax, (%%rdi)");
 }
 
-static void cmp_zero(Type *ty)
+static void cmp_zero(chibiccType *ty)
 {
   switch (ty->kind)
   {
@@ -456,7 +456,7 @@ enum
   F80
 };
 
-static int getTypeId(Type *ty)
+static int getTypeId(chibiccType *ty)
 {
   switch (ty->kind)
   {
@@ -562,7 +562,7 @@ static char *cast_table[][11] = {
     {f80i8, f80i16, f80i32, f80i64, f80u8, f80u16, f80u32, f80u64, f80f32, f80f64, NULL}, // f80
 };
 
-static void cast(Type *from, Type *to)
+static void cast(chibiccType *from, chibiccType *to)
 {
   if (to->kind == TY_VOID)
     return;
@@ -593,7 +593,7 @@ static void cast(Type *from, Type *to)
 //
 // This function returns true if `ty` has only floating-point
 // members in its byte range [lo, hi).
-static bool has_flonum(Type *ty, int lo, int hi, int offset)
+static bool has_flonum(chibiccType *ty, int lo, int hi, int offset)
 {
   if (ty->kind == TY_STRUCT || ty->kind == TY_UNION)
   {
@@ -614,17 +614,17 @@ static bool has_flonum(Type *ty, int lo, int hi, int offset)
   return offset < lo || hi <= offset || ty->kind == TY_FLOAT || ty->kind == TY_DOUBLE;
 }
 
-static bool has_flonum1(Type *ty)
+static bool has_flonum1(chibiccType *ty)
 {
   return has_flonum(ty, 0, 8, 0);
 }
 
-static bool has_flonum2(Type *ty)
+static bool has_flonum2(chibiccType *ty)
 {
   return has_flonum(ty, 8, 16, 0);
 }
 
-static void push_struct(Type *ty)
+static void push_struct(chibiccType *ty)
 {
   int sz = align_to(ty->size, 8);
   println("  sub $%d, %%rsp", sz);
@@ -700,7 +700,7 @@ static int push_args(Node *node)
   // Load as many arguments to the registers as possible.
   for (Node *arg = node->args; arg; arg = arg->next)
   {
-    Type *ty = arg->ty;
+    chibiccType *ty = arg->ty;
 
     switch (ty->kind)
     {
@@ -772,7 +772,7 @@ static int push_args(Node *node)
 
 static void copy_ret_buffer(Obj *var)
 {
-  Type *ty = var->ty;
+  chibiccType *ty = var->ty;
   int gp = 0, fp = 0;
 
   if (has_flonum1(ty))
@@ -819,7 +819,7 @@ static void copy_ret_buffer(Obj *var)
 
 static void copy_struct_reg(void)
 {
-  Type *ty = current_fn->ty->return_ty;
+  chibiccType *ty = current_fn->ty->return_ty;
   int gp = 0, fp = 0;
 
   println("  mov %%rax, %%rdi");
@@ -870,7 +870,7 @@ static void copy_struct_reg(void)
 
 static void copy_struct_mem(void)
 {
-  Type *ty = current_fn->ty->return_ty;
+  chibiccType *ty = current_fn->ty->return_ty;
   Obj *var = current_fn->params;
 
   println("  mov %d(%%rbp), %%rdi", var->offset);
@@ -1153,7 +1153,7 @@ static void gen_expr(Node *node)
 
     for (Node *arg = node->args; arg; arg = arg->next)
     {
-      Type *ty = arg->ty;
+      chibiccType *ty = arg->ty;
 
       switch (ty->kind)
       {
@@ -1586,7 +1586,7 @@ static void gen_stmt(Node *node)
     if (node->lhs)
     {
       gen_expr(node->lhs);
-      Type *ty = node->lhs->ty;
+      chibiccType *ty = node->lhs->ty;
 
       switch (ty->kind)
       {
@@ -1799,7 +1799,7 @@ static void emit_text(Obj *prog)
       if (var->offset > 0)
         continue;
 
-      Type *ty = var->ty;
+      chibiccType *ty = var->ty;
 
       switch (ty->kind)
       {
@@ -1904,7 +1904,7 @@ static void print_offset(Obj *prog)
 //     // Assign offsets to pass-by-stack parameters.
 //     for (Obj *var = fn->params; var; var = var->next)
 //     {
-//       Type *ty = var->ty;
+//       chibiccType *ty = var->ty;
 
 //       switch (ty->kind)
 //       {
@@ -2001,7 +2001,7 @@ void assign_lvar_offsets(Obj *prog)
       if (var->offset) {
         continue;
       }
-      Type *ty = var->ty;
+      chibiccType *ty = var->ty;
 
       switch (ty->kind)
       {

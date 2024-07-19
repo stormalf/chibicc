@@ -417,7 +417,7 @@ static Token *read_utf16_string_literal(char *start, char *quote)
 //
 // UTF-32 is a fixed-width encoding for Unicode. Each code point is
 // encoded in 4 bytes.
-static Token *read_utf32_string_literal(char *start, char *quote, Type *ty)
+static Token *read_utf32_string_literal(char *start, char *quote, chibiccType *ty)
 {
   char *end = string_literal_end(quote + 1);
   uint32_t *buf = calloc(4, end - quote);
@@ -439,7 +439,7 @@ static Token *read_utf32_string_literal(char *start, char *quote, Type *ty)
   return tok;
 }
 
-static Token *read_char_literal(char *start, char *quote, Type *ty)
+static Token *read_char_literal(char *start, char *quote, chibiccType *ty)
 {
   char *p = quote + 1;
   if (*p == '\0')
@@ -521,7 +521,7 @@ static bool convert_pp_int(Token *tok)
     return false;
 
   // Infer a type.
-  Type *ty;
+  chibiccType *ty;
   if (base == 10)
   {
     if (l && u)
@@ -574,7 +574,7 @@ static void convert_pp_number(Token *tok)
   char *end;
   long double val = strtold(tok->loc, &end);
 
-  Type *ty;
+  chibiccType *ty;
   if (*end == 'f' || *end == 'F')
   {
     ty = ty_float;
@@ -627,7 +627,7 @@ static void add_line_numbers(Token *tok)
   } while (*p++);
 }
 
-Token *tokenize_string_literal(Token *tok, Type *basety)
+Token *tokenize_string_literal(Token *tok, chibiccType *basety)
 {
   Token *t;
   if (basety->size == 2)

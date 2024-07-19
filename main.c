@@ -1008,7 +1008,10 @@ static void cc1(void)
   size_t buflen;
   FILE *output_buf = open_memstream(&buf, &buflen);
 
-  // Traverse the AST to emit assembly.
+  // Traverse the AST to emit assembly.ls /tmp
+  FILE *outFile = fopen("/tmp/output.ll", "w");
+  generateLLVMIR(prog, outFile);
+  fclose(outFile);
   codegen(prog, output_buf);
   fclose(output_buf);
 

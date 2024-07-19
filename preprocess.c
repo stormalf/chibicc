@@ -1495,7 +1495,7 @@ static void join_adjacent_string_literals(Token *tok)
     }
 
     StringKind kind = getStringKind(tok1);
-    Type *basety = tok1->ty->base;
+    chibiccType *basety = tok1->ty->base;
 
     for (Token *t = tok1->next; t->kind == TK_STR; t = t->next)
     {

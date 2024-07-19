@@ -1,5 +1,6 @@
 {
   "files.associations": {
+    ".fantomasignore": "ignore",
     "*.COBOL*": "cobol",
     "*.COB*": "cobol",
     "*.COBCOPY*": "cobol",
@@ -102,7 +103,8 @@
     "cstdint": "c",
     "epoll.h": "c",
     "initializer_list": "c",
-    "utility": "c"
+    "utility": "c",
+    "functional": "cpp"
   },
   "C_Cpp.errorSquiggles": "disabled"
 }
