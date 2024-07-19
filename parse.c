@@ -54,7 +54,7 @@ typedef struct Initializer Initializer;
 struct Initializer
 {
   Initializer *next;
-  Type *ty;
+  chibiccType *ty;
   Token *tok;
   bool is_flexible;
 
@@ -111,17 +111,17 @@ static Obj *builtin_alloca;
 extern Context *ctx;
 
 static bool is_typename(Token *tok);
-static Type *declspec(Token **rest, Token *tok, VarAttr *attr);
-static Type *typename(Token **rest, Token *tok);
-static Type *enum_specifier(Token **rest, Token *tok);
-static Type *typeof_specifier(Token **rest, Token *tok);
-static Type *type_suffix(Token **rest, Token *tok, Type *ty);
-static Type *declarator(Token **rest, Token *tok, Type *ty);
-static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr);
+static chibiccType *declspec(Token **rest, Token *tok, VarAttr *attr);
+static chibiccType *typename(Token **rest, Token *tok);
+static chibiccType *enum_specifier(Token **rest, Token *tok);
+static chibiccType *typeof_specifier(Token **rest, Token *tok);
+static chibiccType *type_suffix(Token **rest, Token *tok, chibiccType *ty);
+static chibiccType *declarator(Token **rest, Token *tok, chibiccType *ty);
+static Node *declaration(Token **rest, Token *tok, chibiccType *basety, VarAttr *attr);
 static void array_initializer2(Token **rest, Token *tok, Initializer *init, int i);
 static void struct_initializer2(Token **rest, Token *tok, Initializer *init, Member *mem);
 static void initializer2(Token **rest, Token *tok, Initializer *init);
-static Initializer *initializer(Token **rest, Token *tok, Type *ty, Type **new_ty);
+static Initializer *initializer(Token **rest, Token *tok, chibiccType *ty, chibiccType **new_ty);
 static Node *lvar_initializer(Token **rest, Token *tok, Obj *var);
 static void gvar_initializer(Token **rest, Token *tok, Obj *var);
 static Node *compound_stmt(Token **rest, Token *tok);
@@ -148,18 +148,18 @@ static Node *new_add(Node *lhs, Node *rhs, Token *tok);
 static Node *new_sub(Node *lhs, Node *rhs, Token *tok);
 static Node *mul(Token **rest, Token *tok);
 static Node *cast(Token **rest, Token *tok);
-static Member *get_struct_member(Type *ty, Token *tok);
-static Type *struct_decl(Token **rest, Token *tok);
-static Type *union_decl(Token **rest, Token *tok);
+static Member *get_struct_member(chibiccType *ty, Token *tok);
+static chibiccType *struct_decl(Token **rest, Token *tok);
+static chibiccType *union_decl(Token **rest, Token *tok);
 static Node *postfix(Token **rest, Token *tok);
 static Node *funcall(Token **rest, Token *tok, Node *node);
 static Node *unary(Token **rest, Token *tok);
 static Node *primary(Token **rest, Token *tok);
-static Token *parse_typedef(Token *tok, Type *basety);
+static Token *parse_typedef(Token *tok, chibiccType *basety);
 static bool is_function(Token *tok);
-static Token *function(Token *tok, Type *basety, VarAttr *attr);
-static Token *global_variable(Token *tok, Type *basety, VarAttr *attr);
-//static Type *func_params2(Token **rest, Token *tok, Type *ty);
+static Token *function(Token *tok, chibiccType *basety, VarAttr *attr);
+static Token *global_variable(Token *tok, chibiccType *basety, VarAttr *attr);
+//static chibiccType *func_params2(Token **rest, Token *tok, chibiccType *ty);
 static void initializer3(Token **rest, Token *tok, Initializer *init);
 
 
@@ -202,11 +202,11 @@ VarScope *find_var(Token *tok)
   return NULL;
 }
 
-static Type *find_tag(Token *tok)
+static chibiccType *find_tag(Token *tok)
 {
   for (Scope *sc = scope; sc; sc = sc->next)
   {
-    Type *ty = hashmap_get2(&sc->tags, tok->loc, tok->len);
+    chibiccType *ty = hashmap_get2(&sc->tags, tok->loc, tok->len);
     if (ty)
       return ty;
   }
@@ -293,7 +293,7 @@ static Node *new_vla_ptr(Obj *var, Token *tok)
   return node;
 }
 
-Node *new_cast(Node *expr, Type *ty)
+Node *new_cast(Node *expr, chibiccType *ty)
 {
   add_type(expr);
 
@@ -317,7 +317,7 @@ static VarScope *push_scope(char *name)
   return sc;
 }
 
-static Initializer *new_initializer(Type *ty, bool is_flexible)
+static Initializer *new_initializer(chibiccType *ty, bool is_flexible)
 {
   Initializer *init = calloc(1, sizeof(Initializer));
   if (init == NULL)
@@ -373,7 +373,7 @@ static Initializer *new_initializer(Type *ty, bool is_flexible)
   return init;
 }
 
-static Obj *new_var(char *name, Type *ty)
+static Obj *new_var(char *name, chibiccType *ty)
 {
 
   Obj *var = calloc(1, sizeof(Obj));
@@ -386,7 +386,7 @@ static Obj *new_var(char *name, Type *ty)
   return var;
 }
 
-static Obj *new_lvar(char *name, Type *ty, char *funcname)
+static Obj *new_lvar(char *name, chibiccType *ty, char *funcname)
 {
 
   Obj *var = new_var(name, ty);
@@ -400,7 +400,7 @@ static Obj *new_lvar(char *name, Type *ty, char *funcname)
   return var;
 }
 
-static Obj *new_gvar(char *name, Type *ty)
+static Obj *new_gvar(char *name, chibiccType *ty)
 {
   Obj *var = new_var(name, ty);
   var->next = globals;
@@ -416,12 +416,12 @@ static char *new_unique_name(void)
   return format(".L..%d", id++);
 }
 
-static Obj *new_anon_gvar(Type *ty)
+static Obj *new_anon_gvar(chibiccType *ty)
 {
   return new_gvar(new_unique_name(), ty);
 }
 
-static Obj *new_string_literal(char *p, Type *ty)
+static Obj *new_string_literal(char *p, chibiccType *ty)
 {
   Obj *var = new_anon_gvar(ty);
   var->init_data = p;
@@ -435,7 +435,7 @@ static char *get_ident(Token *tok)
   return strndup(tok->loc, tok->len);
 }
 
-static Type *find_typedef(Token *tok)
+static chibiccType *find_typedef(Token *tok)
 {
 
   if (tok->kind == TK_IDENT)
@@ -447,7 +447,7 @@ static Type *find_typedef(Token *tok)
   return NULL;
 }
 
-static void push_tag_scope(Token *tok, Type *ty)
+static void push_tag_scope(Token *tok, chibiccType *ty)
 {
   hashmap_put2(&scope->tags, tok->loc, tok->len, ty);
 }
@@ -471,7 +471,7 @@ static void push_tag_scope(Token *tok, Type *ty)
 // while keeping the "current" type object that the typenames up
 // until that point represent. When we reach a non-typename token,
 // we returns the current type object.
-static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
+static chibiccType *declspec(Token **rest, Token *tok, VarAttr *attr)
 {
   // We use a single integer as counters for all typenames.
   // For example, bits 0 and 1 represents how many times we saw the
@@ -492,7 +492,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     UNSIGNED = 1 << 18,
   };
 
-  Type *ty = ty_int;
+  chibiccType *ty = ty_int;
   int counter = 0;
   bool is_atomic = false;
   while (is_typename(tok))
@@ -583,7 +583,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     }
 
     // Handle user-defined types.
-    Type *ty2 = find_typedef(tok);
+    chibiccType *ty2 = find_typedef(tok);
     if (equal(tok, "struct") || equal(tok, "union") || equal(tok, "enum") ||
         equal(tok, "typeof") || equal(tok, "__typeof") || ty2)
     {
@@ -718,7 +718,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
 
 // func-params = ("void" | param ("," param)* ("," "...")?)? ")"
 // param       = declspec declarator
-static Type *func_params(Token **rest, Token *tok, Type *ty)
+static chibiccType *func_params(Token **rest, Token *tok, chibiccType *ty)
 {
 
   if (equal(tok, "void") && equal(tok->next, ")"))
@@ -727,8 +727,8 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
     return func_type(ty);
   }
 
-  Type head = {};
-  Type *cur = &head;
+  chibiccType head = {};
+  chibiccType *cur = &head;
   bool is_variadic = false;
 
   while (!equal(tok, ")"))
@@ -765,8 +765,8 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
     }
 
 
-    Type *ty2 = declspec(&tok, tok, NULL);
-    Type *backup = ty2;
+    chibiccType *ty2 = declspec(&tok, tok, NULL);
+    chibiccType *backup = ty2;
     ty2 = declarator(&tok, tok, ty2);
     if (ty2->kind == TY_PTR)
     {
@@ -805,7 +805,7 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
 }
 
 // array-dimensions = ("static" | "restrict")* const-expr? "]" type-suffix
-static Type *array_dimensions(Token **rest, Token *tok, Type *ty)
+static chibiccType *array_dimensions(Token **rest, Token *tok, chibiccType *ty)
 {
 
   while (equal(tok, "static") || equal(tok, "restrict"))
@@ -842,7 +842,7 @@ static Type *array_dimensions(Token **rest, Token *tok, Type *ty)
 // type-suffix = "(" func-params
 //             | "[" array-dimensions
 //             | ε
-static Type *type_suffix(Token **rest, Token *tok, Type *ty)
+static chibiccType *type_suffix(Token **rest, Token *tok, chibiccType *ty)
 {
 
 
@@ -859,7 +859,7 @@ static Type *type_suffix(Token **rest, Token *tok, Type *ty)
 }
 
 // pointers = ("*" ("const" | "volatile" | "restrict" | "_Complex" )*)*
-static Type *pointers(Token **rest, Token *tok, Type *ty)
+static chibiccType *pointers(Token **rest, Token *tok, chibiccType *ty)
 {
   while (consume(&tok, tok, "*"))
   {
@@ -874,7 +874,7 @@ static Type *pointers(Token **rest, Token *tok, Type *ty)
 }
 
 // declarator = pointers ("(" ident ")" | "(" declarator ")" | ident) type-suffix
-static Type *declarator(Token **rest, Token *tok, Type *ty)
+static chibiccType *declarator(Token **rest, Token *tok, chibiccType *ty)
 {
 
   ty = pointers(&tok, tok, ty);
@@ -882,7 +882,7 @@ static Type *declarator(Token **rest, Token *tok, Type *ty)
   {
 
     Token *start = tok;
-    Type dummy = {};
+    chibiccType dummy = {};
     declarator(&tok, start->next, &dummy);
     ctx->filename = PARSE_C;
     ctx->funcname = "declarator";    
@@ -908,7 +908,7 @@ static Type *declarator(Token **rest, Token *tok, Type *ty)
 }
 
 // abstract-declarator = pointers ("(" abstract-declarator ")")? type-suffix
-static Type *abstract_declarator(Token **rest, Token *tok, Type *ty)
+static chibiccType *abstract_declarator(Token **rest, Token *tok, chibiccType *ty)
 {
 
   ty = pointers(&tok, tok, ty);
@@ -916,7 +916,7 @@ static Type *abstract_declarator(Token **rest, Token *tok, Type *ty)
   if (equal(tok, "("))
   {
     Token *start = tok;
-    Type dummy = {};
+    chibiccType dummy = {};
     abstract_declarator(&tok, start->next, &dummy);
     ctx->filename = PARSE_C;
     ctx->funcname = "abstract_declarator";    
@@ -930,9 +930,9 @@ static Type *abstract_declarator(Token **rest, Token *tok, Type *ty)
 }
 
 // type-name = declspec abstract-declarator
-static Type *typename(Token **rest, Token *tok)
+static chibiccType *typename(Token **rest, Token *tok)
 {
-  Type *ty = declspec(&tok, tok, NULL);
+  chibiccType *ty = declspec(&tok, tok, NULL);
   return abstract_declarator(rest, tok, ty);
 }
 
@@ -962,9 +962,9 @@ static bool consume_end(Token **rest, Token *tok)
 //                | ident ("{" enum-list? "}")?
 //
 // enum-list      = ident ("=" num)? ("," ident ("=" num)?)* ","?
-static Type *enum_specifier(Token **rest, Token *tok)
+static chibiccType *enum_specifier(Token **rest, Token *tok)
 {
-  Type *ty = enum_type();
+  chibiccType *ty = enum_type();
 
   // Read a struct tag.
   Token *tag = NULL;
@@ -976,7 +976,7 @@ static Type *enum_specifier(Token **rest, Token *tok)
 
   if (tag && !equal(tok, "{"))
   {
-    Type *ty = find_tag(tag);
+    chibiccType *ty = find_tag(tag);
     if (!ty)
       error_tok(tag, "%s: in enum_specifier : unknown enum type", PARSE_C);
     if (ty->kind != TY_ENUM)
@@ -1018,14 +1018,14 @@ static Type *enum_specifier(Token **rest, Token *tok)
 }
 
 // typeof-specifier = "(" (expr | typename) ")"
-static Type *typeof_specifier(Token **rest, Token *tok)
+static chibiccType *typeof_specifier(Token **rest, Token *tok)
 {
   ctx->filename = PARSE_C;
   ctx->funcname = "typeof_specifier";
   ctx->line_no = __LINE__ + 1;
   tok = skip(tok, "(", ctx);
 
-  Type *ty;
+  chibiccType *ty;
   if (is_typename(tok))
   {
     ty = typename(&tok, tok);
@@ -1044,7 +1044,7 @@ static Type *typeof_specifier(Token **rest, Token *tok)
 }
 
 // Generate code for computing a VLA size.
-static Node *compute_vla_size(Type *ty, Token *tok)
+static Node *compute_vla_size(chibiccType *ty, Token *tok)
 {
   Node *node = new_node(ND_NULL_EXPR, tok);
 
@@ -1081,7 +1081,7 @@ static Node *new_alloca(Node *sz)
 }
 
 // declaration = declspec (declarator ("=" expr)? ("," declarator ("=" expr)?)*)? ";"
-static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
+static Node *declaration(Token **rest, Token *tok, chibiccType *basety, VarAttr *attr)
 {
 
   Node head = {};
@@ -1099,7 +1099,7 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
     }
 
 
-    Type *ty = declarator(&tok, tok, basety);
+    chibiccType *ty = declarator(&tok, tok, basety);
     if (ty->kind == TY_VOID)
       error_tok(tok, "%s: in declaration : variable declared void", PARSE_C);
     if (!ty->name)
@@ -1244,7 +1244,7 @@ static void string_initializer(Token **rest, Token *tok, Initializer *init)
 //   struct { int a, b, c; } x = { .c=5 };
 //
 // The above initializer sets x.c to 5.
-static void array_designator(Token **rest, Token *tok, Type *ty, int *begin, int *end)
+static void array_designator(Token **rest, Token *tok, chibiccType *ty, int *begin, int *end)
 {
 
   *begin = const_expr(&tok, tok->next);
@@ -1270,7 +1270,7 @@ static void array_designator(Token **rest, Token *tok, Type *ty, int *begin, int
 }
 
 // struct-designator = "." ident
-static Member *struct_designator(Token **rest, Token *tok, Type *ty)
+static Member *struct_designator(Token **rest, Token *tok, chibiccType *ty)
 {
   
   Token *start = tok;
@@ -1365,7 +1365,7 @@ static void designation(Token **rest, Token *tok, Initializer *init)
 // An array length can be omitted if an array has an initializer
 // (e.g. `int x[] = {1,2,3}`). If it's omitted, count the number
 // of initializer elements.
-static int count_array_init_elements(Token *tok, Type *ty)
+static int count_array_init_elements(Token *tok, chibiccType *ty)
 {
   
   bool first = true;
@@ -1758,7 +1758,7 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
 
 }
 
-static Type *copy_struct_type(Type *ty)
+static chibiccType *copy_struct_type(chibiccType *ty)
 {
   ty = copy_type(ty);
 
@@ -1777,7 +1777,7 @@ static Type *copy_struct_type(Type *ty)
   return ty;
 }
 
-static Initializer *initializer(Token **rest, Token *tok, Type *ty, Type **new_ty)
+static Initializer *initializer(Token **rest, Token *tok, chibiccType *ty, chibiccType **new_ty)
 {
   Initializer *init = new_initializer(ty, true);
   
@@ -1818,7 +1818,7 @@ static Node *init_desg_expr(InitDesg *desg, Token *tok)
   return new_unary(ND_DEREF, new_add(lhs, rhs, tok), tok);
 }
 
-static Node *create_lvar_init(Initializer *init, Type *ty, InitDesg *desg, Token *tok)
+static Node *create_lvar_init(Initializer *init, chibiccType *ty, InitDesg *desg, Token *tok)
 {
   if (ty->kind == TY_ARRAY)
   {
@@ -1917,7 +1917,7 @@ static void write_buf(char *buf, uint64_t val, int sz)
 }
 
 static Relocation *
-write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int offset)
+write_gvar_data(Relocation *cur, Initializer *init, chibiccType *ty, char *buf, int offset)
 {
   if (ty->kind == TY_ARRAY)
   {
@@ -2086,7 +2086,7 @@ static Node *stmt(Token **rest, Token *tok)
 
   if (equal(tok, "return"))
   {
-    Type *ret_ty = current_fn->ty->return_ty;
+    chibiccType *ret_ty = current_fn->ty->return_ty;
     Node *node = new_node(ND_RETURN, tok);
     if (consume(rest, tok->next, ";"))
     {
@@ -2103,7 +2103,7 @@ static Node *stmt(Token **rest, Token *tok)
     ctx->line_no = __LINE__ + 1;       
     *rest = skip(tok, ";", ctx);
     add_type(exp);
-    // Type *ty = current_fn->ty->return_ty;
+    // chibiccType *ty = current_fn->ty->return_ty;
     // if (ty->kind != TY_STRUCT && ty->kind != TY_UNION)
     //   exp = new_cast(exp, current_fn->ty->return_ty);
 
@@ -2249,7 +2249,7 @@ static Node *stmt(Token **rest, Token *tok)
 
     if (is_typename(tok))
     {
-      Type *basety = declspec(&tok, tok, NULL);
+      chibiccType *basety = declspec(&tok, tok, NULL);
       node->init = declaration(&tok, tok, basety, NULL);
     }
     else
@@ -2430,7 +2430,7 @@ static Node *compound_stmt(Token **rest, Token *tok)
     if (is_typename(tok) && !equal(tok->next, ":"))
     {
       VarAttr attr = {};
-      Type *basety = declspec(&tok, tok, &attr);
+      chibiccType *basety = declspec(&tok, tok, &attr);
       if (attr.is_typedef)
       {
         tok = parse_typedef(tok, basety);
@@ -3231,7 +3231,7 @@ static Node *cast(Token **rest, Token *tok)
   if (equal(tok, "(") && is_typename(tok->next))
   {
     Token *start = tok;
-    Type *ty = typename(&tok, tok->next);
+    chibiccType *ty = typename(&tok, tok->next);
     ctx->filename = PARSE_C;
     ctx->funcname = "cast";        
     ctx->line_no = __LINE__ + 1;          
@@ -3312,7 +3312,7 @@ static Node *unary(Token **rest, Token *tok)
 }
 
 // struct-members = (declspec declarator (","  declarator)* ";")*
-static void struct_members(Token **rest, Token *tok, Type *ty)
+static void struct_members(Token **rest, Token *tok, chibiccType *ty)
 {
   Member head = {};
   Member *cur = &head;
@@ -3321,7 +3321,7 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
   while (!equal(tok, "}"))
   {
     VarAttr attr = {};
-    Type *basety = declspec(&tok, tok, &attr);
+    chibiccType *basety = declspec(&tok, tok, &attr);
     bool first = true;
 
     // Anonymous struct member
@@ -3400,7 +3400,7 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
 }
 
 // attribute = ("__attribute__" "(" "(" "packed" ")" ")")*
-static Token *attribute_list(Token *tok, Type *ty)
+static Token *attribute_list(Token *tok, chibiccType *ty)
 {
   while (consume(&tok, tok, "__attribute__"))
   {
@@ -3458,9 +3458,9 @@ static Token *attribute_list(Token *tok, Type *ty)
 }
 
 // struct-union-decl = attribute? ident? ("{" struct-members)?
-static Type *struct_union_decl(Token **rest, Token *tok)
+static chibiccType *struct_union_decl(Token **rest, Token *tok)
 {
-  Type *ty = struct_type();
+  chibiccType *ty = struct_type();
   tok = attribute_list(tok, ty);
 
   // Read a tag.
@@ -3475,7 +3475,7 @@ static Type *struct_union_decl(Token **rest, Token *tok)
   {
     *rest = tok;
 
-    Type *ty2 = find_tag(tag);
+    chibiccType *ty2 = find_tag(tag);
     if (ty2)
       return ty2;
 
@@ -3497,7 +3497,7 @@ static Type *struct_union_decl(Token **rest, Token *tok)
   {
     // If this is a redefinition, overwrite a previous type.
     // Otherwise, register the struct type.
-    Type *ty2 = hashmap_get2(&scope->tags, tag->loc, tag->len);
+    chibiccType *ty2 = hashmap_get2(&scope->tags, tag->loc, tag->len);
     if (ty2)
     {
       *ty2 = *ty;
@@ -3511,9 +3511,9 @@ static Type *struct_union_decl(Token **rest, Token *tok)
 }
 
 // struct-decl = struct-union-decl
-static Type *struct_decl(Token **rest, Token *tok)
+static chibiccType *struct_decl(Token **rest, Token *tok)
 {
-  Type *ty = struct_union_decl(rest, tok);
+  chibiccType *ty = struct_union_decl(rest, tok);
   ty->kind = TY_STRUCT;
 
   if (ty->size < 0)
@@ -3557,9 +3557,9 @@ static Type *struct_decl(Token **rest, Token *tok)
 }
 
 // union-decl = struct-union-decl
-static Type *union_decl(Token **rest, Token *tok)
+static chibiccType *union_decl(Token **rest, Token *tok)
 {
-  Type *ty = struct_union_decl(rest, tok);
+  chibiccType *ty = struct_union_decl(rest, tok);
   ty->kind = TY_UNION;
 
   if (ty->size < 0)
@@ -3580,7 +3580,7 @@ static Type *union_decl(Token **rest, Token *tok)
 }
 
 // Find a struct member by name.
-static Member *get_struct_member(Type *ty, Token *tok)
+static Member *get_struct_member(chibiccType *ty, Token *tok)
 {
 
   for (Member *mem = ty->members; mem; mem = mem->next)
@@ -3626,7 +3626,7 @@ static Node *struct_ref(Node *node, Token *tok)
   if (node->ty->kind != TY_STRUCT && node->ty->kind != TY_UNION) 
     error_tok(node->tok, "%s: in struct_ref : not a struct nor a union", PARSE_C);
 
-  Type *ty = node->ty;
+  chibiccType *ty = node->ty;
   for (;;)
   {
     Member *mem = get_struct_member(ty, tok);
@@ -3670,7 +3670,7 @@ static Node *postfix(Token **rest, Token *tok)
 
     // Compound literal
     Token *start = tok;
-    Type *ty = typename(&tok, tok->next);
+    chibiccType *ty = typename(&tok, tok->next);
     ctx->filename = PARSE_C;
     ctx->funcname = "postfix";        
     ctx->line_no = __LINE__ + 1;         
@@ -3764,8 +3764,8 @@ static Node *funcall(Token **rest, Token *tok, Node *fn)
       (fn->ty->kind != TY_PTR || fn->ty->base->kind != TY_FUNC))
     error_tok(fn->tok, "%s: in funcall : not a function", PARSE_C);
 
-  Type *ty = (fn->ty->kind == TY_FUNC) ? fn->ty : fn->ty->base;
-  Type *param_ty = ty->params;
+  chibiccType *ty = (fn->ty->kind == TY_FUNC) ? fn->ty : fn->ty->base;
+  chibiccType *param_ty = ty->params;
 
   Node head = {};
   Node *cur = &head;
@@ -3836,7 +3836,7 @@ static Node *generic_selection(Token **rest, Token *tok)
   Node *ctrl = assign(&tok, tok);
   add_type(ctrl);
 
-  Type *t1 = ctrl->ty;
+  chibiccType *t1 = ctrl->ty;
   if (t1->kind == TY_FUNC)
     t1 = pointer_to(t1);
   else if (t1->kind == TY_ARRAY)
@@ -3864,7 +3864,7 @@ static Node *generic_selection(Token **rest, Token *tok)
       continue;
     }
 
-    Type *t2 = typename(&tok, tok);
+    chibiccType *t2 = typename(&tok, tok);
     ctx->filename = PARSE_C;
     ctx->funcname = "generic_selection";        
     ctx->line_no = __LINE__ + 1;          
@@ -3925,7 +3925,7 @@ static Node *primary(Token **rest, Token *tok)
 
   if (equal(tok, "sizeof") && equal(tok->next, "(") && is_typename(tok->next->next))
   {
-    Type *ty = typename(&tok, tok->next->next);
+    chibiccType *ty = typename(&tok, tok->next->next);
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";        
     ctx->line_no = __LINE__ + 1;      
@@ -3968,7 +3968,7 @@ static Node *primary(Token **rest, Token *tok)
 
   if (equal(tok, "_Alignof") && equal(tok->next, "(") && is_typename(tok->next->next))
   {
-    Type *ty = typename(&tok, tok->next->next);
+    chibiccType *ty = typename(&tok, tok->next->next);
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";        
     ctx->line_no = __LINE__ + 1;      
@@ -3992,14 +3992,14 @@ static Node *primary(Token **rest, Token *tok)
     ctx->funcname = "primary";        
     ctx->line_no = __LINE__ + 1;      
     tok = skip(tok->next, "(", ctx);
-    Type *t1 = typename(&tok, tok);
+    chibiccType *t1 = typename(&tok, tok);
     if (equal(tok, ",")) {
       ctx->filename = PARSE_C;
       ctx->funcname = "primary";        
       ctx->line_no = __LINE__ + 1;        
       tok = skip(tok, ",", ctx);
     }
-    Type *t2 = typename(&tok, tok);
+    chibiccType *t2 = typename(&tok, tok);
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";        
     ctx->line_no = __LINE__ + 1;      
@@ -4014,14 +4014,14 @@ static Node *primary(Token **rest, Token *tok)
   //   ctx->funcname = "primary";        
   //   ctx->line_no = __LINE__ + 1;      
   //   tok = skip(tok->next, "(", ctx);
-  //   Type *t1 = typename(&tok, tok);
+  //   chibiccType *t1 = typename(&tok, tok);
   //   if (equal(tok, ",")) {
   //     ctx->filename = PARSE_C;
   //     ctx->funcname = "primary";        
   //     ctx->line_no = __LINE__ + 1;        
   //     tok = skip(tok, ",", ctx);
   //   }
-  //   Type *t2 = typename(&tok, tok);
+  //   chibiccType *t2 = typename(&tok, tok);
   //   ctx->filename = PARSE_C;
   //   ctx->funcname = "primary";        
   //   ctx->line_no = __LINE__ + 1;      
@@ -4035,7 +4035,7 @@ static Node *primary(Token **rest, Token *tok)
       equal(tok, "__builtin_ia32_sfence") || equal(tok, "__builtin_ia32_pause") ||
       equal(tok, "__builtin_ia32_lfence") || equal(tok, "__builtin_ia32_mfence") 
       ) {
-    Type *t1 = typename(&tok, tok);        
+    chibiccType *t1 = typename(&tok, tok);        
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";        
     ctx->line_no = __LINE__ + 1;      
@@ -4055,7 +4055,7 @@ static Node *primary(Token **rest, Token *tok)
     ctx->funcname = "primary";        
     ctx->line_no = __LINE__ + 1;      
     tok = skip(tok->next, "(", ctx);
-    Type *ty = typename(&tok, tok);
+    chibiccType *ty = typename(&tok, tok);
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";        
     ctx->line_no = __LINE__ + 1;      
@@ -4219,7 +4219,7 @@ static Node *primary(Token **rest, Token *tok)
   error_tok(tok, "%s %d: in primary : expected an expression", PARSE_C, __LINE__);
 }
 
-static Token *parse_typedef(Token *tok, Type *basety)
+static Token *parse_typedef(Token *tok, chibiccType *basety)
 {
   bool first = true;
 
@@ -4233,7 +4233,7 @@ static Token *parse_typedef(Token *tok, Type *basety)
     }
     first = false;
 
-    Type *ty = declarator(&tok, tok, basety);
+    chibiccType *ty = declarator(&tok, tok, basety);
     if (!ty->name)
       error_tok(ty->name_pos, "%s: in parse_typedef : typedef name omitted", PARSE_C);
     push_scope(get_ident(ty->name))->type_def = ty;
@@ -4241,7 +4241,7 @@ static Token *parse_typedef(Token *tok, Type *basety)
   return tok;
 }
 
-static void create_param_lvars(Type *param, char *funcname)
+static void create_param_lvars(chibiccType *param, char *funcname)
 {
 
   if (param)
@@ -4306,9 +4306,9 @@ static void mark_live(Obj *var)
   }
 }
 
-static Token *function(Token *tok, Type *basety, VarAttr *attr)
+static Token *function(Token *tok, chibiccType *basety, VarAttr *attr)
 {
-  Type *ty = declarator(&tok, tok, basety);
+  chibiccType *ty = declarator(&tok, tok, basety);
   if (!ty->name)
     error_tok(ty->name_pos, "%s: in function : function name omitted", PARSE_C);
   char *name_str = get_ident(ty->name);
@@ -4350,7 +4350,7 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   fn->nbparm = order;
   // A buffer for a struct/union return value is passed
   // as the hidden first parameter.
-  Type *rty = ty->return_ty;
+  chibiccType *rty = ty->return_ty;
   if ((rty->kind == TY_STRUCT || rty->kind == TY_UNION) && rty->size > 16)
     new_lvar("", pointer_to(rty), name_str);
 
@@ -4385,7 +4385,7 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   return tok;
 }
 
-static Token *global_variable(Token *tok, Type *basety, VarAttr *attr)
+static Token *global_variable(Token *tok, chibiccType *basety, VarAttr *attr)
 {
   bool first = true;
 
@@ -4399,7 +4399,7 @@ static Token *global_variable(Token *tok, Type *basety, VarAttr *attr)
     }
     first = false;
 
-    Type *ty = declarator(&tok, tok, basety);
+    chibiccType *ty = declarator(&tok, tok, basety);
     if (!ty->name)
       error_tok(ty->name_pos, "%s: in global_variable : variable name omitted", PARSE_C);
 
@@ -4425,8 +4425,8 @@ static bool is_function(Token *tok)
 
   if (equal(tok, ";"))
     return false;
-  Type dummy = {};
-  Type *ty = declarator(&tok, tok, &dummy);
+  chibiccType dummy = {};
+  chibiccType *ty = declarator(&tok, tok, &dummy);
 
 
   return ty->kind == TY_FUNC;
@@ -4464,7 +4464,7 @@ static void scan_globals(void)
 
 static void declare_builtin_functions(void)
 {
-  Type *ty = func_type(pointer_to(ty_void));
+  chibiccType *ty = func_type(pointer_to(ty_void));
   ty->params = copy_type(ty_int);
   builtin_alloca = new_gvar("alloca", ty);
   builtin_alloca->is_definition = false;
@@ -4511,7 +4511,7 @@ Obj *parse(Token *tok)
   while (tok->kind != TK_EOF)
   {
     VarAttr attr = {};
-    Type *basety = declspec(&tok, tok, &attr);
+    chibiccType *basety = declspec(&tok, tok, &attr);
 
     // Typedef
     if (attr.is_typedef)

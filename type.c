@@ -1,26 +1,26 @@
 #include "chibicc.h"
 #define TYPE_C "type.c"
 
-Type *ty_void = &(Type){TY_VOID, 1, 1};
-Type *ty_bool = &(Type){TY_BOOL, 1, 1};
+chibiccType *ty_void = &(chibiccType){TY_VOID, 1, 1};
+chibiccType *ty_bool = &(chibiccType){TY_BOOL, 1, 1};
 
-Type *ty_char = &(Type){TY_CHAR, 1, 1};
-Type *ty_short = &(Type){TY_SHORT, 2, 2};
-Type *ty_int = &(Type){TY_INT, 4, 4};
-Type *ty_long = &(Type){TY_LONG, 8, 8};
+chibiccType *ty_char = &(chibiccType){TY_CHAR, 1, 1};
+chibiccType *ty_short = &(chibiccType){TY_SHORT, 2, 2};
+chibiccType *ty_int = &(chibiccType){TY_INT, 4, 4};
+chibiccType *ty_long = &(chibiccType){TY_LONG, 8, 8};
 
-Type *ty_uchar = &(Type){TY_CHAR, 1, 1, true};
-Type *ty_ushort = &(Type){TY_SHORT, 2, 2, true};
-Type *ty_uint = &(Type){TY_INT, 4, 4, true};
-Type *ty_ulong = &(Type){TY_LONG, 8, 8, true};
+chibiccType *ty_uchar = &(chibiccType){TY_CHAR, 1, 1, true};
+chibiccType *ty_ushort = &(chibiccType){TY_SHORT, 2, 2, true};
+chibiccType *ty_uint = &(chibiccType){TY_INT, 4, 4, true};
+chibiccType *ty_ulong = &(chibiccType){TY_LONG, 8, 8, true};
 
-Type *ty_float = &(Type){TY_FLOAT, 4, 4};
-Type *ty_double = &(Type){TY_DOUBLE, 8, 8};
-Type *ty_ldouble = &(Type){TY_LDOUBLE, 16, 16};
+chibiccType *ty_float = &(chibiccType){TY_FLOAT, 4, 4};
+chibiccType *ty_double = &(chibiccType){TY_DOUBLE, 8, 8};
+chibiccType *ty_ldouble = &(chibiccType){TY_LDOUBLE, 16, 16};
 
-static Type *new_type(TypeKind kind, int size, int align)
+static chibiccType *new_type(TypeKind kind, int size, int align)
 {
-  Type *ty = calloc(1, sizeof(Type));
+  chibiccType *ty = calloc(1, sizeof(chibiccType));
   if (ty == NULL)
     error("%s: in new_type ty is null!", TYPE_C);
   ty->kind = kind;
@@ -29,25 +29,25 @@ static Type *new_type(TypeKind kind, int size, int align)
   return ty;
 }
 
-bool is_integer(Type *ty)
+bool is_integer(chibiccType *ty)
 {
   TypeKind k = ty->kind;
   return k == TY_BOOL || k == TY_CHAR || k == TY_SHORT ||
          k == TY_INT || k == TY_LONG || k == TY_ENUM;
 }
 
-bool is_flonum(Type *ty)
+bool is_flonum(chibiccType *ty)
 {
   return ty->kind == TY_FLOAT || ty->kind == TY_DOUBLE ||
          ty->kind == TY_LDOUBLE;
 }
 
-bool is_numeric(Type *ty)
+bool is_numeric(chibiccType *ty)
 {
   return is_integer(ty) || is_flonum(ty);
 }
 
-bool is_compatible(Type *t1, Type *t2)
+bool is_compatible(chibiccType *t1, chibiccType *t2)
 {
   if (t1 == t2)
     return true;
@@ -81,8 +81,8 @@ bool is_compatible(Type *t1, Type *t2)
     if (t1->is_variadic != t2->is_variadic)
       return false;
 
-    Type *p1 = t1->params;
-    Type *p2 = t2->params;
+    chibiccType *p1 = t1->params;
+    chibiccType *p2 = t2->params;
     for (; p1 && p2; p1 = p1->next, p2 = p2->next)
       if (!is_compatible(p1, p2))
         return false;
@@ -97,9 +97,9 @@ bool is_compatible(Type *t1, Type *t2)
   return false;
 }
 
-Type *copy_type(Type *ty)
+chibiccType *copy_type(chibiccType *ty)
 {
-  Type *ret = calloc(1, sizeof(Type));
+  chibiccType *ret = calloc(1, sizeof(chibiccType));
   if (ret == NULL)
     error("%s: in copy_type ret is null!", TYPE_C);
   *ret = *ty;
@@ -107,35 +107,35 @@ Type *copy_type(Type *ty)
   return ret;
 }
 
-Type *pointer_to(Type *base)
+chibiccType *pointer_to(chibiccType *base)
 {
-  Type *ty = new_type(TY_PTR, 8, 8);
+  chibiccType *ty = new_type(TY_PTR, 8, 8);
   ty->base = base;
   ty->is_unsigned = true;
   return ty;
 }
 
-Type *func_type(Type *return_ty)
+chibiccType *func_type(chibiccType *return_ty)
 {
   // The C spec disallows sizeof(<function type>), but
   // GCC allows that and the expression is evaluated to 1.
-  Type *ty = new_type(TY_FUNC, 1, 1);
+  chibiccType *ty = new_type(TY_FUNC, 1, 1);
   ty->return_ty = return_ty;
   return ty;
 }
 
-Type *array_of(Type *base, int len)
+chibiccType *array_of(chibiccType *base, int len)
 {
-  Type *ty = new_type(TY_ARRAY, base->size * len, base->align);
+  chibiccType *ty = new_type(TY_ARRAY, base->size * len, base->align);
   ty->base = base;
   ty->array_len = len;
   return ty;
 }
 
-Type *vla_of(Type *base, Node *len)
+chibiccType *vla_of(chibiccType *base, Node *len)
 {
 
-  Type *ty = new_type(TY_VLA, 8, 8);
+  chibiccType *ty = new_type(TY_VLA, 8, 8);
   ty->base = base;
   ty->vla_len = len;
   return ty;
@@ -145,17 +145,17 @@ Type *vla_of(Type *base, Node *len)
 
 
 
-Type *enum_type(void)
+chibiccType *enum_type(void)
 {
   return new_type(TY_ENUM, 4, 4);
 }
 
-Type *struct_type(void)
+chibiccType *struct_type(void)
 {
   return new_type(TY_STRUCT, 0, 1);
 }
 
-static Type *get_common_type(Type *ty1, Type *ty2)
+static chibiccType *get_common_type(chibiccType *ty1, chibiccType *ty2)
 {
 
   //======ISS-158 trying to fix issue with "parse.c: in struct_ref : not a struct nor a union" when in a macro definition we have (size_t)-1 ? NULL : (n) - 1
@@ -201,7 +201,7 @@ static Type *get_common_type(Type *ty1, Type *ty2)
 // This operation is called the "usual arithmetic conversion".
 static void usual_arith_conv(Node **lhs, Node **rhs)
 {
-  Type *ty = get_common_type((*lhs)->ty, (*rhs)->ty);
+  chibiccType *ty = get_common_type((*lhs)->ty, (*rhs)->ty);
   *lhs = new_cast(*lhs, ty);
   *rhs = new_cast(*rhs, ty);
   
@@ -243,7 +243,7 @@ void add_type(Node *node)
     return;
   case ND_NEG:
   {
-    Type *ty = get_common_type(ty_int, node->lhs->ty);
+    chibiccType *ty = get_common_type(ty_int, node->lhs->ty);
     node->lhs = new_cast(node->lhs, ty);
     node->ty = ty;
     return;
@@ -303,7 +303,7 @@ void add_type(Node *node)
     return;
   case ND_ADDR:
   {
-    Type *ty = node->lhs->ty;
+    chibiccType *ty = node->lhs->ty;
     if (ty->kind == TY_ARRAY)
       node->ty = pointer_to(ty->base);
     else

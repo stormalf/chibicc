@@ -1,46 +1,55 @@
+# Define compilers
 CC=gcc
-CFLAGS =-std=c11 -g -fno-common -Wall -Wno-switch 
-CFLAGS_DIAG=-dotfile 
+CXX=clang++
+
+# Define compiler flags
+CFLAGS=-std=c11 -g -fno-common -Wall -Wno-switch
+CFLAGS_DIAG=-dotfile
+CXXFLAGS=-std=c++17 `llvm-config --cxxflags`
+
+# Define objects and sources
 OBJECT=chibicc
 OBJECTLIB=libchibicc
 SRCS=$(wildcard *.c)
-OBJS=$(SRCS:.c=.o)
+CXX_SRCS=$(wildcard *.cpp)
+OBJS=$(SRCS:.c=.o) $(CXX_SRCS:.cpp=.o)
 
+# Define test and issues sources
 TEST_SRCS=$(wildcard test/*.c)
 TESTS=$(TEST_SRCS:.c=.exe)
 ISSUES_SRCS=$(wildcard issues/*.c)
-#PNG=$(TEST_SRCS:.c=.tmp)
-#PNG2=$(ISSUES_SRCS:.c=.tmp)
 
 # Stage 1
-
 $(OBJECT): $(OBJS)
-	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+	$(CXX) -o $@ $^ $(LDFLAGS) `llvm-config --ldflags --system-libs --libs core`
 
 $(OBJS): $(OBJECT).h
 
+# Rule to compile C sources
+%.o: %.c
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+# Rule to compile C++ sources
+%.o: %.cpp
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+# Test executables
 test/%.exe: $(OBJECT) test/%.c 
 	./$(OBJECT) $(CFLAGS_DIAG) -Iinclude -Itest -c -o test/$*.o test/$*.c 
 	$(CC) -pthread -o $@ test/$*.o -xc test/common
 	dot -Tpng test/$*.dot -o diagram/$*.png || echo $*.dot failed
-	
 
-test: $(TESTS) 
+test: $(TESTS)
 	for i in $^; do echo $$i; ./$$i || exit 1; echo; done
 	test/driver.sh ./$(OBJECT)
 
-
-# #for managing dot diagram
-# test-png: $(TESTS)
-	
 test-all: test test-stage2 
 
 # Stage 2
-
 stage2/$(OBJECT): $(OBJS:%=stage2/%)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
-stage2/%.o: $(OBJECT) %.c
+stage2/%.o: %.c
 	mkdir -p stage2/test
 	./chibicc -c -o $(@D)/$*.o $*.c 
 
@@ -56,7 +65,6 @@ test-stage2: $(TESTS:test/%=stage2/test/%)
 projects-all: projects openssl nmap curl vim
 
 projects: zlib util-linux nginx
-
 
 curl:
 	cd ../curl && make clean && make && make test
@@ -80,13 +88,11 @@ vim:
 	cd ../vim && make clean && CC=chibicc CFLAGS=-fPIC ./configure && make && make test
 
 # Misc.
-
-libchibicc:  $(OBJECT) $(OBJECTLIB).so
+libchibicc: $(OBJECT) $(OBJECTLIB).so
 CFLAGS +=-fPIC
 
-
 libchibicc.so: $(OBJS)
-	gcc $(CFLAGS) -o $@ $^ -shared
+	$(CC) $(CFLAGS) -o $@ $^ -shared
 
 clean:
 	rm -rf $(OBJECT) tmp* $(TESTS) issues/*.s issues/*.exe issues/*.dot test/*.s test/*.exe stage2 diagram/*.png test/*.dot $(OBJECTLIB)

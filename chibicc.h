@@ -31,8 +31,15 @@
 #define __attribute__(x)
 #endif
 
+
+// Add this block to handle restrict keyword in C++
+#ifdef __cplusplus
+#define restrict __restrict__
+#endif
+
+
 #define PRODUCT "chibicc"
-#define VERSION "1.0.22"
+#define VERSION "1.0.23"
 #define MAXLEN 501
 #define DEFAULT_TARGET_MACHINE "x86_64-linux-gnu"
 
@@ -94,7 +101,7 @@ this " PRODUCT " contains only some differences for now like new parameters\n"
 -ignore-assert  ingore static_assert and StaticAssertDecl functions if omit, the static assertions are not omitted \
 chibicc [ -o <path> ] <file>\n"
 
-typedef struct Type Type;
+typedef struct chibiccType chibiccType;
 typedef struct Node Node;
 typedef struct Member Member;
 typedef struct Relocation Relocation;
@@ -161,7 +168,7 @@ struct Token
   long double fval; // If kind is TK_NUM, its value
   char *loc;        // Token location
   int len;          // Token length
-  Type *ty;         // Used if TK_NUM or TK_STR
+  chibiccType *ty;         // Used if TK_NUM or TK_STR
   char *str;        // String literal contents including terminating '\0'
 
   File *file;       // Source location
@@ -184,7 +191,7 @@ bool consume(Token **rest, Token *tok, char *str);
 void convert_pp_tokens(Token *tok);
 File **get_input_files(void);
 File *new_file(char *name, unsigned int file_no, char *contents);
-Token *tokenize_string_literal(Token *tok, Type *basety);
+Token *tokenize_string_literal(Token *tok, chibiccType *basety);
 Token *tokenize(File *file);
 Token *tokenize_file(char *filename);
 bool startswith(char *p, char *q);
@@ -215,7 +222,7 @@ struct Obj
   Obj *next;
   char *name;     // Variable name
   char *funcname; // function name
-  Type *ty;       // Type
+  chibiccType *ty;       // Type
   Token *tok;     // representative token
   bool is_local;  // local or global/function
   int align;      // alignment
@@ -321,7 +328,7 @@ Node
 {
   NodeKind kind; // Node kind
   Node *next;    // Next node
-  Type *ty;      // Type, e.g. int or pointer to int
+  chibiccType *ty;      // Type, e.g. int or pointer to int
   Token *tok;    // Representative token
 
   Node *lhs; // Left-hand side
@@ -345,7 +352,7 @@ Node
   Member *member;
 
   // Function call
-  Type *func_ty;
+  chibiccType *func_ty;
   Node *args;
   bool pass_by_stack;
   Obj *ret_buffer;
@@ -391,12 +398,12 @@ Node
 typedef struct
 {
   Obj *var;
-  Type *type_def;
-  Type *enum_ty;
+  chibiccType *type_def;
+  chibiccType *enum_ty;
   int enum_val;
 } VarScope;
 
-Node *new_cast(Node *expr, Type *ty);
+Node *new_cast(Node *expr, chibiccType *ty);
 int64_t const_expr(Token **rest, Token *tok);
 Obj *parse(Token *tok);
 VarScope *find_var(Token *tok);
@@ -428,7 +435,7 @@ typedef enum
   TY_UNION,
 } TypeKind;
 
-struct Type
+struct chibiccType
 {
   TypeKind kind;
   int size;          // sizeof() value
@@ -436,8 +443,8 @@ struct Type
   bool is_unsigned;  // unsigned or signed
   bool is_atomic;    // true if _Atomic
   bool is_pointer;   // true if it's a pointer
-  Type *pointertype; // store the pointer type int, char...
-  Type *origin;      // for type compatibility check
+  chibiccType *pointertype; // store the pointer type int, char...
+  chibiccType *origin;      // for type compatibility check
 
   // Pointer-to or array-of type. We intentionally use the same member
   // to represent pointer/array duality in C.
@@ -447,7 +454,7 @@ struct Type
   // pointer or not. That means in many contexts "array of T" is
   // naturally handled as if it were "pointer to T", as required by
   // the C spec.
-  Type *base;
+  chibiccType *base;
 
   // Declaration
   Token *name;
@@ -466,17 +473,17 @@ struct Type
   bool is_packed;
 
   // Function type
-  Type *return_ty;
-  Type *params;
+  chibiccType *return_ty;
+  chibiccType *params;
   bool is_variadic;
-  Type *next;
+  chibiccType *next;
 };
 
 // Struct member
 struct Member
 {
   Member *next;
-  Type *ty;
+  chibiccType *ty;
   Token *tok; // for error message
   Token *name;
   int idx;
@@ -489,34 +496,34 @@ struct Member
   int bit_width;
 };
 
-extern Type *ty_void;
-extern Type *ty_bool;
+extern chibiccType *ty_void;
+extern chibiccType *ty_bool;
 
-extern Type *ty_char;
-extern Type *ty_short;
-extern Type *ty_int;
-extern Type *ty_long;
+extern chibiccType *ty_char;
+extern chibiccType *ty_short;
+extern chibiccType *ty_int;
+extern chibiccType *ty_long;
 
-extern Type *ty_uchar;
-extern Type *ty_ushort;
-extern Type *ty_uint;
-extern Type *ty_ulong;
+extern chibiccType *ty_uchar;
+extern chibiccType *ty_ushort;
+extern chibiccType *ty_uint;
+extern chibiccType *ty_ulong;
 
-extern Type *ty_float;
-extern Type *ty_double;
-extern Type *ty_ldouble;
+extern chibiccType *ty_float;
+extern chibiccType *ty_double;
+extern chibiccType *ty_ldouble;
 
-bool is_integer(Type *ty);
-bool is_flonum(Type *ty);
-bool is_numeric(Type *ty);
-bool is_compatible(Type *t1, Type *t2);
-Type *copy_type(Type *ty);
-Type *pointer_to(Type *base);
-Type *func_type(Type *return_ty);
-Type *array_of(Type *base, int size);
-Type *vla_of(Type *base, Node *expr);
-Type *enum_type(void);
-Type *struct_type(void);
+bool is_integer(chibiccType *ty);
+bool is_flonum(chibiccType *ty);
+bool is_numeric(chibiccType *ty);
+bool is_compatible(chibiccType *t1, chibiccType *t2);
+chibiccType *copy_type(chibiccType *ty);
+chibiccType *pointer_to(chibiccType *base);
+chibiccType *func_type(chibiccType *return_ty);
+chibiccType *array_of(chibiccType *base, int size);
+chibiccType *vla_of(chibiccType *base, Node *expr);
+chibiccType *enum_type(void);
+chibiccType *struct_type(void);
 void add_type(Node *node);
 
 
@@ -552,7 +559,7 @@ char *register8_to_64(char *regist);
 char *register_available();  
 char *specific_register_available(char *regist); 
 bool check_register_used(char *regist);
-void check_register_in_template(char *template); 
+void check_register_in_template(char *templatestr); 
 
 //
 // unicode.c
@@ -598,7 +605,7 @@ void hashmap_test(void);
 bool file_exists(char *path);
 void dump_machine(void);
 void dump_version(void);
-bool startsWith(const char *restrict string, const char *restrict prefix);
+bool startsWith(const char * restrict inputstr, const char * restrict prefix);
 
 extern StringArray include_paths;
 extern bool opt_fpic;
@@ -624,10 +631,10 @@ extern char *extract_path(char *tmpl);
 char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals);
 void output_asm(Node *node, Token **rest, Token *tok, Obj *locals);
 void input_asm(Node *node, Token **rest, Token *tok, Obj *locals);
-char *subst_asm(char *template, char *output_str, char *input_str);
+char *subst_asm(char *templatestr, char *output_str, char *input_str);
 char *string_replace(char *str, char *oldstr, char *newstr);
 char *generate_input_asm(char *input_str);
-bool check_template(char *template);
+bool check_template(char *templatestr);
 int search_output_index(char c);
 char *int_to_string(int i);
 void update_offset(char *funcname, Obj *locals);
@@ -639,3 +646,9 @@ char *retrieve_output_index_str(char letter);
 int retrieve_output_index_from_letter(char letter);
 
 char *retrieveVariableNumber(int index);
+
+
+//
+// genllvm.cpp
+//
+void generateLLVMIR(Obj *prog, FILE *out) ;
