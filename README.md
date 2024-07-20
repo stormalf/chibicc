@@ -522,7 +522,7 @@ Example of diagram generated with -dotfile parameter :
 ## release notes
 
 
-1.0.23     fixed Alignment bug in codegen #124 detected by @bztsrc.
+1.0.23     fixed Alignment bug in codegen #124 detected by @bztsrc. Adding gnuc attributes support from @Cosmopolitan.
 
 
 
