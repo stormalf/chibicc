@@ -19,5 +19,6 @@ __attribute__((format(scanf, 2, 3)))
 #endif
 
 int main(void) {
+    printf("ok\n");
     return 0;
 }

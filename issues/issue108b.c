@@ -23,9 +23,11 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include "vlc_common.h"
-
+#include "vlc_threads.h"
 #ifndef VLC_CHARSET_H
 #define VLC_CHARSET_H 1
+#define __has_attribute
+#define __has_attribue(warning)
 
 /**
  * \file vlc_charset.h
@@ -447,5 +449,6 @@ __attribute__((format(scanf, 2, 3)))
 
 
 int main(void) {
+    printf("ok\n");
     return 0;
 }

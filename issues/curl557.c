@@ -2,11 +2,11 @@
 
 int main() {
 
-    printf("%llu\n", 0x7FFFFFFFFFFFFFFF );
-    printf("%llu\n", 0x7FFFFFFFFFFFFFFE );
-    printf("%llu\n", 0x7FFFFFFFFFFFFFFD );
-    printf("%llu\n", 0x7FFFFFFF00000000 );
-    printf("%llu\n", 0x000000007FFFFFFF );
+    printf("%lu\n", 0x7FFFFFFFFFFFFFFF );
+    printf("%lu\n", 0x7FFFFFFFFFFFFFFE );
+    printf("%lu\n", 0x7FFFFFFFFFFFFFFD );
+    printf("%lu\n", 0x7FFFFFFF00000000 );
+    printf("%u\n", 0x000000007FFFFFFF );
     
 
 //   i = 1; co_test[i].num = MPRNT_OFF_T_C(0x7FFFFFFFFFFFFFFF); co_test[i].expected = "9223372036854775807";

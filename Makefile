@@ -53,7 +53,7 @@ test-stage2: $(TESTS:test/%=stage2/test/%)
 	for i in $^; do echo $$i; ./$$i || exit 1; echo; done
 	test/driver.sh ./stage2/$(OBJECT)
 
-projects-all: projects openssl nmap curl vim
+projects-all: projects openssl nmap curl vim postgres
 
 projects: zlib util-linux nginx
 
@@ -79,6 +79,10 @@ nginx:
 vim:
 	cd ../vim && make clean && CC=chibicc CFLAGS=-fPIC ./configure && make && make test
 
+postgres:
+	cd ../postgres && CC=chibicc CFLAGS="-fPIC" LDFLAGS="-fPIC" ./configure --host x86_64-linux-gnu && make clean && make && make check
+
+
 # Misc.
 
 libchibicc:  $(OBJECT) $(OBJECTLIB).so
@@ -101,4 +105,4 @@ install:
 uninstall:
 	sudo rm -rf	/usr/local/include/x86_64-linux-gnu/chibicc && sudo rm /usr/local/bin/chibicc
 
-.PHONY: test clean test-stage2 libchibicc projects projects-all test-all install uninstall
+.PHONY: test clean test-stage2 libchibicc projects projects-all test-all install uninstall postgres vim curl zlib nmap openssl util-linux nginx

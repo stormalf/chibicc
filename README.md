@@ -301,8 +301,10 @@ curl : https://github.com/curl/curl.git
 
     make test
     TESTDONE: 1635 tests were considered during 418 seconds.
-    TESTDONE: 1314 tests out of 1316 reported OK: 99%
-    TESTFAIL: These test cases failed: 557 1119
+    TESTDONE: 1635 tests were considered during 3129 seconds.
+    TESTDONE: 1315 tests out of 1316 reported OK: 99%
+
+TESTFAIL: These test cases failed: 557
 
 
 openssl : https://github.com/openssl/openssl.git
@@ -522,7 +524,8 @@ Example of diagram generated with -dotfile parameter :
 ## release notes
 
 
-1.0.23     fixed Alignment bug in codegen #124 detected by @bztsrc. Adding gnuc attributes support from @Cosmopolitan.
+1.0.23     fixed Alignment bug in codegen #124 detected by @bztsrc. Adding gnuc attributes support from @Cosmopolitan. Adding macros (__GNUC__, ...) from @Cosmopolitan.
+            Managing old C style function (K&R) definition partially (not all cases are supported yet). Lots of C programs that failed (in issues directory) are fixed now and moved to test directory.
 
 
 

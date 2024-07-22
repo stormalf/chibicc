@@ -22,7 +22,7 @@ int main()
 {
     static_assert(TEST == 10, "TEST is not 10");
     // prints hello world
-    //printf("Hello World\n");
+    printf("Hello World\n");
  
     return 0;
 }

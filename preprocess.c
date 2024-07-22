@@ -400,7 +400,6 @@ static CondIncl *push_cond_incl(Token *tok, bool included)
 
 static Macro *find_macro(Token *tok)
 {
-
   if (tok->kind != TK_IDENT)
     return NULL;
   return hashmap_get2(&macros, tok->loc, tok->len);
@@ -1389,6 +1388,15 @@ void init_macros(void)
 {
   // Define predefined macros
   define_macro("_LP64", "1");
+  define_macro("__INT64_TYPE__", "long int");
+  define_macro("__INT32_TYPE__", "int");
+  define_macro("__INT16_TYPE__", "short");
+  define_macro("__INT8_TYPE__", "signed char");
+  define_macro(" __int_least64_t", "int64_t");
+  define_macro(" __INTPTR_TYPE__", "long int");
+  define_macro(" __UINTPTR_TYPE__", "long unsigned int");
+  define_macro("UINTPTR_MAX", "18446744073709551615UL");
+  define_macro("__UINTPTR_MAX__", "18446744073709551615UL");
   define_macro("__C99_MACRO_WITH_VA_ARGS", "1");
   define_macro("__ELF__", "1");
   define_macro("__LP64__", "1");
@@ -1416,6 +1424,7 @@ void init_macros(void)
   define_macro("__amd64", "1");
   define_macro("__amd64__", "1");
   define_macro("__CHIBICC__", "1");
+  define_macro("__chibicc__", "1");
   define_macro("__const__", "const");
   define_macro("__gnu_linux__", "1");
   define_macro("__inline__", "inline");
@@ -1430,7 +1439,14 @@ void init_macros(void)
   define_macro("__x86_64", "1");
   define_macro("__x86_64__", "1");
   define_macro("__GNU__", "1");
-  define_macro("__INTEL_COMPILER", "1");
+
+  //defining GNUC to trap missing attributes or errors
+  define_macro("__GNUC__", "9");
+  //the below macro __GNUC_MINOR seems to cause issues (to see later)
+  //define_macro("__GNUC_MINOR__", "0");
+  define_macro("LONG_MAX", "9223372036854775807");
+  define_macro("ULONG_MAX", "18446744073709551615");
+  //define_macro("__INTEL_COMPILER", "1");
   define_macro("HAVE_ATTRIBUTE_PACKED", "1");
   define_macro("linux", "1");
   define_macro("unix", "1");

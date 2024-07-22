@@ -241,7 +241,7 @@ struct Obj
   bool is_weak;
   bool is_externally_visible;
   char *visibility;
-  
+  char *asmname;
   bool is_inline;
 
   //from COSMOPOLITAN adding is_aligned, is_noreturn, is_destructor, is_constructor, is_ms_abi, is_no_instrument_function, is_force_align_arg_pointer, is_no_caller_saved_registers
