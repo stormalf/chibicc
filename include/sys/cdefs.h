@@ -495,7 +495,7 @@
      array_name[restrict]
    GCC 3.1 and clang support this.
    This syntax is not usable in C++ mode.  */
-#if (__GNUC_PREREQ (3,1) || __clang_major__ >= 3) && !defined __cplusplus
+#if (__GNUC_PREREQ (3,1) || __clang_major__ >= 3) && !defined __cplusplus && !defined __CHIBICC__
 # define __restrict_arr	__restrict
 #else
 # ifdef __GNUC__

@@ -741,6 +741,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     }
 
     tok = tok->next;
+    tok = attribute_list(tok, ty, type_attributes);
 
   }
 
@@ -3613,10 +3614,24 @@ static Token *type_attributes(Token *tok, void *arg)
     tok = skip(tok, ")", ctx);
     return tok;
   }
+
+
+  if (equal(tok->next, "(") && consume(&tok, tok, "__deprecated__")) {
+    ctx->filename = PARSE_C;
+    ctx->funcname = "type_attributes";        
+    ctx->line_no = __LINE__ + 1;          
+    tok = skip(tok, "(", ctx);
+    ConsumeStringLiteral(&tok, tok);
+    ctx->line_no = __LINE__ + 1;  
+    return skip(tok, ")", ctx);
+  }
+
+
   //from COSMOPOLITAN adding deprecated, may_alias, unused
   if (consume(&tok, tok, "deprecated") || consume(&tok, tok, "__deprecated__") ||
       consume(&tok, tok, "may_alias") ||  consume(&tok, tok, "__may_alias__") ||
-      consume(&tok, tok, "unused") || consume(&tok, tok, "__unused__")) {
+      consume(&tok, tok, "unused") || consume(&tok, tok, "__unused__") || 
+      consume(&tok, tok, "__transparent_union__") || consume(&tok, tok, "transparent_union")) {
     return tok;
   }
 
@@ -3632,10 +3647,71 @@ static Token *type_attributes(Token *tok, void *arg)
     return tok;
   }
 
-    if (consume(&tok, tok, "const") || consume(&tok, tok, "__const__")) {
-    return tok;
+ if (consume(&tok, tok, "noinline") ||
+      consume(&tok, tok, "__noinline__") ||
+      consume(&tok, tok, "const") ||
+      consume(&tok, tok, "__const__") ||
+      consume(&tok, tok, "pure") ||
+      consume(&tok, tok, "__pure__") ||
+      consume(&tok, tok, "dontclone") ||
+      consume(&tok, tok, "__dontclone__") ||
+      consume(&tok, tok, "may_alias") ||
+      consume(&tok, tok, "__may_alias__") ||
+      consume(&tok, tok, "warn_unused_result") ||
+      consume(&tok, tok, "__warn_unused_result__") ||
+      consume(&tok, tok, "flatten") ||
+      consume(&tok, tok, "__flatten__") ||
+      consume(&tok, tok, "leaf") ||
+      consume(&tok, tok, "__leaf__") ||
+      consume(&tok, tok, "no_reorder") ||
+      consume(&tok, tok, "__no_reorder__") ||
+      consume(&tok, tok, "dontthrow") ||
+      consume(&tok, tok, "__dontthrow__") ||
+      consume(&tok, tok, "optnone") ||
+      consume(&tok, tok, "__optnone__") ||
+      consume(&tok, tok, "returns_twice") ||
+      consume(&tok, tok, "__returns_twice__") ||
+      consume(&tok, tok, "nodebug") ||
+      consume(&tok, tok, "__nodebug__") ||
+      consume(&tok, tok, "artificial") ||
+      consume(&tok, tok, "__artificial__") ||
+      consume(&tok, tok, "returns_nonnull") ||
+      consume(&tok, tok, "__returns_nonnull__") ||
+      consume(&tok, tok, "malloc") ||
+      consume(&tok, tok, "__malloc__") ||
+      consume(&tok, tok, "deprecated") ||
+      consume(&tok, tok, "__deprecated__") ||
+      consume(&tok, tok, "__transparent_union__") || 
+      consume(&tok, tok, "transparent_union") ||
+      consume(&tok, tok, "gnu_inline") ||
+      consume(&tok, tok, "__gnu_inline__") ||
+      consume(&tok, tok, "used") ||
+      consume(&tok, tok, "__used__") ||
+      consume(&tok, tok, "unused") ||
+      consume(&tok, tok, "__unused__") ||
+      consume(&tok, tok, "no_icf") ||
+      consume(&tok, tok, "__no_icf__") ||
+      consume(&tok, tok, "noipa") ||
+      consume(&tok, tok, "__noipa__") ||
+      consume(&tok, tok, "noplt") ||
+      consume(&tok, tok, "__noplt__") ||
+      consume(&tok, tok, "stack_protect") ||
+      consume(&tok, tok, "__stack_protect__") ||
+      consume(&tok, tok, "no_sanitize_address") ||
+      consume(&tok, tok, "__no_sanitize_address__") ||
+      consume(&tok, tok, "no_sanitize_thread") ||
+      consume(&tok, tok, "__no_sanitize_thread__") ||
+      consume(&tok, tok, "no_split_stack") ||
+      consume(&tok, tok, "__no_split_stack__") ||
+      consume(&tok, tok, "no_stack_limit") ||
+      consume(&tok, tok, "__no_stack_limit__") ||
+      consume(&tok, tok, "no_sanitize_undefined") ||
+      consume(&tok, tok, "__no_sanitize_undefined__") ||
+      consume(&tok, tok, "no_profile_instrument_function") ||
+      consume(&tok, tok, "__no_profile_instrument_function__")) 
+    {
+        return tok;
   }
-
 
   if (consume(&tok, tok, "format") || consume(&tok, tok, "__format__")) {
     ctx->filename = PARSE_C;
@@ -3685,7 +3761,27 @@ static Token *type_attributes(Token *tok, void *arg)
     return tok;
   }
 
-  
+  if (consume(&tok, tok, "mode") || consume(&tok, tok, "__mode__")) {
+    ctx->filename = PARSE_C;
+    ctx->funcname = "type_attributes";        
+    ctx->line_no = __LINE__ + 1;          
+    tok = skip(tok, "(", ctx);
+    if (consume(&tok, tok, "__QI__") || consume(&tok, tok, "__HI__") ||
+        consume(&tok, tok, "__SI__") || consume(&tok, tok, "__DI__") ||
+        consume(&tok, tok, "__TI__") || consume(&tok, tok, "__SF__") ||
+        consume(&tok, tok, "__DF__") || consume(&tok, tok, "__XF__") ||
+        consume(&tok, tok, "__TF__") || consume(&tok, tok, "__SQ__") || consume(&tok, tok, "__HQ__") ||
+        consume(&tok, tok, "__SA__") || consume(&tok, tok, "__DA__") || consume(&tok, tok, "__TQ__") ||
+        consume(&tok, tok, "__V2SI__") || consume(&tok, tok, "__V4SI__") || consume(&tok, tok, "__V8HI__") ||
+        consume(&tok, tok, "__V16QI__") || consume(&tok, tok, "__word__") || consume(&tok, tok, "__pointer__") ||
+        consume(&tok, tok, "__CQI__") || consume(&tok, tok, "__CHI__") || consume(&tok, tok, "__CDF__") ||
+        consume(&tok, tok, "__BI__")) {
+        ctx->line_no = __LINE__ + 1;  
+      return skip(tok, ")", ctx);
+    }
+    ctx->line_no = __LINE__ + 1;  
+    return skip(tok, ")", ctx);
+  }
 
   if (consume(&tok, tok, "nothrow") || consume(&tok, tok, "__nothrow__")) {
     return tok;
@@ -3702,17 +3798,23 @@ static Token *type_attributes(Token *tok, void *arg)
   }
 
 
-  if (consume(&tok, tok, "error") ||
-      consume(&tok, tok, "warning")) {
+  if (consume(&tok, tok, "error") || consume(&tok, tok, "__error__") ||
+      consume(&tok, tok, "warning") || consume(&tok, tok, "__warning__"))  {
     ctx->filename = PARSE_C;
     ctx->funcname = "type_attributes";        
-    ctx->line_no = __LINE__ + 1;          
-    tok = skip(tok, "(", ctx);
-    ctx->line_no = __LINE__ + 1;      
-    tok = skip(tok, "(", ctx);
-    ConsumeStringLiteral(&tok, tok);
     ctx->line_no = __LINE__ + 1;  
-    tok = skip(tok, ")", ctx);
+    bool two_parent= false;        
+    tok = skip(tok, "(", ctx);
+    ctx->line_no = __LINE__ + 1;  
+    if (equal(tok, "("))   { 
+      tok = skip(tok, "(", ctx);
+      two_parent = true;
+    }
+    ConsumeStringLiteral(&tok, tok); 
+    if (two_parent) {   
+      ctx->line_no = __LINE__ + 1; 
+      tok = skip(tok, ")", ctx);
+    }
     ctx->line_no = __LINE__ + 1;  
     return skip(tok, ")", ctx);
   }
@@ -3852,22 +3954,61 @@ static Token *thing_attributes(Token *tok, void *arg) {
   }
 
 
+
   if (consume(&tok, tok, "error") || consume(&tok, tok, "__error__") ||
-      consume(&tok, tok, "__warning__") ||
-      consume(&tok, tok, "warning")) {
+      consume(&tok, tok, "warning") || consume(&tok, tok, "__warning__"))  {
+    ctx->filename = PARSE_C;
+    ctx->funcname = "thing_attributes";        
+    ctx->line_no = __LINE__ + 1;  
+    bool two_parent= false;        
+    tok = skip(tok, "(", ctx);
+    ctx->line_no = __LINE__ + 1;  
+    if (equal(tok, "("))   { 
+      tok = skip(tok, "(", ctx);
+      two_parent = true;
+    }
+    ConsumeStringLiteral(&tok, tok); 
+    if (two_parent) {   
+      ctx->line_no = __LINE__ + 1; 
+      tok = skip(tok, ")", ctx);
+    }
+    ctx->line_no = __LINE__ + 1;  
+    return skip(tok, ")", ctx);
+  }
+
+
+  if (consume(&tok, tok, "mode") || consume(&tok, tok, "__mode__")) {
     ctx->filename = PARSE_C;
     ctx->funcname = "thing_attributes";        
     ctx->line_no = __LINE__ + 1;          
     tok = skip(tok, "(", ctx);
-    ctx->line_no = __LINE__ + 1;      
+    if (consume(&tok, tok, "__QI__") || consume(&tok, tok, "__HI__") ||
+        consume(&tok, tok, "__SI__") || consume(&tok, tok, "__DI__") ||
+        consume(&tok, tok, "__TI__") || consume(&tok, tok, "__SF__") ||
+        consume(&tok, tok, "__DF__") || consume(&tok, tok, "__XF__") ||
+        consume(&tok, tok, "__TF__") || consume(&tok, tok, "__SQ__") || consume(&tok, tok, "__HQ__") ||
+        consume(&tok, tok, "__SA__") || consume(&tok, tok, "__DA__") || consume(&tok, tok, "__TQ__") ||
+        consume(&tok, tok, "__V2SI__") || consume(&tok, tok, "__V4SI__") || consume(&tok, tok, "__V8HI__") ||
+        consume(&tok, tok, "__V16QI__") || consume(&tok, tok, "__word__") || consume(&tok, tok, "__pointer__") ||
+        consume(&tok, tok, "__CQI__") || consume(&tok, tok, "__CHI__") || consume(&tok, tok, "__CDF__") ||
+        consume(&tok, tok, "__BI__")) {
+        ctx->line_no = __LINE__ + 1;  
+      return skip(tok, ")", ctx);
+    }
+    ctx->line_no = __LINE__ + 1;  
+    return skip(tok, ")", ctx);
+  }
+
+  if (equal(tok->next, "(") && consume(&tok, tok, "__deprecated__")) {
+    ctx->filename = PARSE_C;
+    ctx->funcname = "thing_attributes";        
+    ctx->line_no = __LINE__ + 1;          
     tok = skip(tok, "(", ctx);
     ConsumeStringLiteral(&tok, tok);
     ctx->line_no = __LINE__ + 1;  
-    tok = skip(tok, ")", ctx);
-    ctx->line_no = __LINE__ + 1;  
- 
     return skip(tok, ")", ctx);
   }
+
 
 
   if (consume(&tok, tok, "noinline") ||
@@ -3904,6 +4045,8 @@ static Token *thing_attributes(Token *tok, void *arg) {
       consume(&tok, tok, "__malloc__") ||
       consume(&tok, tok, "deprecated") ||
       consume(&tok, tok, "__deprecated__") ||
+      consume(&tok, tok, "__transparent_union__") || 
+      consume(&tok, tok, "transparent_union") ||
       consume(&tok, tok, "gnu_inline") ||
       consume(&tok, tok, "__gnu_inline__") ||
       consume(&tok, tok, "used") ||
@@ -3933,7 +4076,8 @@ static Token *thing_attributes(Token *tok, void *arg) {
     {
         return tok;
   }
-  if (consume(&tok, tok, "sentinel") || consume(&tok, tok, "__sentinel__") ||
+
+    if (consume(&tok, tok, "sentinel") || consume(&tok, tok, "__sentinel__") ||
       consume(&tok, tok, "nonnull") || consume(&tok, tok, "__nonnull__") ||
       consume(&tok, tok, "warning") || consume(&tok, tok, "__warning__") ||
       consume(&tok, tok, "optimize") || consume(&tok, tok, "__optimize__") ||
@@ -4971,6 +5115,11 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   push_scope("__func__")->var =
       new_string_literal(fn->name, array_of(ty_char, strlen(fn->name) + 1));
 
+  //in assert.h __PRETTY_FUNCTION__ is an alias for __func__ for the current function
+  push_scope("__PRETTY_FUNCTION__")->var =
+      new_string_literal(fn->name, array_of(ty_char, strlen(fn->name) + 1));
+
+
   // [GNU] __FUNCTION__ is yet another name of __func__.
   push_scope("__FUNCTION__")->var =
       new_string_literal(fn->name, array_of(ty_char, strlen(fn->name) + 1));
@@ -5105,7 +5254,7 @@ static void declare_builtin_functions(void)
 Obj *parse(Token *tok)
 {
 
-
+ 
   char *path;
   char *fullpath = calloc(1, sizeof(char) * 400);;
   char *filename;

@@ -1403,7 +1403,6 @@ void init_macros(void)
   define_macro(" __int_least64_t", "int64_t");
   define_macro(" __INTPTR_TYPE__", "long int");
   define_macro(" __UINTPTR_TYPE__", "long unsigned int");
-  define_macro("UINTPTR_MAX", "18446744073709551615UL");
   define_macro("__UINTPTR_MAX__", "18446744073709551615UL");
   define_macro("__C99_MACRO_WITH_VA_ARGS", "1");
   define_macro("__ELF__", "1");
@@ -1421,6 +1420,10 @@ void init_macros(void)
   define_macro("__SIZEOF_SHORT__", "2");
   define_macro("__SIZEOF_SIZE_T__", "8");
   define_macro("__SIZE_TYPE__", "unsigned long");
+  define_macro("__SIZEOF_WCHAR_T__", "4");
+  define_macro("__SIZEOF_WINT_T__", "4");
+
+
   //new macros added defined in GCC
   define_macro("__INTMAX_C(c)", "c ## L");
   define_macro("__INT8_C(c)", "c");
@@ -1463,6 +1466,74 @@ void init_macros(void)
   define_macro("LONG_MIN", "-2147483648L");
   define_macro("INT_MAX", "2147483647");
   define_macro("INT_MIN", "-2147483648");
+  define_macro("INTPTR_MAX", "9223372036854775807L");
+  define_macro("INTPTR_MIN", "-9223372036854775808L");
+  define_macro("UINTPTR_MAX", "18446744073709551615UL");
+  define_macro("INTMAX_MAX", "9223372036854775807L");
+  define_macro("INTMAX_MIN", "-9223372036854775808L");
+  define_macro("UINTMAX_MAX", "18446744073709551615UL");
+  define_macro("PTRDIFF_MAX", "9223372036854775807L");
+  define_macro("PTRDIFF_MIN", "-9223372036854775808L");
+  define_macro("SIG_ATOMIC_MAX", "2147483647");
+  define_macro("__SIG_ATOMIC_MAX__", "SIG_ATOMIC_MAX");
+  define_macro("SIG_ATOMIC_MIN", "-2147483648");
+  define_macro("__SIG_ATOMIC_MIN__", "SIG_ATOMIC_MIN");
+  define_macro("SIZE_MAX", "18446744073709551615UL");
+  define_macro("WCHAR_MAX", "2147483647");
+  define_macro("WCHAR_MIN", "-2147483648");
+  define_macro("WINT_MAX", "4294967295U");
+  define_macro("WINT_MIN", "0");
+  define_macro("INT8_MAX", "127");
+  define_macro("INT8_MIN", "-128");
+  define_macro("INT16_MAX", "32767");
+  define_macro("INT16_MIN", "-32768");
+  define_macro("INT32_MAX", "2147483647");
+  define_macro("INT32_MIN", "-2147483648");
+  define_macro("INT64_MAX", "9223372036854775807L");
+  define_macro("INT64_MIN", "-9223372036854775808L");
+  define_macro("UINT8_MAX", "255");
+  define_macro("UINT16_MAX", "65535");
+  define_macro("UINT32_MAX", "4294967295U");
+  define_macro("UINT64_MAX", "18446744073709551615UL");
+  define_macro("INT_LEAST8_MAX", "127");
+  define_macro("INT_LEAST8_MIN", "-128");
+  define_macro("INT_LEAST16_MAX", "32767");
+  define_macro("INT_LEAST16_MIN", "-32768");
+  define_macro("INT_LEAST32_MAX", "2147483647");
+  define_macro("INT_LEAST32_MIN", "-2147483648");
+  define_macro("INT_LEAST64_MAX", "9223372036854775807L");
+  define_macro("INT_LEAST64_MIN", "-9223372036854775808L");
+  define_macro("UINT_LEAST8_MAX", "255");
+  define_macro("UINT_LEAST16_MAX", "65535");
+  define_macro("UINT_LEAST32_MAX", "4294967295U");
+  define_macro("UINT_LEAST64_MAX", "18446744073709551615UL");
+  define_macro("INT_FAST8_MAX", "127");
+  define_macro("INT_FAST8_MIN", "-128");
+  define_macro("INT_FAST16_MAX", "9223372036854775807L");
+  define_macro("INT_FAST16_MIN", "-9223372036854775808L");
+  define_macro("INT_FAST32_MAX", "9223372036854775807L");
+  define_macro("INT_FAST32_MIN", "-9223372036854775808L");
+  define_macro("INT_FAST64_MAX", "9223372036854775807L");
+  define_macro("INT_FAST64_MIN", "-9223372036854775808L");
+  define_macro("UINT_FAST8_MAX", "255");
+  define_macro("UINT_FAST16_MAX", "18446744073709551615UL");
+  define_macro("UINT_FAST32_MAX", "4294967295U");
+  define_macro("UINT_FAST64_MAX", "18446744073709551615UL");
+  define_macro("SCHAR_WIDTH", "8");
+  define_macro("SCHAR_MAX", "127");
+  define_macro("SCHAR_MIN", "-128");
+  define_macro("UCHAR_WIDTH", "8");
+  define_macro("CHAR_WIDTH", "8");
+  define_macro("CHAR_MAX", "127");
+  define_macro("CHAR_MIN", "-128");
+  define_macro("SHRT_WIDTH", "16");
+  define_macro("SHRT_MAX", "32767");
+  define_macro("SHRT_MIN", "-32768");
+  define_macro("USHRT_WIDTH", "16");
+  define_macro("INT_WIDTH", "32");
+  define_macro("_Float32x", "float");
+  define_macro("_Float64x", "double");
+  define_macro("_Float128x", "long double");
 
   define_macro("__STDC_HOSTED__", "1");
   define_macro("__STDC_NO_COMPLEX__", "1");
@@ -1494,7 +1565,12 @@ void init_macros(void)
   //defining GNUC to trap missing attributes or errors
   define_macro("__GNUC__", "9");
   //the below macro __GNUC_MINOR seems to cause issues (to see later)
-  //define_macro("__GNUC_MINOR__", "0");
+  //it causes loops due to __extension__ keyword in bits/atomic_wide_counter.h
+  //the fix for that is to define __extension__ as empty string
+  define_macro("__extension__", "");
+  //this macro fixed issue with regex.h
+  define_macro("_Restrict_arr_", "");
+  define_macro("__GNUC_MINOR__", "0");
   define_macro("LONG_MAX", "9223372036854775807");
   define_macro("ULONG_MAX", "18446744073709551615");
   //define_macro("__INTEL_COMPILER", "1");
@@ -1503,9 +1579,13 @@ void init_macros(void)
   define_macro("unix", "1");
   define_macro("nonnull", "1");
   //====fixing ISS-147 defining the two macros for the linux platform
-  define_macro("__ORDER_LITTLE_ENDIAN__", "1234");
-  define_macro("__ORDER_BIG_ENDIAN__", "4321");
   define_macro("__BYTE_ORDER__", "__ORDER_LITTLE_ENDIAN__");
+  define_macro("__ORDER_PDP_ENDIAN__", "3412");
+  define_macro("__ORDER_BIG_ENDIAN__", "4321");
+  define_macro("__ORDER_LITTLE_ENDIAN__", "1234");
+  define_macro("__FLOAT_WORD_ORDER__", "__ORDER_LITTLE_ENDIAN__");
+  define_macro("__BIG_ENDIAN__", "__ORDER_BIG_ENDIAN__");
+  define_macro("__LITTLE_ENDIAN__", "__ORDER_LITTLE_ENDIAN__");
 
   add_builtin("__FILE__", file_macro);
   add_builtin("__LINE__", line_macro);

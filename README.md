@@ -302,9 +302,9 @@ curl : https://github.com/curl/curl.git
     make test
     TESTDONE: 1635 tests were considered during 418 seconds.
     TESTDONE: 1635 tests were considered during 3129 seconds.
-    TESTDONE: 1315 tests out of 1316 reported OK: 99%
+    TESTDONE: 1314 tests out of 1316 reported OK: 99%
 
-TESTFAIL: These test cases failed: 557
+TESTFAIL: These test cases failed: 557 1474
 
 
 openssl : https://github.com/openssl/openssl.git
@@ -524,8 +524,8 @@ Example of diagram generated with -dotfile parameter :
 ## release notes
 
 
-1.0.23     fixed Alignment bug in codegen #124 detected by @bztsrc. Adding gnuc attributes support from @Cosmopolitan. Adding macros (__GNUC__, ...) from @Cosmopolitan.
-            Managing old C style function (K&R) definition partially (not all cases are supported yet). Lots of C programs that failed (in issues directory) are fixed now and moved to test directory. \__REDIRECT is not supported (sys/cdefs.h changed to take in account \__CHIBICC\__ to avoid \__REDIRECT failure). Fixing issue with attributes found in parameters of functions. 
+1.0.23     fixed Alignment bug in codegen #124 detected by @bztsrc. Adding gnuc attributes support from @Cosmopolitan. Adding macros (\__GNUC__, ...) from @Cosmopolitan.
+            Managing old C style function (K&R) definition partially (not all cases are supported yet). Lots of C programs that failed (in issues directory) are fixed now and moved to test directory. \__REDIRECT is not supported  neither _Restrict_arr (sys/cdefs.h changed to take in account \__CHIBICC\__ to avoid \__REDIRECT or _Restrict_arr failure). Fixing lots of issues with attributes found in parameters of functions. Adding \__extension__ as empty string to avoid looping in bits/atomic_wide_counter.h when \__GNUC_MINOR__ is defined. Fixing a loop issue in bits/atomic_wide_counter.h when \__GNUC_MINOR__ is defined.
 
 
 

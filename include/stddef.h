@@ -7,6 +7,11 @@ typedef unsigned long size_t;
 typedef long ptrdiff_t;
 typedef unsigned int wchar_t;
 typedef long max_align_t;
+typedef __UINT32_TYPE__ uint32_t;
+typedef float _Float32;
+typedef double _Float64;
+typedef long double _Float128;
+typedef _Float32 Float32x;
 
 
 

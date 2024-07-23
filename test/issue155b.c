@@ -1,5 +1,7 @@
 #include <stdbool.h>
 #include <asm-generic/int-ll64.h>
+#include <errno.h>
+
 static inline int lxc_caps_down(void)
 {
 	return 0;
