@@ -1,5 +1,5 @@
 #include <stdio.h>
-
+#include <signal.h>
 // K&R style function definitions
 
 struct Point {

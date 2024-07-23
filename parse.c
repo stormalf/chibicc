@@ -520,7 +520,6 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
   bool is_atomic = false;
   while (is_typename(tok))
   {
-
    
     //fixing =====ISS-155 __label__ out;  
     if (equal(tok, "__label__")) {
@@ -806,7 +805,9 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
 
     Type *ty2 = declspec(&tok, tok, NULL);
     Type *backup = ty2;
+
     ty2 = declarator(&tok, tok, ty2);
+
     if (!ty2)
       error_tok(tok, "%s: in declarator : ty2 is null", PARSE_C);
     if (ty2->kind == TY_PTR)
@@ -849,7 +850,7 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
 static Type *array_dimensions(Token **rest, Token *tok, Type *ty)
 {
 
-  while (equal(tok, "static") || equal(tok, "restrict"))
+  while (equal(tok, "static") || equal(tok, "restrict") )
     tok = tok->next;
 
   // trying to fix issue with regex
@@ -890,6 +891,7 @@ static Type *array_dimensions(Token **rest, Token *tok, Type *ty)
 static Type *type_suffix(Token **rest, Token *tok, Type *ty)
 {
 
+  tok = attribute_list(tok, ty, type_attributes);
   if (is_old_style &&  (equal(tok, "("))) {
     //is_old_style = false;
      while(!equal(tok, ")"))
@@ -982,6 +984,7 @@ static Type *declarator(Token **rest, Token *tok, Type *ty)
     tok = tok->next;
   }
 
+ 
   ty = type_suffix(rest, tok, ty);
   if (!ty)
     error_tok(tok, "%s: in declarator : ty is null", PARSE_C);   
@@ -3961,10 +3964,15 @@ static Token *thing_attributes(Token *tok, void *arg) {
     consume(&tok, tok, "scanf");
     consume(&tok, tok, "__scanf__");
     consume(&tok, tok, "strftime");
+    consume(&tok, tok, "__strftime__");
     consume(&tok, tok, "strfmon");
+    consume(&tok, tok, "__strfmon__");
     consume(&tok, tok, "gnu_printf");
+    consume(&tok, tok, "__gnu_printf__");
     consume(&tok, tok, "gnu_scanf");
+    consume(&tok, tok, "__gnu_scanf__");
     consume(&tok, tok, "gnu_strftime");
+    consume(&tok, tok, "__gnu_strftime__");
     ctx->filename = PARSE_C;
     ctx->funcname = "thing_attributes";        
     ctx->line_no = __LINE__ + 1;      

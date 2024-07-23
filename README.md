@@ -525,7 +525,7 @@ Example of diagram generated with -dotfile parameter :
 
 
 1.0.23     fixed Alignment bug in codegen #124 detected by @bztsrc. Adding gnuc attributes support from @Cosmopolitan. Adding macros (__GNUC__, ...) from @Cosmopolitan.
-            Managing old C style function (K&R) definition partially (not all cases are supported yet). Lots of C programs that failed (in issues directory) are fixed now and moved to test directory. \__REDIRECT is not supported (sys/cdefs.h changed to take in account \__CHIBICC\__ to avoid \__REDIRECT failure).
+            Managing old C style function (K&R) definition partially (not all cases are supported yet). Lots of C programs that failed (in issues directory) are fixed now and moved to test directory. \__REDIRECT is not supported (sys/cdefs.h changed to take in account \__CHIBICC\__ to avoid \__REDIRECT failure). Fixing issue with attributes found in parameters of functions. 
 
 
 
