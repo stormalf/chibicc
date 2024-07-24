@@ -1,5 +1,12 @@
-#include "test.h"
-#include "stddef.h"
+// #include "test.h"
+// #include "stddef.h"
+// #include <string.h>
+// #include <stdio.h>
+#include <stddef.h>
+#include <assert.h>
+#include <stdio.h>
+#include <stdarg.h>
+#define ASSERT(x, y) assert(x == y)
 
 int main() {
   ASSERT(5, ({ struct { char a; int b; } __attribute__((packed)) x; sizeof(x); }));
@@ -34,7 +41,7 @@ int main() {
 
   ASSERT(16, ({ struct __attribute__((aligned(8+8))) { char a; int b; } x; _Alignof(x); }));
 
-  ASSERT(1, offsetof(struct __attribute__((packed)) T { char a; int b[2]; }, b));
+  ASSERT(1, offsetof(struct __attribute__((packed)) T2 { char a; int b[2]; }, b));
   ASSERT(1, _Alignof(struct __attribute__((packed)) { char a; int b[2]; }));
 
   ASSERT(8, ({ struct __attribute__((aligned(8))) { int a; } x; _Alignof(x); }));

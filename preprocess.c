@@ -1386,16 +1386,9 @@ static char *format_time(struct tm *tm)
 
 void init_macros(void)
 {
+
   // Define predefined macros
   define_macro("_LP64", "1");
-  define_macro("__INT64_TYPE__", "long int");
-  define_macro("__INT32_TYPE__", "int");
-  define_macro("__INT16_TYPE__", "short");
-  define_macro("__INT8_TYPE__", "signed char");
-  define_macro("__UINT8_TYPE__", "unsigned char");
-  define_macro("__UINT16_TYPE__", "unsigned short");
-  define_macro("__UINT32_TYPE__", "unsigned int");
-  define_macro("__UINT64_TYPE__", "unsigned long int");
   define_macro("__SCHAR_MAX__", "127");
   define_macro("__SHRT_MAX__", "32767");
   define_macro("__LONG_LONG_MAX__", "9223372036854775807LL");
@@ -1531,10 +1524,6 @@ void init_macros(void)
   define_macro("SHRT_MIN", "-32768");
   define_macro("USHRT_WIDTH", "16");
   define_macro("INT_WIDTH", "32");
-  define_macro("_Float32x", "float");
-  define_macro("_Float64x", "double");
-  define_macro("_Float128x", "long double");
-
   define_macro("__STDC_HOSTED__", "1");
   define_macro("__STDC_NO_COMPLEX__", "1");
   define_macro("__STDC_UTF_16__", "1");

@@ -488,6 +488,8 @@ postgres: https://github.com/postgres/postgres.git
 
 - trying to compile other C projects from source to see what is missing or which bug we have with chibicc.
 - Trying to find the root cause of segmentation fault with postgres initdb command.
+- Trying to fix nginx extended assembly issue
+- Trying to rewrite extended assembly inspiring from excellent project @COSMOPOLITAN https://github.com/jart/cosmopolitan/blob/master/third_party/chibicc
 
 
 ## issues and pull requests fixed
@@ -525,7 +527,7 @@ Example of diagram generated with -dotfile parameter :
 
 
 1.0.23     fixed Alignment bug in codegen #124 detected by @bztsrc. Adding gnuc attributes support from @Cosmopolitan. Adding macros (\__GNUC__, ...) from @Cosmopolitan.
-            Managing old C style function (K&R) definition partially (not all cases are supported yet). Lots of C programs that failed (in issues directory) are fixed now and moved to test directory. \__REDIRECT is not supported  neither _Restrict_arr (sys/cdefs.h changed to take in account \__CHIBICC\__ to avoid \__REDIRECT or _Restrict_arr failure). Fixing lots of issues with attributes found in parameters of functions. Adding \__extension__ as empty string to avoid looping in bits/atomic_wide_counter.h when \__GNUC_MINOR__ is defined. Fixing a loop issue in bits/atomic_wide_counter.h when \__GNUC_MINOR__ is defined.
+            Managing old C style function (K&R) definition partially (not all cases are supported yet). Lots of C programs that failed (in issues directory) are fixed now and moved to test directory. \__REDIRECT is not supported  neither _Restrict_arr (sys/cdefs.h changed to take in account \__CHIBICC\__ to avoid \__REDIRECT or _Restrict_arr failure). Fixing lots of issues with attributes found in parameters of functions. Adding \__extension__ as empty string to avoid looping in bits/atomic_wide_counter.h when \__GNUC_MINOR__ is defined.
 
 
 

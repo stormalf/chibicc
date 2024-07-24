@@ -630,18 +630,22 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
 
         ty = struct_decl(&tok, tok->next);
 
+        
       }
       else if (equal(tok, "union"))
       {
         ty = union_decl(&tok, tok->next);
+        
       }
       else if (equal(tok, "enum"))
       {
         ty = enum_specifier(&tok, tok->next);
+        
       }
       else if (equal(tok, "typeof") || equal(tok, "__typeof"))
       {
         ty = typeof_specifier(&tok, tok->next);
+        
       }
       else
       {
@@ -3616,7 +3620,8 @@ static Token *type_attributes(Token *tok, void *arg)
   }
 
 
-  if (equal(tok->next, "(") && consume(&tok, tok, "__deprecated__")) {
+  if (equal(tok->next, "(") && (consume(&tok, tok, "__deprecated__") || 
+       consume(&tok, tok, "deprecated"))) {
     ctx->filename = PARSE_C;
     ctx->funcname = "type_attributes";        
     ctx->line_no = __LINE__ + 1;          
@@ -3625,6 +3630,7 @@ static Token *type_attributes(Token *tok, void *arg)
     ctx->line_no = __LINE__ + 1;  
     return skip(tok, ")", ctx);
   }
+
 
 
   //from COSMOPOLITAN adding deprecated, may_alias, unused
@@ -3646,6 +3652,8 @@ static Token *type_attributes(Token *tok, void *arg)
     }
     return tok;
   }
+
+
 
  if (consume(&tok, tok, "noinline") ||
       consume(&tok, tok, "__noinline__") ||
@@ -3999,7 +4007,9 @@ static Token *thing_attributes(Token *tok, void *arg) {
     return skip(tok, ")", ctx);
   }
 
-  if (equal(tok->next, "(") && consume(&tok, tok, "__deprecated__")) {
+  
+  if (equal(tok->next, "(") && (consume(&tok, tok, "__deprecated__") || 
+       consume(&tok, tok, "deprecated"))) {
     ctx->filename = PARSE_C;
     ctx->funcname = "thing_attributes";        
     ctx->line_no = __LINE__ + 1;          
@@ -4008,6 +4018,7 @@ static Token *thing_attributes(Token *tok, void *arg) {
     ctx->line_no = __LINE__ + 1;  
     return skip(tok, ")", ctx);
   }
+
 
 
 
@@ -4208,7 +4219,7 @@ static Type *struct_union_decl(Token **rest, Token *tok)
 static Type *struct_decl(Token **rest, Token *tok)
 {
   Type *ty = struct_union_decl(rest, tok);
-
+  tok = attribute_list(tok, ty, type_attributes);
   ty->kind = TY_STRUCT;
 
   if (ty->size < 0)
@@ -4250,6 +4261,7 @@ static Type *struct_decl(Token **rest, Token *tok)
   }
 
   ty->size = align_to(bits, ty->align * 8) / 8;
+  
   return ty;
 }
 
@@ -4368,7 +4380,6 @@ static Node *postfix(Token **rest, Token *tok)
     // Compound literal
     Token *start = tok;
     Type *ty = typename(&tok, tok->next);
-
     ctx->filename = PARSE_C;
     ctx->funcname = "postfix";        
     ctx->line_no = __LINE__ + 1;         
@@ -4380,6 +4391,7 @@ static Node *postfix(Token **rest, Token *tok)
       // gvar_initializer(rest, tok, var);
       // return new_var_node(var, start);
       gvar_initializer(&tok, tok, var);
+
       node = new_var_node(var, start);
     }
     else
@@ -4707,8 +4719,35 @@ static Node *primary(Token **rest, Token *tok)
     return new_num(is_compatible(t1, t2), start);
   }
 
+  //fix from COSMOPOLITAN about builtin_offsetof
+    if (equal(tok, "__builtin_offsetof")) {
+      ctx->filename = PARSE_C;
+      ctx->funcname = "primary";        
+      ctx->line_no = __LINE__ + 1;          
+      tok = skip(tok->next, "(", ctx);
+      Token *stok = tok;
+      Type *tstruct = typename(&tok, tok);
+      if (tstruct->kind != TY_STRUCT && tstruct->kind != TY_UNION) {
+        error_tok(stok, "%s: in primary : not a structure or union type", PARSE_C);
+      }
+      ctx->line_no = __LINE__ + 1;  
+      tok = skip(tok, ",", ctx);
+      Token *member = tok;
+      tok = tok->next;
+      *rest = skip(tok, ")", ctx);
+      for (Member *m = tstruct->members; m; m = m->next) {
+        if (m->name->len == member->len &&
+            !memcmp(m->name->loc, member->loc, m->name->len)) {
+          return new_ulong(m->offset, start);
+        }
+      }
+      error_tok(member, "%s: in primary : no such member", PARSE_C);
+
+    }
+
   // if (equal(tok, "__builtin_offsetof"))
   // {
+
   //   ctx->filename = PARSE_C;
   //   ctx->funcname = "primary";        
   //   ctx->line_no = __LINE__ + 1;      
@@ -4720,12 +4759,12 @@ static Node *primary(Token **rest, Token *tok)
   //     ctx->line_no = __LINE__ + 1;        
   //     tok = skip(tok, ",", ctx);
   //   }
+
   //   Type *t2 = typename(&tok, tok);
   //   ctx->filename = PARSE_C;
   //   ctx->funcname = "primary";        
   //   ctx->line_no = __LINE__ + 1;      
   //   *rest = skip(tok, ")", ctx);
-
   //   return new_num(is_compatible(t1, t2), start);
   // }
 

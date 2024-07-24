@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <features.h>
 #include <stdint.h>
+#include <float.h>
 //#include <stdlib.h>
 #define __HAVE_FLOAT32 1
 #define IEC_60559_TYPES_EXT 1
