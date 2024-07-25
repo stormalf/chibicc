@@ -32,7 +32,7 @@
 #endif
 
 #define PRODUCT "chibicc"
-#define VERSION "1.0.22.1"
+#define VERSION "1.0.22.2"
 #define MAXLEN 501
 #define DEFAULT_TARGET_MACHINE "x86_64-linux-gnu"
 
@@ -236,7 +236,24 @@ struct Obj
   Relocation *rel;
 
   // Function
+  //from COSMOPOLITAN adding is_weak
+  char *section;
+  bool is_weak;
+  bool is_externally_visible;
+  char *visibility;
+  char *asmname;
   bool is_inline;
+
+  //from COSMOPOLITAN adding is_aligned, is_noreturn, is_destructor, is_constructor, is_ms_abi, is_no_instrument_function, is_force_align_arg_pointer, is_no_caller_saved_registers
+  bool is_aligned;
+  bool is_noreturn;
+  bool is_destructor;
+  bool is_constructor;
+  bool is_ms_abi; 
+  bool is_no_instrument_function;
+  bool is_force_align_arg_pointer;
+  bool is_no_caller_saved_registers;
+
   Obj *params;
   Node *body;
   Obj *locals;
@@ -401,6 +418,8 @@ int64_t const_expr(Token **rest, Token *tok);
 Obj *parse(Token *tok);
 VarScope *find_var(Token *tok);
 Obj *find_func(char *name);
+//from COSMOPOLITAN adding function ConsumeStringLiteral
+char *ConsumeStringLiteral(Token **rest, Token *tok) ;
 
 
 extern bool opt_fbuiltin;
@@ -435,6 +454,14 @@ struct Type
   int align;         // alignment
   bool is_unsigned;  // unsigned or signed
   bool is_atomic;    // true if _Atomic
+   //from COSMOPOLITAN adding is_const, is_restrict, is_volatile
+  bool is_const;     // const
+  bool is_restrict;  // restrict
+  bool is_volatile;  // volatile
+  //from COSMOPOLITAN adding is_ms_abi, is_static
+  bool is_ms_abi;    // microsoft abi
+  bool is_static;    // for array parameter pointer
+  
   bool is_pointer;   // true if it's a pointer
   Type *pointertype; // store the pointer type int, char...
   Type *origin;      // for type compatibility check
@@ -455,6 +482,8 @@ struct Type
 
   // Array
   int array_len;
+  //from COSMOPOLITAN adding vector_size
+  int vector_size;
 
   // Variable-length array
   Node *vla_len; // # of elements
@@ -464,6 +493,9 @@ struct Type
   Member *members;
   bool is_flexible;
   bool is_packed;
+  
+  //from COSMOPOLITAN adding is_aligned
+  bool is_aligned;
 
   // Function type
   Type *return_ty;
