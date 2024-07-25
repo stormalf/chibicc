@@ -287,7 +287,7 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
         //replace each %9 by the correct input register
         for (int i = 0; i < nbInput; i++)
         {
-            if (asmExt->input[i]->isAddress && asmExt->input[i]->isStruct) {
+            if (asmExt->input[i]->isAddress) {
                 char *tmp = calloc(1, sizeof(char) * 30);
                 strncat(tmp, "(", 2);
                 strncat(tmp, asmExt->input[i]->reg64, strlen(asmExt->input[i]->reg64) );
