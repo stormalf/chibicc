@@ -473,7 +473,7 @@ lxc: https://github.com/lxc/lxc.git
 
 postgres: https://github.com/postgres/postgres.git 
 
-    CC=chibicc CFLAGS="-fPIC" LDFLAGS="-fPIC -g" ./configure --host x86_64-linux-gnu
+    CC=chibicc CFLAGS="-fPIC" LDFLAGS="-fPIC -g" ./configure --host x86_64-linux-gnu --disable-spinlocks
     make
     make check
     Program received signal SIGSEGV, Segmentation fault.
@@ -521,8 +521,8 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.22.2        Reintroducing partial Old C style function declarations management (issue ISS-172 postgres doesn't compile anymore with 1.0.22 or higher due to 
-                old C style not supported anymore). Now it's possible to compile postgres with chibicc (but still a segmentation fault at execution time). The support of old C style function is partial for the moment.
+1.0.22.3        Fixing some issues with extended assembly (managing diffrently depending letters used =r, =m, =q, =a, =b, =c, =d). Adding -print parameter to print
+                 all tokens in /tmp/chibicc.log file to help for debugging. Reformatting error messages. Adding color codes to error messages.
 
 
 ## old release notes

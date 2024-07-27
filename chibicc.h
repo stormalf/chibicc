@@ -20,6 +20,8 @@
 #include <math.h>
 
 
+#define ROUNDUP(X, K)   (((X) + (K) - 1) & -(K))
+
 #ifndef __has_attribute
 #define __has_attribute(x) __GCC4_has_attribute_##x
 #endif
@@ -91,7 +93,7 @@ this " PRODUCT " contains only some differences for now like new parameters\n"
 -dumpmachine it's required by some projects returns x86_64-linux-gnu\n \
 -dotfile generates a file with .dot extension that can be visualized using graphviz package \n \
 -dM Print macro definitions in -E mode instead of normal output\n \
--ignore-assert  ingore static_assert and StaticAssertDecl functions if omit, the static assertions are not omitted \
+-print print all tokens \n \
 chibicc [ -o <path> ] <file>\n"
 
 typedef struct Type Type;
@@ -645,6 +647,7 @@ extern FILE *dotf;
 extern FILE *f;
 extern bool isDotfile;
 extern bool isDebug;
+extern bool printTokens;
 extern bool isPrintMacro;
 extern char *extract_filename(char *tmpl);
 extern char *extract_path(char *tmpl);
@@ -669,5 +672,5 @@ char *opcode(int size);
 char *update_register_size(char *reg, int size);
 char *retrieve_output_index_str(char letter);
 int retrieve_output_index_from_letter(char letter);
-
 char *retrieveVariableNumber(int index);
+char *generate_input_for_output(void);

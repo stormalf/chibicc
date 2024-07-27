@@ -1,3 +1,4 @@
+#include <stdio.h>
  /* confdefs.h */
 #define PACKAGE_NAME "PostgreSQL"
 #define PACKAGE_TARNAME "postgresql"
@@ -215,6 +216,7 @@ ok |= (argc == 0 ||f (e, argv, 0) != argv[0] ||f (e, argv, 1) != argv[1]);
   // work around unused variable warnings
   ok |= (!success ||bignum == 0LL ||ubignum == 0uLL ||newvar[0] == 'x'
        ||dynamic_array[ni.number - 1] != 543);
-
+  printf("\nOK=%d\n", ok);
+  ASSERT(0, ok);
   return ok;
 }

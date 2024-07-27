@@ -1,6 +1,14 @@
 #include "chibicc.h"
 #define TOKENIZE_C "tokenize.c"
 
+// Define the ANSI color codes
+#define RED "\033[31m"
+#define RESET "\033[0m"
+
+// Length of the color codes
+#define RED_LEN 5 // \033[31m
+#define RESET_LEN 4 // \033[0m
+
 // Input file
 static File *current_file;
 
@@ -28,6 +36,7 @@ void error(char *fmt, ...)
 //
 // foo.c:10: x = y + 1;
 //               ^ <error message here>
+
 static void verror_at(char *filename, char *input, unsigned int line_no,
                       char *loc, char *fmt, va_list ap)
 {
@@ -41,14 +50,14 @@ static void verror_at(char *filename, char *input, unsigned int line_no,
     end++;
 
   // Print out the line.
-  int indent = fprintf(stderr, "%s:%u: ", filename, line_no);
+  int indent = fprintf(stderr, "%s:%u: " RED "error:" RESET " ", filename, line_no);
   fprintf(stderr, "%.*s\n", (int)(end - line), line);
 
   // Show the error message.
   int pos = display_width(line, loc - line) + indent;
 
-  fprintf(stderr, "%*s", pos, ""); // print pos spaces.
-  fprintf(stderr, "^ ");
+  fprintf(stderr, "%*s", pos - (RED_LEN + RESET_LEN), ""); // print pos spaces, adjusting for color codes
+  fprintf(stderr, RED "^" RESET " "); // Print caret in red
   vfprintf(stderr, fmt, ap);
   fprintf(stderr, "\n");
 }
@@ -352,7 +361,7 @@ static Token *read_string_literal(char *start, char *quote)
   char *end = string_literal_end(quote + 1);
   char *buf = calloc(1, end - quote);
   if (buf == NULL)
-    error("%s: in read_string_literal buf is null!", TOKENIZE_C);
+    error("%s: %s:%d: error: in read_string_literal buf is null!", TOKENIZE_C, __FILE__, __LINE__);
   int len = 0;
 
   for (char *p = quote + 1; p < end;)
@@ -381,7 +390,7 @@ static Token *read_utf16_string_literal(char *start, char *quote)
   char *end = string_literal_end(quote + 1);
   uint16_t *buf = calloc(2, end - start);
   if (buf == NULL)
-    error("%s: in read_utf16_string_literal buf is null!", TOKENIZE_C);
+    error("%s: %s:%d: error: in read_utf16_string_literal buf is null!", TOKENIZE_C, __FILE__, __LINE__);
   int len = 0;
 
   for (char *p = quote + 1; p < end;)
@@ -422,7 +431,7 @@ static Token *read_utf32_string_literal(char *start, char *quote, Type *ty)
   char *end = string_literal_end(quote + 1);
   uint32_t *buf = calloc(4, end - quote);
   if (buf == NULL)
-    error("%s: in read_utf32_string_literal buf is null!", TOKENIZE_C);
+    error("%s: %s:%d: error: in read_utf32_string_literal buf is null!", TOKENIZE_C, __FILE__, __LINE__);
   int len = 0;
 
   for (char *p = quote + 1; p < end;)
@@ -823,8 +832,8 @@ Token *tokenize(File *file)
   add_line_numbers(head.next);
 
   // for debug needs print all the tokens with values
-  // if (isDebug && f != NULL)
-  //    print_debug_tokens(TOKENIZE_C, "tokenize", head.next);
+  if (printTokens && f != NULL)
+     print_debug_tokens(TOKENIZE_C, "tokenize", head.next);
   return head.next;
 }
 
@@ -880,7 +889,7 @@ File *new_file(char *name, unsigned int file_no, char *contents)
 {
   File *file = calloc(1, sizeof(File));
   if (file == NULL)
-    error("%s: in new_file file is null!", TOKENIZE_C);
+    error("%s: %s:%d: error: in new_file file is null!", TOKENIZE_C, __FILE__, __LINE__);
   file->name = name;
   file->display_name = name;
   file->file_no = file_no;
@@ -1031,7 +1040,7 @@ Token *tokenize_file(char *path)
   // Save the filename for assembler .file directive.
   input_files = realloc(input_files, sizeof(char *) * (file_no + 2));
   if (input_files == NULL)
-    error("%s: in tokenize_file input_files is null!", TOKENIZE_C);
+    error("%s: %s:%d: error: in tokenize_file input_files is null!", TOKENIZE_C, __FILE__, __LINE__);
   input_files[file_no] = file;
   input_files[file_no + 1] = NULL;
   file_no++;

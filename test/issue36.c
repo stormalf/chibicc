@@ -1,3 +1,5 @@
+#include <stdio.h>
+#include "test.h"
 typedef struct empty_struct {} empty_struct;
 
 int f(empty_struct a) {
@@ -6,5 +8,7 @@ int f(empty_struct a) {
 
 int main() {
     f((empty_struct){});
+    printf("%ld\n", sizeof(empty_struct));
+    ASSERT(1, sizeof(empty_struct));
     return 0;
 }

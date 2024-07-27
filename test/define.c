@@ -8,5 +8,6 @@ int main() {
   m = 4;
 #endif
 printf("%d\n", m);
+ASSERT(4, m);
 return 0;
 }

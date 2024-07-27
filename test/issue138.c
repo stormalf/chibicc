@@ -1,7 +1,7 @@
 #include <bits/types.h>
 #include <stdint.h>
 #include <stdio.h>
-//#include "test.h"
+#include "test.h"
 #define NGX_SMP_LOCK
 #define ngx_inline inline
 
@@ -30,10 +30,14 @@ ngx_atomic_cmp_set(ngx_atomic_t *lock, ngx_atomic_uint_t old,
 
 int main(void)
 {
-    ngx_atomic_t *lock;
-    ngx_atomic_uint_t old = 0;
-    ngx_atomic_uint_t set = 0;
+    ngx_atomic_uint_t mylock = 8;
+    ngx_atomic_t *lock = &mylock;
+    ngx_atomic_uint_t old = 7;
+    ngx_atomic_uint_t set = 1;
     ngx_atomic_uint_t t = ngx_atomic_cmp_set(lock, old, set);
-    printf("lock = %d, old= %d, set = %d\n");
+    printf("lock = %ld, old= %ld, set = %ld\n", mylock, old, set);
+    ASSERT(8, mylock);
+    ASSERT(7, old);
+    ASSERT(1, set);
     return 0;
 }
