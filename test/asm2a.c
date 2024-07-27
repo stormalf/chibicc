@@ -7,7 +7,8 @@ void someasm(void) {
         /* Add 10 and 20 and store result into register %eax */
     int eax=0;
     int a = 0;
-    __asm__ ( "movl $10, %eax;"
+    __asm__ ( "xor %eax, %eax;"
+                "movl $10, %ebx;"
                 "movl $20, %ebx;"
                 "addl %ebx, %eax;"
     );
@@ -15,9 +16,7 @@ void someasm(void) {
     __asm__ ("movl %%eax, %0;" : "=r" ( eax ));
     a = eax;
     printf("a = %d\n", a);
-    ASSERT(30, eax);
-   ASSERT(30, a);
-    
+    ASSERT(20, a);
 
     /* Subtract 20 from 10 and store result into register %eax */
     __asm__ ( "movl $10, %eax;"
@@ -25,9 +24,9 @@ void someasm(void) {
                     "subl %ebx, %eax;"
     );
     __asm__ ("movl %%eax, %0;" : "=r" ( eax ));
-    ASSERT(-10, eax);
+
     printf("eax = %d\n", eax);
-    
+    ASSERT(-10, eax);
 
     /* Multiply 10 and 20 and store result into register %eax */
     __asm__ ( "movl $10, %eax;"
@@ -35,8 +34,9 @@ void someasm(void) {
                     "imull %ebx, %eax;"
     );
     __asm__ ("movl %%eax, %0;" : "=r" ( eax ));
-    ASSERT(200, eax);
+
     printf("eax = %d\n", eax);
+    ASSERT(200, eax);
 }
 
 

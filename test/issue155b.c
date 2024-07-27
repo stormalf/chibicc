@@ -1,5 +1,8 @@
 #include <stdbool.h>
 #include <asm-generic/int-ll64.h>
+#include <errno.h>
+#include <stdio.h>
+#include "test.h"
 static inline int lxc_caps_down(void)
 {
 	return 0;
@@ -79,6 +82,7 @@ static inline bool lxc_file_cap_is_set(const char *path, cap_value_t cap,
 int main()
 {
     int a = lxc_unpriv(lxc_caps_up());
-
+	printf("%d\n", a);
+	ASSERT(0, a);
     return 0;
 }

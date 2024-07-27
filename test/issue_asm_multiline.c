@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include "test.h"
 int main(void) {
     int a = 10, b = 0;
    asm ("movl %eax, %ebx\n\t" 
@@ -6,5 +7,7 @@ int main(void) {
     );
 
     printf("a=%d, b=%d\n", a, b);
+    ASSERT(10, a);
+    ASSERT(0, b);
     return 0;
 }

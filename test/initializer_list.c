@@ -1,4 +1,6 @@
-struct __pthread_rwlock_arch_t {
+#include <stdio.h>
+#include "test.h"
+struct __pthread_rwlock_arch_t {	
 	unsigned int __readers;
 	unsigned int __writers;
 	unsigned int __wrphase_futex;
@@ -29,6 +31,10 @@ typedef union
 int main()
 {
 	pthread_rwlock_t lock = {0, };
-
+	lock.__align = 8;
+	printf("%ld\n", lock.__align);
+	ASSERT(8, lock.__align);
+	printf("%ld\n", sizeof(lock));
+	ASSERT(56, sizeof(lock));
 	return 0;
 }
