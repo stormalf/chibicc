@@ -521,8 +521,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.22.3        Fixing some issues with extended assembly (managing diffrently depending letters used =r, =m, =q, =a, =b, =c, =d). Adding -print parameter to print
-                 all tokens in /tmp/chibicc.log file to help for debugging. Reformatting error messages. Adding color codes to error messages.
+1.0.22.4        Fixing some issues with extended assembly (new test cases), adding r11 and r10 registers and adding "D" and "S" support for input and output. 
 
 
 ## old release notes

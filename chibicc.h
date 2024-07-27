@@ -34,7 +34,7 @@
 #endif
 
 #define PRODUCT "chibicc"
-#define VERSION "1.0.22.3"
+#define VERSION "1.0.22.4"
 #define MAXLEN 501
 #define DEFAULT_TARGET_MACHINE "x86_64-linux-gnu"
 
@@ -577,6 +577,8 @@ char *reg_di(int sz);
 char *reg_si(int sz);
 char *reg_r8w(int sz);
 char *reg_r9w(int sz);
+char *reg_r10w(int sz);
+char *reg_r11w(int sz);
 void assign_lvar_offsets(Obj *prog);
 int add_register_used(char *regist);
 void clear_register_used();
