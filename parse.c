@@ -19,7 +19,7 @@
 #include "chibicc.h"
 #define PARSE_C "parse.c"
 
-extern bool opt_ignore_assert;
+
 
 // Scope for local variables, global variables, typedefs
 // or enum constants
@@ -197,7 +197,7 @@ static void enter_scope(void)
 
   Scope *sc = calloc(1, sizeof(Scope));
   if (sc == NULL)
-    error("%s : in enter_scope : sc pointer is null!", PARSE_C );
+    error("%s %s:%d: in enter_scope : sc pointer is null!", PARSE_C, __FILE__, __LINE__ );
   sc->next = scope;
   scope = sc;
 }
@@ -242,7 +242,7 @@ static Node *new_node(NodeKind kind, Token *tok)
   static int count = 0;
   Node *node = calloc(1, sizeof(Node));
   if (node == NULL)
-    error("%s: in new_node : node is null", PARSE_C);
+    error("%s:%s:%d: error: in new_node : node is null", PARSE_C, __FILE__, __LINE__);
   node->kind = kind;
   node->unique_number = count++;
   node->tok = tok;
@@ -323,7 +323,7 @@ Node *new_cast(Node *expr, Type *ty)
 
   Node *node = calloc(1, sizeof(Node));
   if (node == NULL)
-    error("%s: in new_cast : node is null", PARSE_C);
+    error("%s: %s:%d: error: in new_cast : node is null", PARSE_C, __FILE__, __LINE__);
   node->kind = ND_CAST;
   node->tok = expr->tok;
   node->lhs = expr;
@@ -335,7 +335,7 @@ static VarScope *push_scope(char *name)
 {
   VarScope *sc = calloc(1, sizeof(VarScope));
   if (sc == NULL)
-    error("%s: in push_scope : sc is null!", PARSE_C);
+    error("%s: %s:%d: error: in push_scope : sc is null!", PARSE_C, __FILE__, __LINE__);
 
   hashmap_put(&scope->vars, name, sc);
   return sc;
@@ -345,7 +345,7 @@ static Initializer *new_initializer(Type *ty, bool is_flexible)
 {
   Initializer *init = calloc(1, sizeof(Initializer));
   if (init == NULL)
-    error("%s: in new_initializer : init is null", PARSE_C);
+    error("%s: %s:%d: error: in new_initializer : init is null", PARSE_C, __FILE__, __LINE__);
   init->ty = ty;
 
   if (ty->kind == TY_ARRAY)
@@ -358,7 +358,7 @@ static Initializer *new_initializer(Type *ty, bool is_flexible)
 
     init->children = calloc(ty->array_len, sizeof(Initializer *));
     if (init->children == NULL)
-      error("%s: in new_initializer : init->children is null", PARSE_C);
+      error("%s: %s:%d: error: in new_initializer : init->children is null", PARSE_C, __FILE__, __LINE__);
     for (int i = 0; i < ty->array_len; i++)
       init->children[i] = new_initializer(ty->base, false);
     return init;
@@ -374,14 +374,14 @@ static Initializer *new_initializer(Type *ty, bool is_flexible)
 
     init->children = calloc(len, sizeof(Initializer *));
     if (init->children == NULL)
-      error("%s: in new_initializer : init->children is null (bis)", PARSE_C);
+      error("%s: %s:%d: error: in new_initializer : init->children is null (bis)", PARSE_C, __FILE__, __LINE__);
     for (Member *mem = ty->members; mem; mem = mem->next)
     {
       if (is_flexible && ty->is_flexible && !mem->next)
       {
         Initializer *child = calloc(1, sizeof(Initializer));
         if (child == NULL)
-          error("%s: in new_initializer : child is null", PARSE_C);
+          error("%s: %s:%d: error: in new_initializer : child is null", PARSE_C, __FILE__, __LINE__);
         child->ty = mem->ty;
         child->is_flexible = true;
         init->children[mem->idx] = child;
@@ -402,7 +402,7 @@ static Obj *new_var(char *name, Type *ty)
 
   Obj *var = calloc(1, sizeof(Obj));
   if (var == NULL)
-    error("%s: in new_var : var is null", PARSE_C);
+    error("%s: %s:%d: error: in new_var : var is null", PARSE_C, __FILE__, __LINE__);
   var->name = name;
   var->ty = ty;
   var->align = ty->align;
@@ -420,6 +420,12 @@ static Obj *new_lvar(char *name, Type *ty, char *funcname)
   if (!funcname)
     funcname = current_fn->funcname;
   var->funcname = funcname;
+  // if (var->ty->kind == TY_PTR) {
+
+  //   var->ty->is_pointer = true;
+  //   var->ty->pointertype = ty->base;   
+  //   var->ty->size = ty->size; 
+  // }
   locals = var;
   return var;
 }
@@ -533,6 +539,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
       ctx->line_no = __LINE__ + 1;  
       tok = skip(tok, ";", ctx);
     }
+
 
     // Handle storage class specifiers.
     if (equal(tok, "typedef") || equal(tok, "static") || equal(tok, "extern") ||
@@ -779,7 +786,7 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
       if (!equal(tok, ",")) {
         Node *node = expr(&tok, tok);
         if (eval(node->lhs) == 0) { 
-          error("%s:  Static assert error : %s",  PARSE_C, node->rhs->tok->loc);
+          error("%s: %s:%d: tatic assert error : %s",  PARSE_C, __FILE__, __LINE__, node->rhs->tok->loc);
         }
         while(!equal(tok->next, ";"))
           tok = tok->next;
@@ -801,15 +808,17 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
 
 
     Type *ty2 = declspec(&tok, tok, NULL);
-    Type *backup = ty2;
+    //Type *backup = ty2;
+
     ty2 = declarator(&tok, tok, ty2);
+    
     if (!ty2)
       error_tok(tok, "%s: in declarator : ty2 is null", PARSE_C);
-    if (ty2->kind == TY_PTR)
-    {
-      ty2->is_pointer = true;
-      ty2->pointertype = backup;
-    }
+    // if (ty2->kind == TY_PTR)
+    // {
+    //   ty2->is_pointer = true;
+    //   ty2->pointertype = backup;
+    // }
 
     Token *name = ty2->name;
 
@@ -1853,7 +1862,7 @@ static Type *copy_struct_type(Type *ty)
   {
     Member *m = calloc(1, sizeof(Member));
     if (m == NULL)
-      error("%s: in copy_struct_type :  m is null", PARSE_C);
+      error("%s: %s:%d: error: in copy_struct_type :  m is null", PARSE_C, __FILE__, __LINE__);
     *m = *mem;
     cur = cur->next = m;
   }
@@ -2072,7 +2081,7 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
 
   Relocation *rel = calloc(1, sizeof(Relocation));
   if (rel == NULL)
-    error("%s: in write_gvar_data : rel is null", PARSE_C);
+    error("%s: %s:%d: error: in write_gvar_data : rel is null", PARSE_C, __FILE__, __LINE__);
   rel->offset = offset;
   rel->label = label;
   rel->addend = val;
@@ -2091,7 +2100,7 @@ static void gvar_initializer(Token **rest, Token *tok, Obj *var)
   Relocation head = {};
   char *buf = calloc(1, var->ty->size);
   if (buf == NULL)
-    error("%s: in gvar_initializer : buf is null!", PARSE_C);
+    error("%s: %s:%d: error: in gvar_initializer : buf is null!", PARSE_C, __FILE__, __LINE__);
   write_gvar_data(&head, init, var->ty, buf, 0);
   var->init_data = buf;
   var->rel = head.next;
@@ -2492,7 +2501,8 @@ static Node *stmt(Token **rest, Token *tok)
     return node;
   }
 
-  if (tok->kind == TK_IDENT && equal(tok->next, ":"))
+
+  if ((tok->kind == TK_IDENT && equal(tok->next, ":")))
   {
     Node *node = new_node(ND_LABEL, tok);
     node->label = strndup(tok->loc, tok->len);
@@ -3422,7 +3432,7 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
     {
       Member *mem = calloc(1, sizeof(Member));
       if (mem == NULL)
-        error("%s: in struct_members : mem is null", PARSE_C);
+        error("%s: %s:%d: error: in struct_members : mem is null", PARSE_C, __FILE__, __LINE__);
       mem->ty = basety;
       mem->idx = idx++;
       mem->align = attr.align ? attr.align : mem->ty->align;
@@ -3448,7 +3458,7 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
 
       Member *mem = calloc(1, sizeof(Member));
       if (mem == NULL)
-        error("%s: in struct_members : mem is null (bis)", PARSE_C);
+        error("%s: %s:%d: error: in struct_members : mem is null (bis)", PARSE_C, __FILE__, __LINE__);
       mem->ty = declarator(&tok, tok, basety);
       mem->name = mem->ty->name;
       mem->idx = idx++;
@@ -3472,7 +3482,7 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
   {
     Member *mem = calloc(1, sizeof(Member));
     if (mem == NULL)
-      error("%s: in struct_members : mem is null", PARSE_C);
+      error("%s: %s:%d: error: in struct_members : mem is null", PARSE_C, __FILE__, __LINE__);
     mem->ty = ty_char;
     mem->idx = 0;
     mem->align = mem->ty->align;
@@ -4907,7 +4917,7 @@ static Node *primary(Token **rest, Token *tok)
     }
 
     //printf("=======%s %d\n", tok->loc, __LINE__);
-    error_tok(tok, "%s %d: in primary : error: undefined variable", PARSE_C, __LINE__);
+    error_tok(tok, "%s %d: in primary : error: undefined variable %s", PARSE_C, __LINE__, tok->loc);
   }
 
   if (tok->kind == TK_STR)
@@ -5301,6 +5311,7 @@ Obj *parse(Token *tok)
       tok = static_assertion(tok);
       continue;
     }
+
     VarAttr attr = {};
     //from COSMOPOLITAN adding other GNUC attributes
     tok = attribute_list(tok, &attr, thing_attributes);
@@ -5415,7 +5426,7 @@ char *nodekind2str(NodeKind kind)
   case ND_GOTO_EXPR:
     return "GOTO_EXPR"; // "goto" labels-as-values
   case ND_LABEL:
-    return "LABLE"; // Labeled statement
+    return "LABEL"; // Labeled statement
   case ND_LABEL_VAL:
     return "LABEL_VAL"; // [GNU] Labels-as-values
   case ND_FUNCALL:
@@ -5705,16 +5716,16 @@ while(!equal(tok->next, "{"))
 
 
     Type *ty2 = declspec(&tok, tok, NULL);
-    Type *backup = ty2;
+    //Type *backup = ty2;
     ty2 = declarator(&tok, tok, ty2);
     if (!ty2)
       error_tok(tok, "%s: in declarator : ty2 is null", PARSE_C);
 
-    if (ty2->kind == TY_PTR)
-    {
-      ty2->is_pointer = true;
-      ty2->pointertype = backup;
-    }
+    // if (ty2->kind == TY_PTR)
+    // {
+    //   ty2->is_pointer = true;
+    //   ty2->pointertype = backup;
+    // }
 
     Token *name = ty2->name;
 

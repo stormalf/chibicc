@@ -10,7 +10,8 @@ int main() {
             :
             : "rdx");
 
-    printf("msr: %llx\n", msr);
+    printf("msr: %lx\n", msr);
+
 
     // Do other work...
 
@@ -22,7 +23,7 @@ int main() {
             :
             : "rdx");
 
-    printf("msr: %llx\n", msr);
+    printf("msr: %lx\n", msr);
 
     return 0;
 }

@@ -74,7 +74,7 @@ util-linux:
 	cd ../util-linux && make clean && make && make check-programs && cd tests && ./run.sh
 
 nginx:
-	cd ../nginx && make clean && CC=chibicc CFLAGS=-fPIC ./auto/configure && make 
+	cd ../nginx && make clean && CC=chibicc CFLAGS=-fPIC ./auto/configure --with-http_ssl_module && make & objs/nginx -V
 
 vim:
 	cd ../vim && make clean && CC=chibicc CFLAGS=-fPIC ./configure && make && make test

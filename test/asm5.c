@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <stdio.h>
+#include "test.h"
 void DoCheck(uint32_t dwSomeValue)
 {
    uint32_t dwRes;
@@ -9,7 +10,9 @@ void DoCheck(uint32_t dwSomeValue)
      : "=r" (dwRes)
      : "r" (dwSomeValue)
      : "cc");
-
+   printf("%u: %u %u\n", 0, dwSomeValue, dwRes);
+   ASSERT(0, dwRes);
+   ASSERT(5, dwSomeValue);
    //assert(dwRes > 3);
 }
 

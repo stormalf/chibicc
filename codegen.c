@@ -1874,11 +1874,11 @@ static void print_offset(Obj *prog)
       
     for (Obj *var = fn->params; var; var = var->next)
     {
-    printf("===== %s %s %d %d\n", fn->name, var->name, var->offset, fn->stack_size );
+    printf("=====fn_name=%s var_name=%s offset=%d stack_size=%d\n", fn->name, var->name, var->offset, fn->stack_size );
     }
     for (Obj *var = fn->locals; var; var = var->next)
     {
-      printf("===== %s %s %d %d\n", fn->name, var->name, var->offset, fn->stack_size );
+      printf("=====fn_name=%s var_name=%s offset=%d stack_size=%d\n", fn->name, var->name, var->offset, fn->stack_size );
       //update the function name if it's missing
       if (!var->funcname)
         var->funcname = fn->name;
@@ -1987,7 +1987,7 @@ void assign_lvar_offsets(Obj *prog)
     // inevitably passed by stack rather than by register.
     // The first passed-by-stack parameter resides at RBP+16.
     int top = 16;
-    int bottom = 16;
+    int bottom = 0;
     //trying to fix =====ISS-149 causing segmentation fault when having assembly instructions
     if (fn->alloca_bottom && fn->alloca_bottom->offset)
       bottom =  abs(fn->alloca_bottom->offset);
@@ -2054,7 +2054,7 @@ void assign_lvar_offsets(Obj *prog)
                       : var->align;
 
       if (isDebug)                      
-        printf("======%d %d %d %d %d %s %s\n", bottom, var->ty->kind, var->ty->size, fn->alloca_bottom->offset, fn->alloca_bottom->stack_size, var->name, var->funcname);
+        printf("======bottom=%d kind=%d size=%d fn_bottom=%d fn_stack_size=%d name=%s funcname=%s\n", bottom, var->ty->kind, var->ty->size, fn->alloca_bottom->offset, fn->alloca_bottom->stack_size, var->name, var->funcname);
       //trying to fix ISS-154 Extended assembly compiled with chibicc failed with ASSERT and works fine without assert function 
       //the bottom value need to take in account the size of parameters and local variables to avoid issue with extended assembly
       if (var->offset) {
@@ -2099,7 +2099,7 @@ char *register_available() {
       }
   }
   //no registry available
-  error("%s: in register_available : no register available!", CODEGEN_C);
+  error("%s: %s:%d: error: in register_available : no register available!", CODEGEN_C, __FILE__, __LINE__);
 }
 
 //check if a specific register is available in priority if not try to found a new available
@@ -2127,7 +2127,7 @@ int i;
           return newargreg64[i];
       }
   }
-  error("%s: in register8_to_64 : unexpected error!", CODEGEN_C);
+  error("%s: %s:%d: error: in register8_to_64 : unexpected error!", CODEGEN_C, __FILE__, __LINE__);
 }
 
 //convert register 16 to register 64
@@ -2143,7 +2143,7 @@ int i;
           return newargreg64[i];
       }
   }
-  error("%s: in register16_to_64 : unexpected error!", CODEGEN_C);
+  error("%s: %s:%d: error: in register16_to_64 : unexpected error!", CODEGEN_C, __FILE__, __LINE__);
 }
 
 //convert register 32 to register 64
@@ -2159,7 +2159,7 @@ int i;
           return newargreg64[i];
       }
   }
-  error("%s: in register32_to_64 : unexpected error!", CODEGEN_C);
+  error("%s: %s:%d: error: in register32_to_64 : unexpected error!", CODEGEN_C, __FILE__, __LINE__);
 }
 
 //add a register in the list of used registers
