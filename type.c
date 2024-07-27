@@ -22,7 +22,7 @@ static Type *new_type(TypeKind kind, int size, int align)
 {
   Type *ty = calloc(1, sizeof(Type));
   if (ty == NULL)
-    error("%s: in new_type ty is null!", TYPE_C);
+    error("%s: %s:%d: error: in new_type ty is null!", TYPE_C, __FILE__, __LINE__);
   ty->kind = kind;
   ty->size = size;
   ty->align = align;
@@ -101,7 +101,7 @@ Type *copy_type(Type *ty)
 {
   Type *ret = calloc(1, sizeof(Type));
   if (ret == NULL)
-    error("%s: in copy_type ret is null!", TYPE_C);
+    error("%s: %s:%d: error: in copy_type ret is null!", TYPE_C, __FILE__, __LINE__);
   *ret = *ty;
   ret->origin = ty;
   return ret;
@@ -111,6 +111,8 @@ Type *pointer_to(Type *base)
 {
   Type *ty = new_type(TY_PTR, 8, 8);
   ty->base = base;
+  ty->is_pointer = true;
+  ty->pointertype = base;
   ty->is_unsigned = true;
   return ty;
 }

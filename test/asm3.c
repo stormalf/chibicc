@@ -1,7 +1,7 @@
 
 
 #include <stdio.h>
-
+#include "test.h"
 int main() {
 
     int src = 1;
@@ -13,5 +13,8 @@ int main() {
         : "r" (src));
 
     printf("%d\n", dst);
+    printf("%d\n", src);
+    ASSERT(2, dst);
+    ASSERT(1, src);
     return 0;
 }
