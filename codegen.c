@@ -11,11 +11,13 @@ static char *argreg16[] = {"%di", "%si", "%dx", "%cx", "%r8w", "%r9w"};
 static char *argreg32[] = {"%edi", "%esi", "%edx", "%ecx", "%r8d", "%r9d"};
 static char *argreg64[] = {"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"};
 
-static char *newargreg8[] = {"%cl","%bl", "%dl", "%al", "%ah", "%bh", "%ch", "%dh", "%dih", "%sih", "%r8h", "%r9h", "%dil", "%sil",  "%r8b", "%r9b",};
-static char *newargreg16[] = {"%cx", "%bx", "%dx", "%ax", "%ax", "%bx", "%cx", "%dx", "%di", "%si", "%r8w", "%r9w", "%di", "%si", "%r8w", "%r9w" };
-static char *newargreg32[] = {"%ecx", "%ebx", "%edx", "%eax", "%eax", "%ebx", "%ecx", "%edx", "%edi", "%esi", "%r8d", "%r9d", "%edi", "%esi", "%r8d", "%r9d" };
-static char *newargreg64[] = {"%rcx", "%rbx", "%rdx", "%rax", "%rax", "%rbx", "%rcx", "%rdx", "%rdi", "%rsi", "%r8", "%r9", "%rdi", "%rsi", "%r8", "%r9" };
-static char *registerUsed[] = {"free", "free", "free", "free", "free", "free", "free", "free", "free", "free", "free", "free", "free", "free", "free", "free"};
+
+static char *newargreg8[] =   {"%cl",   "%bl",  "%dl",  "%al",  "%dil", "%r8b", "%r9b", "r10b", "r11b"};
+static char *newargreg16[] =  {"%cx",   "%bx",  "%dx",  "%ax",  "%di",  "%r8w", "%r9w", "r10w", "r11w" };
+static char *newargreg32[] =  {"%ecx",  "%ebx", "%edx", "%eax", "%edi", "%r8d", "%r9d", "r10d", "r11d" };
+static char *newargreg64[] =  {"%rcx",  "%rbx", "%rdx", "%rax", "%rdi", "%r8",  "%r9",  "r10",  "r11" };
+static char *registerUsed[] = {"free",  "free", "free", "free", "free", "free", "free", "free", "free"};
+
 
 static Obj *current_fn;
 
@@ -162,6 +164,44 @@ char *reg_r9w(int sz)
   }
   unreachable();
 }
+
+
+char *reg_r10w(int sz)
+{
+  switch (sz)
+  {
+  case 1:
+    return "%r10b";
+  case 2:
+    return "%r10w";
+  case 4:
+    return "%r10d";
+  case 8:
+    return "%r10";
+  case 16:
+    return "%r10";
+  }
+  unreachable();
+}
+
+char *reg_r11w(int sz)
+{
+  switch (sz)
+  {
+  case 1:
+    return "%r11b";
+  case 2:
+    return "%r11w";
+  case 4:
+    return "%r11d";
+  case 8:
+    return "%r11";
+  case 16:
+    return "%r11";
+  }
+  unreachable();
+}
+
 
 char *reg_bx(int sz)
 {
