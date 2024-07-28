@@ -93,7 +93,7 @@ this " PRODUCT " contains only some differences for now like new parameters\n"
 -dumpmachine it's required by some projects returns x86_64-linux-gnu\n \
 -dotfile generates a file with .dot extension that can be visualized using graphviz package \n \
 -dM Print macro definitions in -E mode instead of normal output\n \
--print print all tokens \n \
+-print print all tokens in a log file in /tmp/chibicc.log \n \
 chibicc [ -o <path> ] <file>\n"
 
 typedef struct Type Type;
@@ -367,6 +367,7 @@ Node
   Type *func_ty;
   Node *args;
   bool pass_by_stack;
+  bool realign_stack;
   Obj *ret_buffer;
 
   // Goto or labeled statement, or labels-as-values
@@ -447,6 +448,7 @@ typedef enum
   TY_VLA, // variable-length array
   TY_STRUCT,
   TY_UNION,
+  TY_INT128,
 } TypeKind;
 
 struct Type
@@ -530,11 +532,13 @@ extern Type *ty_char;
 extern Type *ty_short;
 extern Type *ty_int;
 extern Type *ty_long;
+extern Type *ty_int128;
 
 extern Type *ty_uchar;
 extern Type *ty_ushort;
 extern Type *ty_uint;
 extern Type *ty_ulong;
+extern Type *ty_uint128;
 
 extern Type *ty_float;
 extern Type *ty_double;
