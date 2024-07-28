@@ -366,4 +366,3 @@ void add_type(Node *node)
     return;
   }
 }
-

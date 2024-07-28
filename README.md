@@ -15,60 +15,61 @@ or
 ./chibicc -h
 
     chibicc is a C compiler based on chibicc created by Rui Ueyama.
-    See original project https://github.com/rui314/chibicc for more information
-    this chibicc contains only some differences for now like new parameters
+        See original project https://github.com/rui314/chibicc for more information
+        this chibicc contains only some differences for now like new parameters
     chibicc usage :
-    --help or -h print the help
-    --version or -v print the version of chibicc
-    -cc1 run the cc1 function needs -cc1-input (-cc1-output optional) parameter
-    -fuse-ld to specify other linker than ld used by default
-    -x Specify the language of the following input files.
-        Permissible languages include: c assembler none
-        'none' means revert to the default behavior of
-        guessing the language based on the file's extension.
-    -S generate assembly file
-    -o path to output executable if omitted a.out generated
-    -c path to source to compile
-    -Xlinker <arg> Pass <arg> on to the linker.
-    -Wl,<options> Pass comma-separated <options> on to the linker.
-    -z <arg> Pass <arg> on to the linker.
-    -soname <arg> Pass -soname <arg> on to the linker.
-    --version-script <arg> Pass --version-script <arg> to the linker.
-    -I<path> Pass path to the include directories
-    -L<path> Pass path to the lib directories
-    -D<macro> define macro example -DM13
-    -U<macro> undefine macro example -UM13
-    -s to strip all symbols during linkage phasis
-    -M -MD -MP -MMD -MF <arg> -MT <arg> -MQ <arg> compiler write a list of input files to
-        stdout in a format that "make" command can read. This feature is
-        used to automate file dependency management
-    -fpic or -fPIC Generate position-independent code (PIC)
-    -fno-pic disables the generation of position-independent code with relative address references
-    -pie Create a dynamically linked position independent
-    -fpie Create a dynamically linked position independent
-    -fPIE Create a dynamically linked position independent
-    -fcommon is the default if not specified, it's mainly useful to enable legacy code to link without errors
-    -fno-common specifies that the compiler places uninitialized global variables in the BSS section of the object file.
-    -static  pass to the linker to link a program statically
-    -pthread pass to the linker to link with lpthread library
-    -shared pass to the linker to produce a shared object which can then be linked with other objects to form an executable.
-    -hashmap-test to test the hashmap function
-    -idirafter <dir> apply to lookup for both the #include "file" and #include <file> directives.
-    -### to dump all commands executed by chibicc
-    -debug to dump all commands executed by chibicc in a log file in /tmp/chibicc.log
-    -E Stop after the preprocessing stage; do not run the compiler proper.
-        The output is in the form of preprocessed source code, which is sent to the standard output.
-        Input files that don’t require preprocessing are ignored.
-    -rpath <dir> Add a directory to the runtime library search path this parameter is passed to the linker.
-        This is used when linking an ELF executable with shared objects.
-        All -rpath arguments are concatenated and passed to the runtime linker,
-        which uses them to locate shared objects at runtime.
-        The -rpath option is also used when locating shared objects
-        which are needed by shared objects explicitly included in the link.
-    -dumpmachine it's required by some projects returns x86_64-linux-gnu
-    -dotfile generates a file with .dot extension that can be visualized using graphviz package
-    -dM Print macro definitions in -E mode instead of normal output
-    chibicc [ -o <path> ] <file>
+        --help or -h print the help
+        --version or -v print the version of chibicc
+        -cc1 run the cc1 function needs -cc1-input (-cc1-output optional) parameter 
+        -fuse-ld to specify other linker than ld used by default 
+        -x Specify the language of the following input files.
+            Permissible languages include: c assembler none
+            'none' means revert to the default behavior of
+            guessing the language based on the file's extension.
+        -S generate assembly file 
+        -o path to output executable if omitted a.out generated
+        -c path to source to compile 
+        -Xlinker <arg> Pass <arg> on to the linker.
+        -Wl,<options> Pass comma-separated <options> on to the linker.
+        -z <arg> Pass <arg> on to the linker. 
+        -soname <arg> Pass -soname <arg> on to the linker. 
+        --version-script <arg> Pass --version-script <arg> to the linker.
+        -I<path> Pass path to the include directories 
+        -L<path> Pass path to the lib directories 
+        -D<macro> define macro example -DM13 
+        -U<macro> undefine macro example -UM13
+        -s to strip all symbols during linkage phasis 
+        -M -MD -MP -MMD -MF <arg> -MT <arg> -MQ <arg> compiler write a list of input files to 
+            stdout in a format that "make" command can read. This feature is
+            used to automate file dependency management
+        -fpic or -fPIC Generate position-independent code (PIC)
+        -fno-pic disables the generation of position-independent code with relative address references
+        -pie Create a dynamically linked position independent 
+        -fpie Create a dynamically linked position independent
+        -fPIE Create a dynamically linked position independent
+        -fcommon is the default if not specified, it's mainly useful to enable legacy code to link without errors
+        -fno-common specifies that the compiler places uninitialized global variables in the BSS section of the object file.
+        -static  pass to the linker to link a program statically
+        -pthread pass to the linker to link with lpthread library 
+        -shared pass to the linker to produce a shared object which can then be linked with other objects to form an executable.
+        -hashmap-test to test the hashmap function 
+        -idirafter <dir> apply to lookup for both the #include "file" and #include <file> directives.
+        -### to dump all commands executed by chibicc 
+        -debug to dump all commands executed by chibicc in a log file in /tmp/chibicc.log
+        -E Stop after the preprocessing stage; do not run the compiler proper. 
+            The output is in the form of preprocessed source code, which is sent to the standard output.
+            Input files that don’t require preprocessing are ignored.
+        -rpath <dir> Add a directory to the runtime library search path this parameter is passed to the linker. 
+            This is used when linking an ELF executable with shared objects.
+            All -rpath arguments are concatenated and passed to the runtime linker,
+            which uses them to locate shared objects at runtime. 
+            The -rpath option is also used when locating shared objects 
+            which are needed by shared objects explicitly included in the link. 
+        -dumpmachine it's required by some projects returns x86_64-linux-gnu
+        -dotfile generates a file with .dot extension that can be visualized using graphviz package 
+        -dM Print macro definitions in -E mode instead of normal output
+        -print print all tokens in a log file in /tmp/chibicc.log
+        chibicc [ -o <path> ] <file>
 
 ## compile
 
@@ -254,7 +255,6 @@ List of options ignored :
     "-fdiagnostics-show-option"
     "-fasynchronous-unwind-tables"
     "-fexceptions"
-    "-fsanitize=cfi"
     "--print-search-dirs"
     "-fdiagnostics-show-option"
     "-w"
@@ -339,6 +339,7 @@ git: https://github.com/git/git.git
     autoreconf -fi
     CC=chibicc CFLAGS=-fPIC ./configure
     make
+    make test
 
 
 util-linux : https://github.com/util-linux/util-linux.git

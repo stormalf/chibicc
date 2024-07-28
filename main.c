@@ -667,7 +667,6 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-fdiagnostics-show-option") || 
         !strcmp(argv[i], "-fasynchronous-unwind-tables") || 
         !strcmp(argv[i], "-fexceptions") || 
-        !strcmp(argv[i], "-fsanitize=cfi") || 
         !strcmp(argv[i], "--print-search-dirs") || 
         !strcmp(argv[i], "-fdiagnostics-show-option") || 
         !strcmp(argv[i], "-Xc") ||
