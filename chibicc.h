@@ -18,6 +18,9 @@
 #include <time.h>
 #include <unistd.h>
 #include <math.h>
+#include <signal.h>
+#include <sys/resource.h>
+
 
 
 #define ROUNDUP(X, K)   (((X) + (K) - 1) & -(K))
@@ -448,7 +451,6 @@ typedef enum
   TY_VLA, // variable-length array
   TY_STRUCT,
   TY_UNION,
-  TY_INT128,
 } TypeKind;
 
 struct Type
@@ -532,13 +534,11 @@ extern Type *ty_char;
 extern Type *ty_short;
 extern Type *ty_int;
 extern Type *ty_long;
-extern Type *ty_int128;
 
 extern Type *ty_uchar;
 extern Type *ty_ushort;
 extern Type *ty_uint;
 extern Type *ty_ulong;
-extern Type *ty_uint128;
 
 extern Type *ty_float;
 extern Type *ty_double;

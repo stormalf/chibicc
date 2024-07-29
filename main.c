@@ -61,6 +61,35 @@ static char logFile[] = "/tmp/chibicc.log";
 static StringArray input_paths;
 static StringArray tmpfiles;
 
+
+static void enable_core_dump() {
+    struct rlimit rl;
+    rl.rlim_cur = RLIM_INFINITY;
+    rl.rlim_max = RLIM_INFINITY;
+    if (setrlimit(RLIMIT_CORE, &rl) == -1) {
+        perror("setrlimit");
+        exit(EXIT_FAILURE);
+    }
+}
+
+static void segfault_handler(int signum) {
+    printf("Segmentation fault (signal %d)\n", signum);
+    abort();  // Generate a core dump
+}
+
+static void setup_signal_handlers() {
+    signal(SIGSEGV, segfault_handler);
+}
+
+
+static void print_string_array(StringArray *arr) {
+    for (int i = 0; i < arr->len; i++) {
+        printf("=====ld_extra_args[%d]: %s\n", i, arr->data[i]);
+    }
+}
+
+
+
 static void usage(int status)
 {
   fprintf(stderr, HELP);
@@ -109,7 +138,7 @@ static void add_default_include_paths(char *argv0)
   strarray_push(&include_paths, "/usr/local/include/x86_64-linux-gnu/chibicc");
   strarray_push(&include_paths, "/usr/include/x86_64-linux-gnu");
   strarray_push(&include_paths, "/usr/include");
-  strarray_push(&include_paths, "/usr/lib/gcc/x86_64-linux-gnu/11/include");
+  //strarray_push(&include_paths, "/usr/lib/gcc/x86_64-linux-gnu/11/include");
   //strarray_push(&include_paths, "/usr/include/chibicc/include");
   #if defined(__APPLE__) && defined(__MACH__)
   strarray_push(&include_paths, "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include");
@@ -498,7 +527,7 @@ static void parse_args(int argc, char **argv)
 
     if (!strcmp(argv[i], "-fpic") || !strcmp(argv[i], "-fPIC"))
     {
-      opt_fpic = true;
+      opt_fpic = true;      
       continue;
     }
 
@@ -551,7 +580,7 @@ static void parse_args(int argc, char **argv)
     if (!strcmp(argv[i], "-shared"))
     {
       opt_shared = true;
-      opt_fpic = true;
+      //opt_fpic = true;
       strarray_push(&ld_extra_args, "-shared");
       continue;
     }
@@ -559,6 +588,15 @@ static void parse_args(int argc, char **argv)
     if (!strcmp(argv[i], "-pthread"))
     {
       strarray_push(&ld_extra_args, "-lpthread");
+      continue;
+    }
+
+    if (!strncmp(argv[i], "-L", 2))
+    {
+      //strarray_push(&ld_extra_args, "-L");
+      char *tmp = argv[i];
+      check_parms_length(tmp);
+      strarray_push(&ld_extra_args, tmp);
       continue;
     }
 
@@ -613,7 +651,7 @@ static void parse_args(int argc, char **argv)
     }
 
 
-    if (!strcmp(argv[i], "-rpath"))
+    if (!strcmp(argv[i], "Wl,-rpath,"))
     {
       char *tmp = argv[++i];
       check_parms_length(tmp);
@@ -667,6 +705,7 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-fdiagnostics-show-option") || 
         !strcmp(argv[i], "-fasynchronous-unwind-tables") || 
         !strcmp(argv[i], "-fexceptions") || 
+        !strcmp(argv[i], "-fsanitize=cfi") || 
         !strcmp(argv[i], "--print-search-dirs") || 
         !strcmp(argv[i], "-fdiagnostics-show-option") || 
         !strcmp(argv[i], "-Xc") ||
@@ -697,6 +736,7 @@ static void parse_args(int argc, char **argv)
   if (opt_E)
     opt_x = FILE_C;
 }
+
 
 static FILE *open_file(char *path)
 {
@@ -1103,6 +1143,16 @@ static void run_linker(StringArray *inputs, char *output)
   strarray_push(&arr, "-m");
   strarray_push(&arr, "elf_x86_64");
   strarray_push(&arr, "-allow-multiple-definition");
+
+
+  //for some projects like POSTGRES it seems that the specific path for the project 
+  //should be defined first
+  for (int i = 0; i < ld_extra_args.len; i++) {
+    //printf("====%s\n", ld_extra_args.data[i]);
+    strarray_push(&arr, ld_extra_args.data[i]);
+  }
+
+
   //enabling verbose mode for linker in case of debug
   if (isDebug)
     strarray_push(&arr, "--verbose=1");
@@ -1127,11 +1177,11 @@ static void run_linker(StringArray *inputs, char *output)
   {
     strarray_push(&arr, format("%s/crt1.o", libpath));
     strarray_push(&arr, format("%s/crti.o", libpath));
-    strarray_push(&arr, format("%s/crtbegin.o", gcc_libpath));
-    
+    strarray_push(&arr, format("%s/crtbegin.o", gcc_libpath));    
   }
-  strarray_push(&arr, "-L.");
+
   strarray_push(&arr, format("-L%s", gcc_libpath));
+ // strarray_push(&arr, "-L../../../src/interfaces/libpq");
   strarray_push(&arr, "-L/usr/lib/x86_64-linux-gnu");
   strarray_push(&arr, "-L/usr/lib64");
   strarray_push(&arr, "-L/lib64");
@@ -1140,7 +1190,8 @@ static void run_linker(StringArray *inputs, char *output)
   strarray_push(&arr, "-L/usr/lib/x86_64-pc-linux-gnu");
   strarray_push(&arr, "-L/usr/lib/x86_64-redhat-linux");
   strarray_push(&arr, "-L/usr/lib");
-  strarray_push(&arr, "-L/lib");
+  strarray_push(&arr, "-L/lib");   
+  strarray_push(&arr, "-L.");
   //strarray_push(&arr, "-L/usr/lib/gcc/x86_64-linux-gnu/11/x86_64-linux-gnu");
 
 
@@ -1151,16 +1202,12 @@ static void run_linker(StringArray *inputs, char *output)
 
   }
 
-  for (int i = 0; i < ld_extra_args.len; i++) {
-    //printf("====%s\n", ld_extra_args.data[i]);
-    strarray_push(&arr, ld_extra_args.data[i]);
-  }
-
+  
   for (int i = 0; i < inputs->len; i++) {
     //printf("====%s\n", inputs->data[i]);
     strarray_push(&arr, inputs->data[i]);
   }
-
+ 
   if (opt_static)
   {
     strarray_push(&arr, "--start-group");
@@ -1186,6 +1233,8 @@ static void run_linker(StringArray *inputs, char *output)
   strarray_push(&arr, format("%s/crtn.o", libpath));
   strarray_push(&arr, NULL);
 
+  if (isDebug)
+      print_string_array(&arr);    
   run_subprocess(arr.data);
 }
 
@@ -1219,6 +1268,11 @@ static FileType get_file_type(char *filename)
 
 int main(int argc, char **argv)
 {
+
+  // Enable core dumps and set up signal handlers
+  enable_core_dump();
+  setup_signal_handlers();
+
   atexit(cleanup);
   ctx = calloc(1, sizeof(Context));
 
@@ -1346,7 +1400,7 @@ int main(int argc, char **argv)
   if (ld_args.len > 0)
   {
     // if (symbolic_name)
-    //   symbolic_link(symbolic_name, opt_o);
+    //   symbolic_link(symbolic_name, opt_o);  
     run_linker(&ld_args, opt_o ? opt_o : "a.out");
   }
 

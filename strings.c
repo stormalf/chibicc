@@ -1,27 +1,45 @@
 #include "chibicc.h"
 #define STRINGS_C "strings.c"
 
-void strarray_push(StringArray *arr, char *s) {
+// void strarray_push(StringArray *arr, char *s) {
 
+//   if (!arr->data) {
+//     arr->data = calloc(8, sizeof(char *));
+//     arr->capacity = 8;
+//   }
+
+//   if (arr->capacity == arr->len) {
+//     char **tmp;
+//     tmp = realloc(arr->data, sizeof(char *) * arr->capacity * 2);
+//     if (tmp == NULL)
+//       error("%s: %s:%d: error: in strarray_push reallocation of arr->data failed!", STRINGS_C, __FILE__, __LINE__);
+//     arr->data = tmp;
+//     arr->capacity *= 2;
+//     for (int i = arr->len; i < arr->capacity; i++) {
+//       arr->data[i] = NULL;
+//     }
+//   }
+//   arr->data[arr->len++] = s;
+// }
+
+void strarray_push(StringArray *arr, char *s) {
   if (!arr->data) {
     arr->data = calloc(8, sizeof(char *));
     arr->capacity = 8;
   }
 
   if (arr->capacity == arr->len) {
-    char **tmp;
-    tmp = realloc(arr->data, sizeof(char *) * arr->capacity * 2);
+    char **tmp = realloc(arr->data, sizeof(char *) * arr->capacity * 2);
     if (tmp == NULL)
       error("%s: %s:%d: error: in strarray_push reallocation of arr->data failed!", STRINGS_C, __FILE__, __LINE__);
     arr->data = tmp;
     arr->capacity *= 2;
-    for (int i = arr->len; i < arr->capacity; i++) {
-      arr->data[i] = NULL;
-    }
   }
 
   arr->data[arr->len++] = s;
 }
+
+
 
 // Takes a printf-style format string and returns a formatted string.
 char *format(const char *fmt, ...) {

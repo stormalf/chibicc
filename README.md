@@ -474,7 +474,7 @@ lxc: https://github.com/lxc/lxc.git
 
 postgres: https://github.com/postgres/postgres.git 
 
-    CC=chibicc CFLAGS="-fPIC" LDFLAGS="-fPIC -g" ./configure --host x86_64-linux-gnu --disable-spinlocks
+    CC=chibicc  ./configure --host x86_64-linux-gnu --disable-spinlocks
     make
     make check
     Program received signal SIGSEGV, Segmentation fault.
@@ -522,7 +522,9 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.22.4        Fixing some issues with extended assembly (new test cases), adding r11 and r10 registers and adding "D" and "S" support for input and output. 
+1.0.22.4        Fixing some issues with extended assembly (new test cases), adding r11 and r10 registers and adding "D" and "S" support for input and output.
+                Removing -fsanitize=cfi not supported by gcc. Adding core dump and segfault handler to have useful information when a segfault occurs.
+                Adding debug information for linker. Changing the order of extra linker parameters because if the specific path defined for a project is not the first one, it seems that the linker doesn't find the libraries (#ISS-173).
 
 
 ## old release notes
