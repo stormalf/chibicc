@@ -261,10 +261,10 @@ static Node *new_binary(NodeKind kind, Node *lhs, Node *rhs, Token *tok)
   node->lhs = lhs;
   node->rhs = rhs;
   add_type(node->rhs);
-  if (kind == ND_ASSIGN && node->rhs->ty->kind == TY_VOID  )
-  {
-    error_tok(node->rhs->tok, "%s: in new_binary : Cannot assign void type expression", PARSE_C);
-  }
+  // if (kind == ND_ASSIGN && node->rhs->ty->kind == TY_VOID  )
+  // {
+  //   error_tok(node->rhs->tok, "%s: in new_binary : Cannot assign void type expression", PARSE_C);
+  // }
   // TODO type check other binary expressions, e.g., ND_ADD
   return node;
 }
