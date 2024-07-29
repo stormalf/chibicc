@@ -2289,6 +2289,7 @@ static Node *stmt(Token **rest, Token *tok)
       error_tok(tok, "%s: in stmt : stray case", PARSE_C);
 
     Node *node = new_node(ND_CASE, tok);
+
     int begin = const_expr(&tok, tok->next);
     int end;
 
@@ -2303,11 +2304,11 @@ static Node *stmt(Token **rest, Token *tok)
     {
       end = begin;
     }
-
     ctx->filename = PARSE_C;
     ctx->funcname = "stmt";        
     ctx->line_no = __LINE__ + 1;    
     tok = skip(tok, ":", ctx);
+    tok = attribute_list(tok, tok->ty, type_attributes);
     node->label = new_unique_name();
     node->lhs = stmt(rest, tok);
     node->begin = begin;
@@ -3505,17 +3506,19 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
 //from COSMOPOLITAN adding attribute management
 static Token *attribute_list(Token *tok, void *arg, Token *(*f)(Token *, void *)) 
 {
+
   while (consume(&tok, tok, "__attribute__"))
   {
-    ctx->filename = PARSE_C;
-    ctx->funcname = "attribute_list";        
-    ctx->line_no = __LINE__ + 1;       
-    tok = skip(tok, "(", ctx);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "attribute_list";        
-    ctx->line_no = __LINE__ + 1;       
-    tok = skip(tok, "(", ctx);
 
+    ctx->filename = PARSE_C;
+    ctx->funcname = "attribute_list";        
+    ctx->line_no = __LINE__ + 1;       
+    tok = skip(tok, "(", ctx);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "attribute_list";        
+    ctx->line_no = __LINE__ + 1;       
+    tok = skip(tok, "(", ctx);
+    
     bool first = true;
 
     while (!consume(&tok, tok, ")")) {
@@ -3598,7 +3601,7 @@ static Token *type_attributes(Token *tok, void *arg)
     return tok;
   }
   //from COSMOPOLITAN adding warn_if_not_aligned
-  if (consume(&tok, tok, "warn_if_not_aligned") || consume(&tok, tok, "__warn_if_not_aligned__")) {
+  if (consume(&tok, tok, "warn_if_not_aligned") || consume(&tok, tok, "__warn_if_not_aligned__") ) {
     ctx->filename = PARSE_C;
     ctx->funcname = "type_attributes";        
     ctx->line_no = __LINE__ + 1;          
@@ -3707,6 +3710,8 @@ static Token *type_attributes(Token *tok, void *arg)
       consume(&tok, tok, "__no_stack_limit__") ||
       consume(&tok, tok, "no_sanitize_undefined") ||
       consume(&tok, tok, "__no_sanitize_undefined__") ||
+      consume(&tok, tok, "fallthrough") ||
+      consume(&tok, tok, "__fallthrough__") ||
       consume(&tok, tok, "no_profile_instrument_function") ||
       consume(&tok, tok, "__no_profile_instrument_function__")) 
     {
@@ -3794,6 +3799,26 @@ static Token *type_attributes(Token *tok, void *arg)
 
   if (consume(&tok, tok, "const") || consume(&tok, tok, "__const__")) {
       ty->is_const = true;
+    return tok;
+  }
+
+
+  if (consume(&tok, tok, "sentinel") || consume(&tok, tok, "__sentinel__") ||
+    consume(&tok, tok, "nonnull") || consume(&tok, tok, "__nonnull__") ||
+    consume(&tok, tok, "optimize") || consume(&tok, tok, "__optimize__") ||
+    consume(&tok, tok, "target") || consume(&tok, tok, "__target__") ||
+    consume(&tok, tok, "assume_aligned") || consume(&tok, tok, "__assume_aligned__")) {
+
+    if (consume(&tok, tok, "(")) {
+      for (;;) {
+        const_expr(&tok, tok);
+        if (consume(&tok, tok, ")")) break;
+        ctx->filename = PARSE_C;
+        ctx->funcname = "type_attributes";        
+        ctx->line_no = __LINE__ + 1;          
+        tok = skip(tok, ",", ctx);
+      }
+    }
     return tok;
   }
 
@@ -4078,6 +4103,8 @@ static Token *thing_attributes(Token *tok, void *arg) {
       consume(&tok, tok, "__no_stack_limit__") ||
       consume(&tok, tok, "no_sanitize_undefined") ||
       consume(&tok, tok, "__no_sanitize_undefined__") ||
+      consume(&tok, tok, "fallthrough") ||
+      consume(&tok, tok, "__fallthrough__") ||
       consume(&tok, tok, "no_profile_instrument_function") ||
       consume(&tok, tok, "__no_profile_instrument_function__")) 
     {
@@ -4105,6 +4132,7 @@ static Token *thing_attributes(Token *tok, void *arg) {
     }
     return tok;
   }
+
   if (consume(&tok, tok, "format") || consume(&tok, tok, "__format__")) {
     ctx->filename = PARSE_C;
     ctx->funcname = "thing_attributes";        
@@ -4396,7 +4424,7 @@ static Node *postfix(Token **rest, Token *tok)
   }
   else
   {
-
+    
     node = primary(&tok, tok);
   }
 
