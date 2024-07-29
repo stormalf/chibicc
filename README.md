@@ -257,8 +257,11 @@ List of options ignored :
     "-fexceptions"
     "--print-search-dirs"
     "-fdiagnostics-show-option"
+    "-Xc"
+    "-Aa"
+    "-rdynamic"
     "-w"
-
+    "--param=ssp-buffer-size=4"
 
 ## Dockerfile and devcontainer
 
@@ -524,7 +527,8 @@ Example of diagram generated with -dotfile parameter :
 
 1.0.22.4        Fixing some issues with extended assembly (new test cases), adding r11 and r10 registers and adding "D" and "S" support for input and output.
                 Removing -fsanitize=cfi not supported by gcc. Adding core dump and segfault handler to have useful information when a segfault occurs.
-                Adding debug information for linker. Changing the order of extra linker parameters because if the specific path defined for a project is not the first one, it seems that the linker doesn't find the libraries (#ISS-173).
+                Adding debug information for linker. Changing the order of extra linker parameters because if the specific path defined for a project is not the first one, it seems that the linker doesn't find the libraries (#ISS-173). Adding  support for `chibicc -xc -E -v -` to print the include directories. 
+                Ignoring two other attributes for compatibility with GCC :  \__attribute__((fallthrough)) and \__attribute__((nonnull(1))).
 
 
 ## old release notes

@@ -90,6 +90,39 @@ static void print_string_array(StringArray *arr) {
 
 
 
+static void print_include_directories() {
+
+    // Add standard include paths.
+    strarray_push(&include_paths, "/usr/local/include");
+    strarray_push(&include_paths, "/usr/local/include/x86_64-linux-gnu/chibicc");
+    strarray_push(&include_paths, "/usr/include/x86_64-linux-gnu");
+    strarray_push(&include_paths, "/usr/include");
+    //strarray_push(&include_paths, "/usr/lib/gcc/x86_64-linux-gnu/11/include");
+    //strarray_push(&include_paths, "/usr/include/chibicc/include");
+    #if defined(__APPLE__) && defined(__MACH__)
+    strarray_push(&include_paths, "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include");
+    define_macro("__GNUC__", "5"); // for MacOS SDK compatibility
+    #endif
+
+    // Keep a copy of the standard include paths for -MMD option.
+    for (int i = 0; i < include_paths.len; i++)
+    {
+      strarray_push(&std_include_paths, include_paths.data[i]);
+    }
+
+    printf("#include \"...\" search starts here:\n");
+    printf("#include <...> search starts here:\n");
+
+    for (int i = 0; i < std_include_paths.len; i++)
+    {
+      char *dir = std_include_paths.data[i];
+      printf(" %s\n", dir);
+    }
+
+    printf("End of search list.\n");
+}
+
+
 static void usage(int status)
 {
   fprintf(stderr, HELP);
@@ -98,10 +131,10 @@ static void usage(int status)
 }
 
 // print the version of the command
-static void printVersion(int status)
+static void printVersion()
 {
   printf("%s version : %s\n", PRODUCT, VERSION);
-  exit(status);
+  
 }
 
 // check the length and validity of parameter to avoid non valid input values
@@ -246,8 +279,10 @@ static void parse_args(int argc, char **argv)
 
     if (!strcmp(argv[i], "--version") || !strcmp(argv[i], "-v")  || !strcmp(argv[i], "-V") || !strcmp(argv[i], "-version"))
     {
-      printVersion(0);
-      continue;
+      printVersion();
+      print_include_directories();
+      exit(0);
+
     }
 
     if (!strcmp(argv[i], "-fuse-ld"))
@@ -710,7 +745,8 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-Xc") ||
         !strcmp(argv[i], "-Aa") ||
         !strcmp(argv[i], "-rdynamic") ||        
-        !strcmp(argv[i], "-w"))
+        !strcmp(argv[i], "-w") ||
+        !strcmp(argv[i], "--param=ssp-buffer-size=4"))
       continue;
 
     if (startsWith(argv[i], "-std"))
