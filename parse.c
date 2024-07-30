@@ -186,7 +186,6 @@ static Token *functionKR(Token *tok, Type *basety, VarAttr *attr);
 static Type *func_paramsKR(Token **rest, Token *tok, Type *ty);
 
 
-
 static int align_down(int n, int align)
 {
   return align_to(n - align + 1, align);
@@ -5165,6 +5164,7 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   // [https://www.sigbus.info/n1570#6.4.2.2p1] "__func__" is
   // automatically defined as a local variable containing the
   // current function name.
+
   push_scope("__func__")->var =
       new_string_literal(fn->name, array_of(ty_char, strlen(fn->name) + 1));
 
@@ -5786,3 +5786,4 @@ while(!equal(tok->next, "{"))
 
   return ty;
 }
+

@@ -746,7 +746,9 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-Aa") ||
         !strcmp(argv[i], "-rdynamic") ||        
         !strcmp(argv[i], "-w") ||
-        !strcmp(argv[i], "--param=ssp-buffer-size=4"))
+        !strcmp(argv[i], "--param=ssp-buffer-size=4") ||
+        !strcmp(argv[i], "-fno-lto") 
+        )
       continue;
 
     if (startsWith(argv[i], "-std"))
