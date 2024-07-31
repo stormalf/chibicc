@@ -455,18 +455,6 @@ cpython: git clone git@github.com:python/cpython.git
 
 to be able to use meson with chibicc (meson doesn't know chibicc compiler), I changed the detect.py file in /usr/lib/python3/dist-packages/mesonbuild/compilers/detect.py to add support for chibicc. After that I can now using meson for some projects that are configured to use it.
 
-## Limits
-
-Some C projects doesn't compile for now. It helps to find some bugs and to try to fix them!
-
-VLC : https://github.com/videolan/vlc.git 
-
-    ./bootstrap
-    CC=chibicc CFLAGS="-fPIC" DEFS="-DHAVE_CONFIG_H -DHAVE_ATTRIBUTE_PACKED -DVLC_USED -DVLC_API -DVLC_DEPRECATED -DVLC_MALLOC" LDFLAGS="-fPIC" ./configure  --disable-xcb --disable-qt --disable-a52
-    make all
-
-    VLC doesn't compile with chibicc some issues to fix later.
-
 lxc: https://github.com/lxc/lxc.git
 
     Due to use of __attribute__((weak(alias))) in lxc/src/lxc/lxc.c, the linker is not able to find the symbols in the lxc library.
@@ -481,6 +469,19 @@ lxc: https://github.com/lxc/lxc.git
     -Wl,--undefined,lxc_snapshot_main -Wl,--undefined,lxc_console_main -Wl,--undefined,lxc_ls_main -Wl,--undefined,lxc_create_main -Wl,--undefined,lxc_start_main \
     -Wl,--undefined,lxc_start_main -Wl,--undefined,lxc_unshare_main -Wl,--undefined,lxc_wait_main -Wl,--undefined,lxc_top_main" \
     meson build && cd build && meson compile
+
+
+## Limits
+
+Some C projects doesn't compile for now or crash after being compiled with chibicc. It helps to find some bugs and to try to fix them!
+
+VLC : https://github.com/videolan/vlc.git 
+
+    ./bootstrap
+    CC=chibicc CFLAGS="-fPIC" DEFS="-DHAVE_CONFIG_H -DHAVE_ATTRIBUTE_PACKED -DVLC_USED -DVLC_API -DVLC_DEPRECATED -DVLC_MALLOC" LDFLAGS="-fPIC" ./configure  --disable-xcb --disable-qt --disable-a52
+    make all
+
+    VLC doesn't compile with chibicc some issues to fix later.
 
 
 postgres: https://github.com/postgres/postgres.git 
@@ -536,7 +537,7 @@ Example of diagram generated with -dotfile parameter :
 1.0.22.4        Fixing some issues with extended assembly (new test cases), adding r11 and r10 registers and adding "D" and "S" support for input and output.
                 Removing -fsanitize=cfi not supported by gcc. Adding core dump and segfault handler to have useful information when a segfault occurs.
                 Adding debug information for linker. Changing the order of extra linker parameters because if the specific path defined for a project is not the first one, it seems that the linker doesn't find the libraries (#ISS-173). Adding  support for `chibicc -xc -E -v -` to print the include directories. 
-                Ignoring two other attributes for compatibility with GCC :  \__attribute__((fallthrough)) and \__attribute__((nonnull(1))). Adding a trick to fix the issue with lxc project in the README.md and Makefile. Adding some test cases for builtin functions to test with chibicc for later. Adding macro \__builtin_choose_expr in stddef.h to fix issue found in the lxc project. Adding warning messages in purple like gcc.
+                Ignoring two other attributes for compatibility with GCC :  \__attribute__((fallthrough)) and \__attribute__((nonnull(1))). Adding a trick to fix the issue with lxc project in the README.md and Makefile. Adding some test cases for builtin functions to test with chibicc for later. Adding macro \__builtin_choose_expr in stddef.h to fix issue found in the lxc project. Adding warning messages in purple like gcc. Fixing issue with extended assembly when atomic_sync_bool_compare_and_swap.
 
 
 ## old release notes
