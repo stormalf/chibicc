@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <unistd.h>
+#include "test.h"
 /* Container's specific file/directory names */
 #define LXC_CONFIG_FNAME      "config"
 #define LXC_PARTIAL_FNAME     "partial"
@@ -17,5 +18,6 @@ int main(int argc, char *argv[])
 {
     int std_fds[] = {STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO};
     printf("ARRAY_SIZE(std_fds) = %ld\n", ARRAY_SIZE(std_fds));
+	ASSERT(3, ARRAY_SIZE(std_fds));
 	return 0;
 }
