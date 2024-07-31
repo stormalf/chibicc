@@ -471,13 +471,16 @@ lxc: https://github.com/lxc/lxc.git
 
     Due to use of __attribute__((weak(alias))) in lxc/src/lxc/lxc.c, the linker is not able to find the symbols in the lxc library.
     CC=chibicc \
-    CFLAGS="-fpic -Dlxc_attach_main=main -Dlxc_top_main=main-Dlxc_autostart_main=main -Dlxc_destroy_main=main -Dlxc_config_main=main -Dlxc_stop_main=main -Dlxc_info_main=main -Dlxc_checkpoint_main=main -Dlxc_cgroup_main=main -Dlxc_freeze_main=main -Dlxc_unfreeze_main=main -Dlxc_copy_main=main -Dlxc_device_main=main -Dlxc_execute_main=main -Dlxc_monitor_main=main -Dlxc_snapshot_main=main -Dlxc_console_main=main -Dlxc_ls_main=main -Dlxc_create_main=main -Dlxc_start_main=main -Dlxc_unshare_main=main -Dlxc_wait_main=main" \
-    LDFLAGS="-fpic -Wl,--undefined,lxc_attach_main -Wl,--undefined,lxc_autostart_main -Wl,--undefined,lxc_destroy_main -Wl,--undefined,lxc_config_main -Wl,--undefined,lxc_stop_main -Wl,--undefined,lxc_info_main -Wl,--undefined,lxc_checkpoint_main -Wl,--undefined,lxc_cgroup_main -Wl,--undefined,lxc_freeze_main -Wl,--undefined,lxc_unfreeze_main -Wl,--undefined,lxc_copy_main -Wl,--undefined,lxc_device_main -Wl,--undefined,lxc_execute_main -Wl,--undefined,lxc_monitor_main -Wl,--undefined,lxc_snapshot_main -Wl,--undefined,lxc_console_main -Wl,--undefined,lxc_ls_main -Wl,--undefined,lxc_create_main -Wl,--undefined,lxc_start_main -Wl,--undefined,lxc_start_main -Wl,--undefined,lxc_unshare_main -Wl,--undefined,lxc_wait_main -Wl,--undefined,lxc_stop_main -Wl,--undefined,lxc_top_main" \
-    meson build
-
-    cd build
-    meson compile
-    failed on lxc-attach compile for now
+    CFLAGS="-fpic -Dlxc_attach_main=main -Dlxc_autostart_main=main -Dlxc_destroy_main=main -Dlxc_config_main=main -Dlxc_stop_main=main -Dlxc_info_main=main \
+    -Dlxc_checkpoint_main=main -Dlxc_cgroup_main=main -Dlxc_freeze_main=main -Dlxc_unfreeze_main=main -Dlxc_copy_main=main -Dlxc_device_main=main -Dlxc_execute_main=main \
+    -Dlxc_monitor_main=main -Dlxc_snapshot_main=main -Dlxc_console_main=main  -Dlxc_ls_main=main -Dlxc_create_main=main -Dlxc_start_main=main -Dlxc_unshare_main=main \
+    -Dlxc_wait_main=main -Dlxc_top_main=main" \
+    LDFLAGS="-fpic -Wl,--undefined,lxc_attach_main -Wl,--undefined,lxc_autostart_main -Wl,--undefined,lxc_destroy_main -Wl,--undefined,lxc_config_main \
+    -Wl,--undefined,lxc_stop_main -Wl,--undefined,lxc_info_main -Wl,--undefined,lxc_checkpoint_main -Wl,--undefined,lxc_cgroup_main -Wl,--undefined,lxc_freeze_main \
+    -Wl,--undefined,lxc_unfreeze_main -Wl,--undefined,lxc_copy_main -Wl,--undefined,lxc_device_main -Wl,--undefined,lxc_execute_main -Wl,--undefined,lxc_monitor_main \
+    -Wl,--undefined,lxc_snapshot_main -Wl,--undefined,lxc_console_main -Wl,--undefined,lxc_ls_main -Wl,--undefined,lxc_create_main -Wl,--undefined,lxc_start_main \
+    -Wl,--undefined,lxc_start_main -Wl,--undefined,lxc_unshare_main -Wl,--undefined,lxc_wait_main -Wl,--undefined,lxc_top_main" \
+    meson build && cd build && meson compile
 
 
 postgres: https://github.com/postgres/postgres.git 
@@ -533,7 +536,7 @@ Example of diagram generated with -dotfile parameter :
 1.0.22.4        Fixing some issues with extended assembly (new test cases), adding r11 and r10 registers and adding "D" and "S" support for input and output.
                 Removing -fsanitize=cfi not supported by gcc. Adding core dump and segfault handler to have useful information when a segfault occurs.
                 Adding debug information for linker. Changing the order of extra linker parameters because if the specific path defined for a project is not the first one, it seems that the linker doesn't find the libraries (#ISS-173). Adding  support for `chibicc -xc -E -v -` to print the include directories. 
-                Ignoring two other attributes for compatibility with GCC :  \__attribute__((fallthrough)) and \__attribute__((nonnull(1))).
+                Ignoring two other attributes for compatibility with GCC :  \__attribute__((fallthrough)) and \__attribute__((nonnull(1))). Adding a trick to fix the issue with lxc project in the README.md and Makefile. Adding some test cases for builtin functions to test with chibicc for later. Adding macro \__builtin_choose_expr in stddef.h to fix issue found in the lxc project. Adding warning messages in purple like gcc.
 
 
 ## old release notes
