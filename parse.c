@@ -260,10 +260,10 @@ static Node *new_binary(NodeKind kind, Node *lhs, Node *rhs, Token *tok)
   node->lhs = lhs;
   node->rhs = rhs;
   add_type(node->rhs);
-  // if (kind == ND_ASSIGN && node->rhs->ty->kind == TY_VOID  )
-  // {
-  //   error_tok(node->rhs->tok, "%s: in new_binary : Cannot assign void type expression", PARSE_C);
-  // }
+  if (kind == ND_ASSIGN && node->rhs->ty->kind == TY_VOID  )
+  {
+    error_tok(node->rhs->tok, "%s: in new_binary : Cannot assign void type expression", PARSE_C);
+  }
   // TODO type check other binary expressions, e.g., ND_ADD
   return node;
 }
@@ -3006,13 +3006,15 @@ static Node *conditional(Token **rest, Token *tok)
 {
   Node *cond = logor(&tok, tok);
 
+
   if (!equal(tok, "?"))
   {
     *rest = tok;
     return cond;
   }
 
-  if (equal(tok->next, ":"))
+
+  if (equal(tok->next, ":") || equal(tok, ","))
   {
     // [GNU] Compile `a ?: b` as `tmp = a, tmp ? tmp : b`.
     add_type(cond);
@@ -3752,6 +3754,7 @@ static Token *type_attributes(Token *tok, void *arg)
     tok = skip(tok, ")", ctx);
     return tok;
   }
+
   if (consume(&tok, tok, "format_arg") || consume(&tok, tok, "__format_arg__")) {
     ctx->filename = PARSE_C;
     ctx->funcname = "type_attributes";        
@@ -3856,6 +3859,7 @@ static Token *thing_attributes(Token *tok, void *arg) {
 
 
   if (consume(&tok, tok, "weak") || consume(&tok, tok, "__weak__")) {
+    //int __attribute__((weak, alias("lxc_attach_main"))) main(int argc, char *argv[]);
     attr->is_weak = true;
     return tok;
   }
@@ -4612,6 +4616,7 @@ static Node *generic_selection(Token **rest, Token *tok)
   return ret;
 }
 
+
 // primary = "(" "{" stmt+ "}" ")"
 //         | "(" expr ")"
 //         | "sizeof" "(" type-name ")"
@@ -4626,7 +4631,11 @@ static Node *generic_selection(Token **rest, Token *tok)
 //         | num
 static Node *primary(Token **rest, Token *tok)
 {
+
   Token *start = tok;
+
+  
+
 
   if ((equal(tok, "(") && equal(tok->next, "{")))
   {
@@ -4737,6 +4746,7 @@ static Node *primary(Token **rest, Token *tok)
     return new_num(is_compatible(t1, t2), start);
   }
 
+
      //fix from COSMOPOLITAN about builtin_offsetof
     if (equal(tok, "__builtin_offsetof")) {
       ctx->filename = PARSE_C;
@@ -4763,28 +4773,6 @@ static Node *primary(Token **rest, Token *tok)
 
     }
 
-
-
-  // if (equal(tok, "__builtin_offsetof"))
-  // {
-  //   ctx->filename = PARSE_C;
-  //   ctx->funcname = "primary";        
-  //   ctx->line_no = __LINE__ + 1;      
-  //   tok = skip(tok->next, "(", ctx);
-  //   Type *t1 = typename(&tok, tok);
-  //   if (equal(tok, ",")) {
-  //     ctx->filename = PARSE_C;
-  //     ctx->funcname = "primary";        
-  //     ctx->line_no = __LINE__ + 1;        
-  //     tok = skip(tok, ",", ctx);
-  //   }
-  //   Type *t2 = typename(&tok, tok);
-  //   ctx->filename = PARSE_C;
-  //   ctx->funcname = "primary";        
-  //   ctx->line_no = __LINE__ + 1;      
-  //   *rest = skip(tok, ")", ctx);
-  //   return new_num(is_compatible(t1, t2), start);
-  // }
 
   //trying to fix ===== some builtin functions linked to mmx/emms
   if (equal(tok, "__builtin_ia32_emms") || equal(tok, "__builtin_ia32_stmxcsr") || 
@@ -4972,7 +4960,7 @@ static Node *primary(Token **rest, Token *tok)
     return node;
   }
 
-  error_tok(tok, "%s %d: in primary : expected an expression", PARSE_C, __LINE__);
+  error_tok(tok, "%s %d: in primary : expected an expression %s", PARSE_C, __LINE__, tok->loc);
 }
 
 static Token *parse_typedef(Token *tok, Type *basety)
@@ -5098,7 +5086,6 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   }
   
   //from COSMOPOLITAN adding other GNUC attributes
-  fn->align = MAX(fn->align, attr->align);
   fn->is_weak |= attr->is_weak;
   fn->section = fn->section ?: attr->section;
   fn->is_ms_abi |= attr->is_ms_abi;
@@ -5690,6 +5677,8 @@ static Token *functionKR(Token *tok, Type *basety, VarAttr *attr)
   // [GNU] __FUNCTION__ is yet another name of __func__.
   push_scope("__FUNCTION__")->var =
       new_string_literal(fn->name, array_of(ty_char, strlen(fn->name) + 1));
+
+
   fn->body = compound_stmt(&tok, tok);
   fn->locals = locals;
 
