@@ -1,4 +1,16 @@
 #include <stdio.h>
+#include <stdatomic.h> 
+
+// static inline int __sync_fetch_and_add(int *ptr, int value) {
+//     int old_value;
+//     __asm__ __volatile__(
+//         "lock; xaddl %0, %1"
+//         : "=r" (old_value), "+m" (*ptr)
+//         : "0" (value)
+//         : "memory"
+//     );
+//     return old_value;
+// }
 
 int main() {
     int value = 5;

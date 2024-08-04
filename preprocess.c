@@ -1352,6 +1352,14 @@ static Token *timestamp_macro(Token *tmpl)
   return new_str_token(buf, tmpl);
 }
 
+static Token *builtin_atomics(Token *tmpl) 
+{
+char *buf = "#include <\"stdatomic.h\"";
+
+return new_str_token(buf, tmpl);
+
+}
+
 static Token *base_file_macro(Token *tmpl)
 {
   return new_str_token(base_file, tmpl);
@@ -1443,6 +1451,8 @@ void init_macros(void)
   add_builtin("__COUNTER__", counter_macro);
   add_builtin("__TIMESTAMP__", timestamp_macro);
   add_builtin("__BASE_FILE__", base_file_macro);
+
+  add_builtin("__BUILTIN_ATOMICS__", builtin_atomics);
 
   time_t now = time(NULL);
   struct tm *tm = localtime(&now);
