@@ -4634,9 +4634,6 @@ static Node *primary(Token **rest, Token *tok)
 
   Token *start = tok;
 
-  
-
-
   if ((equal(tok, "(") && equal(tok->next, "{")))
   {
     // This is a GNU statement expresssion.
@@ -4658,7 +4655,6 @@ static Node *primary(Token **rest, Token *tok)
     *rest = skip(tok, ")", ctx);
     return node;
   }
-
 
 
   if (equal(tok, "sizeof") && equal(tok->next, "(") && is_typename(tok->next->next))
@@ -4858,7 +4854,70 @@ static Node *primary(Token **rest, Token *tok)
     return node;
   }
 
-  if (equal(tok, "__builtin_atomic_fetch_op") || equal(tok,"__sync_fetch_and_add"))
+  // if (equal(tok, "__sync_val_compare_and_swap"))
+  // {
+  //   Node *node = new_node(ND_CAS, tok);
+  //   ctx->filename = PARSE_C;
+  //   ctx->funcname = "primary";        
+  //   ctx->line_no = __LINE__ + 1;      
+  //   tok = skip(tok->next, "(", ctx);
+  //   node->cas_addr = assign(&tok, tok);
+  //   ctx->filename = PARSE_C;
+  //   ctx->funcname = "primary";        
+  //   ctx->line_no = __LINE__ + 1;      
+  //   tok = skip(tok, ",", ctx);
+  //   node->cas_old = assign(&tok, tok);
+  //   ctx->filename = PARSE_C;
+  //   ctx->funcname = "primary";        
+  //   ctx->line_no = __LINE__ + 1;      
+  //   tok = skip(tok, ",", ctx);
+  //   node->cas_new = assign(&tok, tok);
+  //   *rest = tok->next;
+  //   return node;
+  // }
+
+
+  if (equal(tok, "__sync_fetch_and_add"))
+  {
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";        
+    ctx->line_no = __LINE__ + 1;      
+    tok = skip(tok->next, "(", ctx);
+    Node *obj = new_unary(ND_DEREF, assign(&tok, tok), tok);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";        
+    ctx->line_no = __LINE__ + 1;      
+    tok = skip(tok, ",", ctx);
+    Node *val = assign(&tok, tok);
+    Node *node;
+    node = new_add(obj, val, tok);
+    node->atomic_fetch = true;
+    *rest = tok->next;
+    return to_assign(node);
+  }
+  
+
+  if (equal(tok, "__sync_fetch_and_sub"))
+  {
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";        
+    ctx->line_no = __LINE__ + 1;      
+    tok = skip(tok->next, "(", ctx);
+    Node *obj = new_unary(ND_DEREF, assign(&tok, tok), tok);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";        
+    ctx->line_no = __LINE__ + 1;      
+    tok = skip(tok, ",", ctx);
+    Node *val = assign(&tok, tok);
+    Node *node;
+    node = new_sub(obj, val, tok);
+    node->atomic_fetch = true;
+    *rest = tok->next;
+    return to_assign(node);
+  }
+  
+
+  if (equal(tok, "__builtin_atomic_fetch_op"))
   {
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";        
@@ -4896,6 +4955,7 @@ static Node *primary(Token **rest, Token *tok)
     *rest = skip(tok->next, ")", ctx);
     return to_assign(node);
   }
+
   if (tok->kind == TK_IDENT)
   {
     //  Variable or enum constant
