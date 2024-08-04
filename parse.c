@@ -4858,7 +4858,7 @@ static Node *primary(Token **rest, Token *tok)
     return node;
   }
 
-  if (equal(tok, "__builtin_atomic_fetch_op"))
+  if (equal(tok, "__builtin_atomic_fetch_op") || equal(tok,"__sync_fetch_and_add"))
   {
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";        

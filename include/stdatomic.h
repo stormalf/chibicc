@@ -40,11 +40,16 @@ typedef enum {
 // #define atomic_fetch_xor(obj, val) (*(obj) ^= (val))
 // #define atomic_fetch_and(obj, val) (*(obj) &= (val))
 
+ 
 #define atomic_fetch_add(obj, val) __builtin_atomic_fetch_op(obj, val, 0)
 #define atomic_fetch_sub(obj, val) __builtin_atomic_fetch_op(obj, val, 1)
 #define atomic_fetch_or(obj, val) __builtin_atomic_fetch_op(obj, val, 2)
 #define atomic_fetch_xor(obj, val) __builtin_atomic_fetch_op(obj, val, 3)
 #define atomic_fetch_and(obj, val) __builtin_atomic_fetch_op(obj, val, 4)
+
+// #define __sync_fetch_and_add(obj, val) __builtin_atomic_fetch_op(obj, val, 0)
+// #define __sync_fetch_and_sub(obj, val) __builtin_atomic_fetch_op(obj, val, 1)
+
 
 
 // #define atomic_fetch_add_explicit(obj, val, order) (*(obj) += (val))
@@ -80,6 +85,10 @@ typedef enum {
 #define atomic_flag_test_and_set_explicit(obj, order) atomic_exchange((obj), 1)
 #define atomic_flag_clear(obj) (*(obj) = 0)
 #define atomic_flag_clear_explicit(obj, order) (*(obj) = 0)
+
+
+
+
 
 typedef _Atomic _Bool atomic_flag;
 typedef _Atomic _Bool atomic_bool;
@@ -119,5 +128,41 @@ typedef _Atomic unsigned long atomic_size_t;
 typedef _Atomic long atomic_ptrdiff_t;
 typedef _Atomic long atomic_intmax_t;
 typedef _Atomic unsigned long atomic_uintmax_t;
+
+
+// static inline int __sync_fetch_and_sub(int *ptr, int value) {
+//     int old_value;
+//     __asm__ __volatile__(
+//         "lock; xaddl %0, %1"
+//         : "=r" (old_value), "+m" (*ptr)
+//         : "0" (-value)
+//         : "memory"
+//     );
+//     return old_value;
+// }
+
+
+// static inline int __sync_fetch_and_add(int *ptr, int value) {
+//     int old_value;
+//     __asm__ __volatile__(
+//         "lock; xaddl %0, %1"
+//         : "=r" (old_value), "+m" (*ptr)
+//         : "0" (value)
+//         : "memory"
+//     );
+//     return old_value;
+// }
+
+// static inline int __sync_lock_test_and_set(int *ptr, int value) {
+//     int old_value;
+//     __asm__ __volatile__(
+//         "xchgl %0, %1"
+//         : "=r" (old_value), "+m" (*ptr)
+//         : "0" (value)
+//         : "memory"
+//     );
+//     return old_value;
+// }
+
 
 #endif

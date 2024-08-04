@@ -40,7 +40,7 @@ typedef struct
     bool isAddress;    // store true if it's an address pointer
     bool isArray;       //true if it's an array variable
     bool isStruct;       //true if it's a struct variable
-
+    bool isToNegate;    //true if the value should be negate
     int indexArray;     //store the index element of array
     int offsetArray;     //store the index of array
     int offsetStruct;   //store the offset of the struct
@@ -131,7 +131,7 @@ static int asmtype = 0;
 extern Context *ctx;
 static bool hasInput = false;
 static bool hasOutput = false;
-
+static bool isToNegate = false;
 
 
 char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
@@ -743,6 +743,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
     VarScope *sc;
     char *input_value = calloc(1, sizeof(char) * 300);
     asmExt->input[nbInput]->offset = 0;
+
     while (!equal(tok->next, ":") && !equal(tok->next, ";"))
     {
         // register in write only mode
@@ -929,8 +930,18 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             ctx->line_no = __LINE__ + 1;
             tok = skip(tok, "(", ctx);
             // check if the variable is defined
+            if (equal(tok, "-")) 
+            {
+                isToNegate = true;
+                consume(&tok, tok, "-");
+            }            
             if (tok->kind == TK_IDENT)
             {           
+                if (isToNegate) {
+                    asmExt->input[nbInput]->isToNegate = isToNegate;
+                    isToNegate = false;
+                }
+                    
                 sc = find_var(tok);
                 if (!sc)
                     error_tok(tok, "%s %d: in input_asm function : variable undefined", EXTASM_C, __LINE__);
@@ -1040,6 +1051,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             } // immediate value
             else if (tok->kind == TK_NUM)
             {
+
                 int length = snprintf(NULL, 0, "%ld", tok->val);
                 if (tok->val == 0)
                     strncat(input_value, "0 ", 3);
@@ -1137,7 +1149,20 @@ char *generate_input_asm(char *input_str)
 {
     char *tmp = calloc(1, sizeof(char) * 100);
     //case variable
-    if (asmExt->input[nbInput]->isVariable)
+    if (asmExt->input[nbInput]->isVariable && asmExt->input[nbInput]->isToNegate)
+    {
+        strncat(tmp, "\n", 3);
+        strncat(tmp, opcode(asmExt->input[nbInput]->size), strlen(opcode(asmExt->input[nbInput]->size)));
+        strncat(tmp, load_variable(asmExt->input[nbInput]->offset), strlen(load_variable(asmExt->input[nbInput]->offset)));
+        strncat(tmp, ", ", 3);
+        strncat(tmp, asmExt->input[nbInput]->variableNumber, strlen(asmExt->input[nbInput]->variableNumber));
+        strncat(tmp, ";\n", 3);
+        strncat(tmp, "neg ", 5);
+        strncat(tmp, asmExt->input[nbInput]->variableNumber, strlen(asmExt->input[nbInput]->variableNumber));
+        strncat(tmp, ";\n", 3);
+        return tmp;
+    }
+    else if (asmExt->input[nbInput]->isVariable)
     {
         strncat(tmp, "\n", 3);
         strncat(tmp, opcode(asmExt->input[nbInput]->size), strlen(opcode(asmExt->input[nbInput]->size)));
@@ -1173,6 +1198,7 @@ bool check_template(char *template)
 // generate input assembly instruction
 char *generate_output_asm(char *output_str)
 {
+    
     char *tmp = calloc(1, sizeof(char) * 300);
     //case variable and not an address
     if (asmExt->output[nbOutput]->isVariable && !asmExt->output[nbOutput]->isAddress)
