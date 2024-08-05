@@ -1449,7 +1449,7 @@ void init_macros(void)
   define_macro("USE_BUILTINS", "1");
   if (opt_fbuiltin) {
     define_macro("memcpy", "__builtin_memcpy");
-
+    define_macro("memset", "__builtin_memset");
   }
 
 

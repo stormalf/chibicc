@@ -372,6 +372,12 @@ void add_type(Node *node)
     add_type(node->builtin_src);
     add_type(node->builtin_size);
     return;
+  case ND_BUILTIN_MEMSET:
+    add_type(node->builtin_dest);
+    add_type(node->builtin_val);
+    add_type(node->builtin_size);
+    return;
+
   case ND_EXCH_N:
   case ND_FETCHADD:
   case ND_FETCHSUB:

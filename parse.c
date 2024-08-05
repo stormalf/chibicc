@@ -189,7 +189,8 @@ static Node *ParseAtomic2(NodeKind kind, Token *tok, Token **rest);
 static Node *ParseAtomic3(NodeKind kind, Token *tok, Token **rest);
 
 //for builtin functions
-static Node *parse_memcpy(Token *tok, Token **rest) ;
+static Node *parse_memcpy(Token *tok, Token **rest);
+static Node *parse_memset(Token *tok, Token **rest);
 
 
 static int align_down(int n, int align)
@@ -4899,6 +4900,11 @@ static Node *primary(Token **rest, Token *tok)
       return parse_memcpy(tok, rest);
   }
 
+  if (equal(tok, "__builtin_memset")) {
+      return parse_memset(tok, rest);
+  }
+
+
   if (equal(tok, "__builtin_atomic_exchange_n")) {
     return ParseAtomic3(ND_EXCH_N, tok, rest);
   }
@@ -6037,6 +6043,31 @@ static Node *parse_memcpy(Token *tok, Token **rest) {
     node->builtin_size = assign(&tok, tok);
     ctx->filename = PARSE_C;
     ctx->funcname = "parse_memcpy";        
+    ctx->line_no = __LINE__ + 1;
+    *rest = skip(tok, ")", ctx);
+    return node;
+}
+
+
+static Node *parse_memset(Token *tok, Token **rest) {
+    Node *node = new_node(ND_BUILTIN_MEMSET, tok);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "parse_memset";
+    ctx->line_no = __LINE__ + 1;
+    tok = skip(tok->next, "(", ctx);
+    node->builtin_dest = assign(&tok, tok);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "parse_memset";
+    ctx->line_no = __LINE__ + 1;
+    tok = skip(tok, ",", ctx);
+    node->builtin_val = assign(&tok, tok);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "parse_memset";
+    ctx->line_no = __LINE__ + 1;
+    tok = skip(tok, ",", ctx);
+    node->builtin_size = assign(&tok, tok);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "parse_memset";
     ctx->line_no = __LINE__ + 1;
     *rest = skip(tok, ")", ctx);
     return node;

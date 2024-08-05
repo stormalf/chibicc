@@ -1402,6 +1402,26 @@ static void gen_expr(Node *node)
     return;   
   }
 
+  case ND_BUILTIN_MEMSET: {
+    // Generate code for destination, value, and size
+    gen_expr(node->builtin_dest);
+    push();
+    gen_expr(node->builtin_val);
+    push();
+    gen_expr(node->builtin_size);
+    push();
+
+    // Move the arguments to the appropriate registers
+    pop("%rcx");  // size
+    pop("%rsi");  // value
+    pop("%rdi");  // destination
+
+    // Move the value to the lower 8-bit register
+    println("  mov %%sil, %%al");  // Move the lower 8 bits of RSI to AL
+    println("  rep stosb");        // Use REP STOSB to set memory
+
+    return;
+  }
   case ND_EXCH:
   {
     gen_expr(node->lhs);

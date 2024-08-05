@@ -354,6 +354,7 @@ typedef enum
   ND_SUBFETCH,     // Atomic sub and fetch
   ND_SYNC,      //atomic synchronize
   ND_BUILTIN_MEMCPY, //builtin memcpy
+  ND_BUILTIN_MEMSET, //builtin memset
 } NodeKind;
 
 // AST node type
@@ -416,6 +417,7 @@ Node
   Node *builtin_dest;
   Node *builtin_src;
   Node *builtin_size;
+  Node *builtin_val;
 
   // Atomic op= operators
   Obj *atomic_addr;
