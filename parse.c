@@ -184,6 +184,12 @@ static Token *static_assertion(Token *tok);
 static bool check_old_style(Token **rest, Token *tok);
 static Token *functionKR(Token *tok, Type *basety, VarAttr *attr);
 static Type *func_paramsKR(Token **rest, Token *tok, Type *ty);
+//from cosmopolitan managing builtin functions
+static Node *ParseAtomic2(NodeKind kind, Token *tok, Token **rest);
+static Node *ParseAtomic3(NodeKind kind, Token *tok, Token **rest);
+
+//for builtin functions
+static Node *parse_memcpy(Token *tok, Token **rest) ;
 
 
 static int align_down(int n, int align)
@@ -4834,6 +4840,7 @@ static Node *primary(Token **rest, Token *tok)
     return node;
   }
 
+
   if (equal(tok, "__builtin_atomic_exchange"))
   {
     Node *node = new_node(ND_EXCH, tok);
@@ -4854,27 +4861,115 @@ static Node *primary(Token **rest, Token *tok)
     return node;
   }
 
-  // if (equal(tok, "__sync_val_compare_and_swap"))
-  // {
-  //   Node *node = new_node(ND_CAS, tok);
-  //   ctx->filename = PARSE_C;
-  //   ctx->funcname = "primary";        
-  //   ctx->line_no = __LINE__ + 1;      
-  //   tok = skip(tok->next, "(", ctx);
-  //   node->cas_addr = assign(&tok, tok);
-  //   ctx->filename = PARSE_C;
-  //   ctx->funcname = "primary";        
-  //   ctx->line_no = __LINE__ + 1;      
-  //   tok = skip(tok, ",", ctx);
-  //   node->cas_old = assign(&tok, tok);
-  //   ctx->filename = PARSE_C;
-  //   ctx->funcname = "primary";        
-  //   ctx->line_no = __LINE__ + 1;      
-  //   tok = skip(tok, ",", ctx);
-  //   node->cas_new = assign(&tok, tok);
-  //   *rest = tok->next;
-  //   return node;
-  // }
+  if (equal(tok, "__sync_val_compare_and_swap")) {
+    Node *node = new_node(ND_CAS_N, tok);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";        
+    ctx->line_no = __LINE__ + 1;      
+    tok = skip(tok->next, "(", ctx);
+    node->cas_addr = assign(&tok, tok);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";        
+    ctx->line_no = __LINE__ + 1;      
+    tok = skip(tok, ",", ctx);
+    node->cas_old = assign(&tok, tok);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";        
+    ctx->line_no = __LINE__ + 1;      
+    tok = skip(tok, ",", ctx);
+    node->cas_new = assign(&tok, tok);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";        
+    ctx->line_no = __LINE__ + 1;      
+    *rest = skip(tok, ")", ctx);
+    return node;
+  }
+
+
+  // Extend the parser to recognize __sync_synchronize()
+  if (equal(tok, "__sync_synchronize")) {
+      Node *node = new_node(ND_SYNC, tok);
+      *rest = skip(tok->next, "(", ctx);
+      *rest = skip(*rest, ")", ctx);
+      return node;
+  }
+
+
+  if (equal(tok, "__builtin_memcpy")) {
+      return parse_memcpy(tok, rest);
+  }
+
+  if (equal(tok, "__builtin_atomic_exchange_n")) {
+    return ParseAtomic3(ND_EXCH_N, tok, rest);
+  }
+  if (equal(tok, "__builtin_atomic_load")) {
+    return ParseAtomic3(ND_LOAD, tok, rest);
+  }
+  if (equal(tok, "__builtin_atomic_store")) {
+    return ParseAtomic3(ND_STORE, tok, rest);
+  }
+  if (equal(tok, "__builtin_atomic_load_n")) {
+    return ParseAtomic2(ND_LOAD_N, tok, rest);
+  }
+  if (equal(tok, "__builtin_atomic_store_n")) {
+    return ParseAtomic3(ND_STORE_N, tok, rest);
+  }
+  if (equal(tok, "__builtin_atomic_fetch_add")) {
+    return ParseAtomic3(ND_FETCHADD, tok, rest);
+  }
+  if (equal(tok, "__builtin_atomic_fetch_sub")) {
+    return ParseAtomic3(ND_FETCHSUB, tok, rest);
+  }
+  if (equal(tok, "__builtin_atomic_fetch_xor")) {
+    return ParseAtomic3(ND_FETCHXOR, tok, rest);
+  }
+  if (equal(tok, "__builtin_atomic_fetch_and")) {
+    return ParseAtomic3(ND_FETCHAND, tok, rest);
+  }
+  if (equal(tok, "__builtin_atomic_fetch_or")) {
+    return ParseAtomic3(ND_FETCHOR, tok, rest);
+  }
+  if (equal(tok, "__builtin_atomic_test_and_set")) {
+    return ParseAtomic2(ND_TESTANDSETA, tok, rest);
+  }
+  if (equal(tok, "__builtin_atomic_clear")) {
+    return ParseAtomic2(ND_CLEAR, tok, rest);
+  }
+  if (equal(tok, "__sync_lock_test_and_set")) {
+    Node *node = new_node(ND_TESTANDSET, tok);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";        
+    ctx->line_no = __LINE__ + 1;     
+    tok = skip(tok->next,  "(", ctx);
+    node->lhs = assign(&tok, tok);
+    add_type(node->lhs);
+    node->ty = node->lhs->ty->base;
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";        
+    ctx->line_no = __LINE__ + 1;     
+    tok = skip(tok,  ",", ctx);
+    node->rhs = assign(&tok, tok);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";        
+    ctx->line_no = __LINE__ + 1;     
+    *rest = skip(tok,  ")", ctx);
+    return node;
+  }
+  if (equal(tok, "__sync_lock_release")) {
+    Node *node = new_node(ND_RELEASE, tok);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";        
+    ctx->line_no = __LINE__ + 1;     
+    tok = skip(tok->next, "(", ctx);
+    node->lhs = assign(&tok, tok);
+    add_type(node->lhs);
+    node->ty = node->lhs->ty->base;
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";        
+    ctx->line_no = __LINE__ + 1;      
+    *rest = skip(tok, ")", ctx);
+    return node;
+  }
 
 
   if (equal(tok, "__sync_fetch_and_add"))
@@ -5523,9 +5618,36 @@ char *nodekind2str(NodeKind kind)
   case ND_ASM:
     return "ASM"; //"asm"
   case ND_CAS:
+  case ND_CAS_N:
     return "CAS"; // Atomic compare-and-swap
   case ND_EXCH:
+  case ND_EXCH_N:
     return "EXCH";
+  case ND_LOAD:
+  case ND_LOAD_N:
+    return "LOAD"; // Atomic load
+  case ND_STORE:
+  case ND_STORE_N:
+    return "STORE"; // Atomic store
+  case ND_TESTANDSET:
+  case ND_TESTANDSETA:
+    return "TESTANDSET"; // Atomic test and set
+  case ND_CLEAR:
+    return "CLEAR"; //atomic clear
+  case ND_RELEASE:
+    return "RELEASE"; //atomic release
+  case  ND_FETCHADD:
+    return "FETCHADD";  // Atomic fetch and add
+  case ND_FETCHSUB:
+    return "FETCHSUB";     // Atomic fetch and sub
+  case ND_FETCHXOR:
+    return "FETCHXOR";     // Atomic fetch and xor
+  case ND_FETCHAND:
+    return "FETCHAND";     // Atomic fetch and and
+  case ND_FETCHOR:
+    return "FETCHOR";      // Atomic fetch and or
+  case ND_SUBFETCH:
+    return "SUBFETCH";     // Atomic sub and fetch
   default:
     return "UNREACHABLE"; // Atomic e
   }
@@ -5836,3 +5958,86 @@ while(!equal(tok->next, "{"))
   return ty;
 }
 
+
+//from cosmopolitan managing builtin atomics
+static Node *ParseAtomic2(NodeKind kind, Token *tok, Token **rest) {
+  Node *node = new_node(kind, tok);
+  ctx->filename = PARSE_C;
+  ctx->funcname = "ParseAtomic2";      
+  ctx->line_no = __LINE__ + 1;  
+  tok = skip(tok->next, "(", ctx);
+  node->lhs = assign(&tok, tok);
+  add_type(node->lhs);
+  node->ty = node->lhs->ty->base;
+  if (equal(tok, ",")) {
+    tok = skip(tok, ",", ctx);
+    node->memorder = const_expr(&tok, tok);
+  }   
+  // ctx->filename = PARSE_C;
+  // ctx->funcname = "ParseAtomic2";      
+  // ctx->line_no = __LINE__ + 1;  
+  // tok = skip(tok, ",", ctx);
+  // node->memorder = const_expr(&tok, tok);
+  ctx->filename = PARSE_C;
+  ctx->funcname = "ParseAtomic2";      
+  ctx->line_no = __LINE__ + 1;  
+  *rest = skip(tok, ")", ctx);
+  return node;
+}
+
+static Node *ParseAtomic3(NodeKind kind, Token *tok, Token **rest) {
+  Node *node = new_node(kind, tok);
+  ctx->filename = PARSE_C;
+  ctx->funcname = "ParseAtomic3";      
+  ctx->line_no = __LINE__ + 1;  
+  tok = skip(tok->next, "(", ctx);
+  node->lhs = assign(&tok, tok);
+  add_type(node->lhs);
+  node->ty = node->lhs->ty->base;
+  ctx->filename = PARSE_C;
+  ctx->funcname = "ParseAtomic3";      
+  ctx->line_no = __LINE__ + 1;  
+  tok = skip(tok, ",", ctx);
+  node->rhs = assign(&tok, tok);
+  add_type(node->rhs);
+  // Check if there's a comma, indicating a memory order argument
+  if (equal(tok, ",")) {
+    tok = skip(tok, ",", ctx);
+    node->memorder = const_expr(&tok, tok);
+  } 
+  // ctx->filename = PARSE_C;
+  // ctx->funcname = "ParseAtomic3";      
+  // ctx->line_no = __LINE__ + 1;  
+  // tok = skip(tok, ",", ctx);
+  // node->memorder = const_expr(&tok, tok);
+  ctx->filename = PARSE_C;
+  ctx->funcname = "ParseAtomic3";      
+  ctx->line_no = __LINE__ + 1;  
+  *rest = skip(tok, ")", ctx);
+  return node;
+}
+
+//builtin function memcpy
+static Node *parse_memcpy(Token *tok, Token **rest) {
+    Node *node = new_node(ND_BUILTIN_MEMCPY, tok);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "parse_memcpy";        
+    ctx->line_no = __LINE__ + 1;
+    tok = skip(tok->next, "(", ctx);
+    node->builtin_dest = assign(&tok, tok);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "parse_memcpy";        
+    ctx->line_no = __LINE__ + 1;
+    tok = skip(tok, ",", ctx);
+    node->builtin_src = assign(&tok, tok);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "parse_memcpy";        
+    ctx->line_no = __LINE__ + 1;
+    tok = skip(tok, ",", ctx);
+    node->builtin_size = assign(&tok, tok);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "parse_memcpy";        
+    ctx->line_no = __LINE__ + 1;
+    *rest = skip(tok, ")", ctx);
+    return node;
+}

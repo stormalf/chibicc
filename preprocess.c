@@ -86,6 +86,7 @@ static int include_next_idx;
 
 //ISS-142
 extern bool opt_E;
+extern bool opt_fbuiltin;
 
 extern Context *ctx;
 
@@ -1442,9 +1443,15 @@ void init_macros(void)
   define_macro("unix", "1");
   //define_macro("nonnull", "1");
   //====fixing ISS-147 defining the two macros for the linux platform
-  define_macro("__ORDER_LITTLE_ENDIAN__", "1234");
+  define_macro("__ORDER_LITTLE_ENDIAN__", "1234");  
   define_macro("__ORDER_BIG_ENDIAN__", "4321");
   define_macro("__BYTE_ORDER__", "__ORDER_LITTLE_ENDIAN__");
+  define_macro("USE_BUILTINS", "1");
+  if (opt_fbuiltin) {
+    define_macro("memcpy", "__builtin_memcpy");
+
+  }
+
 
   add_builtin("__FILE__", file_macro);
   add_builtin("__LINE__", line_macro);

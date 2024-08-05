@@ -951,6 +951,23 @@ static void builtin_alloca(void)
   println("  mov %%rax, %d(%%rbp)", current_fn->alloca_bottom->offset);
 }
 
+//from cosmopolitan
+static void HandleAtomicArithmetic(Node *node, const char *op) {
+  gen_expr(node->lhs);
+  push();
+  gen_expr(node->rhs);
+  pop("%r9");
+  println("\tmov\t%s,%s", reg_ax(node->ty->size), reg_si(node->ty->size));
+  println("\tmov\t(%%r9),%s", reg_ax(node->ty->size));
+  println("1:\tmov\t%s,%s", reg_ax(node->ty->size), reg_dx(node->ty->size));
+  println("\tmov\t%s,%s", reg_ax(node->ty->size), reg_di(node->ty->size));
+  println("\t%s\t%s,%s", op, reg_si(node->ty->size), reg_dx(node->ty->size));
+  println("\tlock cmpxchg\t%s,(%%r9)", reg_dx(node->ty->size));
+  println("\tjnz\t1b");
+  println("\tmov\t%s,%s", reg_di(node->ty->size), reg_ax(node->ty->size));
+}
+
+
 // Generate code for a given node.
 static void gen_expr(Node *node)
 {
@@ -1300,6 +1317,91 @@ static void gen_expr(Node *node)
     println("  movzbl %%cl, %%eax");
     return;
   }
+  case ND_CAS_N: {
+    // Generate code to evaluate and push the address
+    gen_expr(node->cas_addr); // Address
+    push();
+    
+    // Generate code to evaluate and push the new value
+    gen_expr(node->cas_new);  // New value
+    push();
+    
+    // Generate code to evaluate and push the old value
+    gen_expr(node->cas_old);  // Old value
+
+    // Move the old value to r8 to preserve it
+    println("  mov %%rax, %%r8"); 
+
+    // Pop the new value and address from the stack
+    pop("%rdx"); // New value in rdx
+    pop("%rdi"); // Address in rdi
+
+    // Determine the size of the data type
+    int sz = node->cas_addr->ty->base->size;
+
+    // Perform the atomic compare-and-swap operation
+    println("  lock cmpxchg %s, (%%rdi)", reg_dx(sz)); 
+
+    // After cmpxchg, rax contains the old value (before the swap)
+    // Restore the preserved old value to rax
+    println("  mov %%r8, %%rax"); 
+
+    return;
+  }
+  case ND_SYNC: {
+    println("  mfence"); // x86-64 instruction for full memory barrier
+    return;
+  }
+  case ND_BUILTIN_MEMCPY: {
+    if (opt_fbuiltin) {
+      // Generate code to evaluate the destination address
+      gen_expr(node->builtin_dest);
+      push();
+      println("  mov %%rax, %%rdi"); // Destination in RDI
+
+      // Generate code to evaluate the source address
+      gen_expr(node->builtin_src);
+      push();
+      println("  mov %%rax, %%rsi"); // Source in RSI
+      // Generate code to evaluate the size
+      gen_expr(node->builtin_size);
+      push();
+      println("  mov %%rax, %%rcx"); // Size in RCX
+
+      // Call the memcpy function
+      println("  rep movsb");
+      // Pop the stack to balance pushes
+      pop("%rcx");
+      pop("%rsi");
+      pop("%rdi");
+    }
+    else {
+      // Handle the case when built-in functions are disabled
+      // You might want to call an external `memcpy` function here
+    // Generate code for destination pointer
+    gen_expr(node->builtin_dest); 
+    push();
+    
+    // Generate code for source pointer
+    gen_expr(node->builtin_src);  
+    push();
+    
+    // Generate code for size
+    gen_expr(node->builtin_size); 
+    push();
+
+    // Make the call to memcpy
+    println("  call memcpy");
+
+    // Restore the stack
+    pop("%rdx"); // size
+    pop("%rsi"); // source
+    pop("%rdi"); // destination
+    
+    }
+    return;   
+  }
+
   case ND_EXCH:
   {
     gen_expr(node->lhs);
@@ -1311,6 +1413,112 @@ static void gen_expr(Node *node)
     println("  xchg %s, (%%rdi)", reg_ax(sz));
     return;
   }
+  case ND_EXCH_N:
+  case ND_TESTANDSET: {
+    gen_expr(node->lhs);
+    push();
+    gen_expr(node->rhs);
+    pop("%rdi");
+    println("\txchg\t%s,(%%rdi)", reg_ax(node->ty->size));
+    return;
+  }
+  case ND_TESTANDSETA: {
+    gen_expr(node->lhs);
+    push();
+    println("\tmov\t$1,%%eax");
+    pop("%rdi");
+    println("\txchg\t%s,(%%rdi)", reg_ax(node->ty->size));
+    return;
+  }
+  case ND_LOAD: {
+    gen_expr(node->rhs);
+    push();
+    gen_expr(node->lhs);
+    println("\tmov\t(%%rax),%s", reg_ax(node->ty->size));
+    pop("%rdi");
+    println("\tmov\t%s,(%%rdi)", reg_ax(node->ty->size));
+    return;
+  }
+  case ND_LOAD_N: {
+    gen_expr(node->lhs);
+    println("\tmov\t(%%rax),%s", reg_ax(node->ty->size));
+    return;
+  }
+  case ND_STORE: {
+    gen_expr(node->lhs);
+    push();
+    gen_expr(node->rhs);
+    pop("%rdi");
+    println("\tmov\t(%%rax),%s", reg_ax(node->ty->size));
+    println("\tmov\t%s,(%%rdi)", reg_ax(node->ty->size));
+    if (node->memorder) {
+      println("\tmfence");
+    }
+    return;
+  }
+  case ND_STORE_N:
+    gen_expr(node->lhs);
+    push();
+    gen_expr(node->rhs);
+    pop("%rdi");
+    println("\tmov\t%s,(%%rdi)", reg_ax(node->ty->size));
+    if (node->memorder) {
+      println("\tmfence");
+    }
+    return;
+  case ND_CLEAR:
+    gen_expr(node->lhs);
+    println("\tmov\t%%rax,%%rdi");
+    println("\txor\t%%eax,%%eax");
+    println("\tmov\t%s,(%%rdi)", reg_ax(node->ty->size));
+    if (node->memorder) {
+      println("\tmfence");
+    }
+    return;
+  case ND_FETCHADD:
+    gen_expr(node->lhs);
+    push();
+    gen_expr(node->rhs);
+    pop("%rdi");
+    println("\txadd\t%s,(%%rdi)", reg_ax(node->ty->size));
+    return;
+  case ND_FETCHSUB:
+    gen_expr(node->lhs);
+    push();
+    gen_expr(node->rhs);
+    pop("%rdi");
+    println("\tneg\t%s", reg_ax(node->ty->size));
+    println("\txadd\t%s,(%%rdi)", reg_ax(node->ty->size));
+    return;
+  case ND_FETCHXOR:
+    HandleAtomicArithmetic(node, "xor");
+    return;
+  case ND_FETCHAND:
+    HandleAtomicArithmetic(node, "and");
+    return;
+  case ND_FETCHOR:
+    HandleAtomicArithmetic(node, "or");
+    return;
+  case ND_SUBFETCH:
+    gen_expr(node->lhs);
+    push();
+    gen_expr(node->rhs);
+    pop("%rdi");
+    push();
+    println("\tneg\t%s", reg_ax(node->ty->size));
+    println("\txadd\t%s,(%%rdi)", reg_ax(node->ty->size));
+    pop("%rdi");
+    println("\tsub\t%s,%s", reg_di(node->ty->size), reg_ax(node->ty->size));
+    return;
+  case ND_RELEASE:
+    gen_expr(node->lhs);
+    push();
+    pop("%rdi");
+    println("\txor\t%%eax,%%eax");
+    println("\tmov\t%s,(%%rdi)", reg_ax(node->ty->size));
+    return;
+
+
   }
 
   switch (node->lhs->ty->kind)
