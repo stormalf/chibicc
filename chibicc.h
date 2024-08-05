@@ -20,6 +20,7 @@
 #include <math.h>
 #include <signal.h>
 #include <sys/resource.h>
+#include <stdatomic.h>
 
 
 
@@ -335,6 +336,24 @@ typedef enum
   ND_ASM,       // "asm"
   ND_CAS,       // Atomic compare-and-swap
   ND_EXCH,      // Atomic exchange
+  ND_CAS_N,     //atomic compare-and-swap with value
+  ND_EXCH_N,       // Atomic exchange with value
+  ND_LOAD,         // Atomic load to pointer
+  ND_LOAD_N,       // Atomic load to result
+  ND_STORE,        // Atomic store to pointer
+  ND_STORE_N,      // Atomic store to result
+  ND_TESTANDSET,   // Sync lock test and set
+  ND_TESTANDSETA,  // Atomic lock test and set
+  ND_CLEAR,        // Atomic clear
+  ND_RELEASE,      // Atomic lock release
+  ND_FETCHADD,     // Atomic fetch and add
+  ND_FETCHSUB,     // Atomic fetch and sub
+  ND_FETCHXOR,     // Atomic fetch and xor
+  ND_FETCHAND,     // Atomic fetch and and
+  ND_FETCHOR,      // Atomic fetch and or
+  ND_SUBFETCH,     // Atomic sub and fetch
+  ND_SYNC,      //atomic synchronize
+  ND_BUILTIN_MEMCPY, //builtin memcpy
 } NodeKind;
 
 // AST node type
@@ -388,11 +407,15 @@ Node
 
   // "asm" string literal
   char *asm_str;
-
+  char memorder;
   // Atomic compare-and-swap
   Node *cas_addr;
   Node *cas_old;
   Node *cas_new;
+//for builtin memcpy
+  Node *builtin_dest;
+  Node *builtin_src;
+  Node *builtin_size;
 
   // Atomic op= operators
   Obj *atomic_addr;
