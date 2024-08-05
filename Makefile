@@ -22,7 +22,7 @@ $(OBJS): $(OBJECT).h
 test/%.exe: $(OBJECT) test/%.c 
 	./$(OBJECT) $(CFLAGS_DIAG) -Iinclude -Itest -c -o test/$*.o test/$*.c 
 	$(CC) -pthread -o $@ test/$*.o -xc test/common
-	dot -Tpng test/$*.dot -o diagram/$*.png || echo $*.dot failed
+#	dot -Tpng test/$*.dot -o diagram/$*.png || echo $*.dot failed
 	
 
 test: $(TESTS) 
