@@ -142,7 +142,7 @@ static Node *compound_stmt(Token **rest, Token *tok);
 static Node *stmt(Token **rest, Token *tok);
 static Node *expr_stmt(Token **rest, Token *tok);
 static Node *expr(Token **rest, Token *tok);
-static int64_t eval(Node *node);
+//static int64_t eval(Node *node);
 static int64_t eval2(Node *node, char ***label);
 static int64_t eval_rval(Node *node, char ***label);
 static bool is_const_expr(Node *node);
@@ -2208,16 +2208,16 @@ static Node *stmt(Token **rest, Token *tok)
     //   exp = new_cast(exp, current_fn->ty->return_ty);
 
     if (!exp->ty)
-      error_tok(exp->tok, "%s: in stmt : exp->ty is null", PARSE_C);
+      error_tok(exp->tok, "%s %d: in stmt : exp->ty is null", PARSE_C, __LINE__);
       
     if (ret_ty->kind == TY_VOID && exp->ty->kind != TY_VOID)
     {
-      error_tok(exp->tok, "%s: in stmt : Void function must return void type expression", PARSE_C);
+      error_tok(exp->tok, "%s %d: in stmt : Void function must return void type expression", PARSE_C, __LINE__);
     }
     if (ret_ty->kind != TY_VOID && exp->ty->kind == TY_VOID)
     {
       error_tok(exp->tok,
-                "%s: in stmt : Non-void function cannot return void type expression", PARSE_C);
+                "%s %d: in stmt : Non-void function cannot return void type expression", PARSE_C, __LINE__);
     }
     if (ret_ty->kind != TY_STRUCT && ret_ty->kind != TY_UNION)
       exp = new_cast(exp, ret_ty);
@@ -2613,7 +2613,7 @@ static Node *expr(Token **rest, Token *tok)
   return node;
 }
 
-static int64_t eval(Node *node)
+int64_t eval(Node *node)
 {
   return eval2(node, NULL);
 }
@@ -4925,6 +4925,32 @@ static Node *primary(Token **rest, Token *tok)
       return ParseBuiltin(ND_POPCOUNT, tok, rest);
   }
 
+
+  if (equal(tok, "__builtin_expect")) {
+    Node *node = new_node(ND_EXPECT, tok);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";
+    ctx->line_no = __LINE__ + 1;    
+    tok = skip(tok->next, "(", ctx);
+    node->lhs = assign(&tok, tok); // First argument
+    tok = skip(tok, ",", ctx);
+    node->rhs = assign(&tok, tok); // Second argument
+    *rest = skip(tok, ")", ctx);    
+    return node;
+  }
+
+  if (equal(tok, "__builtin_return_address")) {
+    Node *node = new_node(ND_RETURN_ADDR, tok);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";
+    ctx->line_no = __LINE__ + 1;
+    tok = skip(tok->next, "(", ctx);
+    node->lhs = assign(&tok, tok); // Argument to __builtin_return_address
+    *rest = skip(tok, ")", ctx);
+    return node;
+  }
+
+
   if (equal(tok, "__builtin_atomic_exchange_n")) {
     return ParseAtomic3(ND_EXCH_N, tok, rest);
   }
@@ -5684,6 +5710,10 @@ char *nodekind2str(NodeKind kind)
     return "CLZ";   //builtin clz
   case ND_BUILTIN_CTZ:
     return "CTZ";   //builtin ctz
+  case ND_POPCOUNT:
+    return "POPCOUNT"; //builtin popcount
+  case ND_RETURN_ADDR:
+    return "RETURN_ADDRESS";  //builtin return address
   default:
     return "UNREACHABLE"; // Atomic e
   }

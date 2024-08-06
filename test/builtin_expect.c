@@ -7,6 +7,12 @@ int main() {
     } else {
         printf("Unexpected branch\n");
     }
+
+    if (__builtin_expect(x == 5, 1)) {
+        printf("Expected branch 2\n");
+    } else {
+        printf("Unexpected branch 2\n");
+    }
     return 0;
 }
 

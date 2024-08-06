@@ -18,6 +18,7 @@ static char *newargreg32[] =  {"%ecx",  "%ebx", "%edx", "%eax", "%edi", "%r8d", 
 static char *newargreg64[] =  {"%rcx",  "%rbx", "%rdx", "%rax", "%rdi", "%r8",  "%r9",  "r10",  "r11" };
 static char *registerUsed[] = {"free",  "free", "free", "free", "free", "free", "free", "free", "free"};
 
+extern int64_t eval(Node *node);
 
 static Obj *current_fn;
 
@@ -1443,6 +1444,36 @@ static void gen_expr(Node *node)
     gen_expr(node->builtin_val); // Generate code for the expression
     println("  popcnt %%rax, %%rax"); // Count the number of set bits
     return;
+
+  case ND_EXPECT: {
+      // Generate code for the expression we are expecting
+      gen_expr(node->lhs); // Generate code for the condition
+      push(); // Save the condition result on stack
+      gen_expr(node->rhs); // Generate code for the expected value
+      pop("%rdi"); // Restore the condition result from stack into %rdi
+      // Compare the condition result with the expected value
+      println("  cmp %%rax, %%rdi");
+      // Move the condition result back to %rax for use in further code
+      println("  mov %%rdi, %%rax");
+      return;
+  }   
+case ND_RETURN_ADDR: {
+  // Generate code to get the frame pointer of the current function
+  println("  mov %%rbp, %%rax");
+  
+  // Get the depth of the return address
+  int depth = eval(node->lhs);
+  
+  // Walk up the stack frames to the correct depth
+  for (int i = 0; i < depth; i++) {
+    println("  mov (%%rax), %%rax");
+  }
+  
+  // Load the return address from the frame pointer
+  println("  mov 8(%%rax), %%rax");
+  return;
+}
+  
   case ND_EXCH:
   {
     gen_expr(node->lhs);
