@@ -1438,6 +1438,11 @@ static void gen_expr(Node *node)
     println("  cmovz %%edx, %%eax"); // If input was zero, set result to 32
     return;
   }
+  case ND_POPCOUNT:
+    // Built-in version
+    gen_expr(node->builtin_val); // Generate code for the expression
+    println("  popcnt %%rax, %%rax"); // Count the number of set bits
+    return;
   case ND_EXCH:
   {
     gen_expr(node->lhs);

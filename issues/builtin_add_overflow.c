@@ -1,16 +1,19 @@
+
 #include <stdio.h>
+
+
 int main() {
     int result;
-
-    if (__builtin_sub_overflow(-1, 1, &result)) {
+    if (__builtin_add_overflow(54, 1, &result)) {
         printf("Overflow detected!\n");
-    }
-    else {
+    } else { 
         printf("Overflow not detected!\n");
     }
-    if (__builtin_sub_overflow(-2147483648, 1, &result)) {
+    printf("second test\n");
+    if (__builtin_add_overflow(2147483647, 1, &result)) {
         printf("Overflow detected!\n");
     }
+
+
     return 0;
 }
-

@@ -4921,6 +4921,9 @@ static Node *primary(Token **rest, Token *tok)
     return ParseBuiltin(ND_BUILTIN_CTZ, tok, rest);
   }
 
+  if (equal(tok, "__builtin_popcount")) {
+      return ParseBuiltin(ND_POPCOUNT, tok, rest);
+  }
 
   if (equal(tok, "__builtin_atomic_exchange_n")) {
     return ParseAtomic3(ND_EXCH_N, tok, rest);
