@@ -191,7 +191,7 @@ static Node *ParseAtomic3(NodeKind kind, Token *tok, Token **rest);
 //for builtin functions
 static Node *parse_memcpy(Token *tok, Token **rest);
 static Node *parse_memset(Token *tok, Token **rest);
-
+static Node *ParseBuiltin(NodeKind kind, Token *tok, Token **rest);
 
 static int align_down(int n, int align)
 {
@@ -4910,25 +4910,16 @@ static Node *primary(Token **rest, Token *tok)
       return parse_memset(tok, rest);
   }
 
-  // if (equal(tok, "__builtin_clz")) {
-  //     return parse_clz(tok, rest);
-  // }
 
   if (equal(tok, "__builtin_clz"))
   {
-    Node *node = new_node(ND_BUILTIN_CLZ, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";        
-    ctx->line_no = __LINE__ + 1;      
-    tok = skip(tok->next, "(", ctx);
-    node->builtin_val = assign(&tok, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";        
-    ctx->line_no = __LINE__ + 1;      
-    *rest = skip(tok, ")", ctx);
-    return node;
+    return ParseBuiltin(ND_BUILTIN_CLZ, tok, rest);
   }
 
+  if (equal(tok, "__builtin_ctz"))
+  {
+    return ParseBuiltin(ND_BUILTIN_CTZ, tok, rest);
+  }
 
 
   if (equal(tok, "__builtin_atomic_exchange_n")) {
@@ -5680,6 +5671,16 @@ char *nodekind2str(NodeKind kind)
     return "FETCHOR";      // Atomic fetch and or
   case ND_SUBFETCH:
     return "SUBFETCH";     // Atomic sub and fetch
+  case ND_SYNC:
+    return "SYNC";    //atomic synchronize
+  case ND_BUILTIN_MEMCPY:
+    return "MEMCPY";  //builtin memcpy
+  case ND_BUILTIN_MEMSET:
+    return "MEMSET";  //builtin memset
+  case ND_BUILTIN_CLZ:
+    return "CLZ";   //builtin clz
+  case ND_BUILTIN_CTZ:
+    return "CTZ";   //builtin ctz
   default:
     return "UNREACHABLE"; // Atomic e
   }
@@ -5990,6 +5991,19 @@ while(!equal(tok->next, "{"))
   return ty;
 }
 
+static Node *ParseBuiltin(NodeKind kind, Token *tok, Token **rest) {
+   Node *node = new_node(kind, tok);
+   ctx->filename = PARSE_C;
+   ctx->funcname = "primary";        
+   ctx->line_no = __LINE__ + 1;      
+   tok = skip(tok->next, "(", ctx);
+   node->builtin_val = assign(&tok, tok);
+   ctx->filename = PARSE_C;
+   ctx->funcname = "primary";        
+   ctx->line_no = __LINE__ + 1;      
+   *rest = skip(tok, ")", ctx);
+   return node;  
+}
 
 //from cosmopolitan managing builtin atomics
 static Node *ParseAtomic2(NodeKind kind, Token *tok, Token **rest) {
@@ -6005,11 +6019,6 @@ static Node *ParseAtomic2(NodeKind kind, Token *tok, Token **rest) {
     tok = skip(tok, ",", ctx);
     node->memorder = const_expr(&tok, tok);
   }   
-  // ctx->filename = PARSE_C;
-  // ctx->funcname = "ParseAtomic2";      
-  // ctx->line_no = __LINE__ + 1;  
-  // tok = skip(tok, ",", ctx);
-  // node->memorder = const_expr(&tok, tok);
   ctx->filename = PARSE_C;
   ctx->funcname = "ParseAtomic2";      
   ctx->line_no = __LINE__ + 1;  
