@@ -357,6 +357,7 @@ typedef enum
   ND_BUILTIN_MEMSET, //builtin memset
   ND_BUILTIN_CLZ, //builtin clz
   ND_BUILTIN_CTZ, //builtin ctz
+  ND_POPCOUNT,    //builtin popcount
 } NodeKind;
 
 // AST node type

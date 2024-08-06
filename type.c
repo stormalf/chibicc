@@ -379,6 +379,7 @@ void add_type(Node *node)
     return;
   case ND_BUILTIN_CTZ:
   case ND_BUILTIN_CLZ:
+  case ND_POPCOUNT:
     add_type(node->builtin_val);
     node->ty = ty_int;
     return;
