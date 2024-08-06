@@ -355,6 +355,7 @@ typedef enum
   ND_SYNC,      //atomic synchronize
   ND_BUILTIN_MEMCPY, //builtin memcpy
   ND_BUILTIN_MEMSET, //builtin memset
+  ND_BUILTIN_CLZ, //builtin
 } NodeKind;
 
 // AST node type
