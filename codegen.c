@@ -1422,6 +1422,14 @@ static void gen_expr(Node *node)
 
     return;
   }
+  case ND_BUILTIN_CLZ: {
+    gen_expr(node->builtin_val); // Generate code for the expression
+    println("  bsr %%rax, %%rax"); // Bit Scan Reverse to find the highest set bit
+    println("  xor $31, %%eax"); // Count leading zeros
+    println("  mov $31, %%edx");
+    println("  cmovz %%edx, %%eax"); // If input was zero, set result to 32
+    return;
+  }
   case ND_EXCH:
   {
     gen_expr(node->lhs);

@@ -4890,7 +4890,13 @@ static Node *primary(Token **rest, Token *tok)
   // Extend the parser to recognize __sync_synchronize()
   if (equal(tok, "__sync_synchronize")) {
       Node *node = new_node(ND_SYNC, tok);
+      ctx->filename = PARSE_C;
+      ctx->funcname = "primary";        
+      ctx->line_no = __LINE__ + 1;      
       *rest = skip(tok->next, "(", ctx);
+      ctx->filename = PARSE_C;
+      ctx->funcname = "primary";        
+      ctx->line_no = __LINE__ + 1;      
       *rest = skip(*rest, ")", ctx);
       return node;
   }
@@ -4903,6 +4909,26 @@ static Node *primary(Token **rest, Token *tok)
   if (equal(tok, "__builtin_memset")) {
       return parse_memset(tok, rest);
   }
+
+  // if (equal(tok, "__builtin_clz")) {
+  //     return parse_clz(tok, rest);
+  // }
+
+  if (equal(tok, "__builtin_clz"))
+  {
+    Node *node = new_node(ND_BUILTIN_CLZ, tok);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";        
+    ctx->line_no = __LINE__ + 1;      
+    tok = skip(tok->next, "(", ctx);
+    node->builtin_val = assign(&tok, tok);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";        
+    ctx->line_no = __LINE__ + 1;      
+    *rest = skip(tok, ")", ctx);
+    return node;
+  }
+
 
 
   if (equal(tok, "__builtin_atomic_exchange_n")) {

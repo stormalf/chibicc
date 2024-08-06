@@ -377,7 +377,10 @@ void add_type(Node *node)
     add_type(node->builtin_val);
     add_type(node->builtin_size);
     return;
-
+  case ND_BUILTIN_CLZ:
+    add_type(node->builtin_val);
+    node->ty = ty_int;
+    return;
   case ND_EXCH_N:
   case ND_FETCHADD:
   case ND_FETCHSUB:
