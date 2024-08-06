@@ -1430,6 +1430,14 @@ static void gen_expr(Node *node)
     println("  cmovz %%edx, %%eax"); // If input was zero, set result to 32
     return;
   }
+  case ND_BUILTIN_CTZ: {
+    // Built-in version
+    gen_expr(node->builtin_val); // Generate code for the expression
+    println("  bsf %%rax, %%rax"); // Bit Scan Forward to find the lowest set bit
+    println("  mov $32, %%edx"); // Prepare a value of 32 in edx
+    println("  cmovz %%edx, %%eax"); // If input was zero, set result to 32
+    return;
+  }
   case ND_EXCH:
   {
     gen_expr(node->lhs);
