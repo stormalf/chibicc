@@ -17,6 +17,8 @@ Type *ty_ulong = &(Type){TY_LONG, 8, 8, true};
 Type *ty_float = &(Type){TY_FLOAT, 4, 4};
 Type *ty_double = &(Type){TY_DOUBLE, 8, 8};
 Type *ty_ldouble = &(Type){TY_LDOUBLE, 16, 16};
+Type *ty_void_ptr = &(Type){TY_PTR, 8, 8, true};
+
 
 static Type *new_type(TypeKind kind, int size, int align)
 {
@@ -376,6 +378,22 @@ void add_type(Node *node)
     add_type(node->builtin_dest);
     add_type(node->builtin_val);
     add_type(node->builtin_size);
+    return;
+  case ND_EXPECT:
+    add_type(node->rhs);
+    add_type(node->lhs);
+    node->ty = ty_bool;
+    return;
+  case ND_RETURN_ADDR:
+    add_type(node->lhs);
+    node->ty = ty_void_ptr;
+    // Type *ty = node->lhs->ty;
+
+    // if (ty->kind == TY_ARRAY)
+    //   node->ty = pointer_to(ty->base);
+    // else
+    //   node->ty = pointer_to(ty);
+
     return;
   case ND_BUILTIN_CTZ:
   case ND_BUILTIN_CLZ:

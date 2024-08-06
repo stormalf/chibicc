@@ -358,6 +358,8 @@ typedef enum
   ND_BUILTIN_CLZ, //builtin clz
   ND_BUILTIN_CTZ, //builtin ctz
   ND_POPCOUNT,    //builtin popcount
+  ND_EXPECT,    //builtin expect
+  ND_RETURN_ADDR,    //builtin return address
 } NodeKind;
 
 // AST node type
@@ -454,7 +456,7 @@ VarScope *find_var(Token *tok);
 Obj *find_func(char *name);
 //from COSMOPOLITAN adding function ConsumeStringLiteral
 char *ConsumeStringLiteral(Token **rest, Token *tok) ;
-
+int64_t eval(Node *node);
 
 extern bool opt_fbuiltin;
 //
