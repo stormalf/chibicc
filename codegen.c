@@ -1446,34 +1446,198 @@ static void gen_expr(Node *node)
     return;
 
   case ND_EXPECT: {
-      // Generate code for the expression we are expecting
-      gen_expr(node->lhs); // Generate code for the condition
-      push(); // Save the condition result on stack
-      gen_expr(node->rhs); // Generate code for the expected value
-      pop("%rdi"); // Restore the condition result from stack into %rdi
-      // Compare the condition result with the expected value
-      println("  cmp %%rax, %%rdi");
-      // Move the condition result back to %rax for use in further code
-      println("  mov %%rdi, %%rax");
-      return;
+    // Generate code for the expression we are expecting
+    gen_expr(node->lhs); // Generate code for the condition
+    push(); // Save the condition result on stack
+    gen_expr(node->rhs); // Generate code for the expected value
+    pop("%rdi"); // Restore the condition result from stack into %rdi
+    // Compare the condition result with the expected value
+    println("  cmp %%rax, %%rdi");
+    // Move the condition result back to %rax for use in further code
+    println("  mov %%rdi, %%rax");
+    return;
   }   
-case ND_RETURN_ADDR: {
-  // Generate code to get the frame pointer of the current function
-  println("  mov %%rbp, %%rax");
-  
-  // Get the depth of the return address
-  int depth = eval(node->lhs);
-  
-  // Walk up the stack frames to the correct depth
-  for (int i = 0; i < depth; i++) {
-    println("  mov (%%rax), %%rax");
+  case ND_RETURN_ADDR: {
+    // Generate code to get the frame pointer of the current function
+    println("  mov %%rbp, %%rax");
+    
+    // Get the depth of the return address
+    int depth = eval(node->lhs);
+    
+    // Walk up the stack frames to the correct depth
+    for (int i = 0; i < depth; i++) {
+      println("  mov (%%rax), %%rax");
+    }
+    
+    // Load the return address from the frame pointer
+    println("  mov 8(%%rax), %%rax");
+    return;
   }
-  
-  // Load the return address from the frame pointer
-  println("  mov 8(%%rax), %%rax");
-  return;
-}
-  
+  case ND_BUILTIN_ADD_OVERFLOW: {
+   int c = count();  // Unique label counter
+    Type *ty = node->builtin_dest->ty;  // Get the type of the operands
+    if (ty->base)
+      ty = ty->base;
+
+    // Evaluate left-hand side and right-hand side expressions
+    gen_expr(node->lhs);
+    push();
+    gen_expr(node->rhs);
+    push();
+    gen_expr(node->builtin_dest);
+    push();
+
+    // Load values into registers and perform addition
+    pop("%rdx");  // Load address of result variable
+    pop("%rsi");  // Load rhs
+    pop("%rdi");  // Load lhs
+
+    if (ty->size == 1) {
+        println("  mov %%dil, %%al");
+        println("  add %%sil, %%al");
+        println("  mov %%al, (%%rdx)");
+    } else if (ty->size == 2) {
+        println("  mov %%di, %%ax");
+        println("  add %%si, %%ax");
+        println("  mov %%ax, (%%rdx)");
+    } else if (ty->size == 4) {
+        println("  mov %%edi, %%eax");
+        println("  add %%esi, %%eax");
+        println("  mov %%eax, (%%rdx)");
+    } else {
+        println("  mov %%rdi, %%rax");
+        println("  add %%rsi, %%rax");
+        println("  mov %%rax, (%%rdx)");
+    }
+
+    // Check for overflow
+    println("  seto %%al");          // Set AL if overflow occurred
+    println("  movzx %%al, %%eax");  // Zero-extend AL to EAX
+
+    // Return 0 if no overflow, 1 if overflow
+    println("  cmp $0, %%eax");
+    println("  jne .Loverflowa%d", c);
+    println("  mov $0, %%eax");
+    println("  jmp .Lenda%d", c);
+    println(".Loverflowa%d:", c);
+    println("  mov $1, %%eax");
+    println(".Lenda%d:", c);
+    return;
+  }
+  case ND_BUILTIN_SUB_OVERFLOW: {
+    int c = count();  // Unique label counter
+    Type *ty = node->builtin_dest->ty;  // Get the type of the operands
+    if (ty->base)
+      ty = ty->base;
+    // Evaluate left-hand side and right-hand side expressions
+    gen_expr(node->lhs);
+    push();
+    gen_expr(node->rhs);
+    push();
+    gen_expr(node->builtin_dest);
+    push();
+
+    // Load values into registers and perform subtraction
+    pop("%rdx");  // Load address of result variable
+    pop("%rsi");  // Load rhs
+    pop("%rdi");  // Load lhs
+
+    if (ty->size == 1) {
+        println("  mov %%dil, %%al");
+        println("  sub %%sil, %%al");
+        println("  mov %%al, (%%rdx)");
+    } else if (ty->size == 2) {
+        println("  mov %%di, %%ax");
+        println("  sub %%si, %%ax");
+        println("  mov %%ax, (%%rdx)");
+    } else if (ty->size == 4) {
+        println("  mov %%edi, %%eax");
+        println("  sub %%esi, %%eax");
+        println("  mov %%eax, (%%rdx)");
+    } else {
+        println("  mov %%rdi, %%rax");
+        println("  sub %%rsi, %%rax");
+        println("  mov %%rax, (%%rdx)");
+    }
+
+    // Check for overflow
+    println("  seto %%al");          // Set AL if overflow occurred
+    println("  movzx %%al, %%eax");  // Zero-extend AL to EAX
+
+    // Return 0 if no overflow, 1 if overflow
+    println("  cmp $0, %%eax");
+    println("  jne .Loverflows%d", c);
+    println("  mov $0, %%eax");
+    println("  jmp .Lends%d", c);
+    println(".Loverflows%d:", c);
+    println("  mov $1, %%eax");
+    println(".Lends%d:", c);
+    return;
+  }
+  case ND_BUILTIN_MUL_OVERFLOW: {
+    int c = count();  // Unique label counter
+    Type *ty = node->lhs->ty;  // Get the type of the operands
+    if (ty->base)
+      ty = ty->base;
+    int size = ty->size;
+    // Evaluate left-hand side and right-hand side expressions
+    gen_expr(node->lhs);
+    push();
+    gen_expr(node->rhs);
+    push();
+    gen_expr(node->builtin_dest);
+    push();
+
+    // Load values into registers and perform multiplication
+    pop("%rdx");  // Load address of result variable
+    pop("%rsi");  // Load rhs
+    pop("%rdi");  // Load lhs
+
+    // Determine the suffix and size for the operations
+    if (size == 1) {
+        // For 8-bit values (char)
+        println("  movzbl %%di, %%eax");  // Zero-extend to 32-bit
+        println("  movzbl %%si, %%ebx");  // Zero-extend to 32-bit
+        println("  imul %%ebx, %%eax");   // Perform 32-bit multiplication
+        println("  jo .L.overflowm%d", c);  // Jump if overflow
+        println("  mov %%al, (%%rdx)");    // Store result (8-bit)
+        println("  mov $0, %%al");       
+        println("  jmp .L.donem%d", c);    // Jump to done
+    } else if (size == 2) {
+        // For 16-bit values (short)
+        println("  movzwl %%di, %%eax");  // Zero-extend to 32-bit
+        println("  movzwl %%si, %%ebx");  // Zero-extend to 32-bit
+        println("  imul %%ebx, %%eax");   // Perform 32-bit multiplication
+        println("  jo .L.overflowm%d", c);  // Jump if overflow
+        println("  mov %%ax, (%%rdx)");    // Store result (16-bit)
+        println("  mov $0, %%ax");       
+        println("  jmp .L.donem%d", c);    // Jump to done
+    } else if (size == 4) {
+        // For 32-bit values (int)
+        println("  mov %%edi, %%eax");    // Move to 32-bit
+        println("  imul %%esi, %%eax");   // Perform 32-bit multiplication
+        println("  jo .L.overflowm%d", c);  // Jump if overflow
+        println("  mov %%eax, (%%rdx)");    // Store result (32-bit)
+        println("  mov $0, %%eax");       
+        println("  jmp .L.donem%d", c);    // Jump to done
+    } else if (size == 8) {
+        // For 64-bit values (long long)
+        println("  mov %%rdi, %%rax");    // Move to 64-bit
+        println("  imul %%rsi, %%rax");   // Perform 64-bit multiplication
+        println("  jo .L.overflowm%d", c);  // Jump if overflow
+        println("  mov %%rax, (%%rdx)");    // Store result (64-bit)
+        println("  mov $0, %%rax");       
+        println("  jmp .L.donem%d", c);    // Jump to done
+    }
+
+    // Overflow handling
+    println(".L.overflowm%d:", c);
+    println("  mov %%al, (%%rdx)");        // Store result
+    println("  mov $1, %%rax");            // Set return value to 1 (overflow detected)
+    println(".L.donem%d:", c);
+
+    return;
+  }
   case ND_EXCH:
   {
     gen_expr(node->lhs);

@@ -360,6 +360,9 @@ typedef enum
   ND_POPCOUNT,    //builtin popcount
   ND_EXPECT,    //builtin expect
   ND_RETURN_ADDR,    //builtin return address
+  ND_BUILTIN_ADD_OVERFLOW,  //builtin add overflow
+  ND_BUILTIN_SUB_OVERFLOW,  //builtin sub overflow
+  ND_BUILTIN_MUL_OVERFLOW, //builtin mul overflow
 } NodeKind;
 
 // AST node type

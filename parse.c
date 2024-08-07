@@ -192,6 +192,7 @@ static Node *ParseAtomic3(NodeKind kind, Token *tok, Token **rest);
 static Node *parse_memcpy(Token *tok, Token **rest);
 static Node *parse_memset(Token *tok, Token **rest);
 static Node *ParseBuiltin(NodeKind kind, Token *tok, Token **rest);
+static Node *parse_overflow(NodeKind kind, Token *tok, Token **rest);
 
 static int align_down(int n, int align)
 {
@@ -4950,6 +4951,17 @@ static Node *primary(Token **rest, Token *tok)
     return node;
   }
 
+  if (equal(tok, "__builtin_add_overflow")) {
+    return parse_overflow(ND_BUILTIN_ADD_OVERFLOW, tok, rest);
+  }
+
+  if (equal(tok, "__builtin_sub_overflow")) {
+    return parse_overflow(ND_BUILTIN_SUB_OVERFLOW, tok, rest);
+  }
+
+  if (equal(tok, "__builtin_mul_overflow")) {
+    return parse_overflow(ND_BUILTIN_MUL_OVERFLOW, tok, rest);
+  }
 
   if (equal(tok, "__builtin_atomic_exchange_n")) {
     return ParseAtomic3(ND_EXCH_N, tok, rest);
@@ -5714,6 +5726,12 @@ char *nodekind2str(NodeKind kind)
     return "POPCOUNT"; //builtin popcount
   case ND_RETURN_ADDR:
     return "RETURN_ADDRESS";  //builtin return address
+  case ND_BUILTIN_ADD_OVERFLOW:
+    return "ADD_OVERFLOW";    //builtin add overflow
+  case ND_BUILTIN_SUB_OVERFLOW:
+    return "SUB_OVERFLOW";    //builtin sub overflow
+  case ND_BUILTIN_MUL_OVERFLOW:
+    return "MUL_OVERFLOW";    //builtin mul overflow
   default:
     return "UNREACHABLE"; // Atomic e
   }
@@ -6139,4 +6157,30 @@ static Node *parse_memset(Token *tok, Token **rest) {
     ctx->line_no = __LINE__ + 1;
     *rest = skip(tok, ")", ctx);
     return node;
+}
+
+static Node *parse_overflow(NodeKind kind, Token *tok, Token **rest) {
+    // Parse the arguments for __builtin_add_overflow
+    Node *node = new_node(kind, tok);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";
+    ctx->line_no = __LINE__ + 1;
+    tok = skip(tok->next, "(", ctx);
+    node->lhs = assign(&tok, tok);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";
+    ctx->line_no = __LINE__ + 1;
+    tok = skip(tok, ",", ctx);
+    node->rhs = assign(&tok, tok);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";
+    ctx->line_no = __LINE__ + 1;
+    tok = skip(tok, ",", ctx);
+    node->builtin_dest = assign(&tok, tok);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";
+    ctx->line_no = __LINE__ + 1;
+    *rest = skip(tok, ")", ctx);    
+    return node;
+
 }

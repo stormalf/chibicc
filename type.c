@@ -387,13 +387,14 @@ void add_type(Node *node)
   case ND_RETURN_ADDR:
     add_type(node->lhs);
     node->ty = ty_void_ptr;
-    // Type *ty = node->lhs->ty;
-
-    // if (ty->kind == TY_ARRAY)
-    //   node->ty = pointer_to(ty->base);
-    // else
-    //   node->ty = pointer_to(ty);
-
+    return;
+  case ND_BUILTIN_SUB_OVERFLOW:
+  case ND_BUILTIN_MUL_OVERFLOW:
+  case ND_BUILTIN_ADD_OVERFLOW:
+    add_type(node->lhs);
+    add_type(node->rhs);
+    add_type(node->builtin_dest);
+    node->ty = ty_bool;
     return;
   case ND_BUILTIN_CTZ:
   case ND_BUILTIN_CLZ:
