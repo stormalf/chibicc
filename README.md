@@ -15,60 +15,62 @@ or
 ./chibicc -h
 
     chibicc is a C compiler based on chibicc created by Rui Ueyama.
-    See original project https://github.com/rui314/chibicc for more information
-    this chibicc contains only some differences for now like new parameters
+        See original project https://github.com/rui314/chibicc for more information
+        this chibicc contains only some differences for now like new parameters
     chibicc usage :
-    --help or -h print the help
-    --version or -v print the version of chibicc
-    -cc1 run the cc1 function needs -cc1-input (-cc1-output optional) parameter
-    -fuse-ld to specify other linker than ld used by default
-    -x Specify the language of the following input files.
-        Permissible languages include: c assembler none
-        'none' means revert to the default behavior of
-        guessing the language based on the file's extension.
-    -S generate assembly file
-    -o path to output executable if omitted a.out generated
-    -c path to source to compile
-    -Xlinker <arg> Pass <arg> on to the linker.
-    -Wl,<options> Pass comma-separated <options> on to the linker.
-    -z <arg> Pass <arg> on to the linker.
-    -soname <arg> Pass -soname <arg> on to the linker.
-    --version-script <arg> Pass --version-script <arg> to the linker.
-    -I<path> Pass path to the include directories
-    -L<path> Pass path to the lib directories
-    -D<macro> define macro example -DM13
-    -U<macro> undefine macro example -UM13
-    -s to strip all symbols during linkage phasis
-    -M -MD -MP -MMD -MF <arg> -MT <arg> -MQ <arg> compiler write a list of input files to
-        stdout in a format that "make" command can read. This feature is
-        used to automate file dependency management
-    -fpic or -fPIC Generate position-independent code (PIC)
-    -fno-pic disables the generation of position-independent code with relative address references
-    -pie Create a dynamically linked position independent
-    -fpie Create a dynamically linked position independent
-    -fPIE Create a dynamically linked position independent
-    -fcommon is the default if not specified, it's mainly useful to enable legacy code to link without errors
-    -fno-common specifies that the compiler places uninitialized global variables in the BSS section of the object file.
-    -static  pass to the linker to link a program statically
-    -pthread pass to the linker to link with lpthread library
-    -shared pass to the linker to produce a shared object which can then be linked with other objects to form an executable.
-    -hashmap-test to test the hashmap function
-    -idirafter <dir> apply to lookup for both the #include "file" and #include <file> directives.
-    -### to dump all commands executed by chibicc
-    -debug to dump all commands executed by chibicc in a log file in /tmp/chibicc.log
-    -E Stop after the preprocessing stage; do not run the compiler proper.
-        The output is in the form of preprocessed source code, which is sent to the standard output.
-        Input files that don’t require preprocessing are ignored.
-    -rpath <dir> Add a directory to the runtime library search path this parameter is passed to the linker.
-        This is used when linking an ELF executable with shared objects.
-        All -rpath arguments are concatenated and passed to the runtime linker,
-        which uses them to locate shared objects at runtime.
-        The -rpath option is also used when locating shared objects
-        which are needed by shared objects explicitly included in the link.
-    -dumpmachine it's required by some projects returns x86_64-linux-gnu
-    -dotfile generates a file with .dot extension that can be visualized using graphviz package
-    -dM Print macro definitions in -E mode instead of normal output
-    chibicc [ -o <path> ] <file>
+        --help or -h print the help
+        --version or -v print the version of chibicc
+        -cc1 run the cc1 function needs -cc1-input (-cc1-output optional) parameter 
+        -fuse-ld to specify other linker than ld used by default 
+        -x Specify the language of the following input files.
+            Permissible languages include: c assembler none
+            'none' means revert to the default behavior of
+            guessing the language based on the file's extension.
+        -S generate assembly file 
+        -o path to output executable if omitted a.out generated
+        -c path to source to compile 
+        -Xlinker <arg> Pass <arg> on to the linker.
+        -Wl,<options> Pass comma-separated <options> on to the linker.
+        -z <arg> Pass <arg> on to the linker. 
+        -soname <arg> Pass -soname <arg> on to the linker. 
+        --version-script <arg> Pass --version-script <arg> to the linker.
+        -I<path> Pass path to the include directories 
+        -L<path> Pass path to the lib directories 
+        -D<macro> define macro example -DM13 
+        -U<macro> undefine macro example -UM13
+        -s to strip all symbols during linkage phasis 
+        -M -MD -MP -MMD -MF <arg> -MT <arg> -MQ <arg> compiler write a list of input files to 
+            stdout in a format that "make" command can read. This feature is
+            used to automate file dependency management
+        -fpic or -fPIC Generate position-independent code (PIC)
+        -fno-pic disables the generation of position-independent code with relative address references
+        -pie Create a dynamically linked position independent 
+        -fpie Create a dynamically linked position independent
+        -fPIE Create a dynamically linked position independent
+        -fcommon is the default if not specified, it's mainly useful to enable legacy code to link without errors
+        -fno-common specifies that the compiler places uninitialized global variables in the BSS section of the object file.
+        -static  pass to the linker to link a program statically
+        -pthread pass to the linker to link with lpthread library 
+        -shared pass to the linker to produce a shared object which can then be linked with other objects to form an executable.
+        -hashmap-test to test the hashmap function 
+        -idirafter <dir> apply to lookup for both the #include "file" and #include <file> directives.
+        -### to dump all commands executed by chibicc 
+        -debug to dump all commands executed by chibicc in a log file in /tmp/chibicc.log
+        -E Stop after the preprocessing stage; do not run the compiler proper. 
+            The output is in the form of preprocessed source code, which is sent to the standard output.
+            Input files that don’t require preprocessing are ignored.
+        -rpath <dir> Add a directory to the runtime library search path this parameter is passed to the linker. 
+            This is used when linking an ELF executable with shared objects.
+            All -rpath arguments are concatenated and passed to the runtime linker,
+            which uses them to locate shared objects at runtime. 
+            The -rpath option is also used when locating shared objects 
+            which are needed by shared objects explicitly included in the link. 
+        -dumpmachine it's required by some projects returns x86_64-linux-gnu
+        -dotfile generates a file with .dot extension that can be visualized using graphviz package 
+        -dM Print macro definitions in -E mode instead of normal output
+        -print print all tokens in a log file in /tmp/chibicc.log
+        -A print Abstract Syntax Tree in a log file in /tmp/chibicc.log
+        chibicc [ -o <path> ] <file>
 
 ## compile
 
@@ -254,11 +256,13 @@ List of options ignored :
     "-fdiagnostics-show-option"
     "-fasynchronous-unwind-tables"
     "-fexceptions"
-    "-fsanitize=cfi"
     "--print-search-dirs"
     "-fdiagnostics-show-option"
+    "-Xc"
+    "-Aa"
+    "-rdynamic"
     "-w"
-
+    "--param=ssp-buffer-size=4"
 
 ## Dockerfile and devcontainer
 
@@ -339,6 +343,7 @@ git: https://github.com/git/git.git
     autoreconf -fi
     CC=chibicc CFLAGS=-fPIC ./configure
     make
+    make test
 
 
 util-linux : https://github.com/util-linux/util-linux.git
@@ -451,9 +456,25 @@ cpython: git clone git@github.com:python/cpython.git
 
 to be able to use meson with chibicc (meson doesn't know chibicc compiler), I changed the detect.py file in /usr/lib/python3/dist-packages/mesonbuild/compilers/detect.py to add support for chibicc. After that I can now using meson for some projects that are configured to use it.
 
+lxc: https://github.com/lxc/lxc.git
+
+    Due to use of __attribute__((weak(alias))) in lxc/src/lxc/lxc.c, the linker is not able to find the symbols in the lxc library.
+    CC=chibicc \
+    CFLAGS="-fpic -Dlxc_attach_main=main -Dlxc_autostart_main=main -Dlxc_destroy_main=main -Dlxc_config_main=main -Dlxc_stop_main=main -Dlxc_info_main=main \
+    -Dlxc_checkpoint_main=main -Dlxc_cgroup_main=main -Dlxc_freeze_main=main -Dlxc_unfreeze_main=main -Dlxc_copy_main=main -Dlxc_device_main=main -Dlxc_execute_main=main \
+    -Dlxc_monitor_main=main -Dlxc_snapshot_main=main -Dlxc_console_main=main  -Dlxc_ls_main=main -Dlxc_create_main=main -Dlxc_start_main=main -Dlxc_unshare_main=main \
+    -Dlxc_wait_main=main -Dlxc_top_main=main" \
+    LDFLAGS="-fpic -Wl,--undefined,lxc_attach_main -Wl,--undefined,lxc_autostart_main -Wl,--undefined,lxc_destroy_main -Wl,--undefined,lxc_config_main \
+    -Wl,--undefined,lxc_stop_main -Wl,--undefined,lxc_info_main -Wl,--undefined,lxc_checkpoint_main -Wl,--undefined,lxc_cgroup_main -Wl,--undefined,lxc_freeze_main \
+    -Wl,--undefined,lxc_unfreeze_main -Wl,--undefined,lxc_copy_main -Wl,--undefined,lxc_device_main -Wl,--undefined,lxc_execute_main -Wl,--undefined,lxc_monitor_main \
+    -Wl,--undefined,lxc_snapshot_main -Wl,--undefined,lxc_console_main -Wl,--undefined,lxc_ls_main -Wl,--undefined,lxc_create_main -Wl,--undefined,lxc_start_main \
+    -Wl,--undefined,lxc_start_main -Wl,--undefined,lxc_unshare_main -Wl,--undefined,lxc_wait_main -Wl,--undefined,lxc_top_main" \
+    meson build && cd build && meson compile
+
+
 ## Limits
 
-Some C projects doesn't compile for now. It helps to find some bugs and to try to fix them!
+Some C projects doesn't compile for now or crash after being compiled with chibicc. It helps to find some bugs and to try to fix them!
 
 VLC : https://github.com/videolan/vlc.git 
 
@@ -463,17 +484,10 @@ VLC : https://github.com/videolan/vlc.git
 
     VLC doesn't compile with chibicc some issues to fix later.
 
-lxc: https://github.com/lxc/lxc.git
-
-    CC=chibicc CFLAGS=-fpic LDFLAGS=-fpic meson build
-    cd build
-    meson compile
-    failed on lxc-attach compile for now
-
 
 postgres: https://github.com/postgres/postgres.git 
 
-    CC=chibicc CFLAGS="-fPIC" LDFLAGS="-fPIC -g" ./configure --host x86_64-linux-gnu --disable-spinlocks
+    CC=chibicc  ./configure --host x86_64-linux-gnu --disable-spinlocks
     make
     make check
     Program received signal SIGSEGV, Segmentation fault.
@@ -521,8 +535,10 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.22.3        Fixing some issues with extended assembly (managing diffrently depending letters used =r, =m, =q, =a, =b, =c, =d). Adding -print parameter to print
-                 all tokens in /tmp/chibicc.log file to help for debugging. Reformatting error messages. Adding color codes to error messages.
+1.0.22.4        Fixing some issues with extended assembly (new test cases), adding r11 and r10 registers and adding "D" and "S" support for input and output.
+                Removing -fsanitize=cfi not supported by gcc. Adding core dump and segfault handler to have useful information when a segfault occurs.
+                Adding debug information for linker. Changing the order of extra linker parameters because if the specific path defined for a project is not the first one, it seems that the linker doesn't find the libraries (#ISS-173). Adding  support for `chibicc -xc -E -v -` to print the include directories. 
+                Ignoring two other attributes for compatibility with GCC :  \__attribute__((fallthrough)) and \__attribute__((nonnull(1))). Adding a trick to fix the issue with lxc project in the README.md and Makefile. Adding some test cases for builtin functions to test with chibicc for later. Adding macro \__builtin_choose_expr in stddef.h to fix issue found in the lxc project. Adding warning messages in purple like gcc. Fixing issue with extended assembly when atomic_sync_bool_compare_and_swap. Taking in account in extended assembly (-value) to negate the value. Adding builtin function __sync_fetch_and_add and __sync_fetch_and_sub. Adding other builtin_functions like gcc. Adding print AST with option -A (from @cosmopolitan).
 
 
 ## old release notes

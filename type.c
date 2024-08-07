@@ -17,6 +17,8 @@ Type *ty_ulong = &(Type){TY_LONG, 8, 8, true};
 Type *ty_float = &(Type){TY_FLOAT, 4, 4};
 Type *ty_double = &(Type){TY_DOUBLE, 8, 8};
 Type *ty_ldouble = &(Type){TY_LDOUBLE, 16, 16};
+Type *ty_void_ptr = &(Type){TY_PTR, 8, 8, true};
+
 
 static Type *new_type(TypeKind kind, int size, int align)
 {
@@ -252,7 +254,7 @@ void add_type(Node *node)
   }
   case ND_ASSIGN:
     if (node->lhs->ty->kind == TY_ARRAY)
-      error_tok(node->lhs->tok, "%s not an lvalue", TYPE_C);
+      error_tok(node->lhs->tok, "%s %d: not an lvalue", TYPE_C, __LINE__);
     if (node->lhs->ty->kind != TY_STRUCT && node->lhs->ty->kind != TY_UNION)
       node->rhs = new_cast(node->rhs, node->lhs->ty);
     node->ty = node->lhs->ty;
@@ -318,12 +320,12 @@ void add_type(Node *node)
       if (node->lhs->ty)
         node->lhs->ty->base = node->lhs->ty;
       else
-        error_tok(node->tok, "%s invalid pointer dereference", TYPE_C);
+        error_tok(node->tok, "%s %d: invalid pointer dereference", TYPE_C, __LINE__);
     }
     //======ISS-154 trying to fix deferencing pointer issue when we have a macro that can return a pointer or null  (self) ? NULL      
     //printf("======%d %d %s\n", node->lhs->ty->base->kind, node->lhs->ty->kind, node->lhs->tok->loc);
     if (node->lhs->ty->base->kind == TY_VOID && node->lhs->ty->kind == TY_VOID)
-      error_tok(node->tok, "%s dereferencing a void pointer", TYPE_C);
+      error_tok(node->tok, "%s %d : dereferencing a void pointer", TYPE_C, __LINE__);
     if (node->lhs->ty->base->kind == TY_VOID)
       node->lhs->ty->base = node->lhs->ty;
     node->ty = node->lhs->ty->base;
@@ -355,15 +357,70 @@ void add_type(Node *node)
     node->ty = ty_bool;
 
     if (node->cas_addr->ty->kind != TY_PTR)
-      error_tok(node->cas_addr->tok, "%s pointer expected", TYPE_C);
+      error_tok(node->cas_addr->tok, "%s %d: pointer expected", TYPE_C, __LINE__);
     if (node->cas_old->ty->kind != TY_PTR)
-      error_tok(node->cas_old->tok, "%s pointer expected", TYPE_C);
+      error_tok(node->cas_old->tok, "%s %d: pointer expected", TYPE_C, __LINE__);
+    return;
+  case ND_CAS_N:
+    add_type(node->cas_addr);
+    add_type(node->cas_old);
+    add_type(node->cas_new);
+    node->ty = ty_bool;
+    if (node->cas_addr->ty->kind != TY_PTR)
+      error_tok(node->cas_addr->tok, "%s %d: pointer expected", TYPE_C, __LINE__);
+    return;
+  case ND_BUILTIN_MEMCPY:
+    add_type(node->builtin_dest);
+    add_type(node->builtin_src);
+    add_type(node->builtin_size);
+    return;
+  case ND_BUILTIN_MEMSET:
+    add_type(node->builtin_dest);
+    add_type(node->builtin_val);
+    add_type(node->builtin_size);
+    return;
+  case ND_EXPECT:
+    add_type(node->rhs);
+    add_type(node->lhs);
+    node->ty = ty_bool;
+    return;
+  case ND_RETURN_ADDR:
+    add_type(node->lhs);
+    node->ty = ty_void_ptr;
+    return;
+  case ND_BUILTIN_SUB_OVERFLOW:
+  case ND_BUILTIN_MUL_OVERFLOW:
+  case ND_BUILTIN_ADD_OVERFLOW:
+    add_type(node->lhs);
+    add_type(node->rhs);
+    add_type(node->builtin_dest);
+    node->ty = ty_bool;
+    return;
+  case ND_BUILTIN_CTZ:
+  case ND_BUILTIN_CLZ:
+  case ND_POPCOUNT:
+    add_type(node->builtin_val);
+    node->ty = ty_int;
+    return;
+  case ND_EXCH_N:
+  case ND_FETCHADD:
+  case ND_FETCHSUB:
+  case ND_FETCHXOR:
+  case ND_FETCHAND:
+  case ND_FETCHOR:
+  case ND_SUBFETCH:
+    if (node->lhs->ty->kind != TY_PTR)
+      error_tok(node->lhs->tok, "pointer expected");
+    node->rhs = new_cast(node->rhs, node->lhs->ty->base);
+    node->ty = node->lhs->ty->base;
+    return;
+  case ND_UNREACHABLE:
+    node->ty = ty_void;
     return;
   case ND_EXCH:
     if (node->lhs->ty->kind != TY_PTR)
-      error_tok(node->cas_addr->tok, "%s pointer expected", TYPE_C);
+      error_tok(node->cas_addr->tok, "%s %d: pointer expected", TYPE_C, __LINE__);
     node->ty = node->lhs->ty->base;
     return;
   }
 }
-

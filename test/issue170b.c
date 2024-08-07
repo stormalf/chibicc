@@ -1,3 +1,4 @@
+#include "assert.h"
 #ifdef __cplusplus
 # error "A C++ compiler has been selected for C."
 #endif
@@ -798,6 +799,7 @@ int main(int argc, char* argv[])
   require += info_language_standard_default[argc];
   require += info_language_extensions_default[argc];
   (void)argv;
-  return require;
+  assert(require != 0  ? printf("require=%d\n"): "require should not be 0");
+  return 0;
 }
 #endif

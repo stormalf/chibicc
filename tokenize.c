@@ -6,8 +6,10 @@
 #define RESET "\033[0m"
 
 // Length of the color codes
+#define PURPLE "\033[0;35m"
 #define RED_LEN 5 // \033[31m
 #define RESET_LEN 4 // \033[0m
+#define PURPLE_LEN 7
 
 // Input file
 static File *current_file;
@@ -85,11 +87,53 @@ void error_tok(Token *tok, char *fmt, ...)
   exit(7);
 }
 
+
+//to print warning message in purple color
+static void vwarning_at(char *filename, char *input, unsigned int line_no,
+                      char *loc, char *fmt, va_list ap)
+{
+  // Find a line containing `loc`.
+  char *line = loc;
+  while (input < line && line[-1] != '\n')
+    line--;
+
+  char *end = loc;
+  while (*end && *end != '\n')
+    end++;
+
+  // Print out the line.
+  int indent = fprintf(stderr, "%s:%u: " PURPLE "warning:" RESET " ", filename, line_no);
+  fprintf(stderr, "%.*s\n", (int)(end - line), line);
+
+  // Show the error message.
+  int pos = display_width(line, loc - line) + indent;
+
+  fprintf(stderr, "%*s", pos - (PURPLE_LEN + RESET_LEN), ""); // print pos spaces, adjusting for color codes
+  fprintf(stderr, PURPLE "^" RESET " "); // Print caret in purple
+  vfprintf(stderr, fmt, ap);
+  fprintf(stderr, "\n");
+}
+
+void warning_at(char *loc, char *fmt, ...)
+{
+  unsigned int line_no = 1;
+  for (char *p = current_file->contents; p < loc; p++)
+    if (*p == '\n')
+      line_no++;
+
+  va_list ap;
+  va_start(ap, fmt);
+  vwarning_at(current_file->name, current_file->contents, line_no, loc, fmt, ap);
+  va_end(ap);
+
+}
+
+
 void warn_tok(Token *tok, char *fmt, ...)
 {
   va_list ap;
   va_start(ap, fmt);
-  verror_at(tok->file->name, tok->file->contents, tok->line_no, tok->loc, fmt, ap);
+  vwarning_at(tok->file->name, tok->file->contents, tok->line_no, tok->loc, fmt, ap);
   va_end(ap);
 }
 

@@ -18,6 +18,10 @@
 #include <time.h>
 #include <unistd.h>
 #include <math.h>
+#include <signal.h>
+#include <sys/resource.h>
+#include <stdatomic.h>
+
 
 
 #define ROUNDUP(X, K)   (((X) + (K) - 1) & -(K))
@@ -34,7 +38,7 @@
 #endif
 
 #define PRODUCT "chibicc"
-#define VERSION "1.0.22.3"
+#define VERSION "1.0.22.4"
 #define MAXLEN 501
 #define DEFAULT_TARGET_MACHINE "x86_64-linux-gnu"
 
@@ -93,7 +97,8 @@ this " PRODUCT " contains only some differences for now like new parameters\n"
 -dumpmachine it's required by some projects returns x86_64-linux-gnu\n \
 -dotfile generates a file with .dot extension that can be visualized using graphviz package \n \
 -dM Print macro definitions in -E mode instead of normal output\n \
--print print all tokens \n \
+-print print all tokens in a log file in /tmp/chibicc.log \n \
+-A print Abstract Syntax Tree in a log file in /tmp/chibicc.log \n \
 chibicc [ -o <path> ] <file>\n"
 
 typedef struct Type Type;
@@ -332,6 +337,34 @@ typedef enum
   ND_ASM,       // "asm"
   ND_CAS,       // Atomic compare-and-swap
   ND_EXCH,      // Atomic exchange
+  ND_CAS_N,     //atomic compare-and-swap with value
+  ND_EXCH_N,       // Atomic exchange with value
+  ND_LOAD,         // Atomic load to pointer
+  ND_LOAD_N,       // Atomic load to result
+  ND_STORE,        // Atomic store to pointer
+  ND_STORE_N,      // Atomic store to result
+  ND_TESTANDSET,   // Sync lock test and set
+  ND_TESTANDSETA,  // Atomic lock test and set
+  ND_CLEAR,        // Atomic clear
+  ND_RELEASE,      // Atomic lock release
+  ND_FETCHADD,     // Atomic fetch and add
+  ND_FETCHSUB,     // Atomic fetch and sub
+  ND_FETCHXOR,     // Atomic fetch and xor
+  ND_FETCHAND,     // Atomic fetch and and
+  ND_FETCHOR,      // Atomic fetch and or
+  ND_SUBFETCH,     // Atomic sub and fetch
+  ND_SYNC,      //atomic synchronize
+  ND_BUILTIN_MEMCPY, //builtin memcpy
+  ND_BUILTIN_MEMSET, //builtin memset
+  ND_BUILTIN_CLZ, //builtin clz
+  ND_BUILTIN_CTZ, //builtin ctz
+  ND_POPCOUNT,    //builtin popcount
+  ND_EXPECT,    //builtin expect
+  ND_RETURN_ADDR,    //builtin return address
+  ND_BUILTIN_ADD_OVERFLOW,  //builtin add overflow
+  ND_BUILTIN_SUB_OVERFLOW,  //builtin sub overflow
+  ND_BUILTIN_MUL_OVERFLOW, //builtin mul overflow
+  ND_UNREACHABLE,   //builtin unreachable
 } NodeKind;
 
 // AST node type
@@ -367,6 +400,7 @@ Node
   Type *func_ty;
   Node *args;
   bool pass_by_stack;
+  bool realign_stack;
   Obj *ret_buffer;
 
   // Goto or labeled statement, or labels-as-values
@@ -384,11 +418,16 @@ Node
 
   // "asm" string literal
   char *asm_str;
-
+  char memorder;
   // Atomic compare-and-swap
   Node *cas_addr;
   Node *cas_old;
   Node *cas_new;
+//for builtin memcpy
+  Node *builtin_dest;
+  Node *builtin_src;
+  Node *builtin_size;
+  Node *builtin_val;
 
   // Atomic op= operators
   Obj *atomic_addr;
@@ -422,7 +461,7 @@ VarScope *find_var(Token *tok);
 Obj *find_func(char *name);
 //from COSMOPOLITAN adding function ConsumeStringLiteral
 char *ConsumeStringLiteral(Token **rest, Token *tok) ;
-
+int64_t eval(Node *node);
 
 extern bool opt_fbuiltin;
 //
@@ -557,6 +596,12 @@ void add_type(Node *node);
 char *nodekind2str(NodeKind kind);
 
 //
+// printast.c
+//
+
+void print_ast(FILE *, Obj *);
+
+//
 // debug.c
 //
 
@@ -577,6 +622,8 @@ char *reg_di(int sz);
 char *reg_si(int sz);
 char *reg_r8w(int sz);
 char *reg_r9w(int sz);
+char *reg_r10w(int sz);
+char *reg_r11w(int sz);
 void assign_lvar_offsets(Obj *prog);
 int add_register_used(char *regist);
 void clear_register_used();
@@ -674,3 +721,5 @@ char *retrieve_output_index_str(char letter);
 int retrieve_output_index_from_letter(char letter);
 char *retrieveVariableNumber(int index);
 char *generate_input_for_output(void);
+
+

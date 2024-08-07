@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include "memcached.h"
-
+#include <assert.h>
 
 
 
@@ -15,5 +15,9 @@ int main() {
       break;
     }
 
+    printf("t1=%d iovused=%d iovcnt=%d\n", t1, iovused, iovcnt);
+    ASSERT(1023, t1);
+    ASSERT(10, iovused);
+    ASSERT(10, iovcnt);
     return 0;
 }
