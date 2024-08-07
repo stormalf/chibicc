@@ -4963,6 +4963,20 @@ static Node *primary(Token **rest, Token *tok)
     return parse_overflow(ND_BUILTIN_MUL_OVERFLOW, tok, rest);
   }
 
+  if (equal(tok, "__builtin_unreachable")) {
+    Node *node = new_node(ND_UNREACHABLE, tok);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";
+    ctx->line_no = __LINE__ + 1;
+    tok = skip(tok->next, "(", ctx);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";
+    ctx->line_no = __LINE__ + 1;    
+    *rest = skip(tok, ")", ctx);
+    return node;
+  }
+
+
   if (equal(tok, "__builtin_atomic_exchange_n")) {
     return ParseAtomic3(ND_EXCH_N, tok, rest);
   }
