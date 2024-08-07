@@ -363,6 +363,7 @@ typedef enum
   ND_BUILTIN_ADD_OVERFLOW,  //builtin add overflow
   ND_BUILTIN_SUB_OVERFLOW,  //builtin sub overflow
   ND_BUILTIN_MUL_OVERFLOW, //builtin mul overflow
+  ND_UNREACHABLE,   //builtin unreachable
 } NodeKind;
 
 // AST node type

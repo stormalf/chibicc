@@ -1638,6 +1638,9 @@ static void gen_expr(Node *node)
 
     return;
   }
+  case ND_UNREACHABLE:
+    println("  // __builtin_unreachable: no code generation needed");
+    return;
   case ND_EXCH:
   {
     gen_expr(node->lhs);

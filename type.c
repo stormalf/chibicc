@@ -414,7 +414,9 @@ void add_type(Node *node)
     node->rhs = new_cast(node->rhs, node->lhs->ty->base);
     node->ty = node->lhs->ty->base;
     return;
-
+  case ND_UNREACHABLE:
+    node->ty = ty_void;
+    return;
   case ND_EXCH:
     if (node->lhs->ty->kind != TY_PTR)
       error_tok(node->cas_addr->tok, "%s %d: pointer expected", TYPE_C, __LINE__);
