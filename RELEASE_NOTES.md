@@ -68,3 +68,7 @@ Fixing issue #131 (ISS-131) parsing issue when trying to compile nginx project c
 1.0.22.1        Fix for nginx execution core dumped (issue #171). And moving issue138.c component from test folder to issues folder because it fails even after compiled with gcc.
 
 1.0.22.2 Reintroducing partial Old C style function declarations management (issue ISS-172 postgres doesn't compile anymore with 1.0.22 or higher due to old C style not supported anymore). Now it's possible to compile postgres with chibicc (but still a segmentation fault at execution time). The support of old C style function is partial for the moment.
+
+1.0.22.3        Fixing some issues with extended assembly (managing diffrently depending letters used =r, =m, =q, =a, =b, =c, =d). Adding -print parameter to print
+                 all tokens in /tmp/chibicc.log file to help for debugging. Reformatting error messages. Adding color codes to error messages.
+

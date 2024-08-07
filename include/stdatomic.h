@@ -21,18 +21,20 @@ typedef enum {
   memory_order_seq_cst,
 } memory_order;
 
-#define ATOMIC_FLAG_INIT(x) (x)
+//#define ATOMIC_FLAG_INIT(x) (x)
+#define ATOMIC_FLAG_INIT	{ 0 }
+
 #define atomic_init(addr, val) (*(addr) = (val))
 #define kill_dependency(x) (x)
 #define atomic_thread_fence(order)
 #define atomic_signal_fence(order)
 #define atomic_is_lock_free(x) 1
 
-#define atomic_load(addr) (*(addr))
-#define atomic_store(addr, val) (*(addr) = (val))
+// #define atomic_load(addr) (*(addr))
+// #define atomic_store(addr, val) (*(addr) = (val))
 
-#define atomic_load_explicit(addr, order) (*(addr))
-#define atomic_store_explicit(addr, val, order) (*(addr) = (val))
+// #define atomic_load_explicit(addr, order) (*(addr))
+// #define atomic_store_explicit(addr, val, order) (*(addr) = (val))
 
 // #define atomic_fetch_add(obj, val) (*(obj) += (val))
 // #define atomic_fetch_sub(obj, val) (*(obj) -= (val))
@@ -40,6 +42,7 @@ typedef enum {
 // #define atomic_fetch_xor(obj, val) (*(obj) ^= (val))
 // #define atomic_fetch_and(obj, val) (*(obj) &= (val))
 
+ 
 #define atomic_fetch_add(obj, val) __builtin_atomic_fetch_op(obj, val, 0)
 #define atomic_fetch_sub(obj, val) __builtin_atomic_fetch_op(obj, val, 1)
 #define atomic_fetch_or(obj, val) __builtin_atomic_fetch_op(obj, val, 2)
@@ -76,10 +79,32 @@ typedef enum {
 #define atomic_exchange(obj, val) __builtin_atomic_exchange((obj), (val))
 #define atomic_exchange_explicit(obj, val, order) __builtin_atomic_exchange((obj), (val))
 
-#define atomic_flag_test_and_set(obj) atomic_exchange((obj), 1)
-#define atomic_flag_test_and_set_explicit(obj, order) atomic_exchange((obj), 1)
-#define atomic_flag_clear(obj) (*(obj) = 0)
-#define atomic_flag_clear_explicit(obj, order) (*(obj) = 0)
+// #define atomic_flag_test_and_set(obj) atomic_exchange((obj), 1)
+// #define atomic_flag_test_and_set_explicit(obj, order) atomic_exchange((obj), 1)
+// #define atomic_flag_clear(obj) (*(obj) = 0)
+// #define atomic_flag_clear_explicit(obj, order) (*(obj) = 0)
+
+
+// Other atomic operation macros
+
+#define atomic_load(obj) __builtin_atomic_load_n((obj))
+#define atomic_load_explicit(obj, order) __builtin_atomic_load_n((obj), (order))
+
+#define atomic_store(obj, val) __builtin_atomic_store_n((obj), (val))
+#define atomic_store_explicit(obj, val, order) __builtin_atomic_store_n((obj), (val), (order))
+
+#define atomic_test_and_set(obj) __builtin_atomic_test_and_set((obj))
+#define atomic_test_and_set_explicit(obj, order) __builtin_atomic_test_and_set((obj), (order))
+
+
+#define atomic_flag_test_and_set(obj) __sync_lock_test_and_set(obj, 1)
+#define atomic_flag_test_and_set_explicit(obj, order) __sync_lock_test_and_set(obj, 1)
+//#define atomic_flag_clear_explicit(obj, order) __sync_lock_release(obj)
+//#define atomic_flag_clear(obj) __sync_lock_release(obj)
+#define atomic_flag_clear(obj) atomic_clear(obj)
+#define atomic_flag_clear_explicit(obj, order) atomic_clear_explicit(obj, order)
+#define atomic_clear(obj) __builtin_atomic_clear((obj))
+#define atomic_clear_explicit(obj, order) __builtin_atomic_clear((obj), (order))
 
 typedef _Atomic _Bool atomic_flag;
 typedef _Atomic _Bool atomic_bool;
@@ -119,5 +144,6 @@ typedef _Atomic unsigned long atomic_size_t;
 typedef _Atomic long atomic_ptrdiff_t;
 typedef _Atomic long atomic_intmax_t;
 typedef _Atomic unsigned long atomic_uintmax_t;
+
 
 #endif
