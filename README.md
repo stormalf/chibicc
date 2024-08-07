@@ -69,6 +69,7 @@ or
         -dotfile generates a file with .dot extension that can be visualized using graphviz package 
         -dM Print macro definitions in -E mode instead of normal output
         -print print all tokens in a log file in /tmp/chibicc.log
+        -A print Abstract Syntax Tree in a log file in /tmp/chibicc.log
         chibicc [ -o <path> ] <file>
 
 ## compile
@@ -537,7 +538,7 @@ Example of diagram generated with -dotfile parameter :
 1.0.22.4        Fixing some issues with extended assembly (new test cases), adding r11 and r10 registers and adding "D" and "S" support for input and output.
                 Removing -fsanitize=cfi not supported by gcc. Adding core dump and segfault handler to have useful information when a segfault occurs.
                 Adding debug information for linker. Changing the order of extra linker parameters because if the specific path defined for a project is not the first one, it seems that the linker doesn't find the libraries (#ISS-173). Adding  support for `chibicc -xc -E -v -` to print the include directories. 
-                Ignoring two other attributes for compatibility with GCC :  \__attribute__((fallthrough)) and \__attribute__((nonnull(1))). Adding a trick to fix the issue with lxc project in the README.md and Makefile. Adding some test cases for builtin functions to test with chibicc for later. Adding macro \__builtin_choose_expr in stddef.h to fix issue found in the lxc project. Adding warning messages in purple like gcc. Fixing issue with extended assembly when atomic_sync_bool_compare_and_swap. Taking in account in extended assembly (-value) to negate the value. Adding builtin function __sync_fetch_and_add and __sync_fetch_and_sub. Adding other builtin_functions like gcc.
+                Ignoring two other attributes for compatibility with GCC :  \__attribute__((fallthrough)) and \__attribute__((nonnull(1))). Adding a trick to fix the issue with lxc project in the README.md and Makefile. Adding some test cases for builtin functions to test with chibicc for later. Adding macro \__builtin_choose_expr in stddef.h to fix issue found in the lxc project. Adding warning messages in purple like gcc. Fixing issue with extended assembly when atomic_sync_bool_compare_and_swap. Taking in account in extended assembly (-value) to negate the value. Adding builtin function __sync_fetch_and_add and __sync_fetch_and_sub. Adding other builtin_functions like gcc. Adding print AST with option -A (from @cosmopolitan).
 
 
 ## old release notes

@@ -18,6 +18,43 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include "chibicc.h"
 
+#define HASH_TABLE_SIZE 256
+
+
+// Simple hash table entry
+typedef struct HashTableEntry {
+    Type *type;
+    struct HashTableEntry *next;
+} HashTableEntry;
+
+// Simple hash table
+HashTableEntry *hashTable[HASH_TABLE_SIZE];
+
+// Hash function for Type pointer
+unsigned int hash(Type *ty) {
+    return ((unsigned long)ty) % HASH_TABLE_SIZE;
+}
+
+// Insert Type into hash table
+bool insertType(Type *ty) {
+    unsigned int index = hash(ty);
+    HashTableEntry *entry = hashTable[index];
+
+    while (entry) {
+        if (entry->type == ty) {
+            return false; // Type already exists, cycle detected
+        }
+        entry = entry->next;
+    }
+
+    // Insert new entry
+    HashTableEntry *newEntry = malloc(sizeof(HashTableEntry));
+    newEntry->type = ty;
+    newEntry->next = hashTable[index];
+    hashTable[index] = newEntry;
+    return true;
+}
+
 static const char kBoolStr[2][6] = {"false", "true"};
 
 static const char kTypeKindStr[17][8] = {
@@ -26,17 +63,23 @@ static const char kTypeKindStr[17][8] = {
     "FUNC",   "ARRAY", "VLA",    "STRUCT",  "UNION",
 };
 
-static const char kNodeKindStr[50][11] = {
+
+static const char kNodeKindStr[76][21] = {
     "NULL_EXPR",  "ADD",     "SUB",       "MUL",       "DIV",       "NEG",
-    "REM",        "BINAND",  "BINOR",     "BINXOR",    "SHL",       "SHR",
+    "MOD",        "BITAND",  "BITOR",     "BITXOR",    "SHL",       "SHR",
     "EQ",         "NE",      "LT",        "LE",        "ASSIGN",    "COND",
     "COMMA",      "MEMBER",  "ADDR",      "DEREF",     "NOT",       "BITNOT",
     "LOGAND",     "LOGOR",   "RETURN",    "IF",        "FOR",       "DO",
     "SWITCH",     "CASE",    "BLOCK",     "GOTO",      "GOTO_EXPR", "LABEL",
     "LABEL_VAL",  "FUNCALL", "EXPR_STMT", "STMT_EXPR", "VAR",       "VLA_PTR",
     "NUM",        "CAST",    "MEMZERO",   "ASM",       "CAS",       "EXCH",
-    "FPCLASSIFY",
+    "CAS_N",      "EXCH_N",  "LOAD",      "LOAD_N",    "STORE",     "STORE_N",
+    "TESTANDSET", "TESTANDSETA",  "CLEAR", "RELEASE",    "FETCHADD",     "FETCHSUB", 
+    "FETCHXOR", "FETCHAND",  "FETCHOR", "SUBFETCH",    "SYNC",     "BUILTIN_MEMCPY",  
+    "BUILTIN_MEMSET", "BUILTIN_CLZ",  "BUILTIN_CTZ", "POPCOUNT",    "EXPECT",     "RETURN_ADDR",     
+    "BUILTIN_ADD_OVERFLOW", "BUILTIN_SUB_OVERFLOW",  "BUILTIN_MUL_OVERFLOW", "UNREACHABLE",  
 };
+
 
 static struct Visited {
   size_t i, n;
@@ -46,6 +89,7 @@ static struct Visited {
 static void PrintObj(FILE *, int, const char *, Obj *);
 static void PrintNode(FILE *, int, const char *, Node *);
 static void PrintType(FILE *, int, const char *, Type *);
+static void PrintAsm(FILE *f, int l, const char *s, char *a);
 
 static bool Visit(void *ptr) {
   size_t i;
@@ -55,7 +99,7 @@ static bool Visit(void *ptr) {
       return false;
     }
   }
-  APPEND(&g_visited.p, &g_visited.i, &g_visited.n, &addr);
+ // APPEND(&g_visited.p, &g_visited.i, &g_visited.n, &addr);
   return true;
 }
 
@@ -111,6 +155,11 @@ static void PrintMembers(FILE *f, int l, const char *s, Member *m) {
 
 static void PrintType(FILE *f, int l, const char *s, Type *t) {
   for (; t; t = t->next) {
+    if (!insertType(t)) {
+        //printf("Detected cycle at address: %p\n", (void *)t);
+        break; // Exit to avoid infinite loop
+    }
+ 
     if (Visit(t)) {
       PrintLine(f, l, "%sType { # %p", s, t);
       PrintLine(f, l + 2, "kind: TY_%s", kTypeKindStr[t->kind]);
@@ -144,18 +193,10 @@ static void PrintType(FILE *f, int l, const char *s, Type *t) {
   }
 }
 
-static void PrintAsm(FILE *f, int l, const char *s, Asm *a) {
-  int i;
-  if (!a) return;
+static void PrintAsm(FILE *f, int l, const char *s, char * a) {
+if (!a) return;
   PrintLine(f, l, "%sAsm { # %p", s, a);
-  PrintStr(f, l + 2, "str: ", a->str);
-  for (i = 0; i < a->n; ++i) {
-    PrintLine(f, l + 2, "ops: AsmOperand {");
-    PrintStr(f, l + 4, "str: ", a->ops[i].str);
-    PrintNode(f, l + 4, "node: ", a->ops[i].node);
-    PrintLine(f, l + 2, "}");
-  }
-  PrintLine(f, l, "}");
+  PrintStr(f, l + 2, "str: ", a);
 }
 
 static void PrintNode(FILE *f, int l, const char *s, Node *n) {
@@ -184,7 +225,7 @@ static void PrintNode(FILE *f, int l, const char *s, Node *n) {
     PrintStr(f, l + 2, "brk_label: ", n->brk_label);
     PrintStr(f, l + 2, "cont_label: ", n->cont_label);
     PrintInt(f, l + 2, "begin: ", n->begin);
-    PrintAsm(f, l + 2, "azm: ", n->azm);
+    PrintAsm(f, l + 2, "asm: ", n->asm_str);
     PrintInt(f, l + 2, "end: ", n->end);
     PrintMember(f, l + 2, "member: ", n->member);
     PrintObj(f, l + 2, "var: ", n->var);
@@ -221,7 +262,7 @@ static void PrintObj(FILE *f, int l, const char *s, Obj *o) {
   PrintStr(f, l + 2, "section: ", o->section);
   PrintStr(f, l + 2, "visibility: ", o->visibility);
   PrintBool(f, l + 2, "is_tentative: ", o->is_tentative);
-  PrintBool(f, l + 2, "is_string_literal: ", o->is_string_literal);
+  //PrintBool(f, l + 2, "is_string_literal: ", o->is_string_literal);
   PrintBool(f, l + 2, "is_tls: ", o->is_tls);
   PrintStr(f, l + 2, "init_data: ", o->init_data);
   PrintRelo(f, l + 2, "rel: ", o->rel);
@@ -249,7 +290,7 @@ static void PrintObj(FILE *f, int l, const char *s, Obj *o) {
 }
 
 void print_ast(FILE *f, Obj *o) {
-  for (; o; o = o->next) {
+  for (; o ; o = o->next) {
     PrintObj(f, 0, "", o);
   }
 }

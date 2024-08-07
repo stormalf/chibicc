@@ -22,6 +22,7 @@ bool opt_shared;
 static FileType opt_x;
 static StringArray opt_include;
 bool opt_E;
+static bool opt_A;
 static bool opt_M;
 static bool opt_MD;
 static bool opt_MMD;
@@ -293,11 +294,6 @@ static void parse_args(int argc, char **argv)
     }
 
     if (startsWith(argv[i], "-march="))
-    {
-      continue;
-    }
-
-    if (startsWith(argv[i], "-A"))
     {
       continue;
     }
@@ -696,6 +692,18 @@ static void parse_args(int argc, char **argv)
       continue;
     }
 
+    //for printing AST
+    if (!strcmp(argv[i], "-A")) {
+      opt_A = true;
+    } 
+
+    //other options -Axxx ignored
+    if (startsWith(argv[i], "-A"))
+    {
+      continue;
+    }
+
+
     // These options are ignored for now.
     if (!strncmp(argv[i], "-O", 2) ||
         !strncmp(argv[i], "-W", 2) ||
@@ -1079,6 +1087,10 @@ static void cc1(void)
   }
 
   Obj *prog = parse(tok);
+  if (opt_A) {
+    print_ast(f, prog);
+    return;
+  }
 
   // Open a temporary output buffer.
   char *buf;
@@ -1316,7 +1328,7 @@ int main(int argc, char **argv)
   parse_args(argc, argv);
 
   // the parsing need to be done before trying to open the log file
-  if ((isDebug && f == NULL) || (printTokens && f == NULL))
+  if ((isDebug && f == NULL) || (printTokens && f == NULL) || opt_A)
   {
     f = fopen(logFile, "w");
     if (f == NULL)
@@ -1416,6 +1428,10 @@ int main(int argc, char **argv)
       continue;
     }
 
+    if (opt_A) {
+      run_cc1(argc, argv, input, NULL);
+      continue;
+    }
     // Compile and assemble
     if (opt_c)
     {

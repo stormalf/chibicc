@@ -98,6 +98,7 @@ this " PRODUCT " contains only some differences for now like new parameters\n"
 -dotfile generates a file with .dot extension that can be visualized using graphviz package \n \
 -dM Print macro definitions in -E mode instead of normal output\n \
 -print print all tokens in a log file in /tmp/chibicc.log \n \
+-A print Abstract Syntax Tree in a log file in /tmp/chibicc.log \n \
 chibicc [ -o <path> ] <file>\n"
 
 typedef struct Type Type;
@@ -593,6 +594,12 @@ void add_type(Node *node);
 
 
 char *nodekind2str(NodeKind kind);
+
+//
+// printast.c
+//
+
+void print_ast(FILE *, Obj *);
 
 //
 // debug.c
