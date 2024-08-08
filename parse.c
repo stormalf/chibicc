@@ -2642,15 +2642,30 @@ static int64_t eval2(Node *node, char ***label)
   case ND_MUL:
     return eval(node->lhs) * eval(node->rhs);
   case ND_DIV:
-    if (node->ty->is_unsigned)
+    // Check for division overflow
+    if (eval(node->lhs) == LLONG_MIN && eval(node->rhs) == -1) {
+      warn_tok(node->tok, "in eval2: %s %d: integer overflow!", PARSE_C, __LINE__);
+      return 0;  // Return 0 or any other value you think is appropriate
+    }
+    if (eval(node->rhs) == 0)
+          error_tok(node->tok, "%s  %d: in eval2 : eval(node->rhs) caused a division by zero!", PARSE_C, __LINE__ );
+    if (node->ty && node->ty->is_unsigned)
       return (uint64_t)eval(node->lhs) / eval(node->rhs);
     return eval(node->lhs) / eval(node->rhs);
   case ND_NEG:
     return -eval(node->lhs);
   case ND_MOD:
-    if (node->ty->is_unsigned)
+    // Check for division overflow
+    if (eval(node->lhs) == LLONG_MIN && eval(node->rhs) == -1) {
+      warn_tok(node->tok, "in eval2: %s %d: integer overflow!", PARSE_C, __LINE__);
+      return 0;  
+    }
+    if (eval(node->rhs) == 0)
+          error_tok(node->tok, "%s  %d: in eval2 : eval(node->rhs) caused a division by zero!", PARSE_C, __LINE__ );    
+    if (node->ty && node->ty->is_unsigned)
       return (uint64_t)eval(node->lhs) % eval(node->rhs);
     return eval(node->lhs) % eval(node->rhs);
+
   case ND_BITAND:
     return eval(node->lhs) & eval(node->rhs);
   case ND_BITOR:
