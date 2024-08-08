@@ -21,6 +21,7 @@
 #include <signal.h>
 #include <sys/resource.h>
 #include <stdatomic.h>
+#include <limits.h>
 
 
 
@@ -38,7 +39,7 @@
 #endif
 
 #define PRODUCT "chibicc"
-#define VERSION "1.0.22.4"
+#define VERSION "1.0.22.5"
 #define MAXLEN 501
 #define DEFAULT_TARGET_MACHINE "x86_64-linux-gnu"
 
