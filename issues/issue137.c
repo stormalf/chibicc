@@ -3,13 +3,13 @@
 static const char hello[] = "hello, hello!";
 
 void test_compress(compr, comprLen, uncompr, uncomprLen) char *compr,
-    *uncompr;
+  *uncompr;
 long comprLen, uncomprLen;
 {
     int err;
     long len = (long)strlen(hello) + 1;
 
-    strcpy((char *)uncompr, "garbage");
+    //strcpy((char *)uncompr, "garbage");
 
     printf("uncompress(): %s\n", (char *)uncompr);
 }
