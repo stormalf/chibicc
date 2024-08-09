@@ -9,7 +9,7 @@ long comprLen, uncomprLen;
     int err;
     long len = (long)strlen(hello) + 1;
 
-    //strcpy((char *)uncompr, "garbage");
+    //strncpy(uncompr, "garbage", 8);
 
     printf("uncompress(): %s\n", (char *)uncompr);
 }
