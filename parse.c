@@ -96,7 +96,6 @@ struct InitDesg
 
 static int nbFunc = 0;
 static Type* ArrayType[50][50];
-static Type* ArrayTypeSorted[50][50];
 static Token* ArrayToken[50][50];
 static Token* ArrayTokenOrder[50][50];
 static int order = 0;
@@ -178,7 +177,6 @@ static Token *parse_typedef(Token *tok, Type *basety);
 static bool is_function(Token *tok);
 static Token *function(Token *tok, Type *basety, VarAttr *attr);
 static Token *global_variable(Token *tok, Type *basety, VarAttr *attr);
-//static Type *func_params2(Token **rest, Token *tok, Type *ty);
 static void initializer3(Token **rest, Token *tok, Initializer *init);
 //from COSMOPOLITAN adding attribute for variable
 static Token *thing_attributes(Token *tok, void *arg);
@@ -199,7 +197,7 @@ static Node *ParseBuiltin(NodeKind kind, Token *tok, Token **rest);
 static Node *parse_overflow(NodeKind kind, Token *tok, Token **rest);
 
 static Token * old_style_params(Token **rest, Token *tok, Type *ty);
-static Type *old_params(int nbparms);
+static Type *old_params(Type *ty, int nbparms);
 
 static int align_down(int n, int align)
 {
@@ -434,12 +432,12 @@ static Obj *new_lvar(char *name, Type *ty, char *funcname)
   if (!funcname)
     funcname = current_fn->funcname;
   var->funcname = funcname;
-  // if (var->ty->kind == TY_PTR) {
+  if (var->ty->kind == TY_PTR) {
 
-  //   var->ty->is_pointer = true;
-  //   var->ty->pointertype = ty->base;   
-  //   var->ty->size = ty->size; 
-  // }
+    var->ty->is_pointer = true;
+    var->ty->pointertype = ty->base;   
+    var->ty->size = ty->size; 
+  }
   locals = var;
   return var;
 }
@@ -883,7 +881,7 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
   // long comprLen, uncomprLen;
   // the order of parameters inside parenthesis doesn't correspond to the declaration of each parameter.
   if (is_old_style) {
-    ty->params = old_params(nbparms);
+    ty->params = old_params(head.next, nbparms);
   } else 
     ty->params = head.next;
 
@@ -5408,6 +5406,7 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
 
   // if it's a pointer we don't know the size of the type of pointer int ? char ?
   create_param_lvars(ty->params, name_str);
+
   // store the number of function parameters to be used for extended assembly
   fn->nbparm = order;
   // A buffer for a struct/union return value is passed
@@ -5450,7 +5449,6 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
       new_string_literal(fn->name, array_of(ty_char, strlen(fn->name) + 1));
   fn->body = compound_stmt(&tok, tok);
   fn->locals = locals;
-
 
   order = 0;
   leave_scope();
@@ -5899,7 +5897,6 @@ static Token * old_style_params(Token **rest, Token *tok, Type *ty) {
   while(!equal(tok, ")"))
   {
     //first count the number of parameters 
-
     if (!first) {
       ctx->filename = PARSE_C;
       ctx->funcname = "old_style_params";      
@@ -5913,8 +5910,7 @@ static Token * old_style_params(Token **rest, Token *tok, Type *ty) {
     tok = tok->next;
   }
   tok = tok->next;
-
-return tok;
+  return tok;
 }
 
 
@@ -6062,33 +6058,41 @@ static Node *parse_overflow(NodeKind kind, Token *tok, Token **rest) {
 }
 
 
-//the goal of this function is to put the correct type for the correct parameter order in case of old C style K&R
-// example :
-// void test_compress(compr, comprLen, uncompr, uncomprLen) char *compr,
-//   *uncompr;
-// long comprLen, uncomprLen;
-// the order of parameters inside parenthesis doesn't correspond to the declaration of each parameter.
-// that's why this function found the parameter order and update the type for this order and returns new ty->params following
-// the expected order and not the declaration order. It's quite complex and probably we can find an easiest way to do it
-static Type *old_params(int nbparms) {
+// //the goal of this function is to put the correct type for the correct parameter order in case of old C style K&R
+// // example :
+// // void test_compress(compr, comprLen, uncompr, uncomprLen) char *compr,
+// //   *uncompr;
+// // long comprLen, uncomprLen;
+// // the order of parameters inside parenthesis doesn't correspond to the declaration of each parameter.
+// // that's why this function found the parameter order and update the type for this order and returns new ty->params following
+// // the expected order and not the declaration order. It's quite complex and probably we can find an easiest way to do it
+static Type *old_params(Type *ty, int nbparms) {
   Type head = {};
   Type *cur = &head;
-  for (int i=0; i < nbparms; i++){
-    for (int j=0; j< nbparms; j++) {
-      if (!strncmp(ArrayTokenOrder[nbFunc][i]->loc, ArrayToken[nbFunc][j]->loc, ArrayTokenOrder[nbFunc][i]->len )
-        && !strncmp(ArrayTokenOrder[nbFunc][i]->loc, ArrayToken[nbFunc][j]->loc, ArrayToken[nbFunc][j]->len )
-      ) {
-        
-        ArrayTypeSorted[nbFunc][i]= ArrayType[nbFunc][j];
-        cur = cur->next = copy_type(ArrayType[nbFunc][j]);
+  bool isOrdered = true;
 
-      }
-
+  // Check if parameters are already in order
+  for (int i = 0; i < nbparms; i++) {
+    if (strncmp(ArrayTokenOrder[nbFunc][i]->loc, ArrayToken[nbFunc][i]->loc, ArrayToken[nbFunc][i]->len) != 0) {
+      isOrdered = false;
+      break;
     }
-   
+  }
+
+  // If parameters are already in order, return the original type list
+  if (isOrdered) {
+    return ty;
+  }
+
+  // If not in order, create a new Type list with parameters in correct order
+  for (int i = 0; i < nbparms; i++) {
+    for (int j = 0; j < nbparms; j++) {
+      if (strncmp(ArrayTokenOrder[nbFunc][i]->loc, ArrayToken[nbFunc][j]->loc, ArrayTokenOrder[nbFunc][i]->len) == 0) {
+        cur = cur->next = copy_type(ArrayType[nbFunc][j]);
+        break;
+      }
+    }
   }
 
   return head.next;
-
-
 }
