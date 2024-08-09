@@ -6,7 +6,10 @@
 /* @(#) $Id$ */
 
 #include "zlib.h"
+#include <zconf.h>
 #include <stdio.h>
+
+typedef unsigned char  Byte;  /* 8 bits */
 
 #ifdef STDC
 #include <string.h>

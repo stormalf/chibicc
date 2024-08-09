@@ -5871,11 +5871,11 @@ static bool check_old_style(Token **rest, Token *tok)
         break;
       }
 
-      //if function not followed by a Keyword exit
-      if (equal(tok, ")") && tok->next &&tok->next->kind != TK_KEYWORD)
-      {
-        break;
-      }
+      // //if function not followed by a Keyword exit
+      // if (equal(tok, ")") && tok->next &&tok->next->kind != TK_KEYWORD)
+      // {
+      //   break;
+      // }
 
       if (equal(tok, "}"))
       {
@@ -6092,4 +6092,3 @@ static Type *old_params(int nbparms) {
 
 
 }
-
