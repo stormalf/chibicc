@@ -277,6 +277,7 @@ static Node *new_binary(NodeKind kind, Node *lhs, Node *rhs, Token *tok)
   {
     error_tok(node->rhs->tok, "%s %d: in new_binary : Cannot assign void type expression", PARSE_C, __LINE__);
   }
+
   // TODO type check other binary expressions, e.g., ND_ADD
   return node;
 }
@@ -1204,6 +1205,14 @@ static Node *compute_vla_size(Type *ty, Token *tok)
 
 static Node *new_alloca(Node *sz)
 {
+  if (!builtin_alloca) {
+    // Fallback implementation for alloca
+    Node *node = new_node(ND_ALLOC, sz->tok);
+    node->ty = pointer_to(ty_void); // Adjust the type as necessary
+    node->lhs = sz; // `sz` is the size to allocate
+    add_type(sz);
+    return node;
+  }
   Node *node = new_unary(ND_FUNCALL, new_var_node(builtin_alloca, sz->tok), sz->tok);
   node->func_ty = builtin_alloca->ty;
   node->ty = builtin_alloca->ty->return_ty;
@@ -1211,6 +1220,7 @@ static Node *new_alloca(Node *sz)
   add_type(sz);
   return node;
 }
+
 
 // declaration = declspec (declarator ("=" expr)? ("," declarator ("=" expr)?)*)? ";"
 static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
@@ -1238,7 +1248,8 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
       error_tok(tok, "%s %d: in declaration : variable declared void", PARSE_C, __LINE__);
     if (!ty->name)
       error_tok(ty->name_pos, "%s %d: in declaration : variable name omitted", PARSE_C, __LINE__);
-    
+
+   
     if (attr && attr->is_static)
     {
       // static local variable
@@ -4952,7 +4963,6 @@ static Node *primary(Token **rest, Token *tok)
       return node;
   }
 
-
   if (equal(tok, "__builtin_memcpy")) {
       return parse_memcpy(tok, rest);
   }
@@ -5182,7 +5192,6 @@ static Node *primary(Token **rest, Token *tok)
   if (tok->kind == TK_IDENT)
   {
     //  Variable or enum constant
-
     VarScope *sc = find_var(tok);
     *rest = tok->next;
 
@@ -5199,7 +5208,7 @@ static Node *primary(Token **rest, Token *tok)
 
     if (sc)
     {
-
+      
       if (sc->var)
         return new_var_node(sc->var, tok);
       if (sc->enum_ty)
@@ -5601,6 +5610,8 @@ Obj *parse(Token *tok)
 
   if (opt_fbuiltin)
     declare_builtin_functions();
+
+
   globals = NULL;
 
   while (tok->kind != TK_EOF)
@@ -5796,6 +5807,8 @@ char *nodekind2str(NodeKind kind)
     return "SUB_OVERFLOW";    //builtin sub overflow
   case ND_BUILTIN_MUL_OVERFLOW:
     return "MUL_OVERFLOW";    //builtin mul overflow
+  case ND_ALLOC:
+    return "ALLOCA";  //builtin alloca
   default:
     return "UNREACHABLE"; // Atomic e
   }
@@ -6003,7 +6016,7 @@ static Node *parse_memcpy(Token *tok, Token **rest) {
     ctx->funcname = "parse_memcpy";        
     ctx->line_no = __LINE__ + 1;
     *rest = skip(tok, ")", ctx);
-    return node;
+    return node;  
 }
 
 

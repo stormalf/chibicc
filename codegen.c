@@ -1756,8 +1756,16 @@ static void gen_expr(Node *node)
     println("\txor\t%%eax,%%eax");
     println("\tmov\t%s,(%%rdi)", reg_ax(node->ty->size));
     return;
+  case ND_ALLOC:
+    // Evaluate the size expression and store the result in RAX
+    gen_expr(node->lhs); // Assume size to allocate is in RAX
+    // Allocate space on the stack
+    println("  mov %%rax, %%rdi"); // Move size to RDI (or appropriate register)
+    println("  sub %%rdi, %%rsp"); // Allocate space on the stack
+    println("  mov %%rsp, %%rax"); // Store the new stack pointer (allocated memory address) in RAX
+    return;
 
-
+  
   }
 
   switch (node->lhs->ty->kind)

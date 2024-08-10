@@ -1437,7 +1437,7 @@ void init_macros(void)
   define_macro("__x86_64", "1");
   define_macro("__x86_64__", "1");
   define_macro("__GNU__", "1");
-  //define_macro("__INTEL_COMPILER", "1");
+  define_macro("__INTEL_COMPILER", "1");
   define_macro("HAVE_ATTRIBUTE_PACKED", "1");
   define_macro("linux", "1");
   define_macro("unix", "1");
@@ -1447,10 +1447,10 @@ void init_macros(void)
   define_macro("__ORDER_BIG_ENDIAN__", "4321");
   define_macro("__BYTE_ORDER__", "__ORDER_LITTLE_ENDIAN__");
   define_macro("USE_BUILTINS", "1");
-  if (opt_fbuiltin) {
-    define_macro("memcpy", "__builtin_memcpy");
-    define_macro("memset", "__builtin_memset");
-  }
+  // if (opt_fbuiltin) {
+  //   define_macro("memcpy", "__builtin_memcpy");
+  //   define_macro("memset", "__builtin_memset");
+  // }
 
 
   add_builtin("__FILE__", file_macro);

@@ -266,6 +266,8 @@ void add_type(Node *node)
     usual_arith_conv(&node->lhs, &node->rhs);
     node->ty = ty_int;
     return;
+  case ND_ALLOC:
+    add_type(node->lhs);  
   case ND_FUNCALL:
     node->ty = node->func_ty->return_ty;
     return;
