@@ -758,7 +758,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     }
 
     tok = tok->next;
-     tok = attribute_list(tok, ty, type_attributes);
+    tok = attribute_list(tok, ty, type_attributes);
 
   }
 
@@ -776,6 +776,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
 static Type *func_params(Token **rest, Token *tok, Type *ty)
 {
 
+  tok = attribute_list(tok, ty, type_attributes);
   if (equal(tok, "void") && equal(tok->next, ")"))
   {
     *rest = tok->next->next;
@@ -789,6 +790,7 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
   while (!equal(tok, ")") && !equal(tok->next, "{"))
   {
 
+    tok = attribute_list(tok, ty, type_attributes);
     if (cur != &head) {
       ctx->filename = PARSE_C;
       ctx->funcname = "func_params";      
@@ -823,8 +825,8 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
       break;
     }
 
-
     Type *ty2 = declspec(&tok, tok, NULL);
+    tok = attribute_list(tok, ty, type_attributes);
     //Type *backup = ty2;
     if (is_old_style) {
       Token *backup = tok;
@@ -838,7 +840,7 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
     }
 
     ty2 = declarator(&tok, tok, ty2);
-   
+    tok = attribute_list(tok, ty, type_attributes);
     if (!ty2)
       error_tok(tok, "%s %d: in func_params : ty2 is null", PARSE_C, __LINE__);
     // if (ty2->kind == TY_PTR)
@@ -1005,6 +1007,7 @@ static Type *declarator(Token **rest, Token *tok, Type *ty)
 {
 
   ty = pointers(&tok, tok, ty);
+  
   if (equal(tok, "(") && !is_typename(tok->next) && !equal(tok->next, ")"))
   {
 
