@@ -366,6 +366,7 @@ typedef enum
   ND_BUILTIN_SUB_OVERFLOW,  //builtin sub overflow
   ND_BUILTIN_MUL_OVERFLOW, //builtin mul overflow
   ND_UNREACHABLE,   //builtin unreachable
+  ND_ALLOC,   //builtin alloca
 } NodeKind;
 
 // AST node type
@@ -564,6 +565,7 @@ struct Member
 };
 
 extern Type *ty_void;
+extern Type *ty_void_ptr;
 extern Type *ty_bool;
 
 extern Type *ty_char;
