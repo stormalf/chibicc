@@ -790,7 +790,7 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
   while (!equal(tok, ")") && !equal(tok->next, "{"))
   {
 
-    tok = attribute_list(tok, ty, type_attributes);
+    
     if (cur != &head) {
       ctx->filename = PARSE_C;
       ctx->funcname = "func_params";      
@@ -826,7 +826,7 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
     }
 
     Type *ty2 = declspec(&tok, tok, NULL);
-    tok = attribute_list(tok, ty, type_attributes);
+    tok = attribute_list(tok, ty2, type_attributes);
     //Type *backup = ty2;
     if (is_old_style) {
       Token *backup = tok;
@@ -840,7 +840,7 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
     }
 
     ty2 = declarator(&tok, tok, ty2);
-    tok = attribute_list(tok, ty, type_attributes);
+    tok = attribute_list(tok, ty2, type_attributes);
     if (!ty2)
       error_tok(tok, "%s %d: in func_params : ty2 is null", PARSE_C, __LINE__);
     // if (ty2->kind == TY_PTR)
