@@ -3459,8 +3459,7 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
         ctx->filename = PARSE_C;
         ctx->funcname = "struct_members";        
         ctx->line_no = __LINE__ + 1;
-        if (equal(tok, ","))              
-          tok = skip(tok, ",", ctx);
+        tok = skip(tok, ",", ctx);
       }
 
 
