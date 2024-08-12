@@ -1328,6 +1328,8 @@ char *opcode(int size)
         return "\n  movl ";
     case 8:
         return "\n  movq ";
+    case 16:
+        return "\n  mov ";        
     default:
         error("%s: %s:%d: error: in opcode : size %d unexpected!", EXTASM_C, __FILE__, __LINE__, size);
     }

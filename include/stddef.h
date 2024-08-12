@@ -8,6 +8,17 @@ typedef long ptrdiff_t;
 typedef unsigned int wchar_t;
 typedef long max_align_t;
 
+// custom_float_types.h
+
+typedef float _Float32;
+typedef double _Float64;
+typedef long double _Float128;
+
+// Define the extended types if necessary
+typedef double _Float32x;
+typedef long double _Float64x;
+
+#define _Pragma(message) 
 
 #define __builtin_choose_expr(cond, true_expr, false_expr) (cond ? true_expr : false_expr)
 

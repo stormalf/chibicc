@@ -77,6 +77,7 @@ struct Hideset
   char *name;
 };
 
+
 static HashMap macros;
 static CondIncl *cond_incl;
 static HashMap pragma_once;
@@ -95,6 +96,9 @@ static Macro *find_macro(Token *tok);
 static void join_adjacent_string_literals(Token *tok);
 static Token *paste(Token *lhs, Token *rhs);
 
+
+
+//begin
 static bool is_hash(Token *tok)
   // [https://www.sigbus.info/n1570#6.10.3.4p3] tok->origin is checked here
   // because "#" can appear in object-like macro, and after expansion of that
@@ -1110,6 +1114,7 @@ static Token *preprocess2(Token *tok)
     if (tok->kind == TK_IDENT && expand_macro(&tok, tok))
       continue;
 
+
     // Pass through if it is not a "#".
     if (!is_hash(tok))
     {
@@ -1126,6 +1131,8 @@ static Token *preprocess2(Token *tok)
     {
       bool is_dquote;
       char *filename = read_include_filename(&tok, tok->next, &is_dquote);
+      if (isDebug)
+        printf("=====includes===%s\n", filename);
 
       if (filename[0] != '/' && is_dquote)
       {
@@ -1427,6 +1434,7 @@ void init_macros(void)
   define_macro("__const__", "const");
   define_macro("__gnu_linux__", "1");
   define_macro("__inline__", "inline");
+  define_macro("__inline", "inline");
   define_macro("__linux", "1");
   define_macro("__linux__", "1");
   define_macro("__signed__", "signed");
@@ -1438,16 +1446,20 @@ void init_macros(void)
   define_macro("__x86_64__", "1");
   define_macro("__GNU__", "1");
   define_macro("__INTEL_COMPILER", "1");
-  //define_macro("__GNUC__", "9");
+  define_macro("__GNUC__", "9");
+  define_macro("__GNUC_MINOR__", "1");
+  define_macro("__GNUC_PATCHLEVEL__ ", "1");
   define_macro("HAVE_ATTRIBUTE_PACKED", "1");
   define_macro("linux", "1");
   define_macro("unix", "1");
+  define_macro("__extension__", "");
   //define_macro("nonnull", "1");
   //====fixing ISS-147 defining the two macros for the linux platform
   define_macro("__ORDER_LITTLE_ENDIAN__", "1234");  
   define_macro("__ORDER_BIG_ENDIAN__", "4321");
   define_macro("__BYTE_ORDER__", "__ORDER_LITTLE_ENDIAN__");
   define_macro("USE_BUILTINS", "1");
+  define_macro("_Pragma(message) ", "");
   // if (opt_fbuiltin) {
   //   define_macro("memcpy", "__builtin_memcpy");
   //   define_macro("memset", "__builtin_memset");
@@ -1512,6 +1524,10 @@ static void join_adjacent_string_literals(Token *tok)
     }
 
     StringKind kind = getStringKind(tok1);
+    if (!tok1->ty){
+      error("%s: %s:%d: error: in join_adjacent_string_literals :  tok1->ty is null", PREPROCESS_C, __FILE__, __LINE__);
+    }
+
     Type *basety = tok1->ty->base;
 
     for (Token *t = tok1->next; t->kind == TK_STR; t = t->next)
@@ -1546,6 +1562,11 @@ static void join_adjacent_string_literals(Token *tok)
     {
       tok1 = tok1->next;
       continue;
+    }
+
+    if (!tok1->ty){
+      error("%s: %s:%d: error: in join_adjacent_string_literals :  tok1->ty is null", PREPROCESS_C, __FILE__, __LINE__);
+      
     }
 
     Token *tok2 = tok1->next;
@@ -1610,6 +1631,7 @@ Token *preprocess3(Token *tok)
   while (tok->kind != TK_EOF)
   {
 
+
     Macro *m = find_macro(tok);
 
     if (m != NULL && m->body->len == 0)
@@ -1619,6 +1641,7 @@ Token *preprocess3(Token *tok)
         continue;
     }
 
+
     cur = cur->next = tok;
     tok = tok->next;
   }
@@ -1626,4 +1649,5 @@ Token *preprocess3(Token *tok)
   cur->next = tok;
   return head.next;
 }
+
 

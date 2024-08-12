@@ -108,7 +108,7 @@ clean:
 install:
 	test -d /usr/local/include/x86_64-linux-gnu/chibicc || \
 		sudo mkdir -p /usr/local/include/x86_64-linux-gnu/chibicc
-	sudo cp include/* /usr/local/include/x86_64-linux-gnu/chibicc/
+	sudo cp -r include/* /usr/local/include/x86_64-linux-gnu/chibicc/
 	sudo cp chibicc /usr/local/bin/chibicc
 
 uninstall:

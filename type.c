@@ -424,5 +424,8 @@ void add_type(Node *node)
       error_tok(node->cas_addr->tok, "%s %d: pointer expected", TYPE_C, __LINE__);
     node->ty = node->lhs->ty->base;
     return;
+  case ND_BUILTIN_INFF:
+    node->ty = ty_ldouble;
+    return;
   }
 }

@@ -92,14 +92,13 @@ static void print_string_array(StringArray *arr) {
 
 
 static void print_include_directories() {
-
+    strarray_push(&include_paths,  "./include");
     // Add standard include paths.
-    strarray_push(&include_paths, "./include");
     strarray_push(&include_paths, "/usr/local/include/x86_64-linux-gnu/chibicc");
-    strarray_push(&include_paths, "/usr/local/include");
     strarray_push(&include_paths, "/usr/include/x86_64-linux-gnu");
+    strarray_push(&include_paths, "/usr/local/include");
     strarray_push(&include_paths, "/usr/include");
-    //strarray_push(&include_paths, "/usr/lib/gcc/x86_64-linux-gnu/11/include");
+    strarray_push(&include_paths, "/usr/lib/gcc/x86_64-linux-gnu/11/include");
     //strarray_push(&include_paths, "/usr/include/chibicc/include");
     #if defined(__APPLE__) && defined(__MACH__)
     strarray_push(&include_paths, "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include");
@@ -169,12 +168,11 @@ static void add_default_include_paths(char *argv0)
   strarray_push(&include_paths, format("%s/include", dirname(strdup(argv0))));
 
   // Add standard include paths.
-  strarray_push(&include_paths, "./include");
   strarray_push(&include_paths, "/usr/local/include/x86_64-linux-gnu/chibicc");
+  strarray_push(&include_paths, "/usr/include");
   strarray_push(&include_paths, "/usr/local/include");
   strarray_push(&include_paths, "/usr/include/x86_64-linux-gnu");
-  strarray_push(&include_paths, "/usr/include");
-  //strarray_push(&include_paths, "/usr/lib/gcc/x86_64-linux-gnu/11/include");
+  strarray_push(&include_paths, "/usr/lib/gcc/x86_64-linux-gnu/11/include");
   //strarray_push(&include_paths, "/usr/include/chibicc/include");
   #if defined(__APPLE__) && defined(__MACH__)
   strarray_push(&include_paths, "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include");
@@ -1343,7 +1341,8 @@ int main(int argc, char **argv)
 
   // init_macros can call tokenize functions moving here to be able to print debug values
   init_macros();
-  
+
+
   if (opt_cc1 && !isCc1input)
   {
     error("%s : %s:%d: error: in main with -cc1 parameter -cc1-input is mandatory!", MAIN_C, __FILE__, __LINE__);
