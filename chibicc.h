@@ -145,7 +145,7 @@ typedef enum
   TK_STR,     // String literals
   TK_NUM,     // Numeric literals
   TK_PP_NUM,  // Preprocessing numbers
-  TK_EOF,     // End-of-file markers
+  TK_EOF,     // End-of-file markers  
 } TokenKind;
 
 typedef struct
@@ -210,7 +210,7 @@ void define_macro(char *name, char *buf);
 void undef_macro(char *name);
 Token *preprocess(Token *tok, bool isReadLine);
 Token *preprocess3(Token *tok);
-
+void define_typedefs(void);
 
 //
 // parse.c
@@ -261,6 +261,7 @@ struct Obj
   bool is_no_instrument_function;
   bool is_force_align_arg_pointer;
   bool is_no_caller_saved_registers;
+  
 
   Obj *params;
   Node *body;
@@ -367,6 +368,7 @@ typedef enum
   ND_BUILTIN_MUL_OVERFLOW, //builtin mul overflow
   ND_UNREACHABLE,   //builtin unreachable
   ND_ALLOC,   //builtin alloca
+  ND_BUILTIN_INFF, //builtin inff
 } NodeKind;
 
 // AST node type
@@ -539,6 +541,8 @@ struct Type
   
   //from COSMOPOLITAN adding is_aligned
   bool is_aligned;
+  bool is_weak;
+  char *visibility;
 
   // Function type
   Type *return_ty;

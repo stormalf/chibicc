@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <stdbool.h>
+
 # define VLC_EXPORT __attribute__((visibility("default")))
 #  define VLC_USED  __attribute__((warn_unused_result))
 #define VLC_STATIC_ONCE { ATOMIC_VAR_INIT(0) }
@@ -248,9 +249,9 @@ static inline vlc_tick_t vlc_tick_from_frac(uint64_t num, uint64_t den)
 }
 
 
-/*
- * vlc_tick_t <> milliseconds (ms) conversions
- */
+// /*
+//  * vlc_tick_t <> milliseconds (ms) conversions
+//  */
 #if (CLOCK_FREQ % 1000) == 0
 #define VLC_TICK_FROM_MS(ms)  ((CLOCK_FREQ / INT64_C(1000)) * (ms))
 #define MS_FROM_VLC_TICK(vtk) ((vtk) / (CLOCK_FREQ / INT64_C(1000)))

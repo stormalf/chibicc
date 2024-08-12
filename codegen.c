@@ -1764,7 +1764,10 @@ static void gen_expr(Node *node)
     println("  sub %%rdi, %%rsp"); // Allocate space on the stack
     println("  mov %%rsp, %%rax"); // Store the new stack pointer (allocated memory address) in RAX
     return;
-
+  case ND_BUILTIN_INFF:
+    println("  movq $0x7ff0000000000000, %%rax"); // Move the double representation of infinity to RAX
+    println("  movq %%rax, %%xmm0");              // Move the value from RAX to XMM0
+    return;
   
   }
 
@@ -2177,15 +2180,22 @@ static void emit_data(Obj *prog)
 
 static void store_fp(int r, int offset, int sz)
 {
-  switch (sz)
-  {
+  switch (sz) {
+  case 2:
+    // movw is used for 2-byte (16-bit) words
+    println("  movw %%xmm%d, %d(%%rbp)", r, offset);
+    return;
   case 4:
     println("  movss %%xmm%d, %d(%%rbp)", r, offset);
     return;
   case 8:
     println("  movsd %%xmm%d, %d(%%rbp)", r, offset);
     return;
+  case 16:
+    println("  movaps %%xmm%d, %d(%%rbp)", r, offset); // movaps for 16-byte (128-bit) vector
+    return;
   }
+  printf("===== r=%d offset=%d sz=%d\n", r, offset, sz);
   unreachable();
 }
 
