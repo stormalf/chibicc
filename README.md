@@ -304,10 +304,10 @@ curl : https://github.com/curl/curl.git
         CCLD     curl
 
     make test
-    TESTDONE: 1635 tests were considered during 418 seconds.
-    TESTDONE: 1314 tests out of 1316 reported OK: 99%
-    TESTFAIL: These test cases failed: 557 1119
-
+    TESTDONE: 1722 tests were considered during 4327 seconds.
+    TESTDONE: 1391 tests out of 1392 reported OK: 99%
+    FAIL 557: 'curl_mprintf() testing' printf, unittest
+    TESTFAIL: These test cases failed: 557
 
 openssl : https://github.com/openssl/openssl.git
 
@@ -536,7 +536,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.23        Improvement: diagnose overflow in integer constant expression #96  from @pmor13. Fixing issue with old C style (K&R) when parameters order don't correspond to parameter definition. Adding \__LINE__ in parse.c in all error_tok messages. Removing \__builtin_memcpy \__builtin_memset macro from preprocess.c that causes segmentation fault on zlib project. Adding other tests from @cosmopolitan. Adding \__GNUC__ macro and fixing all issues caused by this defined macro. Defining _Pragma macro that does nothing to keep compatibility with \__GNUC__. Fixing regression on struct members.
+1.0.23        Improvement: diagnose overflow in integer constant expression #96  from @pmor13. Fixing issue with old C style (K&R) when parameters order don't correspond to parameter definition. Adding \__LINE__ in parse.c in all error_tok messages. Removing \__builtin_memcpy \__builtin_memset macro from preprocess.c that causes segmentation fault on zlib project. Adding other tests from @cosmopolitan. Adding \__GNUC__ macro and fixing all issues caused by this defined macro. Defining _Pragma macro that does nothing to keep compatibility with \__GNUC__. Fixing regression on struct members. Fixed on test case from curl.
 
 ## old release notes
 
