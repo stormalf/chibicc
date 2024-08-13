@@ -2612,6 +2612,9 @@ static Node *compound_stmt(Token **rest, Token *tok)
     }
     else
     {
+      //case specific of fallthrough
+      VarAttr attr= {};
+      tok = attribute_list(tok, &attr, thing_attributes);
       cur = cur->next = stmt(&tok, tok);
     }
     add_type(cur);
@@ -3533,6 +3536,9 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
       Member *mem = calloc(1, sizeof(Member));
       if (mem == NULL)
         error("%s: %s:%d: error: in struct_members : mem is null (bis)", PARSE_C, __FILE__, __LINE__);
+      if (tok->kind == TK_KEYWORD)
+        basety = declspec(&tok, tok, &attr);
+
       mem->ty = declarator(&tok, tok, basety);
       mem->name = mem->ty->name;
       mem->idx = idx++;
@@ -3783,13 +3789,20 @@ static Token *type_attributes(Token *tok, void *arg)
       consume(&tok, tok, "__no_stack_limit__") ||
       consume(&tok, tok, "no_sanitize_undefined") ||
       consume(&tok, tok, "__no_sanitize_undefined__") ||
-      consume(&tok, tok, "fallthrough") ||
-      consume(&tok, tok, "__fallthrough__") ||
       consume(&tok, tok, "no_profile_instrument_function") ||
       consume(&tok, tok, "__no_profile_instrument_function__")) 
     {
         return tok;
-  }
+    }
+
+    //fallthrough is the last instruction in case: followed by a semicolon
+    if (consume(&tok, tok, "fallthrough") ||
+      consume(&tok, tok, "__fallthrough__") )
+    {
+      return tok;
+    }
+      
+
 
   if (consume(&tok, tok, "format") || consume(&tok, tok, "__format__")) {
     ctx->filename = PARSE_C;
@@ -4033,16 +4046,23 @@ static Token *thing_attributes(Token *tok, void *arg) {
     return tok;
   }
 
-  if (consume(&tok, tok, "aligned") || consume(&tok, tok, "__aligned__")) {
-
+  if (consume(&tok, tok, "aligned") || consume(&tok, tok, "__aligned__"))
+  {
+    ctx->filename = PARSE_C;
+    ctx->funcname = "thing_attributes";       
+    ctx->line_no = __LINE__ + 1;       
+    tok = skip(tok, "(", ctx);
+    //from COSMOPOLITAN adding is_aligned
     attr->is_aligned = true;
-    if (consume(&tok, tok, "(")) {
-      attr->align = const_expr(&tok, tok);
-      attr->align = 16; /* biggest alignment */
-
+    attr->align = const_expr(&tok, tok);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "thing_attributes";     
+    ctx->line_no = __LINE__ + 1;       
+    tok = skip(tok, ")", ctx);
     return tok;
-   }
   }
+
+
   if (consume(&tok, tok, "warn_if_not_aligned") || consume(&tok, tok, "__warn_if_not_aligned__")) {
     ctx->filename = PARSE_C;
     ctx->funcname = "thing_attributes";        
@@ -4178,13 +4198,19 @@ static Token *thing_attributes(Token *tok, void *arg) {
       consume(&tok, tok, "__no_stack_limit__") ||
       consume(&tok, tok, "no_sanitize_undefined") ||
       consume(&tok, tok, "__no_sanitize_undefined__") ||
-      consume(&tok, tok, "fallthrough") ||
-      consume(&tok, tok, "__fallthrough__") ||
       consume(&tok, tok, "no_profile_instrument_function") ||
       consume(&tok, tok, "__no_profile_instrument_function__")) 
     {
         return tok;
-  }
+    }
+
+    //fallthrough is the last instruction in case: followed by a semicolon
+    if (consume(&tok, tok, "fallthrough") ||
+      consume(&tok, tok, "__fallthrough__") )
+    {
+      return tok;
+    }
+      
 
     if (consume(&tok, tok, "sentinel") || consume(&tok, tok, "__sentinel__") ||
       consume(&tok, tok, "nonnull") || consume(&tok, tok, "__nonnull__") ||
