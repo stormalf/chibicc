@@ -388,11 +388,11 @@ static Initializer *new_initializer(Type *ty, bool is_flexible)
 
   if (ty->kind == TY_STRUCT || ty->kind == TY_UNION)
   {
-
     // Count the number of struct members.
     int len = 0;
     for (Member *mem = ty->members; mem; mem = mem->next)
       len++;
+
 
     init->children = calloc(len, sizeof(Initializer *));
     if (init->children == NULL)
@@ -410,6 +410,7 @@ static Initializer *new_initializer(Type *ty, bool is_flexible)
       }
       else
       {
+
         init->children[mem->idx] = new_initializer(mem->ty, false);
       }
     }
@@ -550,7 +551,6 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
   while (is_typename(tok))
   {
 
-
     //fixing =====ISS-155 __label__ out;  
     if (equal(tok, "__label__")) {
       consume(&tok, tok, "__label__");
@@ -587,6 +587,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
         error_tok(tok, "%s %d: in declspec : typedef may not be used together with static,"
                        " extern, inline, __thread or _Thread_local",
                   PARSE_C, __LINE__);
+
       tok = tok->next;
 
         //from COSMOPOLITAN adding other GNUC attributes
@@ -673,6 +674,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
       {
         ty = ty2;
         tok = tok->next;
+
       }
 
       counter += OTHER;
@@ -786,7 +788,6 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
 {
 
   tok = attribute_list(tok, ty, type_attributes);
-  
   if (equal(tok, "void") && equal(tok->next, ")"))
   {
     *rest = tok->next->next;
@@ -948,6 +949,7 @@ static Type *array_dimensions(Token **rest, Token *tok, Type *ty)
 static Type *type_suffix(Token **rest, Token *tok, Type *ty)
 {
   tok->next = attribute_list(tok->next, ty, type_attributes);
+  
   if (equal(tok, "("))
   {
     //in case of old style K&R we omit the parameters inside parenthesis and we parse the parameters that 
@@ -1039,6 +1041,7 @@ static Type *declarator(Token **rest, Token *tok, Type *ty)
   tok = attribute_list(tok, ty, type_attributes);  
   Token *name = NULL;
   Token *name_pos = tok;
+  
   if (tok->kind == TK_IDENT)
   {
     name = tok;
@@ -1080,6 +1083,7 @@ static Type *abstract_declarator(Token **rest, Token *tok, Type *ty)
 // type-name = declspec abstract-declarator
 static Type *typename(Token **rest, Token *tok)
 {
+  
   Type *ty = declspec(&tok, tok, NULL);
   tok = attribute_list(tok, ty, type_attributes);
   return abstract_declarator(rest, tok, ty);
@@ -1264,7 +1268,7 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
       error_tok(tok, "%s %d: in declaration : variable declared void", PARSE_C, __LINE__);
     if (!ty->name)
       error_tok(ty->name_pos, "%s %d: in declaration : variable name omitted", PARSE_C, __LINE__);
-
+    tok = attribute_list(tok, attr, thing_attributes);
    
     if (attr && attr->is_static)
     {
@@ -1295,6 +1299,7 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
       
       Obj *var = new_lvar(get_ident(ty->name), ty, NULL);
       Token *tok = ty->name;
+      tok = attribute_list(tok, ty, type_attributes);
       Node *expr = new_binary(ND_ASSIGN, new_vla_ptr(var, tok),
                               new_alloca(new_var_node(ty->vla_size, tok)),
                               tok);
@@ -1447,6 +1452,7 @@ static Member *struct_designator(Token **rest, Token *tok, Type *ty)
 
   for (Member *mem = ty->members; mem; mem = mem->next)
   {
+
     // Anonymous struct member
     if (!mem->name)
     {
@@ -1492,7 +1498,7 @@ static void designation(Token **rest, Token *tok, Initializer *init)
     return;
   }
 
-
+  
   if (equal(tok, ".") && init->ty->kind == TY_STRUCT)
   {
     Member *mem = struct_designator(&tok, tok, init->ty);
@@ -1951,7 +1957,6 @@ static Initializer *initializer(Token **rest, Token *tok, Type *ty, Type **new_t
   if ((ty->kind == TY_STRUCT || ty->kind == TY_UNION) && ty->is_flexible)
   {
     ty = copy_struct_type(ty);
-
     Member *mem = ty->members;
     while (mem->next)
       mem = mem->next;
@@ -2003,6 +2008,7 @@ static Node *create_lvar_init(Initializer *init, Type *ty, InitDesg *desg, Token
 
     for (Member *mem = ty->members; mem; mem = mem->next)
     {
+      
       InitDesg desg2 = {desg, 0, mem};
       Node *rhs = create_lvar_init(init->children[mem->idx], mem->ty, &desg2, tok);
       node = new_binary(ND_COMMA, node, rhs, tok);
@@ -2261,6 +2267,7 @@ static Node *stmt(Token **rest, Token *tok)
       return node;
     }
 
+
     Node *exp = expr(&tok, tok->next);
     ctx->filename = PARSE_C;
     ctx->funcname = "stmt";        
@@ -2378,7 +2385,6 @@ static Node *stmt(Token **rest, Token *tok)
     ctx->funcname = "stmt";        
     ctx->line_no = __LINE__ + 1;    
     tok = skip(tok, ":", ctx);
-    tok = attribute_list(tok, tok->ty, type_attributes);
     node->label = new_unique_name();
     node->lhs = stmt(rest, tok);
     node->begin = begin;
@@ -2625,6 +2631,9 @@ static Node *compound_stmt(Token **rest, Token *tok)
     }
     else
     {
+      //case specific of fallthrough
+      VarAttr attr= {};
+      tok = attribute_list(tok, &attr, thing_attributes);
       cur = cur->next = stmt(&tok, tok);
     }
     add_type(cur);
@@ -2668,11 +2677,11 @@ static Node *expr_stmt(Token **rest, Token *tok)
 // expr = assign ("," expr)?
 static Node *expr(Token **rest, Token *tok)
 {
+
   Node *node = assign(&tok, tok);
 
   if (equal(tok, ","))
     return new_binary(ND_COMMA, node, expr(rest, tok->next), tok);
-
   *rest = tok;
   return node;
 }
@@ -3472,6 +3481,7 @@ static Node *cast(Token **rest, Token *tok)
 //       | postfix
 static Node *unary(Token **rest, Token *tok)
 {
+  
   if (equal(tok, "+"))
     return cast(rest, tok->next);
 
@@ -3573,7 +3583,8 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
       Member *mem = calloc(1, sizeof(Member));
       if (mem == NULL)
         error("%s: %s:%d: error: in struct_members : mem is null (bis)", PARSE_C, __FILE__, __LINE__);
-      Type *ty2 = declspec(&tok, tok, &attr);      
+      if (tok->kind == TK_KEYWORD)
+        ty = declspec(&tok, tok, &attr);
       mem->ty = declarator(&tok, tok, basety);
       mem->name = mem->ty->name;
       mem->idx = idx++;
@@ -3657,8 +3668,10 @@ static Token *attribute_list(Token *tok, void *arg, Token *(*f)(Token *, void *)
 static Token *type_attributes(Token *tok, void *arg)
 {
   Type *ty = arg;
-  if (!ty)
+  if (!ty) {
+    warn_tok(tok, "in type_attributes: %s %d: ty is null", PARSE_C, __LINE__);
     return tok;
+  }
   if (consume(&tok, tok, "packed") || consume(&tok, tok, "__packed__"))
       {
         ty->is_packed = true;
@@ -3750,9 +3763,9 @@ static Token *type_attributes(Token *tok, void *arg)
       consume(&tok, tok, "__transparent_union__") || consume(&tok, tok, "transparent_union")) {
     return tok;
   }
-
-
- if (consume(&tok, tok, "noinline") ||
+  
+  
+  if (consume(&tok, tok, "noinline") ||
       consume(&tok, tok, "__noinline__") ||
       consume(&tok, tok, "const") ||
       consume(&tok, tok, "__const__") ||
@@ -3813,13 +3826,19 @@ static Token *type_attributes(Token *tok, void *arg)
       consume(&tok, tok, "__no_stack_limit__") ||
       consume(&tok, tok, "no_sanitize_undefined") ||
       consume(&tok, tok, "__no_sanitize_undefined__") ||
-      consume(&tok, tok, "fallthrough") ||
-      consume(&tok, tok, "__fallthrough__") ||
       consume(&tok, tok, "no_profile_instrument_function") ||
       consume(&tok, tok, "__no_profile_instrument_function__")) 
     {
         return tok;
   }
+
+  //fallthrough is the last instruction in case: followed by a semicolon
+  if (consume(&tok, tok, "fallthrough") ||
+    consume(&tok, tok, "__fallthrough__") )
+    {
+      return tok;
+    }
+      
 
   if (consume(&tok, tok, "format") || consume(&tok, tok, "__format__")) {
     ctx->filename = PARSE_C;
@@ -3909,7 +3928,6 @@ static Token *type_attributes(Token *tok, void *arg)
 
     if (consume(&tok, tok, "sentinel") || consume(&tok, tok, "__sentinel__") ||
       consume(&tok, tok, "nonnull") || consume(&tok, tok, "__nonnull__") ||
-      consume(&tok, tok, "warning") || consume(&tok, tok, "__warning__") ||
       consume(&tok, tok, "optimize") || consume(&tok, tok, "__optimize__") ||
       consume(&tok, tok, "target") || consume(&tok, tok, "__target__") ||
       consume(&tok, tok, "assume_aligned") || consume(&tok, tok, "__assume_aligned__") ||
@@ -3988,8 +4006,10 @@ static Token *type_attributes(Token *tok, void *arg)
 //from COSMOPOLITAN adding attribute for variable
 static Token *thing_attributes(Token *tok, void *arg) {
   VarAttr *attr = arg;
-  if (!attr)
+  if (!attr) {
+    warn_tok(tok, "in thing_attributes: %s %d: attr is null", PARSE_C, __LINE__);
     return tok;
+  }
 
   if (consume(&tok, tok, "weak") || consume(&tok, tok, "__weak__")) {
     //int __attribute__((weak, alias("lxc_attach_main"))) main(int argc, char *argv[]);
@@ -4177,9 +4197,7 @@ static Token *thing_attributes(Token *tok, void *arg) {
     return skip(tok, ")", ctx);
   }
 
-
-
-
+ 
   if (consume(&tok, tok, "noinline") ||
       consume(&tok, tok, "__noinline__") ||
       consume(&tok, tok, "const") ||
@@ -4241,17 +4259,22 @@ static Token *thing_attributes(Token *tok, void *arg) {
       consume(&tok, tok, "__no_stack_limit__") ||
       consume(&tok, tok, "no_sanitize_undefined") ||
       consume(&tok, tok, "__no_sanitize_undefined__") ||
-      consume(&tok, tok, "fallthrough") ||
-      consume(&tok, tok, "__fallthrough__") ||
       consume(&tok, tok, "no_profile_instrument_function") ||
       consume(&tok, tok, "__no_profile_instrument_function__")) 
     {
         return tok;
-  }
+    }
+
+    //fallthrough is the last instruction in case: followed by a semicolon
+    if (consume(&tok, tok, "fallthrough") ||
+      consume(&tok, tok, "__fallthrough__") )
+    {
+      return tok;
+    }
+
 
     if (consume(&tok, tok, "sentinel") || consume(&tok, tok, "__sentinel__") ||
       consume(&tok, tok, "nonnull") || consume(&tok, tok, "__nonnull__") ||
-      consume(&tok, tok, "warning") || consume(&tok, tok, "__warning__") ||
       consume(&tok, tok, "optimize") || consume(&tok, tok, "__optimize__") ||
       consume(&tok, tok, "target") || consume(&tok, tok, "__target__") ||
       consume(&tok, tok, "assume_aligned") || consume(&tok, tok, "__assume_aligned__") ||
@@ -4345,6 +4368,8 @@ static Type *struct_union_decl(Token **rest, Token *tok)
 
   // Read a tag.
   Token *tag = NULL;
+
+    
   if (tok->kind == TK_IDENT)
   {
     tag = tok;
@@ -4477,13 +4502,14 @@ static Member *get_struct_member(Type *ty, Token *tok)
     //     return mem;
     if (!mem->name)
     {
-      if (mem->ty->kind == TY_STRUCT || mem->ty->kind == TY_UNION)
+
+      //if (mem->ty->kind == TY_STRUCT || mem->ty->kind == TY_UNION)
         if (get_struct_member(mem->ty, tok))
           return mem;
 
       continue;
     }
-
+  
     // Regular struct member
     if (mem->name->len == tok->len &&
         !strncmp(mem->name->loc, tok->loc, tok->len))
@@ -4515,6 +4541,7 @@ static Node *struct_ref(Node *node, Token *tok)
   for (;;)
   {
     Member *mem = get_struct_member(ty, tok);
+    //printf("=====%p %s\n", mem, tok->loc);
     if (!mem)
       error_tok(tok, "%s %d: in struct_ref : no such member", PARSE_C, __LINE__);
     node = new_unary(ND_MEMBER, node, tok);
@@ -4548,6 +4575,7 @@ static Node *new_inc_dec(Node *node, Token *tok, int addend)
 //              | "--"
 static Node *postfix(Token **rest, Token *tok)
 {
+  
 
   Node *node;
   if (equal(tok, "(") && is_typename(tok->next))
@@ -4590,6 +4618,7 @@ static Node *postfix(Token **rest, Token *tok)
     if (equal(tok, "("))
     {
       node = funcall(&tok, tok->next, node);
+      
       continue;
     }
 
@@ -4646,6 +4675,7 @@ static Node *postfix(Token **rest, Token *tok)
 static Node *funcall(Token **rest, Token *tok, Node *fn)
 {
   add_type(fn);
+  
   if (fn->ty->kind != TY_FUNC &&
       (fn->ty->kind != TY_PTR || fn->ty->base->kind != TY_FUNC))
     error_tok(fn->tok, "%s %d: in funcall : not a function", PARSE_C, __LINE__);
@@ -5366,8 +5396,7 @@ static Node *primary(Token **rest, Token *tok)
 
 static Token *parse_typedef(Token *tok, Type *basety)
 {
-  bool first = true;
-
+  bool first = true;  
   while (!consume(&tok, tok, ";"))
   {
     if (!first) {
@@ -5457,6 +5486,7 @@ static void mark_live(Obj *var)
 
 static Token *function(Token *tok, Type *basety, VarAttr *attr)
 {
+  
   Type *ty = declarator(&tok, tok, basety);
   if (!ty)
     error_tok(tok, "%s %d: in function : ty is null", PARSE_C, __LINE__);
@@ -5553,7 +5583,8 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   // [https://www.sigbus.info/n1570#6.4.2.2p1] "__func__" is
   // automatically defined as a local variable containing the
   // current function name.
-
+  
+  tok = attribute_list(tok, ty, type_attributes);
   push_scope("__func__")->var =
       new_string_literal(fn->name, array_of(ty_char, strlen(fn->name) + 1));
 
@@ -5725,6 +5756,7 @@ Obj *parse(Token *tok)
 
   while (tok->kind != TK_EOF)
   {
+    
     if (equal(tok, "_Static_assert")) {
       tok = static_assertion(tok);
       continue;
