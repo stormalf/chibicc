@@ -485,10 +485,10 @@ VLC : https://github.com/videolan/vlc.git
     VLC doesn't compile with chibicc some issues to fix later.
 
 
-postgres: https://github.com/postgres/postgres.git 
+postgres: https://github.com/postgres/postgres.git  (in case of bad network use git clone --filter=blob:none --depth=1 https://github.com/postgres/postgres.git --branch master)
 
-    CC=chibicc  ./configure --host x86_64-linux-gnu --disable-spinlocks
-    CC=chibicc  ./configure --host x86_64-linux-gnu --without-icu --without-readline
+    CC=chibicc  CFLAGS="-g" ./configure --host x86_64-linux-gnu --disable-spinlocks
+    CC=chibicc  CFLAGS="-g" ./configure --host x86_64-linux-gnu --without-icu --without-readline
     make
     make check
     Program received signal SIGSEGV, Segmentation fault.
@@ -536,7 +536,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.22.5        Improvement: diagnose overflow in integer constant expression #96  from @pmor13. Fixing issue with old C style (K&R) when parameters order don't correspond to parameter definition. Adding \__LINE__ in parse.c in all error_tok messages. Removing \__builtin_memcpy \__builtin_memset macro from preprocess.c that causes segmentation fault on zlib project. Adding other tests from @cosmopolitan.
+1.0.22.5        Improvement: diagnose overflow in integer constant expression #96  from @pmor13. Fixing issue with old C style (K&R) when parameters order don't correspond to parameter definition. Adding \__LINE__ in parse.c in all error_tok messages. Removing \__builtin_memcpy \__builtin_memset macro from preprocess.c that causes segmentation fault on zlib project. Adding other tests from @cosmopolitan. Adding \__GNUC__ macro and fixing all issues caused by this defined macro. Defining _Pragma macro that does nothing to keep compatibility with \__GNUC__. Fixing regression on struct members.
 
 ## old release notes
 
