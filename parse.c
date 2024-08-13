@@ -1776,7 +1776,6 @@ static void union_initializer(Token **rest, Token *tok, Initializer *init)
       *rest = skip(tok, "}", ctx);
       return;
     }
-
     initializer2(&tok, tok->next, init->children[0]);
     if (equal(tok, ",") && equal(tok->next, "}"))
       consume(&tok, tok, ",");
@@ -1824,7 +1823,8 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
   // trying to fix issue #62
   if (equal(tok, ","))
     return;
-
+  if (!init)
+    error("%s: %s:%d: error: in initializer2 :  init is null %s", PARSE_C, __FILE__, __LINE__, tok->loc);
 
   if (init->ty->kind == TY_ARRAY && tok->kind == TK_STR)
   {
@@ -2172,6 +2172,7 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
 // initializer list contains a non-constant expression.
 static void gvar_initializer(Token **rest, Token *tok, Obj *var)
 {
+
   Initializer *init = initializer(rest, tok, var->ty, &var->ty);
 
   Relocation head = {};
@@ -3567,6 +3568,7 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
     // Regular struct members
     while (!consume(&tok, tok, ";"))
     {
+      
       tok = attribute_list(tok, ty, type_attributes);
       if (equal(tok, ";"))
         break;
@@ -3584,7 +3586,7 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
       if (mem == NULL)
         error("%s: %s:%d: error: in struct_members : mem is null (bis)", PARSE_C, __FILE__, __LINE__);
       if (tok->kind == TK_KEYWORD)
-        ty = declspec(&tok, tok, &attr);
+        basety = declspec(&tok, tok, &attr);
       mem->ty = declarator(&tok, tok, basety);
       mem->name = mem->ty->name;
       mem->idx = idx++;
@@ -4115,16 +4117,33 @@ static Token *thing_attributes(Token *tok, void *arg) {
     return tok;
   }
 
-  if (consume(&tok, tok, "aligned") || consume(&tok, tok, "__aligned__")) {
+  // if (consume(&tok, tok, "aligned") || consume(&tok, tok, "__aligned__")) {
 
-    attr->is_aligned = true;
-    if (consume(&tok, tok, "(")) {
-      attr->align = const_expr(&tok, tok);
-      attr->align = 16; /* biggest alignment */
+  //   attr->is_aligned = true;
+  //   if (consume(&tok, tok, "(")) {
+  //     attr->align = const_expr(&tok, tok);
+  //     attr->align = 16; /* biggest alignment */
 
-    return tok;
-   }
-  }
+  //   return tok;
+  //  }
+  // }
+
+    if (consume(&tok, tok, "aligned") || consume(&tok, tok, "__aligned__"))
+      {
+        ctx->filename = PARSE_C;
+        ctx->funcname = "thing_attributes";       
+        ctx->line_no = __LINE__ + 1;       
+        tok = skip(tok, "(", ctx);
+        //from COSMOPOLITAN adding is_aligned
+        attr->is_aligned = true;
+        attr->align = const_expr(&tok, tok);
+        ctx->filename = PARSE_C;
+        ctx->funcname = "thing_attributes";     
+        ctx->line_no = __LINE__ + 1;       
+        tok = skip(tok, ")", ctx);
+        return tok;
+      }
+
   if (consume(&tok, tok, "warn_if_not_aligned") || consume(&tok, tok, "__warn_if_not_aligned__")) {
     ctx->filename = PARSE_C;
     ctx->funcname = "thing_attributes";        
