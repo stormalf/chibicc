@@ -3,6 +3,15 @@
 
 #define NULL ((void *)0)
 
+// Define sizes of various types
+#define SIZEOF_CHAR 1
+#define SIZEOF_SHORT 2
+#define SIZEOF_INT 4 // Ensure this is set to 4
+#define SIZEOF_LONG 8
+#define SIZEOF_LONG_LONG 8
+#define SIZEOF_POINTER 8
+
+
 typedef unsigned long size_t;
 typedef long ptrdiff_t;
 typedef unsigned int wchar_t;
