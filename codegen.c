@@ -2199,10 +2199,34 @@ static void store_fp(int r, int offset, int sz)
   unreachable();
 }
 
-static void store_gp(int r, int offset, int sz)
-{
-  switch (sz)
-  {
+// static void store_gp(int r, int offset, int sz)
+// {
+//   switch (sz)
+//   {
+//   case 1:
+//     println("  mov %s, %d(%%rbp)", argreg8[r], offset);
+//     return;
+//   case 2:
+//     println("  mov %s, %d(%%rbp)", argreg16[r], offset);
+//     return;
+//   case 4:
+//     println("  mov %s, %d(%%rbp)", argreg32[r], offset);
+//     return;
+//   case 8:
+//     println("  mov %s, %d(%%rbp)", argreg64[r], offset);
+//     return;
+//   default:
+//     for (int i = 0; i < sz; i++)
+//     {
+//       println("  mov %s, %d(%%rbp)", argreg8[r], offset + i);
+//       println("  shr $8, %s", argreg64[r]);
+//     }
+//     return;
+//   }
+// }
+
+static void store_gp(int r, int offset, int sz) {
+  switch (sz) {
   case 1:
     println("  mov %s, %d(%%rbp)", argreg8[r], offset);
     return;
@@ -2215,15 +2239,19 @@ static void store_gp(int r, int offset, int sz)
   case 8:
     println("  mov %s, %d(%%rbp)", argreg64[r], offset);
     return;
+  case 16:
+    // Assuming we can use xmm registers to store 128 bits
+    println("  movdqu %%xmm%d, %d(%%rbp)", r, offset);
+    return;
   default:
-    for (int i = 0; i < sz; i++)
-    {
+    for (int i = 0; i < sz; i++) {
       println("  mov %s, %d(%%rbp)", argreg8[r], offset + i);
       println("  shr $8, %s", argreg64[r]);
     }
     return;
   }
 }
+
 
 static void emit_text(Obj *prog)
 {
