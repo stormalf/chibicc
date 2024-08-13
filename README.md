@@ -304,9 +304,8 @@ curl : https://github.com/curl/curl.git
         CCLD     curl
 
     make test
-    TESTDONE: 1635 tests were considered during 418 seconds.
-    TESTDONE: 1314 tests out of 1316 reported OK: 99%
-    TESTFAIL: These test cases failed: 557 1119
+    TESTDONE: 1722 tests were considered during 3895 seconds.
+    TESTDONE: 1392 tests out of 1392 reported OK: 100%
 
 
 openssl : https://github.com/openssl/openssl.git
@@ -485,16 +484,24 @@ VLC : https://github.com/videolan/vlc.git
     VLC doesn't compile with chibicc some issues to fix later.
 
 
-postgres: https://github.com/postgres/postgres.git 
+postgres: https://github.com/postgres/postgres.git  (in case of bad network use git clone --filter=blob:none --depth=1 https://github.com/postgres/postgres.git --branch master)
 
-    CC=chibicc  ./configure --host x86_64-linux-gnu --disable-spinlocks
+    CC=chibicc  CFLAGS="-g" ./configure --host x86_64-linux-gnu --disable-spinlocks
+    CC=chibicc  CFLAGS="-g -O0" ./configure --host x86_64-linux-gnu --without-icu --without-readline
     make
     make check
-    Program received signal SIGSEGV, Segmentation fault.
-    #0  MemoryChunkSetHdrMask () at ../../../../src/include/utils/memutils_memorychunk.h:164
-    #1  0x0000000001f001b9 in AllocSetAlloc () at aset.c:885
-    the initdb command produced by chibicc failed with segmentation fault.
-
+	Program received signal SIGSEGV, Segmentation fault.
+    0x0000000001af1374 in hash_initial_lookup () at dynahash.c:1769
+    1769            segp = hashp->dir[segment_num];
+    (gdb) bt
+    #0  0x0000000001af1374 in hash_initial_lookup () at dynahash.c:1769
+    #1  0x0000000001af5d8a in hash_search_with_hash_value () at dynahash.c:1009
+    #2  0x0000000001af6d8d in hash_search () at dynahash.c:960
+    #3  0x0000000001bd8174 in pg_tzset () at pgtz.c:260
+    #4  0x0000000001bd8617 in pg_timezone_initialize () at pgtz.c:370
+    #5  0x0000000001b3a404 in InitializeGUCOptions () at guc.c:1538
+    #6  0x0000000001245ba6 in PostmasterMain () at postmaster.c:573
+    #7  0x0000000000ef5f48 in main () at main.c:197
 
 ## TODO
 
@@ -535,7 +542,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.22.5        Improvement: diagnose overflow in integer constant expression #96  from @pmor13. Fixing issue with old C style (K&R) when parameters order don't correspond to parameter definition. Adding \__LINE__ in parse.c in all error_tok messages. Removing \__builtin_memcpy \__builtin_memset macro from preprocess.c that causes segmentation fault on zlib project. Adding other tests from @cosmopolitan. Reporting some fixes from 1.0.23 to this version.
+1.0.22.5        Improvement: diagnose overflow in integer constant expression #96  from @pmor13. Fixing issue with old C style (K&R) when parameters order don't correspond to parameter definition. Adding \__LINE__ in parse.c in all error_tok messages. Removing \__builtin_memcpy \__builtin_memset macro from preprocess.c that causes segmentation fault on zlib project. Adding other tests from @cosmopolitan. Reporting some fixes from 1.0.23 to this version. Fixing last issue with curl due to sizeof_int and sizeof_long not taken in account (adding them in stddef.h).
 
 ## old release notes
 
