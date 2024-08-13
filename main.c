@@ -894,7 +894,7 @@ static void run_subprocess(char **argv)
 
     execvp(argv[0], argv);
     fprintf(stderr, "%s : %s:%d: error: in run_subprocess exec failed: %s: %s\n", MAIN_C, __FILE__, __LINE__, argv[0], strerror(errno));
-    _exit(99);
+    _exit(1);
   }
 
   // Wait for the child process to finish.
@@ -1335,7 +1335,7 @@ int main(int argc, char **argv)
     if (f == NULL)
     {
       error("%s : %s:%d: error: in main Issue with -debug or -printparameter, file not opened!", MAIN_C, __FILE__, __LINE__);
-      exit(2);
+      exit(1);
     }
   }
 
