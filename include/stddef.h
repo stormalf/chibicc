@@ -11,7 +11,6 @@
 #define SIZEOF_LONG_LONG 8
 #define SIZEOF_POINTER 8
 
-
 typedef unsigned long size_t;
 typedef long ptrdiff_t;
 typedef unsigned int wchar_t;

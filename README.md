@@ -487,7 +487,7 @@ VLC : https://github.com/videolan/vlc.git
 postgres: https://github.com/postgres/postgres.git  (in case of bad network use git clone --filter=blob:none --depth=1 https://github.com/postgres/postgres.git --branch master)
 
     CC=chibicc  CFLAGS="-g" ./configure --host x86_64-linux-gnu --disable-spinlocks
-    CC=chibicc  CFLAGS="-g -O0" ./configure --host x86_64-linux-gnu --without-icu --without-readline
+    CC=chibicc  CFLAGS="-g -O0"  CXXFLAGS="-g -O0" ./configure --host x86_64-linux-gnu --without-icu --without-readline
     make
     make check
 	Program received signal SIGSEGV, Segmentation fault.
