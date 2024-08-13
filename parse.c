@@ -5616,7 +5616,7 @@ Obj *parse(Token *tok)
     if (base_file == NULL && opt_o == NULL)
     {
       fprintf(stderr, "%s: in parse base_file and opt_o are null!\n", PARSE_C);
-      exit(5);
+      exit(1);
     }
     path = replace_extn(opt_o ? opt_o : base_file, ".dot");
     if (opt_o != NULL)
@@ -5631,7 +5631,7 @@ Obj *parse(Token *tok)
     if (dotf == NULL)
     {
       fprintf(stderr, "%s: in parse dot file cannot be opend\n", PARSE_C);
-      exit(4);
+      exit(1);
     } 
     fprintf(dotf, "digraph A { \n");
     
