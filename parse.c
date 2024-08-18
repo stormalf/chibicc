@@ -199,6 +199,7 @@ static Node *parse_overflow(NodeKind kind, Token *tok, Token **rest);
 static Token * old_style_params(Token **rest, Token *tok, Type *ty);
 static Type *old_params(Type *ty, int nbparms);
 
+
 static int align_down(int n, int align)
 {
   return align_to(n - align + 1, align);
@@ -4525,7 +4526,6 @@ static Node *postfix(Token **rest, Token *tok)
   }
   else
   {
-    
     node = primary(&tok, tok);
   }
 
@@ -4757,11 +4757,16 @@ static Node *primary(Token **rest, Token *tok)
 
   if (equal(tok, "sizeof") && equal(tok->next, "(") && is_typename(tok->next->next))
   {
+    
     Type *ty = typename(&tok, tok->next->next);
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";        
     ctx->line_no = __LINE__ + 1;      
     *rest = skip(tok, ")", ctx);
+
+   // Check if the type is incomplete
+    if (ty->size < 0)
+      error_tok(tok, "%s %d: in primary : incomplete type for sizeof", PARSE_C, __LINE__);
 
     if (ty->kind == TY_VLA)
     {
@@ -4776,11 +4781,17 @@ static Node *primary(Token **rest, Token *tok)
     return new_ulong(ty->size, start);
   }
 
+
   if (equal(tok, "sizeof"))
   {
-
     Node *node = unary(rest, tok->next);
     add_type(node);
+
+    // Check if the type is incomplete
+    if (node->ty->size < 0)
+      error_tok(tok, "%s %d: in primary : incomplete type for sizeof", PARSE_C, __LINE__);
+
+
     //trying to fix =====ISS-166 segmentation fault 
     if (node->ty->kind == TY_VLA)
     {
@@ -4792,9 +4803,11 @@ static Node *primary(Token **rest, Token *tok)
       return new_binary(ND_COMMA, lhs, rhs, tok);
     }
 
+
+
     // if (node->ty->kind == TY_VLA)
     //   return new_var_node(node->ty->vla_size, tok);
-    return new_ulong(node->ty->size, tok);
+    return new_ulong(node->ty->size, start);
   }
 
 
@@ -5280,8 +5293,8 @@ static Node *primary(Token **rest, Token *tok)
     *rest = tok->next;
     return node;
   }
-
-  error_tok(tok, "%s %d: in primary : expected an expression %s", PARSE_C, __LINE__, tok->loc);
+   
+  error_tok(tok, "%s %d: in primary : expected an expression", PARSE_C, __LINE__);
 }
 
 static Token *parse_typedef(Token *tok, Type *basety)
@@ -6138,3 +6151,4 @@ static Type *old_params(Type *ty, int nbparms) {
 
   return head.next;
 }
+
