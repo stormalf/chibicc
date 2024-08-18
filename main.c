@@ -99,7 +99,7 @@ static void print_include_directories() {
     strarray_push(&include_paths, "/usr/local/include");
     strarray_push(&include_paths, "/usr/include/x86_64-linux-gnu");
     strarray_push(&include_paths, "/usr/include");
-    //strarray_push(&include_paths, "/usr/lib/gcc/x86_64-linux-gnu/11/include");
+    strarray_push(&include_paths, "/usr/lib/gcc/x86_64-linux-gnu/11/include");
     //strarray_push(&include_paths, "/usr/include/chibicc/include");
     #if defined(__APPLE__) && defined(__MACH__)
     strarray_push(&include_paths, "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include");
@@ -174,7 +174,7 @@ static void add_default_include_paths(char *argv0)
   strarray_push(&include_paths, "/usr/local/include");
   strarray_push(&include_paths, "/usr/include/x86_64-linux-gnu");
   strarray_push(&include_paths, "/usr/include");
-  //strarray_push(&include_paths, "/usr/lib/gcc/x86_64-linux-gnu/11/include");
+  strarray_push(&include_paths, "/usr/lib/gcc/x86_64-linux-gnu/11/include");
   //strarray_push(&include_paths, "/usr/include/chibicc/include");
   #if defined(__APPLE__) && defined(__MACH__)
   strarray_push(&include_paths, "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include");
@@ -1244,7 +1244,7 @@ static void run_linker(StringArray *inputs, char *output)
   strarray_push(&arr, "-L/usr/lib");
   strarray_push(&arr, "-L/lib");   
   strarray_push(&arr, "-L.");
-  //strarray_push(&arr, "-L/usr/lib/gcc/x86_64-linux-gnu/11/x86_64-linux-gnu");
+  strarray_push(&arr, "-L/usr/lib/gcc/x86_64-linux-gnu/11/x86_64-linux-gnu");
 
 
   if (!opt_static)
