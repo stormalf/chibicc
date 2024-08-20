@@ -284,18 +284,15 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 asm_str = subst_asm(template, tmp, asmExt->output[i]->variableNumber);
                 free(tmp);
             }else {
-                if (asmExt->output[i]->isq){
-                    asm_str = subst_asm(template, update_register_size(asmExt->output[i]->reg, 1), asmExt->output[i]->variableNumber);
-                }
-                else if (asmExt->output[i]->isl){
-                    asm_str = subst_asm(template, update_register_size(asmExt->output[i]->reg, 4), asmExt->output[i]->variableNumber);
-                }
-                else{
-                    asm_str = subst_asm(template, asmExt->output[i]->reg, asmExt->output[i]->variableNumber);
+                    char *pchb = strstr(template,"b ");
+                    if (pchb)
+                        asm_str = subst_asm(template, update_register_size(asmExt->output[i]->reg, 1), asmExt->output[i]->variableNumber);
+                    if (!pchb)
+                        asm_str = subst_asm(template, asmExt->output[i]->reg, asmExt->output[i]->variableNumber);
                 }
             }
-        }
     }
+
 
 
     if (hasInput) {
