@@ -1,6 +1,5 @@
 #include <sys/sem.h>
  
- 
  int
  main (void)
  {

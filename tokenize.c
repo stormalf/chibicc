@@ -535,7 +535,13 @@ static bool convert_pp_int(Token *tok)
     base = 8;
   }
 
-  int64_t val = strtoul(p, &p, base);
+   errno = 0; // Clear errno before calling strtoul
+  int64_t val = strtoull(p, &p, base);
+  // Check for overflow
+  // if (errno == ERANGE || val > ULLONG_MAX ) {
+  //     warn_tok(tok, "%s %d: in convert_pp_int : integer overflow", TOKENIZE_C, __LINE__);
+  //     return false;
+  // }
 
   // Read U, L or LL suffixes.
   bool l = false;

@@ -455,6 +455,7 @@ static void store(Type *ty)
     println("  mov %%eax, (%%rdi)");
   else
     println("  mov %%rax, (%%rdi)");
+
 }
 
 static void cmp_zero(Type *ty)
@@ -1074,7 +1075,7 @@ static void gen_expr(Node *node)
     load(node->ty);
     return;
   case ND_ADDR:
-    gen_addr(node->lhs);
+    gen_addr(node->lhs);    
     return;
   case ND_ASSIGN:
     gen_addr(node->lhs);
@@ -1425,20 +1426,35 @@ static void gen_expr(Node *node)
   }
   case ND_BUILTIN_CLZ: {
     gen_expr(node->builtin_val); // Generate code for the expression
-    println("  bsr %%rax, %%rax"); // Bit Scan Reverse to find the highest set bit
+    println("  bsr %%eax, %%eax"); // Bit Scan Reverse to find the highest set bit
     println("  xor $31, %%eax"); // Count leading zeros
-    println("  mov $31, %%edx");
-    println("  cmovz %%edx, %%eax"); // If input was zero, set result to 32
     return;
   }
+
+  case ND_BUILTIN_CLZL: {
+    gen_expr(node->builtin_val); // Generate code for the expression
+    println("  bsr %%rax, %%rax");       // Calculate number of leading zeros for 64-bit
+    println("  xor $63, %%eax");       // Special handling if input was -1
+
+    return;
+  }
+
   case ND_BUILTIN_CTZ: {
     // Built-in version
     gen_expr(node->builtin_val); // Generate code for the expression
-    println("  bsf %%rax, %%rax"); // Bit Scan Forward to find the lowest set bit
-    println("  mov $32, %%edx"); // Prepare a value of 32 in edx
-    println("  cmovz %%edx, %%eax"); // If input was zero, set result to 32
+    println("  bsf %%eax, %%eax"); // Bit Scan Forward to find the lowest set bit
+    // println("  mov $32, %%edx"); // Prepare a value of 32 in edx
+    // println("  cmovz %%edx, %%eax"); // If input was zero, set result to 32
     return;
   }
+  case ND_BUILTIN_CTZL: {
+    // Built-in version
+    gen_expr(node->builtin_val); // Generate code for the expression
+    println("  bsf %%rax, %%rax"); // Bit Scan Forward to find the lowest set bit
+    return;
+  }
+
+
   case ND_POPCOUNT:
     // Built-in version
     gen_expr(node->builtin_val); // Generate code for the expression

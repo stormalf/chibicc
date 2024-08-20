@@ -358,7 +358,9 @@ typedef enum
   ND_BUILTIN_MEMCPY, //builtin memcpy
   ND_BUILTIN_MEMSET, //builtin memset
   ND_BUILTIN_CLZ, //builtin clz
+  ND_BUILTIN_CLZL, //builtin clz
   ND_BUILTIN_CTZ, //builtin ctz
+  ND_BUILTIN_CTZL, //builtin ctzl
   ND_POPCOUNT,    //builtin popcount
   ND_EXPECT,    //builtin expect
   ND_RETURN_ADDR,    //builtin return address
