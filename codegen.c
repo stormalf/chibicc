@@ -1651,6 +1651,24 @@ static void gen_expr(Node *node)
   case ND_UNREACHABLE:
     println("  // __builtin_unreachable: no code generation needed");
     return;
+  
+  case ND_BUILTIN_ISNAN: {
+    gen_expr(node->builtin_val);  // Generate code for the expression
+    if (node->builtin_val->ty->kind == TY_FLOAT) {
+        // Use movss to move the float value and then compare
+        println("  movss %%xmm0, %%xmm1");
+        println("  ucomiss %%xmm1, %%xmm1");
+    } else {
+        // Use ucomisd for double
+        println("  ucomisd %%xmm0, %%xmm0");
+    }
+
+    println("  setp %%al");
+    println("  movzx %%al, %%eax");
+    return;
+  }
+
+  
   case ND_EXCH:
   {
     gen_expr(node->lhs);
@@ -2797,3 +2815,5 @@ int len = sizeof(newargreg64)/sizeof(newargreg64[0]);
   }
 
 }
+
+
