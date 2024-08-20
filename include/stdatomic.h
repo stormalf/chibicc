@@ -1,5 +1,15 @@
 #ifndef __STDATOMIC_H
 #define __STDATOMIC_H
+
+
+#define __ATOMIC_RELAXED 0
+#define __ATOMIC_CONSUME 1
+#define __ATOMIC_ACQUIRE 2
+#define __ATOMIC_RELEASE 3
+#define __ATOMIC_ACQ_REL 4
+#define __ATOMIC_SEQ_CST 5
+
+
 #define ATOMIC_BOOL_LOCK_FREE 1
 #define ATOMIC_CHAR_LOCK_FREE 1
 #define ATOMIC_CHAR16_T_LOCK_FREE 1

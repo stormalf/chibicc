@@ -1455,6 +1455,22 @@ void init_macros(void)
   define_macro("HAVE_RECV", "1");
   define_macro("HAVE_SEND", "1");
   define_macro("__extension__", "");
+  //for postgres
+  define_macro("HAVE_GCC__SYNC_CHAR_TAS", "1");
+  define_macro("HAVE_GCC__SYNC_INT32_TAS", "1");
+  define_macro("HAVE_GCC__SYNC_INT32_CAS", "1");
+  define_macro("HAVE_GCC__SYNC_INT64_CAS", "1");
+  define_macro("HAVE_GCC__ATOMIC_INT32_CAS", "1"); 
+  define_macro("HAVE_GCC__ATOMIC_INT64_CAS", "1");
+  define_macro("HAVE_LONG_INT_64", "1");
+  define_macro("HAVE_LONG_LONG_INT_64", "1");
+  define_macro("__ATOMIC_RELAXED", "0");
+  define_macro("__ATOMIC_CONSUME", "1");
+  define_macro("__ATOMIC_ACQUIRE", "2");
+  define_macro("__ATOMIC_RELEASE", "3");
+  define_macro("__ATOMIC_ACQ_REL", "4");
+  define_macro("__ATOMIC_SEQ_CST", "5");
+
   //define_macro("nonnull", "1");
   //====fixing ISS-147 defining the two macros for the linux platform
   define_macro("__ORDER_LITTLE_ENDIAN__", "1234");  
