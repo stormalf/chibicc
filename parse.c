@@ -4764,7 +4764,7 @@ static Node *primary(Token **rest, Token *tok)
     *rest = skip(tok, ")", ctx);
 
    // Check if the type is incomplete
-    if (ty->size < 0)
+    if (ty->kind == TY_UNION && ty->size < 0)
       error_tok(tok, "%s %d: in primary : incomplete type for sizeof", PARSE_C, __LINE__);
 
     if (ty->kind == TY_VLA)
@@ -4787,8 +4787,9 @@ static Node *primary(Token **rest, Token *tok)
     add_type(node);
 
     // Check if the type is incomplete
-    if (node->ty->size < 0)
+    if (node->ty->kind == TY_UNION && node->ty->size < 0) {
       error_tok(tok, "%s %d: in primary : incomplete type for sizeof", PARSE_C, __LINE__);
+    }
 
 
     //trying to fix =====ISS-166 segmentation fault 
