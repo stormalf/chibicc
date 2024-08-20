@@ -4869,8 +4869,9 @@ static Node *primary(Token **rest, Token *tok)
     *rest = skip(tok, ")", ctx);
    
    // Check if the type is incomplete
-    if (ty->size < 0)
+    if (ty->kind == TY_UNION && ty->size < 0) {
       error_tok(tok, "%s %d: in primary : incomplete type for sizeof", PARSE_C, __LINE__);
+    }
 
     if (ty->kind == TY_VLA)
     {
@@ -4892,7 +4893,7 @@ static Node *primary(Token **rest, Token *tok)
     add_type(node);
 
     // Check if the type is incomplete
-    if (node->ty->size < 0)
+    if (node->ty->kind == TY_UNION && node->ty->size < 0)
       error_tok(tok, "%s %d: in primary : incomplete type for sizeof", PARSE_C, __LINE__);
           
     //trying to fix =====ISS-166 segmentation fault 
@@ -5124,6 +5125,10 @@ static Node *primary(Token **rest, Token *tok)
     return node;
   }
 
+  if (equal(tok, "__builtin_isnan"))
+  {
+    return ParseBuiltin(ND_BUILTIN_ISNAN, tok, rest);
+  }
 
   if (equal(tok, "__builtin_clz"))
   {
@@ -5981,6 +5986,10 @@ char *nodekind2str(NodeKind kind)
     return "CTZ";   //builtin ctz
   case ND_BUILTIN_CTZL:
     return "CTZL";   //builtin ctzl
+  case ND_BUILTIN_INFF:
+    return "INFF";   //builtin inff
+  case ND_BUILTIN_ISNAN:
+    return "ISNAN"; //builtin isnan
   case ND_POPCOUNT:
     return "POPCOUNT"; //builtin popcount
   case ND_RETURN_ADDR:
