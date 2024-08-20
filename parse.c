@@ -5013,6 +5013,21 @@ static Node *primary(Token **rest, Token *tok)
       return parse_memset(tok, rest);
   }
 
+  if (equal(tok, "__builtin_inff")) {
+    Node *node = new_node(ND_BUILTIN_INFF, tok);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";
+    ctx->line_no = __LINE__ + 1;    
+    tok = skip(tok->next, "(", ctx);
+    *rest = skip(tok, ")", ctx);    
+    return node;
+  }
+
+  if (equal(tok, "__builtin_isnan"))
+  {
+    return ParseBuiltin(ND_BUILTIN_ISNAN, tok, rest);
+  }
+
 
   if (equal(tok, "__builtin_clz"))
   {
@@ -5852,6 +5867,10 @@ char *nodekind2str(NodeKind kind)
     return "CTZ";   //builtin ctz
   case ND_BUILTIN_CTZL:
     return "CTZL";   //builtin ctzl
+  case ND_BUILTIN_INFF:
+    return "INFF";   //builtin inff
+  case ND_BUILTIN_ISNAN:
+    return "ISNAN"; //builtin isnan    
   case ND_POPCOUNT:
     return "POPCOUNT"; //builtin popcount
   case ND_RETURN_ADDR:

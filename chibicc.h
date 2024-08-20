@@ -369,6 +369,8 @@ typedef enum
   ND_BUILTIN_MUL_OVERFLOW, //builtin mul overflow
   ND_UNREACHABLE,   //builtin unreachable
   ND_ALLOC,   //builtin alloca
+  ND_BUILTIN_INFF, //builtin inff
+  ND_BUILTIN_ISNAN, //builtin isnan
 } NodeKind;
 
 // AST node type

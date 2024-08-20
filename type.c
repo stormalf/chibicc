@@ -398,6 +398,10 @@ void add_type(Node *node)
     add_type(node->builtin_dest);
     node->ty = ty_bool;
     return;
+  case ND_BUILTIN_ISNAN:
+    add_type(node->builtin_val);
+    node->ty = ty_bool;
+    return;    
   case ND_BUILTIN_CTZ:
   case ND_BUILTIN_CTZL:
   case ND_BUILTIN_CLZ:
@@ -426,5 +430,8 @@ void add_type(Node *node)
       error_tok(node->cas_addr->tok, "%s %d: pointer expected", TYPE_C, __LINE__);
     node->ty = node->lhs->ty->base;
     return;
+  case ND_BUILTIN_INFF:
+    node->ty = ty_ldouble;
+    return;    
   }
 }
