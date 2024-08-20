@@ -10,6 +10,9 @@
 #define SIZEOF_LONG 8
 #define SIZEOF_LONG_LONG 8
 #define SIZEOF_POINTER 8
+#define LONG_MAX 9223372036854775807
+#define INT_MIN -2147483648
+#define INT_MAX 2147483647
 
 typedef unsigned long size_t;
 typedef long ptrdiff_t;

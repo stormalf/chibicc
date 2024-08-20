@@ -1438,6 +1438,20 @@ void init_macros(void)
   define_macro("__x86_64__", "1");
   define_macro("__GNU__", "1");
   define_macro("__INTEL_COMPILER", "1");
+  define_macro("HAVE_GCC__SYNC_CHAR_TAS", "1");
+  define_macro("HAVE_GCC__SYNC_INT32_TAS", "1");
+  define_macro("HAVE_GCC__SYNC_INT32_CAS", "1");
+  define_macro("HAVE_GCC__SYNC_INT64_CAS", "1");
+  define_macro("HAVE_GCC__ATOMIC_INT32_CAS", "1"); 
+  define_macro("HAVE_GCC__ATOMIC_INT64_CAS", "1");
+  define_macro("HAVE_LONG_INT_64", "1");
+  define_macro("HAVE_LONG_LONG_INT_64", "1");
+  define_macro("__ATOMIC_RELAXED", "0");
+  define_macro("__ATOMIC_CONSUME", "1");
+  define_macro("__ATOMIC_ACQUIRE", "2");
+  define_macro("__ATOMIC_RELEASE", "3");
+  define_macro("__ATOMIC_ACQ_REL", "4");
+  define_macro("__ATOMIC_SEQ_CST", "5");
   //define_macro("__GNUC__", "9");
   define_macro("HAVE_ATTRIBUTE_PACKED", "1");
   define_macro("linux", "1");
@@ -1447,7 +1461,7 @@ void init_macros(void)
   define_macro("__ORDER_LITTLE_ENDIAN__", "1234");  
   define_macro("__ORDER_BIG_ENDIAN__", "4321");
   define_macro("__BYTE_ORDER__", "__ORDER_LITTLE_ENDIAN__");
-  define_macro("USE_BUILTINS", "1");
+  //define_macro("USE_BUILTINS", "1");
   // if (opt_fbuiltin) {
   //   define_macro("memcpy", "__builtin_memcpy");
   //   define_macro("memset", "__builtin_memset");

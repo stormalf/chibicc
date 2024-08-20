@@ -1018,8 +1018,8 @@ static Type *declarator(Token **rest, Token *tok, Type *ty)
     ctx->filename = PARSE_C;
     ctx->funcname = "declarator";    
     ctx->line_no = __LINE__ + 2;
-    if (equal(tok, ")"))
-      tok = skip(tok, ")", ctx);
+    //if (equal(tok, ")"))
+    tok = skip(tok, ")", ctx);
     ty = type_suffix(rest, tok, ty);
     if (!ty)
       error_tok(tok, "%s %d: in declarator : ty is null", PARSE_C, __LINE__);
@@ -3527,8 +3527,7 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
         ctx->filename = PARSE_C;
         ctx->funcname = "struct_members";        
         ctx->line_no = __LINE__ + 1;
-        if (equal(tok, ","))              
-          tok = skip(tok, ",", ctx);
+        tok = skip(tok, ",", ctx);
       }
 
 
@@ -5019,10 +5018,19 @@ static Node *primary(Token **rest, Token *tok)
     return ParseBuiltin(ND_BUILTIN_CLZ, tok, rest);
   }
 
+  if (equal(tok, "__builtin_clzl")) {
+      return ParseBuiltin(ND_BUILTIN_CLZL, tok, rest);
+  }
+
   if (equal(tok, "__builtin_ctz"))
   {
     return ParseBuiltin(ND_BUILTIN_CTZ, tok, rest);
   }
+
+  if (equal(tok, "__builtin_ctzl")) {
+      return ParseBuiltin(ND_BUILTIN_CTZL, tok, rest);
+  }
+
 
   if (equal(tok, "__builtin_popcount")) {
       return ParseBuiltin(ND_POPCOUNT, tok, rest);
@@ -5837,8 +5845,12 @@ char *nodekind2str(NodeKind kind)
     return "MEMSET";  //builtin memset
   case ND_BUILTIN_CLZ:
     return "CLZ";   //builtin clz
+  case ND_BUILTIN_CLZL:
+    return "CLZL";   //builtin clzl   
   case ND_BUILTIN_CTZ:
     return "CTZ";   //builtin ctz
+  case ND_BUILTIN_CTZL:
+    return "CTZL";   //builtin ctzl
   case ND_POPCOUNT:
     return "POPCOUNT"; //builtin popcount
   case ND_RETURN_ADDR:

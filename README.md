@@ -486,8 +486,8 @@ VLC : https://github.com/videolan/vlc.git
 
 postgres: https://github.com/postgres/postgres.git  (in case of bad network use git clone --filter=blob:none --depth=1 https://github.com/postgres/postgres.git --branch master)
 
-    CC=chibicc  CFLAGS="-g" ./configure --host x86_64-linux-gnu --disable-spinlocks
-    CC=chibicc  CFLAGS="-g -O0"  CXXFLAGS="-g -O0" ./configure --host x86_64-linux-gnu --without-icu --without-readline
+    CC=chibicc  CFLAGS="-g -DHASH_DEBUG=1" ./configure --host x86_64-linux-gnu --disable-spinlocks
+    CC=chibicc  CFLAGS="-g -O0 -DHASH_DEBUG=1"  CXXFLAGS="-g -O0 -DHASH_DEBUG=1" ./configure --host x86_64-linux-gnu --without-icu --without-readline 
     make
     make check
 	Program received signal SIGSEGV, Segmentation fault.
@@ -542,7 +542,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.22.5        Improvement: diagnose overflow in integer constant expression #96  from @pmor13. Fixing issue with old C style (K&R) when parameters order don't correspond to parameter definition. Adding \__LINE__ in parse.c in all error_tok messages. Removing \__builtin_memcpy \__builtin_memset macro from preprocess.c that causes segmentation fault on zlib project. Adding other tests from @cosmopolitan. Reporting some fixes from 1.0.23 to this version. Fixing last issue with curl due to sizeof_int and sizeof_long not taken in account (adding them in stddef.h). Fixing issue with semun (ISS-146).
+1.0.22.5        Improvement: diagnose overflow in integer constant expression #96  from @pmor13. Fixing issue with old C style (K&R) when parameters order don't correspond to parameter definition. Adding \__LINE__ in parse.c in all error_tok messages. Removing \__builtin_memcpy \__builtin_memset macro from preprocess.c that causes segmentation fault on zlib project. Adding other tests from @cosmopolitan. Reporting some fixes from 1.0.23 to this version. Fixing last issue with curl due to sizeof_int and sizeof_long not taken in account (adding them in stddef.h). Fixing issue with semun (ISS-146). Fixing issue with \__builtin_clz that gives incorrect result. And adding \__builtin_ctzl and \__builtin_clzl.
 
 ## old release notes
 

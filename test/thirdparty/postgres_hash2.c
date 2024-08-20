@@ -130,7 +130,7 @@ int main() {
     // Initialize example data
     hashp.hctl = &hctl;
     hashp.ssize = 4; // Segment size (must be power of 2)
-    hashp.sshift = 2; // Segment shift (log2 of ssize)
+    hashp.sshift = 8; // Segment shift (log2 of ssize)
     hashp.dir = segments;
     hashp.ssize = 2; // Number of segments
 
@@ -149,7 +149,7 @@ int main() {
     segments[1] = &buckets[2];
 
     HASHBUCKET *bucketptr;
-    uint32_t bucket = hash_initial_lookup(&hashp, 2, &bucketptr);
+    uint32_t bucket = hash_initial_lookup(&hashp, 3926571702, &bucketptr);
 
     printf("Bucket: %u\n", bucket);
     if (bucketptr != NULL) {
