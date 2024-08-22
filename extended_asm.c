@@ -138,7 +138,6 @@ static bool hasOutput = false;
 static bool isToNegate = false;
 
 
-
 char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
 {
     char *input_asm_str;
@@ -271,9 +270,17 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
         tok = tok->next;
     }
 
+   //case of no input need to generate input for output
+    if (hasOutput && !hasInput){
+        input_for_output = generate_input_for_output();
+        if (input_for_output != NULL) {
+                strncat(asm_str, input_for_output, strlen(input_for_output));
+            }
+    }
+
     if (hasOutput) {
         //replace each %9 by the correct output register
-
+        char *tmp_asm = calloc(1, sizeof(char) * 500);
         for (int i = 0; i < nbOutput; i++)
         {
             if (asmExt->output[i]->isAddress) {
@@ -281,17 +288,39 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 strncat(tmp, "(", 2);
                 strncat(tmp, asmExt->output[i]->reg64, strlen(asmExt->output[i]->reg64) );
                 strncat(tmp, ")", 2);
-                asm_str = subst_asm(template, tmp, asmExt->output[i]->variableNumber);
+                tmp_asm = subst_asm(template, tmp, asmExt->output[i]->variableNumber);
                 free(tmp);
             }else {
-                    char *pchb = strstr(template,"b ");
-                    if (pchb)
-                        asm_str = subst_asm(template, update_register_size(asmExt->output[i]->reg, 1), asmExt->output[i]->variableNumber);
-                    if (!pchb)
-                        asm_str = subst_asm(template, asmExt->output[i]->reg, asmExt->output[i]->variableNumber);
+                tmp_asm = subst_asm(template, asmExt->output[i]->reg, asmExt->output[i]->variableNumber);
                 }
             }
+        strncat(asm_str, tmp_asm, strlen(tmp_asm));
+
     }
+
+
+    // if (hasOutput) {
+    //     //replace each %9 by the correct output register
+
+    //     for (int i = 0; i < nbOutput; i++)
+    //     {
+    //         if (asmExt->output[i]->isAddress) {
+    //             char *tmp = calloc(1, sizeof(char) * 30);
+    //             strncat(tmp, "(", 2);
+    //             strncat(tmp, asmExt->output[i]->reg64, strlen(asmExt->output[i]->reg64) );
+    //             strncat(tmp, ")", 2);
+    //             asm_str = subst_asm(template, tmp, asmExt->output[i]->variableNumber);
+    //             free(tmp);
+    //         }else {
+    //                 char *pchb = strstr(template,"b ");
+    //                 if (pchb)
+    //                     asm_str = subst_asm(template, update_register_size(asmExt->output[i]->reg, 1), asmExt->output[i]->variableNumber);
+    //                 if (!pchb)
+    //                     asm_str = subst_asm(template, asmExt->output[i]->reg, asmExt->output[i]->variableNumber);
+    //             }
+    //         }
+    // }
+
 
 
     if (hasInput) {
@@ -606,7 +635,6 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 asmExt->output[nbOutput]->size = sc->var->ty->size;
                 if (!asmExt->output[nbOutput]->reg)
                     error_tok(tok, "%s %d: in output_asm function : reg is null extended assembly not managed yet", EXTASM_C, __LINE__);
-              
                 asmExt->output[nbOutput]->reg = update_register_size(asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->size);
                 asmExt->output[nbOutput]->isVariable = true;
                 asmExt->output[nbOutput]->output = tok;
@@ -1156,13 +1184,6 @@ char *subst_asm(char *template, char *output_str, char *input_str)
 {
     return string_replace(template, input_str, output_str);
 }
-
-// do the susbtitution into the template
-char *subst_asm_prefix(char *template, char *output_str, char *input_str)
-{
-    return string_replace(template, input_str, output_str);
-}
-
 
 // generic string replace function
 char *string_replace(char *str, char *oldstr, char *newstr)
