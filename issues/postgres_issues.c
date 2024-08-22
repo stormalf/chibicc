@@ -4,7 +4,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdarg.h>
-
+typedef int64_t int64;
+typedef uint64_t uint64;
+typedef int32_t int32;
+typedef uint32_t uint32;
 // Define macros for delays and logging
 #define MIN_DELAY_USEC 1000
 #define MAX_DELAY_USEC 1000000
@@ -14,11 +17,194 @@
 #define PANIC 1
 #define S_LOCK_TEST
 
-// Define macros for spinlocks
-#define TAS_SPIN(lock)    (*(lock) ? 1 : tas(lock))
 
-// Type for spinlock
-typedef volatile int slock_t;
+#if defined(__GNUC__) || defined(__INTEL_COMPILER)
+
+#define PG_HAVE_ATOMIC_FLAG_SUPPORT
+typedef struct pg_atomic_flag
+{
+	volatile char value;
+} pg_atomic_flag;
+
+#define PG_HAVE_ATOMIC_U32_SUPPORT
+typedef struct pg_atomic_uint32
+{
+	volatile uint32 value;
+} pg_atomic_uint32;
+
+
+#endif
+
+
+#ifdef __x86_64__
+#define PG_HAVE_ATOMIC_U64_SUPPORT
+typedef struct pg_atomic_uint64
+{
+	/* alignment guaranteed due to being on a 64bit platform */
+	volatile uint64 value;
+} pg_atomic_uint64;
+#endif	/* __x86_64__ */
+
+
+
+
+#ifdef __x86_64__		/* AMD Opteron, Intel EM64T */
+#define HAS_TEST_AND_SET
+
+typedef unsigned char slock_t;
+
+#define TAS(lock) tas(lock)
+
+/*
+ * On Intel EM64T, it's a win to use a non-locking test before the xchg proper,
+ * but only when spinning.
+ *
+ * See also Implementing Scalable Atomic Locks for Multi-Core Intel(tm) EM64T
+ * and IA32, by Michael Chynoweth and Mary R. Lee. As of this writing, it is
+ * available at:
+ * http://software.intel.com/en-us/articles/implementing-scalable-atomic-locks-for-multi-core-intel-em64t-and-ia32-architectures
+ */
+#define TAS_SPIN(lock)    (*(lock) ? 1 : TAS(lock))
+
+static __inline__ int
+tas(volatile slock_t *lock)
+{
+	slock_t		_res = 1;
+
+	__asm__ __volatile__(
+		"	lock			\n"
+		"	xchgb	%0,%1	\n"
+:		"+q"(_res), "+m"(*lock)
+:		/* no inputs */
+:		"memory", "cc");
+
+	return (int) _res;
+}
+
+#define SPIN_DELAY() spin_delay()
+
+static __inline__ void
+spin_delay(void)
+{
+	/*
+	 * Adding a PAUSE in the spin delay loop is demonstrably a no-op on
+	 * Opteron, but it may be of some use on EM64T, so we keep it.
+	 */
+	__asm__ __volatile__(
+		" rep; nop			\n");
+}
+
+#endif	 /* __x86_64__ */
+
+
+#if defined(__GNUC__) || defined(__INTEL_COMPILER)
+
+#define PG_HAVE_ATOMIC_TEST_SET_FLAG
+static inline bool
+pg_atomic_test_set_flag_impl(volatile pg_atomic_flag *ptr)
+{
+	char		_res = 1;
+
+	__asm__ __volatile__(
+		"	lock			\n"
+		"	xchgb	%0,%1	\n"
+:		"+q"(_res), "+m"(ptr->value)
+:
+:		"memory");
+	return _res == 0;
+}
+
+#define PG_HAVE_ATOMIC_CLEAR_FLAG
+static inline void
+pg_atomic_clear_flag_impl(volatile pg_atomic_flag *ptr)
+{
+	/*
+	 * On a TSO architecture like x86 it's sufficient to use a compiler
+	 * barrier to achieve release semantics.
+	 */
+	__asm__ __volatile__("" ::: "memory");
+	ptr->value = 0;
+}
+
+#define PG_HAVE_ATOMIC_COMPARE_EXCHANGE_U32
+static inline bool
+pg_atomic_compare_exchange_u32_impl(volatile pg_atomic_uint32 *ptr,
+									uint32 *expected, uint32 newval)
+{
+	char	ret;
+
+	/*
+	 * Perform cmpxchg and use the zero flag which it implicitly sets when
+	 * equal to measure the success.
+	 */
+	__asm__ __volatile__(
+		"	lock				\n"
+		"	cmpxchgl	%4,%5	\n"
+		"   setz		%2		\n"
+:		"=a" (*expected), "=m"(ptr->value), "=q" (ret)
+:		"a" (*expected), "r" (newval), "m"(ptr->value)
+:		"memory", "cc");
+	return (bool) ret;
+}
+
+#define PG_HAVE_ATOMIC_FETCH_ADD_U32
+static inline uint32
+pg_atomic_fetch_add_u32_impl(volatile pg_atomic_uint32 *ptr, int32 add_)
+{
+	uint32 res;
+	__asm__ __volatile__(
+		"	lock				\n"
+		"	xaddl	%0,%1		\n"
+:		"=q"(res), "=m"(ptr->value)
+:		"0" (add_), "m"(ptr->value)
+:		"memory", "cc");
+	return res;
+}
+
+#ifdef __x86_64__
+
+#define PG_HAVE_ATOMIC_COMPARE_EXCHANGE_U64
+static inline bool
+pg_atomic_compare_exchange_u64_impl(volatile pg_atomic_uint64 *ptr,
+									uint64 *expected, uint64 newval)
+{
+	char	ret;
+
+	//AssertPointerAlignment(expected, 8);
+
+	/*
+	 * Perform cmpxchg and use the zero flag which it implicitly sets when
+	 * equal to measure the success.
+	 */
+	__asm__ __volatile__(
+		"	lock				\n"
+		"	cmpxchgq	%4,%5	\n"
+		"   setz		%2		\n"
+:		"=a" (*expected), "=m"(ptr->value), "=q" (ret)
+:		"a" (*expected), "r" (newval), "m"(ptr->value)
+:		"memory", "cc");
+	return (bool) ret;
+}
+
+#define PG_HAVE_ATOMIC_FETCH_ADD_U64
+static inline uint64
+pg_atomic_fetch_add_u64_impl(volatile pg_atomic_uint64 *ptr, int64 add_)
+{
+	uint64 res;
+	__asm__ __volatile__(
+		"	lock				\n"
+		"	xaddq	%0,%1		\n"
+:		"=q"(res), "=m"(ptr->value)
+:		"0" (add_), "m"(ptr->value)
+:		"memory", "cc");
+	return res;
+}
+
+#endif /* __x86_64__ */
+
+#endif /* defined(__GNUC__) || defined(__INTEL_COMPILER) */
+
+
 
 // Struct to hold spin delay status
 typedef struct {
@@ -29,6 +215,12 @@ typedef struct {
     int line;
     const char *func;
 } SpinDelayStatus;
+
+void
+s_unlock(volatile slock_t *lock)
+{
+	*lock = 0;
+}
 
 // Dummy functions for simulation
 void pg_usleep(int usec) {
@@ -115,18 +307,6 @@ void perform_spin_delay(SpinDelayStatus *status) {
     }
 }
 
-// Test-and-set spinlock operation
-static __inline__ int tas(volatile slock_t *lock) {
-    slock_t _res = 1;
-
-    __asm__ __volatile__(
-        "   lock            \n"
-        "   xchgb   %0,%1  \n"
-        :   "+q"(_res), "+m"(*lock)
-        :   /* no inputs */
-        :   "memory", "cc");
-    return (int) _res;
-}
 
 // Platform-independent portion of waiting for a spinlock
 int s_lock(volatile slock_t *lock, const char *file, int line, const char *func) {
