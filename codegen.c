@@ -2427,8 +2427,8 @@ void codegen(Obj *prog, FILE *out)
   emit_data(prog);
   emit_text(prog);
   //print offset for each variable
-  if (isDebug)
-    print_offset(prog);
+  // if (isDebug)
+  //   print_offset(prog);
 }
 
 
@@ -2621,8 +2621,8 @@ void assign_lvar_offsets(Obj *prog)
                       ? MAX(16, var->align)
                       : var->align;
 
-      if (isDebug)                      
-        printf("======bottom=%d kind=%d size=%d fn_bottom=%d fn_stack_size=%d name=%s funcname=%s\n", bottom, var->ty->kind, var->ty->size, fn->alloca_bottom->offset, fn->alloca_bottom->stack_size, var->name, var->funcname);
+      // if (isDebug)                      
+      //   printf("======bottom=%d kind=%d size=%d fn_bottom=%d fn_stack_size=%d name=%s funcname=%s\n", bottom, var->ty->kind, var->ty->size, fn->alloca_bottom->offset, fn->alloca_bottom->stack_size, var->name, var->funcname);
       //trying to fix ISS-154 Extended assembly compiled with chibicc failed with ASSERT and works fine without assert function 
       //the bottom value need to take in account the size of parameters and local variables to avoid issue with extended assembly
       if (var->offset) {
