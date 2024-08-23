@@ -404,12 +404,23 @@ void add_type(Node *node)
     return;    
   case ND_BUILTIN_CTZ:
   case ND_BUILTIN_CTZL:
+  case ND_BUILTIN_CTZLL:
   case ND_BUILTIN_CLZ:
   case ND_BUILTIN_CLZL:
+  case ND_BUILTIN_CLZLL:
+  case ND_BUILTIN_BSWAP32:
   case ND_POPCOUNT:
     add_type(node->builtin_val);
     node->ty = ty_int;
     return;
+  case ND_BUILTIN_BSWAP16:
+    add_type(node->builtin_val);
+    node->ty = ty_short;
+    return;   
+  case ND_BUILTIN_BSWAP64:
+    add_type(node->builtin_val);
+    node->ty = ty_long;
+    return;        
   case ND_EXCH_N:
   case ND_FETCHADD:
   case ND_FETCHSUB:
