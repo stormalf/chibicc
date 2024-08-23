@@ -731,5 +731,4 @@ char *retrieve_output_index_str(char letter);
 int retrieve_output_index_from_letter(char letter);
 char *retrieveVariableNumber(int index);
 char *generate_input_for_output(void);
-
-
+char *generate_return_rax(Token *retval);
