@@ -5140,6 +5140,12 @@ static Node *primary(Token **rest, Token *tok)
     return ParseBuiltin(ND_BUILTIN_CLZL, tok, rest);
   }
 
+  if (equal(tok, "__builtin_clzll"))
+  {
+    return ParseBuiltin(ND_BUILTIN_CLZLL, tok, rest);
+  }
+
+
   if (equal(tok, "__builtin_ctz"))
   {
     return ParseBuiltin(ND_BUILTIN_CTZ, tok, rest);
@@ -5149,6 +5155,24 @@ static Node *primary(Token **rest, Token *tok)
   if (equal(tok, "__builtin_ctzl"))
   {
     return ParseBuiltin(ND_BUILTIN_CTZL, tok, rest);
+  }
+
+
+  if (equal(tok, "__builtin_ctzll"))
+  {
+    return ParseBuiltin(ND_BUILTIN_CTZLL, tok, rest);
+  }
+
+  if (equal(tok, "__builtin_bswap16")) {
+      return ParseBuiltin(ND_BUILTIN_BSWAP16, tok, rest);
+  }
+
+  if (equal(tok, "__builtin_bswap32")) {
+      return ParseBuiltin(ND_BUILTIN_BSWAP32, tok, rest);
+  }
+
+  if (equal(tok, "__builtin_bswap64")) {
+      return ParseBuiltin(ND_BUILTIN_BSWAP64, tok, rest);
   }
 
   if (equal(tok, "__builtin_popcount")) {
@@ -5982,10 +6006,14 @@ char *nodekind2str(NodeKind kind)
     return "CLZ";   //builtin clz
   case ND_BUILTIN_CLZL:
     return "CLZL";   //builtin clzl
+  case ND_BUILTIN_CLZLL:
+    return "CLZLL";   //builtin clzll
   case ND_BUILTIN_CTZ:
     return "CTZ";   //builtin ctz
   case ND_BUILTIN_CTZL:
     return "CTZL";   //builtin ctzl
+  case ND_BUILTIN_CTZLL:
+    return "CTZLL";   //builtin ctzll
   case ND_BUILTIN_INFF:
     return "INFF";   //builtin inff
   case ND_BUILTIN_ISNAN:
@@ -6000,6 +6028,12 @@ char *nodekind2str(NodeKind kind)
     return "SUB_OVERFLOW";    //builtin sub overflow
   case ND_BUILTIN_MUL_OVERFLOW:
     return "MUL_OVERFLOW";    //builtin mul overflow
+  case ND_BUILTIN_BSWAP16:
+    return "BSWAP16";    //builtin bswap16
+  case ND_BUILTIN_BSWAP32:
+    return "BSWAP32";    //builtin bswap32
+  case ND_BUILTIN_BSWAP64:
+    return "BSWAP64";    //builtin bswap64          
   case ND_ALLOC:
     return "ALLOCA";  //builtin alloca
   default:
