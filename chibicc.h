@@ -359,8 +359,10 @@ typedef enum
   ND_BUILTIN_MEMSET, //builtin memset
   ND_BUILTIN_CLZ, //builtin clz
   ND_BUILTIN_CLZL, //builtin clz
+  ND_BUILTIN_CLZLL, //builtin clzl
   ND_BUILTIN_CTZ, //builtin ctz
   ND_BUILTIN_CTZL, //builtin ctzl
+  ND_BUILTIN_CTZLL, //builtin ctzll
   ND_POPCOUNT,    //builtin popcount
   ND_EXPECT,    //builtin expect
   ND_RETURN_ADDR,    //builtin return address
@@ -371,6 +373,9 @@ typedef enum
   ND_ALLOC,   //builtin alloca
   ND_BUILTIN_INFF, //builtin inff
   ND_BUILTIN_ISNAN, //builtin isnan
+  ND_BUILTIN_BSWAP16, //builtin bswap16
+  ND_BUILTIN_BSWAP32, //builtin bswap32
+  ND_BUILTIN_BSWAP64, //builtin bswap64
 } NodeKind;
 
 // AST node type

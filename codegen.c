@@ -1430,7 +1430,7 @@ static void gen_expr(Node *node)
     println("  xor $31, %%eax"); // Count leading zeros
     return;
   }
-
+  case ND_BUILTIN_CLZLL:
   case ND_BUILTIN_CLZL: {
     gen_expr(node->builtin_val); // Generate code for the expression
     println("  bsr %%rax, %%rax");       // Calculate number of leading zeros for 64-bit
@@ -1447,6 +1447,7 @@ static void gen_expr(Node *node)
     // println("  cmovz %%edx, %%eax"); // If input was zero, set result to 32
     return;
   }
+  case ND_BUILTIN_CTZLL:
   case ND_BUILTIN_CTZL: {
     // Built-in version
     gen_expr(node->builtin_val); // Generate code for the expression
@@ -1454,6 +1455,25 @@ static void gen_expr(Node *node)
     return;
   }
 
+  case ND_BUILTIN_BSWAP16: {
+      gen_expr(node->builtin_val);  // Generate code for the expression
+      println("  mov %%ax, %%dx");  // Move the lower 16 bits of the result into dx
+      println("  rol $8, %%dx");    // Rotate the bits in dx by 8 bits to the left
+      println("  mov %%dx, %%ax");  // Move the result back into ax
+      return;
+  }
+
+  case ND_BUILTIN_BSWAP32: {
+      gen_expr(node->builtin_val);  // Generate code for the expression
+      println("  bswap %%eax");     // Reverse the byte order of the 32-bit value in eax
+      return;
+  }
+
+  case ND_BUILTIN_BSWAP64: {
+      gen_expr(node->builtin_val);  // Generate code for the expression
+      println("  bswap %%rax");     // Reverse the byte order of the 64-bit value in rax
+      return;
+  }
 
   case ND_POPCOUNT:
     // Built-in version
