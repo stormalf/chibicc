@@ -455,7 +455,6 @@ static void store(Type *ty)
     println("  mov %%eax, (%%rdi)");
   else
     println("  mov %%rax, (%%rdi)");
-
 }
 
 static void cmp_zero(Type *ty)
@@ -1075,7 +1074,7 @@ static void gen_expr(Node *node)
     load(node->ty);
     return;
   case ND_ADDR:
-    gen_addr(node->lhs);    
+    gen_addr(node->lhs);
     return;
   case ND_ASSIGN:
     gen_addr(node->lhs);
@@ -1438,18 +1437,13 @@ static void gen_expr(Node *node)
 
     return;
   }
-
   case ND_BUILTIN_CTZ: {
-    // Built-in version
     gen_expr(node->builtin_val); // Generate code for the expression
     println("  bsf %%eax, %%eax"); // Bit Scan Forward to find the lowest set bit
-    // println("  mov $32, %%edx"); // Prepare a value of 32 in edx
-    // println("  cmovz %%edx, %%eax"); // If input was zero, set result to 32
     return;
   }
   case ND_BUILTIN_CTZLL:
   case ND_BUILTIN_CTZL: {
-    // Built-in version
     gen_expr(node->builtin_val); // Generate code for the expression
     println("  bsf %%rax, %%rax"); // Bit Scan Forward to find the lowest set bit
     return;
@@ -1473,10 +1467,62 @@ static void gen_expr(Node *node)
       gen_expr(node->builtin_val);  // Generate code for the expression
       println("  bswap %%rax");     // Reverse the byte order of the 64-bit value in rax
       return;
+  }  
+
+  case ND_BUILTIN_INFF:
+  case ND_BUILTIN_HUGE_VALF: {
+      // Loading the bit pattern for positive infinity in 32-bit single precision (float)
+      println("  mov $0x7f800000, %%eax");  // Load the bit pattern 0x7f800000 into eax (single precision positive infinity)
+      println("  movd %%eax, %%xmm0"); 
+      return;
+  }
+
+  // For __builtin_huge_val
+  case ND_BUILTIN_HUGE_VAL: {
+      // Loading the bit pattern for positive infinity in 64-bit double precision
+      println("  mov $0x7ff0000000000000, %%rax");  
+      println("  movq %%rax, %%xmm0");      
+      return;
+  }
+
+  // For __builtin_huge_vall
+  case ND_BUILTIN_HUGE_VALL: {
+    println("  push $0x7f800000"); 
+    println("  flds (%%rsp)"); 
+    println("  pop %%rax"); 
+    return;
+  }
+
+  // For __builtin_frame_address
+  case ND_BUILTIN_FRAME_ADDRESS: {
+    int c = count();  // Unique label counter
+    // Get the level argument from the stack
+    println("  mov %%rdi, %%rax"); // Move the level argument into rax
+    
+    // Check if level is 0
+    println("  cmp $0, %%rax");
+    println("  je .Lframe_address_%d", c);
+    
+    // For level > 0, we need to follow the frame pointers
+    // We will need to move up the stack `level` times
+    // Note: The actual implementation depends on how you manage stack frames
+    println("  mov %%rbp, %%rcx"); // Move current frame pointer to rcx
+    println("  sub $1, %%rax");   // Decrement level (level - 1)
+    println(".Lframe_address_loop%d:", c);
+    println("  test %%rax, %%rax"); // Check if level == 0
+    println("  jz .Lframe_address_done%d", c);
+    println("  mov (%%rcx), %%rcx"); // Move up one frame
+    println("  sub $1, %%rax"); // Decrement level
+    println("  jmp .Lframe_address_loop%d", c);
+    println(".Lframe_address_done%d:", c);
+    println("  mov %%rcx, %%rax"); // Return the frame pointer
+
+    println(".Lframe_address_%d:", c);
+    println("  mov %%rbp, %%rax"); // Return the current frame pointer
+    return;
   }
 
   case ND_POPCOUNT:
-    // Built-in version
     gen_expr(node->builtin_val); // Generate code for the expression
     println("  popcnt %%rax, %%rax"); // Count the number of set bits
     return;
@@ -1693,6 +1739,7 @@ static void gen_expr(Node *node)
     println("  movzx %%al, %%eax");
     return;
   }
+
   
   case ND_EXCH:
   {
@@ -1817,11 +1864,6 @@ static void gen_expr(Node *node)
     println("  sub %%rdi, %%rsp"); // Allocate space on the stack
     println("  mov %%rsp, %%rax"); // Store the new stack pointer (allocated memory address) in RAX
     return;
-  case ND_BUILTIN_INFF:
-    println("  movq $0x7ff0000000000000, %%rax"); // Move the double representation of infinity to RAX
-    println("  movq %%rax, %%xmm0");              // Move the value from RAX to XMM0
-    return;
-  
   
   }
 
@@ -2253,7 +2295,6 @@ static void store_fp(int r, int offset, int sz)
   unreachable();
 }
 
-
 // static void store_gp(int r, int offset, int sz)
 // {
 //   switch (sz)
@@ -2447,8 +2488,8 @@ void codegen(Obj *prog, FILE *out)
   emit_data(prog);
   emit_text(prog);
   //print offset for each variable
-  // if (isDebug)
-  //   print_offset(prog);
+  if (isDebug)
+    print_offset(prog);
 }
 
 
@@ -2641,8 +2682,8 @@ void assign_lvar_offsets(Obj *prog)
                       ? MAX(16, var->align)
                       : var->align;
 
-      // if (isDebug)                      
-      //   printf("======bottom=%d kind=%d size=%d fn_bottom=%d fn_stack_size=%d name=%s funcname=%s\n", bottom, var->ty->kind, var->ty->size, fn->alloca_bottom->offset, fn->alloca_bottom->stack_size, var->name, var->funcname);
+      if (isDebug)                      
+        printf("======bottom=%d kind=%d size=%d fn_bottom=%d fn_stack_size=%d name=%s funcname=%s\n", bottom, var->ty->kind, var->ty->size, fn->alloca_bottom->offset, fn->alloca_bottom->stack_size, var->name, var->funcname);
       //trying to fix ISS-154 Extended assembly compiled with chibicc failed with ASSERT and works fine without assert function 
       //the bottom value need to take in account the size of parameters and local variables to avoid issue with extended assembly
       if (var->offset) {
@@ -2842,3 +2883,5 @@ int len = sizeof(newargreg64)/sizeof(newargreg64[0]);
   }
 
 }
+
+
