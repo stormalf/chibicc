@@ -195,6 +195,7 @@ static Node *parse_memcpy(Token *tok, Token **rest);
 static Node *parse_memset(Token *tok, Token **rest);
 static Node *ParseBuiltin(NodeKind kind, Token *tok, Token **rest);
 static Node *parse_overflow(NodeKind kind, Token *tok, Token **rest);
+static Node *parse_huge_val(double fval, Token *tok, Token **rest);
 
 static Token * old_style_params(Token **rest, Token *tok, Type *ty);
 static Type *old_params(Type *ty, int nbparms);
@@ -292,6 +293,14 @@ static Node *new_unary(NodeKind kind, Node *expr, Token *tok)
   node->lhs = expr;
   return node;
 }
+
+static Node *new_double(double fval, Token *tok)
+{
+  Node *node = new_node(ND_NUM, tok);
+  node->fval = fval;
+  return node;
+}
+
 
 static Node *new_num(int64_t val, Token *tok)
 {
@@ -4853,32 +4862,134 @@ static Node *primary(Token **rest, Token *tok)
     return new_num(is_compatible(t1, t2), start);
   }
 
+  if (equal(tok, "__builtin_constant_p")) {
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";        
+    ctx->line_no = __LINE__ + 1;  
+    tok = skip(tok->next, "(", ctx);
+
+    // Parse the expression inside __builtin_constant_p
+    Node *expr = assign(&tok, tok);
+
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";        
+    ctx->line_no = __LINE__ + 1;    
+    *rest = skip(tok, ")", ctx);
+
+    // Determine if the expression is constant
+    bool is_constant = false;
+
+    if (expr->tok->kind == TK_NUM || expr->tok->kind == TK_STR) {
+        // Consider numeric and character literals as constants
+        is_constant = true;
+    }
+    // Optionally, you can add more checks for other constant expressions
+
+    return new_num(is_constant ? 1 : 0, start);
+  }
+
 
      //fix from COSMOPOLITAN about builtin_offsetof
-    if (equal(tok, "__builtin_offsetof")) {
-      ctx->filename = PARSE_C;
-      ctx->funcname = "primary";        
-      ctx->line_no = __LINE__ + 1;          
-      tok = skip(tok->next, "(", ctx);
-      Token *stok = tok;
-      Type *tstruct = typename(&tok, tok);
-      if (tstruct->kind != TY_STRUCT && tstruct->kind != TY_UNION) {
-        error_tok(stok, "%s %d: in primary : not a structure or union type", PARSE_C, __LINE__);
-      }
-      ctx->line_no = __LINE__ + 1;  
-      tok = skip(tok, ",", ctx);
-      Token *member = tok;
-      tok = tok->next;
-      *rest = skip(tok, ")", ctx);
-      for (Member *m = tstruct->members; m; m = m->next) {
-        if (m->name->len == member->len &&
-            !memcmp(m->name->loc, member->loc, m->name->len)) {
-          return new_ulong(m->offset, start);
-        }
-      }
-      error_tok(member, "%s %d: in primary : no such member", PARSE_C, __LINE__);
+    // if (equal(tok, "__builtin_offsetof")) {
+    //   ctx->filename = PARSE_C;
+    //   ctx->funcname = "primary";        
+    //   ctx->line_no = __LINE__ + 1;          
+    //   tok = skip(tok->next, "(", ctx);
+    //   Token *stok = tok;
+    //   Type *tstruct = typename(&tok, tok);
+    //   if (tstruct->kind != TY_STRUCT && tstruct->kind != TY_UNION) {
+    //     error_tok(stok, "%s %d: in primary : not a structure or union type", PARSE_C, __LINE__);
+    //   }
+    //   ctx->line_no = __LINE__ + 1;  
+    //   tok = skip(tok, ",", ctx);
+    //   Token *member = tok;
+    //   tok = tok->next;
+    //   *rest = skip(tok, ")", ctx);
+    //   for (Member *m = tstruct->members; m; m = m->next) {
+    //     if (m->name->len == member->len &&
+    //         !memcmp(m->name->loc, member->loc, m->name->len)) {
+    //       return new_ulong(m->offset, start);
+    //     }
+    //   }
+    //   error_tok(member, "%s %d: in primary : no such member", PARSE_C, __LINE__);
 
+    // }
+
+  if (equal(tok, "__builtin_offsetof")) {
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";        
+    ctx->line_no = __LINE__ + 1;          
+    tok = skip(tok->next, "(", ctx);
+    Token *stok = tok;
+
+    // Parse the structure type
+    Type *tstruct = typename(&tok, tok);
+    if (tstruct->kind != TY_STRUCT && tstruct->kind != TY_UNION) {
+        error_tok(stok, "%s %d: in primary : not a structure or union type", PARSE_C, __LINE__);
     }
+
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";        
+    ctx->line_no = __LINE__ + 1;          
+    tok = skip(tok, ",", ctx);
+    int offset = 0;
+
+    while (true) {
+        if (tok->kind != TK_IDENT) {
+            error_tok(tok, "%s %d: in primary : expected member name", PARSE_C, __LINE__);
+        }
+
+        // Find the member in the current structure
+        Member *member = NULL;
+        for (Member *m = tstruct->members; m; m = m->next) {
+            if (m->name->len == tok->len &&
+                !memcmp(m->name->loc, tok->loc, m->name->len)) {
+                member = m;
+                break;
+            }
+        }
+
+        if (!member) {
+            error_tok(tok, "%s %d: in primary : no such member", PARSE_C, __LINE__);
+        }
+
+        // Add the member's offset to the running total
+        offset += member->offset;
+
+        // Update the type context for the next member lookup
+        tstruct = member->ty;
+
+        // Move to the next token
+        tok = tok->next;
+
+    // Check if it's an array subscript
+        if (equal(tok, "[")) {
+            tok = tok->next;
+            int index = strtol(tok->loc, NULL, 10);
+            offset += index * member->ty->size; // Add array index offset
+            // Move to the closing bracket
+            tok = tok->next;
+            ctx->filename = PARSE_C;
+            ctx->funcname = "primary";        
+            ctx->line_no = __LINE__ + 1;          
+            tok = skip(tok, "]", ctx);
+        }
+
+        // If we've reached the end or the next member access ('.'), break or continue
+        if (equal(tok, ")")) {
+            break;
+        } else if (equal(tok, ".")) {
+            tok = tok->next;
+        } else {
+            error_tok(tok, "%s %d: in primary : unexpected token", PARSE_C, __LINE__);
+        }
+    }
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";        
+    ctx->line_no = __LINE__ + 1;          
+    *rest = skip(tok, ")", ctx);
+    return new_ulong(offset, stok);
+  }
 
 
   //trying to fix ===== some builtin functions linked to mmx/emms
@@ -5096,6 +5207,20 @@ static Node *primary(Token **rest, Token *tok)
     return node;
   }
 
+
+  if (equal(tok, "__builtin_frame_address"))
+  {
+    Node *node = new_node(ND_BUILTIN_FRAME_ADDRESS, tok);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";
+    ctx->line_no = __LINE__ + 1;
+    tok = skip(tok->next, "(", ctx);
+    node->lhs = assign(&tok, tok); 
+    *rest = skip(tok, ")", ctx);
+    return node;
+  }
+
+
   if (equal(tok, "__builtin_add_overflow")) {
     return parse_overflow(ND_BUILTIN_ADD_OVERFLOW, tok, rest);
   }
@@ -5272,6 +5397,19 @@ static Node *primary(Token **rest, Token *tok)
     ctx->line_no = __LINE__ + 1;      
     *rest = skip(tok->next, ")", ctx);
     return to_assign(node);
+  }
+
+  // Handle __builtin_huge_valf
+  if (equal(tok, "__builtin_huge_valf")) {
+    return parse_huge_val(HUGE_VALF, tok, rest);
+  }
+  // Handle __builtin_huge_vall
+  if (equal(tok, "__builtin_huge_vall")) {
+    return parse_huge_val(HUGE_VALL, tok, rest);
+  }
+  // Handle __builtin_huge_val
+  if (equal(tok, "__builtin_huge_val")) {
+    return parse_huge_val(HUGE_VAL, tok, rest);
   }
 
   if (tok->kind == TK_IDENT)
@@ -5894,6 +6032,8 @@ char *nodekind2str(NodeKind kind)
     return "POPCOUNT"; //builtin popcount
   case ND_RETURN_ADDR:
     return "RETURN_ADDRESS";  //builtin return address
+  case ND_BUILTIN_FRAME_ADDRESS:
+    return "FRAME_ADDRESS"; //builtin frame address    
   case ND_BUILTIN_ADD_OVERFLOW:
     return "ADD_OVERFLOW";    //builtin add overflow
   case ND_BUILTIN_SUB_OVERFLOW:
@@ -5905,7 +6045,13 @@ char *nodekind2str(NodeKind kind)
   case ND_BUILTIN_BSWAP32:
     return "BSWAP32";    //builtin bswap32
   case ND_BUILTIN_BSWAP64:
-    return "BSWAP64";    //builtin bswap64        
+    return "BSWAP64";    //builtin bswap64  
+  case ND_BUILTIN_HUGE_VALF:
+    return "HUGE_VALF"; //builtin huge_valf
+  case ND_BUILTIN_HUGE_VAL:
+    return "HUGE_VAL";   //builtin huge_val
+  case ND_BUILTIN_HUGE_VALL:
+    return "HUGE_VALL";  //builtin huge_vall    
   case ND_ALLOC:
     return "ALLOCA";  //builtin alloca
   default:
@@ -6209,3 +6355,14 @@ static Type *old_params(Type *ty, int nbparms) {
   return head.next;
 }
 
+
+static Node *parse_huge_val(double fval, Token *tok, Token **rest) {
+      Node *node = new_double(fval, tok);
+      ctx->filename = PARSE_C;
+      ctx->funcname = "primary";        
+      ctx->line_no = __LINE__ + 1;      
+      tok = skip(tok->next, "(", ctx);
+      tok = skip(tok, ")", ctx);
+      *rest = tok;
+      return node;
+}

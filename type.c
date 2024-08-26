@@ -386,6 +386,7 @@ void add_type(Node *node)
     add_type(node->lhs);
     node->ty = ty_bool;
     return;
+  case ND_BUILTIN_FRAME_ADDRESS:    
   case ND_RETURN_ADDR:
     add_type(node->lhs);
     node->ty = ty_void_ptr;
@@ -441,6 +442,11 @@ void add_type(Node *node)
       error_tok(node->cas_addr->tok, "%s %d: pointer expected", TYPE_C, __LINE__);
     node->ty = node->lhs->ty->base;
     return;
+  case ND_BUILTIN_HUGE_VALF:
+      node->ty = ty_float;
+      return;
+  case ND_BUILTIN_HUGE_VAL:      
+  case ND_BUILTIN_HUGE_VALL:
   case ND_BUILTIN_INFF:
     node->ty = ty_ldouble;
     return;    

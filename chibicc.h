@@ -376,6 +376,10 @@ typedef enum
   ND_BUILTIN_BSWAP16, //builtin bswap16
   ND_BUILTIN_BSWAP32, //builtin bswap32
   ND_BUILTIN_BSWAP64, //builtin bswap64
+  ND_BUILTIN_HUGE_VALF, //builtin huge_valf
+  ND_BUILTIN_HUGE_VAL, //builtin huge_val
+  ND_BUILTIN_HUGE_VALL, //builtin huge_vall
+  ND_BUILTIN_FRAME_ADDRESS, //builtin frame_address
 } NodeKind;
 
 // AST node type

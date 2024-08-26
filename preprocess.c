@@ -1452,6 +1452,8 @@ void init_macros(void)
   define_macro("__ATOMIC_RELEASE", "3");
   define_macro("__ATOMIC_ACQ_REL", "4");
   define_macro("__ATOMIC_SEQ_CST", "5");
+  define_macro("offsetof", "__builtin_offsetof");
+  define_macro("__builtin_choose_expr(cond, true_expr, false_expr)", "(cond ? true_expr : false_expr)");
   //define_macro("__GNUC__", "9");
   define_macro("HAVE_ATTRIBUTE_PACKED", "1");
   define_macro("linux", "1");
