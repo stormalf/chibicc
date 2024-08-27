@@ -14,6 +14,6 @@ int main() {
     pg_atomic_flag flag = {1};
     pg_atomic_clear_flag_impl(&flag);
     printf("Flag cleared: %d\n", flag.value);
-    Assert(0, flag.value);
+    ASSERT(0, flag.value);
     return 0;
 }

@@ -30,8 +30,8 @@ void test_bitwise_operations() {
 
     printf("Testing num: %lu\n", num);
     printf("Initial word: %lu\n", word);
-    Assert(9223372036854775807, num);
-    Assert(9223372036854775806, word);
+    ASSERT(9223372036854775807, num);
+    ASSERT(9223372036854775806, word);
 
     while ((word >> shift) == 0) {
         shift -= 8;
@@ -39,12 +39,12 @@ void test_bitwise_operations() {
     }
 
     printf("Final shift: %d\n", shift);
-    Assert(56, shift);
+    ASSERT(56, shift);
     int pos = shift + pg_leftmost_one_pos[(word >> shift) & 255];
     printf("Computed pos: %d\n", pos);
-    Assert(62, pos);
+    ASSERT(62, pos);
     printf("Computed log2: %d\n", pos + 1);
-    Assert(63, pos + 1);
+    ASSERT(63, pos + 1);
 }
 
 int main() {

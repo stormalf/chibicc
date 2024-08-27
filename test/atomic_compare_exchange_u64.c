@@ -25,8 +25,8 @@ int main() {
     unsigned long long expected = 10;
     bool result = pg_atomic_compare_exchange_u64_impl(&val, &expected, 20);
     printf("Compare and Exchange U64: %d, New Value: %llu\n", result, val.value);
-    Assert(1, result);
-    Assert(20, val.value);
+    ASSERT(1, result);
+    ASSERT(20, val.value);
     return 0;
 }
 #endif

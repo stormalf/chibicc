@@ -18,6 +18,9 @@ Type *ty_float = &(Type){TY_FLOAT, 4, 4};
 Type *ty_double = &(Type){TY_DOUBLE, 8, 8};
 Type *ty_ldouble = &(Type){TY_LDOUBLE, 16, 16};
 Type *ty_void_ptr = &(Type){TY_PTR, 8, 8, true};
+// Define the int128 type
+Type *ty_int128 = &(Type){TY_INT128, 16, 16}; // Size and alignment are 16 bytes
+Type *ty_uint128 = &(Type){TY_INT128, 16, 16}; // Size and alignment are 16 bytes
 
 
 static Type *new_type(TypeKind kind, int size, int align)
@@ -35,7 +38,7 @@ bool is_integer(Type *ty)
 {
   TypeKind k = ty->kind;
   return k == TY_BOOL || k == TY_CHAR || k == TY_SHORT ||
-         k == TY_INT || k == TY_LONG || k == TY_ENUM;
+         k == TY_INT || k == TY_INT128 || k == TY_LONG || k == TY_ENUM;
 }
 
 bool is_flonum(Type *ty)
@@ -74,6 +77,8 @@ bool is_compatible(Type *t1, Type *t2)
   case TY_DOUBLE:
   case TY_LDOUBLE:
     return true;
+  case TY_INT128: 
+    return t1->is_unsigned == t2->is_unsigned;    
   case TY_PTR:
     return is_compatible(t1->base, t2->base);
   case TY_FUNC:
@@ -182,6 +187,11 @@ static Type *get_common_type(Type *ty1, Type *ty2)
     return ty_double;
   if (ty1->kind == TY_FLOAT || ty2->kind == TY_FLOAT)
     return ty_float;
+
+  // Handle int128 types
+  if (ty1->kind == TY_INT128 || ty2->kind == TY_INT128)
+    return ty_int128;
+
 
   if (ty1->size < 4)
     ty1 = ty_int;
@@ -386,6 +396,7 @@ void add_type(Node *node)
     add_type(node->lhs);
     node->ty = ty_bool;
     return;
+  case ND_BUILTIN_FRAME_ADDRESS:
   case ND_RETURN_ADDR:
     add_type(node->lhs);
     node->ty = ty_void_ptr;
@@ -441,6 +452,11 @@ void add_type(Node *node)
       error_tok(node->cas_addr->tok, "%s %d: pointer expected", TYPE_C, __LINE__);
     node->ty = node->lhs->ty->base;
     return;
+  case ND_BUILTIN_HUGE_VALF:
+      node->ty = ty_float;
+      return;
+  case ND_BUILTIN_HUGE_VAL:      
+  case ND_BUILTIN_HUGE_VALL:
   case ND_BUILTIN_INFF:
     node->ty = ty_ldouble;
     return;

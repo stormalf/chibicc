@@ -11,6 +11,14 @@ void assert(int expected, int actual, char *code) {
   }
 }
 
+
+void assert128(__int128 k, __int128 x, char *code, char *func, int line) {
+  if (k != x) {
+    printf("%s:%d: %s => want %jd but got %jd\n", func, line, code, (long int) k,(long int) x);
+    exit(1);
+  }
+}
+
 static int static_fn() { return 5; }
 int ext1 = 5;
 int *ext2 = &ext1;

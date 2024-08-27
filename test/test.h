@@ -1,6 +1,8 @@
 #define ASSERT(x, y) assert(x, y, #y)
-
 void assert(int expected, int actual, char *code);
+
+#define ASSERT128(x, y) assert128(x, y, #y, __FILE__, __LINE__)
+void assert128(__int128, __int128, char *, char *, int);
 
 int printf(char *fmt, ...);
 int sprintf(char *buf, char *fmt, ...);

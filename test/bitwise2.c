@@ -63,15 +63,15 @@ int main() {
     for (int i = 0; i < sizeof(test_values) / sizeof(test_values[0]); ++i) {
         printf("Input: %ld, next_pow2_int: %d\n", test_values[i], next_pow2_int(test_values[i]));
         if (i == 0)
-            Assert(1, next_pow2_int(test_values[i]) );
-        elif (i == 1)
-            Assert(2, next_pow2_int(test_values[i]) );
-        elif (i == 2)
-            Assert(4, next_pow2_int(test_values[i]) );
-        elif (i == 3)
-            Assert(536870912, next_pow2_int(test_values[i]) );
-        elif (i == 4)
-            Assert(1073741824, next_pow2_int(test_values[i]) );
+            ASSERT(1, next_pow2_int(test_values[i]) );
+        else if (i == 1)
+            ASSERT(2, next_pow2_int(test_values[i]) );
+        else if (i == 2)
+            ASSERT(4, next_pow2_int(test_values[i]) );
+        else if (i == 3)
+            ASSERT(536870912, next_pow2_int(test_values[i]) );
+        else if (i == 4)
+            ASSERT(1073741824, next_pow2_int(test_values[i]) );
 
     }
     return 0;

@@ -19,7 +19,7 @@ int main() {
     pg_atomic_uint32 val = {10};
     unsigned int old_val = pg_atomic_fetch_add_u32_impl(&val, 5);
     printf("Fetch and Add: Old Value: %u, New Value: %u\n", old_val, val.value);
-    Assert(10, old_val);
-    Assert(15, val.value);
+    ASSERT(10, old_val);
+    ASSERT(15, val.value);
     return 0;
 }
