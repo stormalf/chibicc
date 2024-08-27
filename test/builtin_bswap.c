@@ -16,13 +16,13 @@ int main() {
     // Print original and swapped values
     printf("Original 16-bit value: 0x%04" PRIx16 "\n", value16);
     printf("Swapped 16-bit value: 0x%04" PRIx16 "\n", swapped16);
-    Assert(0x3412, swapped16);
+    ASSERT(0x3412, swapped16);
 
     printf("Original 32-bit value: 0x%08" PRIx32 "\n", value32);
     printf("Swapped 32-bit value: 0x%08" PRIx32 "\n", swapped32);
-    Assert(0x78563412, swapped32);
+    ASSERT(0x78563412, swapped32);
     printf("Original 64-bit value: 0x%016" PRIx64 "\n", value64);
     printf("Swapped 64-bit value: 0x%016" PRIx64 "\n", swapped64);
-    Assert(0xf0debc9a78563412, swapped64);
+    ASSERT(0xf0debc9a78563412, swapped64);
     return 0;
 }

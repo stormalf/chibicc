@@ -147,9 +147,9 @@ static Node *stmt(Token **rest, Token *tok);
 static Node *expr_stmt(Token **rest, Token *tok);
 static Node *expr(Token **rest, Token *tok);
 //static int64_t eval(Node *node);
-static int64_t eval2(Node *node, char ***label);
+//static int64_t eval2(Node *node, char ***label);
 static int64_t eval_rval(Node *node, char ***label);
-static bool is_const_expr(Node *node);
+//static bool is_const_expr(Node *node);
 static Node *assign(Token **rest, Token *tok);
 static Node *logor(Token **rest, Token *tok);
 static double eval_double(Node *node);
@@ -278,6 +278,7 @@ static Node *new_binary(NodeKind kind, Node *lhs, Node *rhs, Token *tok)
   {
     error_tok(node->rhs->tok, "%s %d: in new_binary : Cannot assign void type expression", PARSE_C, __LINE__);
   }
+
 
   // TODO type check other binary expressions, e.g., ND_ADD
   return node;
@@ -505,7 +506,7 @@ static void push_tag_scope(Token *tok, Type *ty)
   hashmap_put2(&scope->tags, tok->loc, tok->len, ty);
 }
 
-// declspec = ("void" | "_Bool" | "char" | "short" | "int" | "long" | "double"
+// declspec = ("void" | "_Bool" | "char" | "short" | "int" | "__int128" | "long" | "double"
 //             | "typedef" | "static" | "extern" | "inline"
 //             | "_Thread_local" | "__thread"
 //             | "signed" | "unsigned"
@@ -543,6 +544,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     OTHER = 1 << 16,
     SIGNED = 1 << 17,
     UNSIGNED = 1 << 18,
+    INT128 = 1 << 19,
   };
 
   Type *ty = ty_int;
@@ -696,6 +698,8 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
       counter += LONG;
     else if (equal(tok, "float"))
       counter += FLOAT;
+    else if (equal(tok, "__int128"))
+      counter += INT128;      
     else if (equal(tok, "double"))
       counter += DOUBLE;
     else if (equal(tok, "signed"))
@@ -749,11 +753,19 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     case SIGNED + LONG + LONG + INT:
       ty = ty_long;
       break;
+    case INT128:
+    case SIGNED + INT128:
+      ty = copy_type(ty_int128);
+      break;      
     case UNSIGNED + LONG:
     case UNSIGNED + LONG + INT:
     case UNSIGNED + LONG + LONG:
     case UNSIGNED + LONG + LONG + INT:
       ty = ty_ulong;
+      break;
+    case UNSIGNED + INT128:
+      ty = copy_type(ty_uint128);
+      //ty = ty_int;
       break;
     case FLOAT:
       ty = ty_float;
@@ -1356,7 +1368,6 @@ static void string_initializer(Token **rest, Token *tok, Initializer *init)
     *init = *new_initializer(array_of(init->ty->base, tok->ty->array_len), false);
 
   int len = MIN(init->ty->array_len, tok->ty->array_len);
-
   switch (init->ty->base->size)
   {
   case 1:
@@ -1379,6 +1390,20 @@ static void string_initializer(Token **rest, Token *tok, Initializer *init)
     for (int i = 0; i < len; i++)
       init->children[i]->expr = new_num(str[i], tok);
     break;
+  }
+  case 8: {
+    // Initialize array of 64-bit integers
+    for (int i = 0; i < len; i++) {
+        // We need to ensure that we are accessing the string in a manner suitable for 64-bit integers.
+        // For simplicity, let's fill the 64-bit integer with repeated characters from the string.
+        uint64_t value = 0;
+        for (int j = 0; j < 8 && i * 8 + j < len; j++) {
+            value |= (uint64_t)(unsigned char) tok->str[i * 8 + j] << (j * 8);
+        }
+        init->children[i]->expr = new_num(value, tok);
+    }
+    break;
+    
   }
   default:
     error_tok(tok, "%s %d: in string_initializer : array of inappropriate type initialized from string constant", PARSE_C, __LINE__);
@@ -2191,7 +2216,7 @@ static bool is_typename(Token *tok)
   if (map.capacity == 0)
   {
     static char *kw[] = {
-        "void", "_Bool", "char", "short", "int", "long", "struct", "union",
+        "void", "_Bool", "char", "short", "int", "__int128", "long", "struct", "union",
         "typedef", "enum", "static", "extern", "_Alignas", "signed", "unsigned",
         "const", "volatile", "auto", "register", "restrict", "__restrict",
         "__restrict__", "_Noreturn", "float", "double", "typeof", "inline",
@@ -2699,7 +2724,7 @@ int64_t eval(Node *node)
 // is a pointer to a global variable and n is a postiive/negative
 // number. The latter form is accepted only as an initialization
 // expression for a global variable.
-static int64_t eval2(Node *node, char ***label)
+int64_t eval2(Node *node, char ***label)
 {
   add_type(node);
 
@@ -2847,7 +2872,7 @@ static int64_t eval_rval(Node *node, char ***label)
   error_tok(node->tok, "%s %d: in eval2 : invalid initializer3", PARSE_C, __LINE__);
 }
 
-static bool is_const_expr(Node *node)
+bool is_const_expr(Node *node)
 {
   add_type(node);
 
@@ -4955,32 +4980,108 @@ static Node *primary(Token **rest, Token *tok)
     return new_num(is_compatible(t1, t2), start);
   }
 
+  if (equal(tok, "__builtin_constant_p")) {
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";        
+    ctx->line_no = __LINE__ + 1;  
+    tok = skip(tok->next, "(", ctx);
 
-     //fix from COSMOPOLITAN about builtin_offsetof
-    if (equal(tok, "__builtin_offsetof")) {
-      ctx->filename = PARSE_C;
-      ctx->funcname = "primary";        
-      ctx->line_no = __LINE__ + 1;          
-      tok = skip(tok->next, "(", ctx);
-      Token *stok = tok;
-      Type *tstruct = typename(&tok, tok);
-      if (tstruct->kind != TY_STRUCT && tstruct->kind != TY_UNION) {
-        error_tok(stok, "%s %d: in primary : not a structure or union type", PARSE_C, __LINE__);
-      }
-      ctx->line_no = __LINE__ + 1;  
-      tok = skip(tok, ",", ctx);
-      Token *member = tok;
-      tok = tok->next;
-      *rest = skip(tok, ")", ctx);
-      for (Member *m = tstruct->members; m; m = m->next) {
-        if (m->name->len == member->len &&
-            !memcmp(m->name->loc, member->loc, m->name->len)) {
-          return new_ulong(m->offset, start);
-        }
-      }
-      error_tok(member, "%s %d: in primary : no such member", PARSE_C, __LINE__);
+    // Parse the expression inside __builtin_constant_p
+    Node *expr = assign(&tok, tok);
 
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";        
+    ctx->line_no = __LINE__ + 1;    
+    *rest = skip(tok, ")", ctx);
+
+    // Determine if the expression is constant
+    bool is_constant = false;
+
+    if (expr->tok->kind == TK_NUM || expr->tok->kind == TK_STR) {
+        // Consider numeric and character literals as constants
+        is_constant = true;
     }
+    // Optionally, you can add more checks for other constant expressions
+
+    return new_num(is_constant ? 1 : 0, start);
+  }
+
+
+  if (equal(tok, "__builtin_offsetof")) {
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";        
+    ctx->line_no = __LINE__ + 1;          
+    tok = skip(tok->next, "(", ctx);
+    Token *stok = tok;
+
+    // Parse the structure type
+    Type *tstruct = typename(&tok, tok);
+    if (tstruct->kind != TY_STRUCT && tstruct->kind != TY_UNION) {
+        error_tok(stok, "%s %d: in primary : not a structure or union type", PARSE_C, __LINE__);
+    }
+
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";        
+    ctx->line_no = __LINE__ + 1;          
+    tok = skip(tok, ",", ctx);
+    int offset = 0;
+
+    while (true) {
+        if (tok->kind != TK_IDENT) {
+            error_tok(tok, "%s %d: in primary : expected member name", PARSE_C, __LINE__);
+        }
+
+        // Find the member in the current structure
+        Member *member = NULL;
+        for (Member *m = tstruct->members; m; m = m->next) {
+            if (m->name->len == tok->len &&
+                !memcmp(m->name->loc, tok->loc, m->name->len)) {
+                member = m;
+                break;
+            }
+        }
+
+        if (!member) {
+            error_tok(tok, "%s %d: in primary : no such member", PARSE_C, __LINE__);
+        }
+
+        // Add the member's offset to the running total
+        offset += member->offset;
+
+        // Update the type context for the next member lookup
+        tstruct = member->ty;
+
+        // Move to the next token
+        tok = tok->next;
+
+    // Check if it's an array subscript
+        if (equal(tok, "[")) {
+            tok = tok->next;
+            int index = strtol(tok->loc, NULL, 10);
+            offset += index * member->ty->size; // Add array index offset
+            // Move to the closing bracket
+            tok = tok->next;
+            ctx->filename = PARSE_C;
+            ctx->funcname = "primary";        
+            ctx->line_no = __LINE__ + 1;          
+            tok = skip(tok, "]", ctx);
+        }
+
+        // If we've reached the end or the next member access ('.'), break or continue
+        if (equal(tok, ")")) {
+            break;
+        } else if (equal(tok, ".")) {
+            tok = tok->next;
+        } else {
+            error_tok(tok, "%s %d: in primary : unexpected token", PARSE_C, __LINE__);
+        }
+    }
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";        
+    ctx->line_no = __LINE__ + 1;          
+    *rest = skip(tok, ")", ctx);
+    return new_ulong(offset, stok);
+  }
 
 
   //trying to fix ===== some builtin functions linked to mmx/emms
@@ -5140,6 +5241,7 @@ static Node *primary(Token **rest, Token *tok)
     return ParseBuiltin(ND_BUILTIN_CLZL, tok, rest);
   }
 
+
   if (equal(tok, "__builtin_clzll"))
   {
     return ParseBuiltin(ND_BUILTIN_CLZLL, tok, rest);
@@ -5186,9 +5288,9 @@ static Node *primary(Token **rest, Token *tok)
     ctx->funcname = "primary";
     ctx->line_no = __LINE__ + 1;    
     tok = skip(tok->next, "(", ctx);
-    node->lhs = assign(&tok, tok); // First argument
+    node->lhs = assign(&tok, tok); 
     tok = skip(tok, ",", ctx);
-    node->rhs = assign(&tok, tok); // Second argument
+    node->rhs = assign(&tok, tok); 
     *rest = skip(tok, ")", ctx);    
     return node;
   }
@@ -5199,7 +5301,19 @@ static Node *primary(Token **rest, Token *tok)
     ctx->funcname = "primary";
     ctx->line_no = __LINE__ + 1;
     tok = skip(tok->next, "(", ctx);
-    node->lhs = assign(&tok, tok); // Argument to __builtin_return_address
+    node->lhs = assign(&tok, tok); 
+    *rest = skip(tok, ")", ctx);
+    return node;
+  }
+
+  if (equal(tok, "__builtin_frame_address"))
+  {
+    Node *node = new_node(ND_BUILTIN_FRAME_ADDRESS, tok);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";
+    ctx->line_no = __LINE__ + 1;
+    tok = skip(tok->next, "(", ctx);
+    node->lhs = assign(&tok, tok); 
     *rest = skip(tok, ")", ctx);
     return node;
   }
@@ -6022,6 +6136,8 @@ char *nodekind2str(NodeKind kind)
     return "POPCOUNT"; //builtin popcount
   case ND_RETURN_ADDR:
     return "RETURN_ADDRESS";  //builtin return address
+  case ND_BUILTIN_FRAME_ADDRESS:
+    return "FRAME_ADDRESS"; //builtin frame address
   case ND_BUILTIN_ADD_OVERFLOW:
     return "ADD_OVERFLOW";    //builtin add overflow
   case ND_BUILTIN_SUB_OVERFLOW:

@@ -20,8 +20,8 @@ int main() {
     pg_atomic_uint64 val = {10};
     unsigned long long old_val = pg_atomic_fetch_add_u64_impl(&val, 5);
     printf("Fetch and Add U64: Old Value: %llu, New Value: %llu\n", old_val, val.value);
-    Assert(10, old_val);
-    Assert(15, val.value);
+    ASSERT(10, old_val);
+    ASSERT(15, val.value);
     return 0;
 }
 #endif

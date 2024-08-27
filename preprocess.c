@@ -1428,6 +1428,7 @@ void init_macros(void)
   define_macro("__STDC__", "1");
   define_macro("__USER_LABEL_PREFIX__", "");
   define_macro("__alignof__", "_Alignof");
+  define_macro("alignof", "_Alignof");
   define_macro("__amd64", "1");
   define_macro("__amd64__", "1");
   define_macro("__CHIBICC__", "1");
@@ -1470,7 +1471,7 @@ void init_macros(void)
   define_macro("__ATOMIC_RELEASE", "3");
   define_macro("__ATOMIC_ACQ_REL", "4");
   define_macro("__ATOMIC_SEQ_CST", "5");
-
+  //define_macro("__builtin_choose_expr(cond, true_expr, false_expr)", "(cond ? true_expr : false_expr)");
   //define_macro("nonnull", "1");
   //====fixing ISS-147 defining the two macros for the linux platform
   define_macro("__ORDER_LITTLE_ENDIAN__", "1234");  
@@ -1478,10 +1479,18 @@ void init_macros(void)
   define_macro("__BYTE_ORDER__", "__ORDER_LITTLE_ENDIAN__");
   define_macro("USE_BUILTINS", "1");
   define_macro("_Pragma(message) ", "");
-  // if (opt_fbuiltin) {
-  //   define_macro("memcpy", "__builtin_memcpy");
-  //   define_macro("memset", "__builtin_memset");
-  // }
+  define_macro("_Float32", "float");
+  define_macro("_Float32x", "float");
+  define_macro("_Float64", "double");
+  define_macro("_Float64x", "double");
+  define_macro("_Float128", "long double");
+  define_macro("_Float128x", "long double");
+
+  if (opt_fbuiltin) {
+  //define_macro("offsetof", "__builtin_offsetof");
+  //define_macro("memcpy", "__builtin_memcpy");
+  //define_macro("memset", "__builtin_memset");
+  }
 
 
   add_builtin("__FILE__", file_macro);

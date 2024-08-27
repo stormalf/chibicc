@@ -100,6 +100,8 @@ this " PRODUCT " contains only some differences for now like new parameters\n"
 -dM Print macro definitions in -E mode instead of normal output\n \
 -print print all tokens in a log file in /tmp/chibicc.log \n \
 -A print Abstract Syntax Tree in a log file in /tmp/chibicc.log \n \
+-msse3 enabling sse3 support \
+-msse4 enabling sse4 support \
 chibicc [ -o <path> ] <file>\n"
 
 typedef struct Type Type;
@@ -377,6 +379,10 @@ typedef enum
   ND_BUILTIN_BSWAP16, //builtin bswap16
   ND_BUILTIN_BSWAP32, //builtin bswap32
   ND_BUILTIN_BSWAP64, //builtin bswap64
+  ND_BUILTIN_HUGE_VALF, //builtin huge_valf
+  ND_BUILTIN_HUGE_VAL, //builtin huge_val
+  ND_BUILTIN_HUGE_VALL, //builtin huge_vall
+  ND_BUILTIN_FRAME_ADDRESS, //builtin frame address
 } NodeKind;
 
 // AST node type
@@ -474,6 +480,8 @@ Obj *find_func(char *name);
 //from COSMOPOLITAN adding function ConsumeStringLiteral
 char *ConsumeStringLiteral(Token **rest, Token *tok) ;
 int64_t eval(Node *node);
+int64_t eval2(Node *node, char ***label);
+bool is_const_expr(Node *node);
 
 extern bool opt_fbuiltin;
 //
@@ -498,6 +506,7 @@ typedef enum
   TY_VLA, // variable-length array
   TY_STRUCT,
   TY_UNION,
+  TY_INT128,  //to manage 128 bits
 } TypeKind;
 
 struct Type
@@ -584,6 +593,8 @@ extern Type *ty_char;
 extern Type *ty_short;
 extern Type *ty_int;
 extern Type *ty_long;
+extern Type *ty_int128;
+extern Type *ty_uint128;
 
 extern Type *ty_uchar;
 extern Type *ty_ushort;
@@ -713,6 +724,8 @@ extern bool printTokens;
 extern bool isPrintMacro;
 extern char *extract_filename(char *tmpl);
 extern char *extract_path(char *tmpl);
+extern bool opt_sse3;
+extern bool opt_sse4;
 
 //
 // extended_asm.c
