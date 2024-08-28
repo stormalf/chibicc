@@ -2604,70 +2604,52 @@ static void gen_expr(Node *node)
       }    
     return;
   case ND_SHR:
-    // Move shift amount to CL register
-    println("  mov %%rdi, %%rcx");
-    if (node->lhs->ty->is_unsigned) {
-      if (node->lhs->ty->kind == TY_INT128) {
-        // Shift both lower and upper 64 bits
-        println("  shrd %%cl, %%rdx, %%rax");  // Shift right with the value in CL
-        println("  shr %%cl, %%rdx");           // Shift remaining upper 64 bits
-        //println("  mov %%rdx, %%rax"); //return result
-      } else if (node->lhs->ty->vector_size == 16) {
-        error_tok(node->tok, "in gen_expr: %s %d todo sse shr", CODEGEN_C, __LINE__);
+    int c = count();
+      // Move shift amount to CL register
+      println("  mov %%rdi, %%rcx");
+
+      // Check if the shift amount is greater than 63
+      println("  cmp $64, %%rcx");
+      println("  ja .Lshift_gt64_%d", c);
+
+      // Handle normal shifts within 64 bits
+      if (node->lhs->ty->is_unsigned) {
+        if (node->lhs->ty->kind == TY_INT128) {
+          // Shift both lower and upper 64 bits
+          println("  shrd %%cl, %%rdx, %%rax");  // Shift right double
+          println("  shr %%cl, %%rdx");          // Shift upper 64 bits
+        } else if (node->lhs->ty->vector_size == 16) {
+          error_tok(node->tok, "in gen_expr: %s %d todo sse shr", CODEGEN_C, __LINE__);
+        } else {
+          println("  shr %%cl, %s", ax);
+        }
       } else {
-        println("  shr %%cl, %s", ax);
+        if (node->lhs->ty->kind == TY_INT128) {
+          // Shift both lower and upper 64 bits
+          println("  shrd %%cl, %%rdx, %%rax");  // Shift right double
+          println("  sar %%cl, %%rdx");          // Arithmetic shift right
+        } else if (node->lhs->ty->vector_size == 16) {
+          error_tok(node->tok, "in gen_expr: %s %d todo sse sar", CODEGEN_C, __LINE__);
+        } else {
+          println("  sar %%cl, %s", ax);
+        }
       }
-    } else {
-      if (node->lhs->ty->kind == TY_INT128) {
-        // Shift both lower and upper 64 bits
-        println("  shrd %%cl, %%rdx, %%rax");  // Shift right with the value in CL
-        println("  sar %%cl, %%rdx");           // Arithmetic shift right remaining upper 64 bits
-        println("  mov %%rdx, %%rax"); //return result
-      } else if (node->lhs->ty->vector_size == 16) {
-        error_tok(node->tok, "in gen_expr: %s %d todo sse sar", CODEGEN_C, __LINE__);
-      } else {
-        println("  sar %%cl, %s", ax);
-      }
-    }
+
+      // Handle shifts greater than 63
+      println("  jmp .Lshift_done_%d", c);
+      println(".Lshift_gt64_%d:", c);
+
+      // Adjust the shift amount (subtract 64) and shift only the upper 64 bits
+      println("  sub $64, %%rcx");
+      println("  mov %%rdx, %%rax");  // Move high bits to low
+      println("  shr %%cl, %%rax");   // Shift remaining bits
+
+      // Zero out %%rdx, since all bits have been shifted out
+      println("  xor %%rdx, %%rdx");
+
+      println(".Lshift_done_%d:", c);
+
     return;
-  // case ND_SHR:
-  // int c = count();
-  // // Move shift amount to CL register
-  // println("  mov %%rdi, %%rcx");
-  // // Check if the shift amount is zero
-
-  // if (node->lhs->ty->is_unsigned) {
-  //   if (node->lhs->ty->kind == TY_INT128) {
-  //     // Shift both lower and upper 64 bits
-  //     println("  shrd %%cl, %%rdx, %%rax");  // Shift right double
-  //     println("  shr %%cl, %%rdx");           // Shift remaining upper 64 bits
-  //     println("  test %%cl, %%cl");
-  //     println("  jz .Lno_shift%d", c);
-
-  //     println("  mov %%rdx, %%rax"); // Move high bits to low if no shift
-  //   } else if (node->lhs->ty->vector_size == 16) {
-  //     error_tok(node->tok, "in gen_expr: %s %d todo sse shr", CODEGEN_C, __LINE__);
-  //   } else {
-  //     println("  shr %%cl, %s", ax);
-  //   }
-  // } else {
-  //   if (node->lhs->ty->kind == TY_INT128) {
-  //     // Shift both lower and upper 64 bits
-  //     println("  shrd %%cl, %%rdx, %%rax");  // Shift right double
-  //     println("  sar %%cl, %%rdx");           // Arithmetic shift right
-  //   } else if (node->lhs->ty->vector_size == 16) {
-  //     error_tok(node->tok, "in gen_expr: %s %d todo sse sar", CODEGEN_C, __LINE__);
-  //   } else {
-  //     println("  sar %%cl, %s", ax);
-  //   }
-  // }
-
-  // // Handle shift amount of zero
-  // println(".Lno_shift%d:",c);
-
-
-  return;
-
 
   }
 
