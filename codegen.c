@@ -279,6 +279,7 @@ static void gen_addr(Node *node)
   switch (node->kind)
   {
   case ND_VAR:
+    
     // Variable-length array, which is always local.
     if (node->var->ty->kind == TY_VLA)
     {
@@ -352,6 +353,7 @@ static void gen_addr(Node *node)
       return;
     }
 
+
     // Global variable
     println("  lea %s(%%rip), %%rax", node->var->name);
     return;
@@ -416,11 +418,10 @@ static void load(Type *ty)
     println("  fldt (%%rax)");
     return;
   case TY_INT128:
-    // Load the lower 64 bits into RAX
-    println("  mov (%%rax), %%rax");
-    // Load the upper 64 bits into RDX
-    println("  mov 8(%%rax), %%rdx");
+      println("  mov 8(%%rax), %%rdx");
+      println("  mov (%%rax), %%rax");
     return;
+
 
   }
 
@@ -471,20 +472,19 @@ static void store(Type *ty)
     println("  fstpt (%%rdi)");
     return;
   case TY_INT128:
-    // Store lower 64 bits from RAX
-    println("  mov %%rax, (%%rdi)");
-    // Store upper 64 bits from RDX
-    println("  mov %%rdx, 8(%%rdi)");
+      println("  mov %%rax, (%%rdi)");
+      println("  mov %%rdx, 8(%%rdi)");
     return; 
   }
 
-  if (ty->vector_size == 16) {
-    if (ty->align >= 16) {
-      println(" movdqa %%xmm0, (%%rdi)");
-    } else {
-      println(" movdqu %%xmm0, (%%rdi)");
-    }
-  }
+  // if (ty->vector_size == 16) {
+  //   if (ty->align >= 16) {
+  //     println(" movdqa %%xmm0, (%%rdi)");
+  //   } else {
+  //     println(" movdqu %%xmm0, (%%rdi)");
+  //   }
+  //   return;
+  // }
 
   if (ty->size == 1)
     println("  mov %%al, (%%rdi)");
@@ -502,6 +502,7 @@ static void store(Type *ty)
     println("  mov %%rdx, 8(%%rdi)");
   }
 }
+
 
 static void cmp_zero(Type *ty)
 {
@@ -712,6 +713,7 @@ static void cast(Type *from, Type *to)
 
   int t1 = getTypeId(from);
   int t2 = getTypeId(to);
+
   if (cast_table[t1][t2])
     println("  %s", cast_table[t1][t2]);
 }
@@ -800,10 +802,18 @@ static void push_args2(Node *args, bool first_pass)
     depth += 2;
     break;
   case TY_INT128:
-      push2();
+    push2();
+    // Handle 128-bit integer arguments
+    // println("  sub $16, %%rsp");  // Allocate 16 bytes on the stack
+    // println("  mov %%rax, (%%rsp)");  // Store lower 64 bits
+    // println("  mov %%rdx, 8(%%rsp)"); // Store upper 64 bits
+    // depth += 2;      
     break;    
   default:
     push();
+  }
+  if (args->realign_stack) {
+    pushreg("rbx");
   }
 }
 
@@ -832,9 +842,10 @@ static int push_args(Node *node)
 
   // If the return type is a large struct/union, the caller passes
   // a pointer to a buffer as if it were the first argument.
-  if (node->ret_buffer && node->ty->size > 16)
+  if (node->ret_buffer && node->ty->size > 16 )
     gp++;
 
+  
   // Load as many arguments to the registers as possible.
   for (Node *arg = node->args; arg; arg = arg->next)
   {
@@ -868,12 +879,21 @@ static int push_args(Node *node)
       break;
     case TY_FLOAT:
     case TY_DOUBLE:
-      if (fp++ >= FP_MAX)
-      {
-        arg->pass_by_stack = true;
-        stack++;
-      }
-      break;
+      // if (fp++ >= FP_MAX)
+      // {
+      //   arg->pass_by_stack = true;
+      //   stack++;
+      // }
+      // break;
+        if (fp++ >= FP_MAX) {
+          if ((stack & 1) && arg->ty->vector_size == 16) {
+            arg->realign_stack = true;
+            ++stack;
+          }
+          arg->pass_by_stack = true;
+          ++stack;
+        }
+        break;      
     case TY_LDOUBLE:
       arg->pass_by_stack = true;
       stack += 2;
@@ -920,52 +940,104 @@ static int push_args(Node *node)
   return stack;
 }
 
+// static void copy_ret_buffer(Obj *var)
+// {
+//   Type *ty = var->ty;
+//   int gp = 0, fp = 0;
+
+//   if (has_flonum1(ty))
+//   {
+//     assert(ty->size == 4 || 8 <= ty->size);
+//     if (ty->size == 4)
+//       println("  movss %%xmm0, %d(%%rbp)", var->offset);
+//     else
+//       println("  movsd %%xmm0, %d(%%rbp)", var->offset);
+//     fp++;
+//   }
+//   else
+//   {
+//     for (int i = 0; i < MIN(8, ty->size); i++)
+//     {
+//       println("  mov %%al, %d(%%rbp)", var->offset + i);
+//       println("  shr $8, %%rax");
+//     }
+//     gp++;
+//   }
+
+//   if (ty->size > 8)
+//   {
+//     if (has_flonum2(ty))
+//     {
+//       assert(ty->size == 12 || ty->size == 16);
+//       if (ty->size == 12)
+//         println("  movss %%xmm%d, %d(%%rbp)", fp, var->offset + 8);
+//       else
+//         println("  movsd %%xmm%d, %d(%%rbp)", fp, var->offset + 8);
+//     }
+//     else
+//     {
+//       char *reg1 = (gp == 0) ? "%al" : "%dl";
+//       char *reg2 = (gp == 0) ? "%rax" : "%rdx";
+//       for (int i = 8; i < MIN(16, ty->size); i++)
+//       {
+//         println("  mov %s, %d(%%rbp)", reg1, var->offset + i);
+//         println("  shr $8, %s", reg2);
+//       }
+//     }
+//   }
+// }
+
 static void copy_ret_buffer(Obj *var)
 {
-  Type *ty = var->ty;
-  int gp = 0, fp = 0;
+    Type *ty = var->ty;
+    int gp = 0, fp = 0;
 
-  if (has_flonum1(ty))
-  {
-    assert(ty->size == 4 || 8 <= ty->size);
-    if (ty->size == 4)
-      println("  movss %%xmm0, %d(%%rbp)", var->offset);
-    else
-      println("  movsd %%xmm0, %d(%%rbp)", var->offset);
-    fp++;
-  }
-  else
-  {
-    for (int i = 0; i < MIN(8, ty->size); i++)
+    if (has_flonum1(ty))
     {
-      println("  mov %%al, %d(%%rbp)", var->offset + i);
-      println("  shr $8, %%rax");
-    }
-    gp++;
-  }
-
-  if (ty->size > 8)
-  {
-    if (has_flonum2(ty))
-    {
-      assert(ty->size == 12 || ty->size == 16);
-      if (ty->size == 12)
-        println("  movss %%xmm%d, %d(%%rbp)", fp, var->offset + 8);
-      else
-        println("  movsd %%xmm%d, %d(%%rbp)", fp, var->offset + 8);
+        assert(ty->size == 4 || ty->size == 8);
+        if (ty->size == 4)
+            println("  movss %%xmm0, %d(%%rbp)", var->offset);  // Handle float (4 bytes)
+        else
+            println("  movsd %%xmm0, %d(%%rbp)", var->offset);  // Handle double (8 bytes)
+        fp++;
     }
     else
     {
-      char *reg1 = (gp == 0) ? "%al" : "%dl";
-      char *reg2 = (gp == 0) ? "%rax" : "%rdx";
-      for (int i = 8; i < MIN(16, ty->size); i++)
-      {
-        println("  mov %s, %d(%%rbp)", reg1, var->offset + i);
-        println("  shr $8, %s", reg2);
-      }
+        // **Change 1: Handle the first 8 bytes for integer types (up to 64 bits)**
+        for (int i = 0; i < MIN(8, ty->size); i++)
+        {
+            println("  mov %%al, %d(%%rbp)", var->offset + i);
+            println("  shr $8, %%rax");
+        }
+        gp++;
     }
-  }
+
+    // **Change 2: Handle the remaining bytes (for __int128, this covers bytes 9-16)**
+    if (ty->size > 8)
+    {
+        if (has_flonum2(ty))
+        {
+            assert(ty->size == 12 || ty->size == 16);
+            if (ty->size == 12)
+                println("  movss %%xmm%d, %d(%%rbp)", fp, var->offset + 8);  // Handle 12 bytes floating-point case
+            else
+                println("  movsd %%xmm%d, %d(%%rbp)", fp, var->offset + 8);  // Handle 16 bytes floating-point case
+        }
+        else
+        {
+            // **Change 3: Use %dl and %rdx for the second 8 bytes (bytes 9-16)**
+            char *reg1 = (gp == 0) ? "%al" : "%dl";
+            char *reg2 = (gp == 0) ? "%rax" : "%rdx";
+
+            for (int i = 8; i < MIN(16, ty->size); i++)
+            {
+                println("  mov %s, %d(%%rbp)", reg1, var->offset + i);
+                println("  shr $8, %s", reg2);
+            }
+        }
+    }
 }
+
 
 static void copy_struct_reg(void)
 {
@@ -1092,16 +1164,20 @@ static void gen_expr(Node *node)
   {
     switch (node->ty->kind)
     {
-    case TY_INT128: {
-      print_mov_imm(node->val, "%rax", "%eax");
-      if (node->ty->is_unsigned) {
-        println("  xor %%edx, %%edx");
-      } else {
-        println("  cqto");
-      }
-      return;
 
-    }      
+    case TY_INT128:
+    {
+        // Extract the 128-bit integer value into high and low 64-bit parts
+        __int128 val = node->val;
+
+        uint64_t low = (uint64_t)val;
+        uint64_t high = (uint64_t)(val >> 64);
+
+        println("  mov $%lu, %%rax  # low 64 bits", low);
+        println("  mov $%lu, %%rdx  # high 64 bits", high);
+
+        return;
+    }
     case TY_FLOAT:
     {
       union
@@ -1205,7 +1281,6 @@ static void gen_expr(Node *node)
     gen_addr(node->lhs);
     push();
     gen_expr(node->rhs);
-
     if (node->lhs->kind == ND_MEMBER && node->lhs->member->is_bitfield)
     {
       println("  mov %%rax, %%r8");
@@ -1684,10 +1759,10 @@ static void gen_expr(Node *node)
     println("  mov %%rbp, %%rax");
     
     // Get the depth of the return address
-    int depth = eval(node->lhs);
+    int tmpdepth = eval(node->lhs);
     
     // Walk up the stack frames to the correct depth
-    for (int i = 0; i < depth; i++) {
+    for (int i = 0; i < tmpdepth; i++) {
       println("  mov (%%rax), %%rax");
     }
     
@@ -2150,6 +2225,7 @@ static void gen_expr(Node *node)
     if (node->lhs->ty->kind == TY_INT128) {
       println("  add %%rdi, %%rax");
       println("  adc %%rsi, %%rdx");
+
     } else if (node->lhs->ty->vector_size == 16) {
       println("  padd%c %%xmm1, %%xmm0", GetSseIntSuffix(node->lhs->ty));
     } else {
@@ -2301,53 +2377,298 @@ static void gen_expr(Node *node)
       } else {
         println("  or %s, %s", di, ax);
       }
-
     return;
   case ND_BITXOR:
-    println("  xor %s, %s", di, ax);
+    if (node->lhs->ty->kind == TY_INT128) {
+        println("  xor %%rdi, %%rax");
+        println("  xor %%rsi, %%rdx");
+      } else if (node->lhs->ty->vector_size == 16) {
+        println("  pxor %%xmm1, %%xmm0");
+      } else {
+        println("  xor %s, %s", di, ax);
+      }
     return;
   case ND_EQ:
   case ND_NE:
   case ND_LT:
   case ND_LE:
-    println("  cmp %s, %s", di, ax);
+  
+    // println("  cmp %s, %s", di, ax);
 
-    if (node->kind == ND_EQ)
-    {
-      println("  sete %%al");
-    }
-    else if (node->kind == ND_NE)
-    {
-      println("  setne %%al");
-    }
-    else if (node->kind == ND_LT)
-    {
-      if (node->lhs->ty->is_unsigned)
-        println("  setb %%al");
-      else
-        println("  setl %%al");
-    }
-    else if (node->kind == ND_LE)
-    {
-      if (node->lhs->ty->is_unsigned)
-        println("  setbe %%al");
-      else
-        println("  setle %%al");
-    }
-
+    // if (node->kind == ND_EQ)
+    // {
+    //   println("  sete %%al");
+    // }
+    // else if (node->kind == ND_NE)
+    // {
+    //   println("  setne %%al");
+    // }
+    // else if (node->kind == ND_LT)
+    // {
+    //   if (node->lhs->ty->is_unsigned)
+    //     println("  setb %%al");
+    //   else
+    //     println("  setl %%al");
+    // }
+    // else if (node->kind == ND_LE)
+    // {
+    //   if (node->lhs->ty->is_unsigned)
+    //     println("  setbe %%al");
+    //   else
+    //     println("  setle %%al");
+    // }
+  if (node->lhs->ty->kind == TY_INT128) {
+        switch (node->kind) {
+          case ND_EQ:
+            println("  mov %%rax, %%r8"); // Move lower 64 bits of lhs to r8
+            println("  mov %%rdx, %%r9"); // Move upper 64 bits of lhs to r9
+            println("  xor %%r8, %%rdi"); // Compare lower 64 bits of lhs and rhs
+            println("  xor %%r9, %%rsi"); // Compare upper 64 bits of lhs and rhs
+            println("  or %%rsi, %%rdi"); // Combine the results
+            println("  sete %%al");       // Set AL if the result is zero (equal)
+            println("  movzx %%al, %%eax"); // Zero extend AL to EAX            
+            return;
+          case ND_NE:
+            println("  xor %%rax, %%rdi");
+            println("  xor %%rdx, %%rsi");
+            println("  or %%rsi, %%rdi");
+            println("  setne %%al");
+            println("  movzb %%al, %%rax");  // Zero-extend al to rax to ensure the whole rax is correctly set
+            return;
+          case ND_LT:
+            if (node->lhs->ty->is_unsigned) {
+              println("  cmp %%rdi, %%rax");
+              println("  mov %%rdx, %%rax");
+              println("  sbb %%rsi, %%rax");
+              println("  setc %%al");
+              println("  movzb %%al, %%rax");  // Zero-extend al to rax to ensure the whole rax is correctly set
+            } else {
+              println("  cmp %%rdi, %%rax");
+              println("  mov %%rdx, %%rax");
+              println("  sbb %%rsi, %%rax");
+              println("  setl %%al");
+              println("  movzb %%al, %%rax");  // Zero-extend al to rax to ensure the whole rax is correctly set
+            }
+            return;
+          case ND_LE:
+            if (node->lhs->ty->is_unsigned) {
+              println("  cmp %%rax, %%rdi");
+              println("  sbb %%rdx, %%rsi");
+              println("  setnc %%al");
+              println("  movzb %%al, %%rax");  // Zero-extend al to rax to ensure the whole rax is correctly set
+            } else {
+              println("  cmp %%rax, %%rdi");
+              println("  sbb %%rdx, %%rsi");
+              println("  setge %%al");
+              println("  movzb %%al, %%rax");  // Zero-extend al to rax to ensure the whole rax is correctly set
+            }
+            return;
+        }
+      } else if (node->lhs->ty->vector_size == 16) {
+        switch (node->kind) {
+          case ND_EQ:
+            switch (node->lhs->ty->kind) {
+              case TY_CHAR:
+              case TY_SHORT:
+              case TY_INT:
+                println("  pcmpeq%c %%xmm1, %%xmm0",
+                        GetSseIntSuffix(node->lhs->ty));
+                return;
+              default:
+                error_tok(node->tok, "in gen_expr: %s %d todo sse eq", CODEGEN_C, __LINE__);
+            }
+            return;
+          case ND_NE:
+            switch (node->lhs->ty->kind) {
+              case TY_CHAR:
+              case TY_SHORT:
+              case TY_INT:
+                println("  pcmpeq%c %%xmm1, %%xmm0",
+                        GetSseIntSuffix(node->lhs->ty));
+                println("  pcmpeqd %%xmm1, %%xmm1");
+                println("  andnps  %%xmm1, %%xmm0");
+                return;
+              default:
+                error_tok(node->tok, "in gen_expr: %s %d todo sse ne", CODEGEN_C, __LINE__);
+            }
+            return;
+          case ND_LT:
+            if (node->lhs->ty->is_unsigned) {
+              switch (node->lhs->ty->kind) {
+                case TY_CHAR:
+                case TY_SHORT:
+                  println("  psubus%c %%xmm0, %%xmm1",
+                          GetSseIntSuffix(node->lhs->ty));
+                  println("  movaps %%xmm1, %%xmm0");
+                  println("  xorps %%xmm1, %%xmm1");
+                  println("  pcmpeq%c %%xmm1, %%xmm0",
+                          GetSseIntSuffix(node->lhs->ty));
+                  println("  pcmpeqd %%xmm1, %%xmm1");
+                  println("  andnps %%xmm1, %%xmm0");
+                  return;
+                default:
+                  error_tok(node->tok, "in gen_expr: %s %d todo sse ltu", CODEGEN_C, __LINE__);
+              }
+            } else {
+              switch (node->lhs->ty->kind) {
+                case TY_CHAR:
+                case TY_SHORT:
+                case TY_INT:
+                  println("  pcmpgt%c %%xmm0, %%xmm1",
+                          GetSseIntSuffix(node->lhs->ty));
+                  println("  movaps %%xmm1, %%xmm0");
+                  return;
+                default:
+                  error_tok(node->tok, "in gen_expr: %s %d todo sse lt", CODEGEN_C, __LINE__);
+              }
+            }
+            return;
+          case ND_LE:
+            if (node->lhs->ty->is_unsigned) {
+              switch (node->lhs->ty->kind) {
+                case TY_CHAR:
+                  println("  pminub %%xmm0, %%xmm1");
+                  println("  pcmpeqb %%xmm1, %%xmm0");
+                  return;
+                case TY_SHORT:
+                  println("  psubusw %%xmm1, %%xmm0");
+                  println("  xorps %%xmm1, %%xmm1");
+                  println("  pcmpeqw %%xmm1, %%xmm0");
+                  return;
+                case TY_INT:
+                  println("  mov  $-2147483648, %%eax");
+                  println("  movd %%eax, %%xmm2");
+                  println("  pshufd $0, %%xmm2");
+                  println("  pcmpgtd %%xmm1, %%xmm0");
+                  println("  pcmpeqd %%xmm1, %%xmm1");
+                  println("  andnps %%xmm1, %%xmm0");
+                  return;
+                default:
+                  error_tok(node->tok, "in gen_expr: %s %d todo sse leu", CODEGEN_C, __LINE__);
+              }
+            } else {
+              switch (node->lhs->ty->kind) {
+                case TY_SHORT:
+                  println("  pminsw %%xmm0, %%xmm1");
+                  println("  pcmpeqw %%xmm1, %%xmm0");
+                  return;
+                case TY_CHAR:
+                case TY_INT:
+                  println("  pcmpgt%c %%xmm1, %%xmm0",
+                          GetSseIntSuffix(node->lhs->ty));
+                  println("  pcmpeqd %%xmm1, %%xmm1");
+                  println("  andnps %%xmm1, %%xmm0");
+                  return;
+                default:
+                  error_tok(node->tok, "in gen_expr: %s %d todo sse le", CODEGEN_C, __LINE__);
+              }
+            }
+            return;
+        }
+      } else {
+        println("  cmp %s,%s", di, ax);
+        if (node->kind == ND_EQ) {
+          println("  sete %%al");
+        } else if (node->kind == ND_NE) {
+          println("  setne %%al");
+        } else if (node->kind == ND_LT) {
+          if (node->lhs->ty->is_unsigned) {
+            println("  setb %%al");
+          } else {
+            println("  setl %%al");
+          }
+        } else if (node->kind == ND_LE) {
+          if (node->lhs->ty->is_unsigned) {
+            println("  setbe %%al");
+          } else {
+            println("  setle %%al");
+          }
+        }
+      }
+        
     println("  movzb %%al, %%rax");
     return;
   case ND_SHL:
     println("  mov %%rdi, %%rcx");
-    println("  shl %%cl, %s", ax);
+    if (node->lhs->ty->kind == TY_INT128) {
+        println("  shld %%cl, %%rax, %%rdx");
+        println("  shl %%cl, %%rax");
+        println("  xor %%edi, %%edi");
+        println("  and $64, %%cl");
+        println("  cmovne %%rax, %%rdx");
+        println("  cmovne %%rdi, %%rax");
+      } else if (node->lhs->ty->vector_size == 16) {
+        error_tok(node->tok, "in gen_expr: %s %d todo sse shl", CODEGEN_C, __LINE__);
+      } else {
+        println("  shl %%cl, %s", ax);
+      }    
     return;
   case ND_SHR:
+    // Move shift amount to CL register
     println("  mov %%rdi, %%rcx");
-    if (node->lhs->ty->is_unsigned)
-      println("  shr %%cl, %s", ax);
-    else
-      println("  sar %%cl, %s", ax);
+    if (node->lhs->ty->is_unsigned) {
+      if (node->lhs->ty->kind == TY_INT128) {
+        // Shift both lower and upper 64 bits
+        println("  shrd %%cl, %%rdx, %%rax");  // Shift right with the value in CL
+        println("  shr %%cl, %%rdx");           // Shift remaining upper 64 bits
+        //println("  mov %%rdx, %%rax"); //return result
+      } else if (node->lhs->ty->vector_size == 16) {
+        error_tok(node->tok, "in gen_expr: %s %d todo sse shr", CODEGEN_C, __LINE__);
+      } else {
+        println("  shr %%cl, %s", ax);
+      }
+    } else {
+      if (node->lhs->ty->kind == TY_INT128) {
+        // Shift both lower and upper 64 bits
+        println("  shrd %%cl, %%rdx, %%rax");  // Shift right with the value in CL
+        println("  sar %%cl, %%rdx");           // Arithmetic shift right remaining upper 64 bits
+        println("  mov %%rdx, %%rax"); //return result
+      } else if (node->lhs->ty->vector_size == 16) {
+        error_tok(node->tok, "in gen_expr: %s %d todo sse sar", CODEGEN_C, __LINE__);
+      } else {
+        println("  sar %%cl, %s", ax);
+      }
+    }
     return;
+  // case ND_SHR:
+  // int c = count();
+  // // Move shift amount to CL register
+  // println("  mov %%rdi, %%rcx");
+  // // Check if the shift amount is zero
+
+  // if (node->lhs->ty->is_unsigned) {
+  //   if (node->lhs->ty->kind == TY_INT128) {
+  //     // Shift both lower and upper 64 bits
+  //     println("  shrd %%cl, %%rdx, %%rax");  // Shift right double
+  //     println("  shr %%cl, %%rdx");           // Shift remaining upper 64 bits
+  //     println("  test %%cl, %%cl");
+  //     println("  jz .Lno_shift%d", c);
+
+  //     println("  mov %%rdx, %%rax"); // Move high bits to low if no shift
+  //   } else if (node->lhs->ty->vector_size == 16) {
+  //     error_tok(node->tok, "in gen_expr: %s %d todo sse shr", CODEGEN_C, __LINE__);
+  //   } else {
+  //     println("  shr %%cl, %s", ax);
+  //   }
+  // } else {
+  //   if (node->lhs->ty->kind == TY_INT128) {
+  //     // Shift both lower and upper 64 bits
+  //     println("  shrd %%cl, %%rdx, %%rax");  // Shift right double
+  //     println("  sar %%cl, %%rdx");           // Arithmetic shift right
+  //   } else if (node->lhs->ty->vector_size == 16) {
+  //     error_tok(node->tok, "in gen_expr: %s %d todo sse sar", CODEGEN_C, __LINE__);
+  //   } else {
+  //     println("  sar %%cl, %s", ax);
+  //   }
+  // }
+
+  // // Handle shift amount of zero
+  // println(".Lno_shift%d:",c);
+
+
+  return;
+
+
   }
 
   error_tok(node->tok, "%s invalid expression", CODEGEN_C);
@@ -3233,4 +3554,9 @@ static int GetSseIntSuffix(Type *ty) {
     default:
       unreachable();
   }
+}
+
+void pushreg(const char *arg) {
+  println("\tpush\t%%%s", arg);
+  depth++;
 }

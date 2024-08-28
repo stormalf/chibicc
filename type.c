@@ -19,8 +19,8 @@ Type *ty_double = &(Type){TY_DOUBLE, 8, 8};
 Type *ty_ldouble = &(Type){TY_LDOUBLE, 16, 16};
 Type *ty_void_ptr = &(Type){TY_PTR, 8, 8, true};
 // Define the int128 type
-Type *ty_int128 = &(Type){TY_INT128, 16, 16}; // Size and alignment are 16 bytes
-Type *ty_uint128 = &(Type){TY_INT128, 16, 16}; // Size and alignment are 16 bytes
+Type *ty_int128 = &(Type){TY_INT128, 16, 16}; 
+Type *ty_uint128 = &(Type){TY_INT128, 16, 16, true}; 
 
 
 static Type *new_type(TypeKind kind, int size, int align)
@@ -189,8 +189,12 @@ static Type *get_common_type(Type *ty1, Type *ty2)
     return ty_float;
 
   // Handle int128 types
-  if (ty1->kind == TY_INT128 || ty2->kind == TY_INT128)
-    return ty_int128;
+  if (ty1->kind == TY_INT128 || ty2->kind == TY_INT128) {
+    if( ty1->is_unsigned || ty2->is_unsigned) 
+      return ty_uint128;
+    else
+      return ty_int128;
+  }
 
 
   if (ty1->size < 4)
