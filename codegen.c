@@ -2605,49 +2605,58 @@ static void gen_expr(Node *node)
     return;
   case ND_SHR:
     int c = count();
-      // Move shift amount to CL register
-      println("  mov %%rdi, %%rcx");
+    // Move shift amount to CL register
+    println("  mov %%rdi, %%rcx");
 
-      // Check if the shift amount is greater than 63
-      println("  cmp $64, %%rcx");
-      println("  ja .Lshift_gt64_%d", c);
-
-      // Handle normal shifts within 64 bits
+    if (node->lhs->ty->kind == TY_INT128) {
+      // Handle 128-bit shifts
       if (node->lhs->ty->is_unsigned) {
-        if (node->lhs->ty->kind == TY_INT128) {
-          // Shift both lower and upper 64 bits
-          println("  shrd %%cl, %%rdx, %%rax");  // Shift right double
-          println("  shr %%cl, %%rdx");          // Shift upper 64 bits
-        } else if (node->lhs->ty->vector_size == 16) {
-          error_tok(node->tok, "in gen_expr: %s %d todo sse shr", CODEGEN_C, __LINE__);
-        } else {
-          println("  shr %%cl, %s", ax);
-        }
-      } else {
-        if (node->lhs->ty->kind == TY_INT128) {
-          // Shift both lower and upper 64 bits
-          println("  shrd %%cl, %%rdx, %%rax");  // Shift right double
-          println("  sar %%cl, %%rdx");          // Arithmetic shift right
-        } else if (node->lhs->ty->vector_size == 16) {
-          error_tok(node->tok, "in gen_expr: %s %d todo sse sar", CODEGEN_C, __LINE__);
-        } else {
-          println("  sar %%cl, %s", ax);
-        }
-      }
+        // Handle unsigned 128-bit shift right
+        println("  cmp $64, %%rcx");
+        println("  ja .Lshift_gt64_unsigned_%d", c);
 
-      // Handle shifts greater than 63
-      println("  jmp .Lshift_done_%d", c);
-      println(".Lshift_gt64_%d:", c);
+        // Common shift logic for shifts within 64 bits
+        println("  shrd %%cl, %%rdx, %%rax");  // Shift right double
+        println("  shr %%cl, %%rdx");          // Logical shift of upper 64 bits
+        println("  jmp .Lshift_done_%d", c);
 
-      // Adjust the shift amount (subtract 64) and shift only the upper 64 bits
-      println("  sub $64, %%rcx");
-      println("  mov %%rdx, %%rax");  // Move high bits to low
-      println("  shr %%cl, %%rax");   // Shift remaining bits
+        // Handle shifts greater than 63 bits
+        println(".Lshift_gt64_unsigned_%d:", c);
+        println("  sub $64, %%rcx");           // Adjust shift amount
+        println("  mov %%rdx, %%rax");         // Move high bits to low
+        println("  shr %%cl, %%rax");          // Logical shift remaining bits in %%rax
+        println("  xor %%rdx, %%rdx");         // Clear %%rdx (upper 64 bits)
+    } else {
+        // Handle signed 128-bit shift right (arithmetic)
+        println("  cmp $64, %%rcx");
+        println("  ja .Lshift_gt64_signed_%d", c);
 
-      // Zero out %%rdx, since all bits have been shifted out
-      println("  xor %%rdx, %%rdx");
+        // Common shift logic for shifts within 64 bits
+        println("  shrd %%cl, %%rdx, %%rax");  // Shift right double
+        println("  sar %%cl, %%rdx");          // Arithmetic shift of upper 64 bits
+        println("  jmp .Lshift_done_%d", c);
 
-      println(".Lshift_done_%d:", c);
+        // Handle shifts greater than 63 bits
+        println(".Lshift_gt64_signed_%d:", c);
+        println("  sub $64, %%rcx");           // Adjust shift amount
+        println("  mov %%rdx, %%rax");         // Move high bits to low
+        println("  sar %%cl, %%rax");          // Arithmetic shift remaining bits in %%rax
+        println("  sar $63, %%rdx");           // Sign extend %%rdx to fill with sign bit
+    }
+
+    println(".Lshift_done_%d:", c);
+
+  } else if (node->lhs->ty->vector_size == 16) {
+    // Handle SSE/AVX vector shifts (not implemented here)
+    error_tok(node->tok, "in gen_expr: %s %d todo sse shift", CODEGEN_C, __LINE__);
+  } else {
+    // Handle other types (non-128-bit)
+    if (node->lhs->ty->is_unsigned) {
+        println("  shr %%cl, %s", ax);  // Logical shift for unsigned
+    } else {
+        println("  sar %%cl, %s", ax);  // Arithmetic shift for signed
+    }
+  } 
 
     return;
 
