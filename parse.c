@@ -765,7 +765,6 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
       break;
     case UNSIGNED + INT128:
       ty = copy_type(ty_uint128);
-      //ty = ty_int;
       break;
     case FLOAT:
       ty = ty_float;
@@ -1405,6 +1404,20 @@ static void string_initializer(Token **rest, Token *tok, Initializer *init)
     break;
     
   }
+  case 16:
+    {
+        // Initialize array of 128-bit integers
+        for (int i = 0; i < len; i++)
+        {
+            __int128 value = 0;
+            for (int j = 0; j < 16 && i * 16 + j < len; j++)
+            {
+                value |= (__int128)(unsigned char)tok->str[i * 16 + j] << (j * 8);
+            }
+            init->children[i]->expr = new_num(value, tok);
+        }
+        break;
+    }
   default:
     error_tok(tok, "%s %d: in string_initializer : array of inappropriate type initialized from string constant", PARSE_C, __LINE__);
     // unreachable();
@@ -2747,8 +2760,8 @@ int64_t eval2(Node *node, char ***label)
     }
     if (eval(node->rhs) == 0)
           error_tok(node->tok, "%s  %d: in eval2 : eval(node->rhs) caused a division by zero!", PARSE_C, __LINE__ );
-    if (node->ty && node->ty->is_unsigned)
-      return (uint64_t)eval(node->lhs) / eval(node->rhs);
+    if (node->ty && node->ty->is_unsigned) 
+      return (uint64_t)eval(node->lhs) / (uint64_t)eval(node->rhs);
     return eval(node->lhs) / eval(node->rhs);
   case ND_NEG:
     return -eval(node->lhs);
