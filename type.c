@@ -31,6 +31,8 @@ static Type *new_type(TypeKind kind, int size, int align)
   ty->kind = kind;
   ty->size = size;
   ty->align = align;
+  if (ty->kind == TY_INT128)
+    ty->is_aligned = true;
   return ty;
 }
 
