@@ -220,6 +220,8 @@ static void leave_scope(void)
   scope = scope->next;
 }
 
+
+
 // Find a variable by name.
 VarScope *find_var(Token *tok)
 {
@@ -238,6 +240,8 @@ VarScope *find_var(Token *tok)
 
   return NULL;
 }
+
+
 
 static Type *find_tag(Token *tok)
 {
@@ -359,7 +363,6 @@ static VarScope *push_scope(char *name)
   VarScope *sc = calloc(1, sizeof(VarScope));
   if (sc == NULL)
     error("%s: %s:%d: error: in push_scope : sc is null!", PARSE_C, __FILE__, __LINE__);
-
   hashmap_put(&scope->vars, name, sc);
   return sc;
 }
@@ -501,8 +504,12 @@ static Type *find_typedef(Token *tok)
   return NULL;
 }
 
+
+
+
 static void push_tag_scope(Token *tok, Type *ty)
 {
+
   hashmap_put2(&scope->tags, tok->loc, tok->len, ty);
 }
 
@@ -584,8 +591,9 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
       else
         attr->is_tls = true;
 
+      //fixing  check for typedef specifier/attribute not strict enough #142 suggested by @samkho
       if (attr->is_typedef &&
-          attr->is_static + attr->is_extern + attr->is_inline + attr->is_tls > 1)
+          attr->is_static + attr->is_extern + attr->is_inline + attr->is_tls >= 1)
         error_tok(tok, "%s %d: in declspec : typedef may not be used together with static,"
                        " extern, inline, __thread or _Thread_local",
                   PARSE_C, __LINE__);
@@ -650,6 +658,10 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
 
     // Handle user-defined types.
     Type *ty2 = find_typedef(tok);
+    // if (ty2 && ty2->name)
+    //   printf("======ty2->name: %p %d %.*s %.*s %d %d \n", ty2, ty2->align, ty2->name->len, ty2->name->loc, tok->len, tok->loc, tok->len, ty2->name->len);
+
+
     if (equal(tok, "struct") || equal(tok, "union") || equal(tok, "enum") ||
         equal(tok, "typeof") || equal(tok, "__typeof") || ty2)
     {
@@ -1028,9 +1040,9 @@ static Type *pointers(Token **rest, Token *tok, Type *ty)
 // declarator = pointers ("(" ident ")" | "(" declarator ")" | ident) type-suffix
 static Type *declarator(Token **rest, Token *tok, Type *ty)
 {
-  tok = attribute_list(tok, ty, type_attributes);
+  //tok = attribute_list(tok, ty, type_attributes);
   ty = pointers(&tok, tok, ty);
-  tok->next = attribute_list(tok->next, ty, type_attributes);
+  //tok->next = attribute_list(tok->next, ty, type_attributes);
 
 
   if (equal(tok, "(") && !is_typename(tok->next) && !equal(tok->next, ")"))
@@ -1049,7 +1061,6 @@ static Type *declarator(Token **rest, Token *tok, Type *ty)
       error_tok(tok, "%s %d: in declarator : ty is null", PARSE_C, __LINE__);
     return declarator(&tok, start->next, ty);
   }
-  tok = attribute_list(tok, ty, type_attributes);  
   Token *name = NULL;
   Token *name_pos = tok;
   
@@ -1058,7 +1069,6 @@ static Type *declarator(Token **rest, Token *tok, Type *ty)
     name = tok;
     tok = tok->next;
   }
-
   ty = type_suffix(rest, tok, ty);
   if (!ty)
     error_tok(tok, "%s %d: in declarator : ty is null", PARSE_C, __LINE__);     
@@ -3761,10 +3771,30 @@ static Token *type_attributes(Token *tok, void *arg)
         ty->vector_size = vs;
         if (!ty->is_aligned) ty->align = vs;
     }
+
     ctx->filename = PARSE_C;
     ctx->funcname = "type_attributes";        
     ctx->line_no = __LINE__ + 1;  
     tok = skip(tok, ")", ctx);
+    if (equal(tok, ",")) {
+      ctx->filename = PARSE_C;
+      ctx->funcname = "type_attributes";     
+      ctx->line_no = __LINE__ + 1;       
+      tok = skip(tok, ",", ctx);
+      if (consume(&tok, tok, "__aligned__")) {
+        ctx->filename = PARSE_C;
+        ctx->funcname = "type_attributes";       
+        ctx->line_no = __LINE__ + 1;       
+        tok = skip(tok, "(", ctx);
+        ty->is_aligned = true;
+        ty->align = const_expr(&tok, tok);
+        ctx->filename = PARSE_C;
+        ctx->funcname = "type_attributes";     
+        ctx->line_no = __LINE__ + 1;       
+        tok = skip(tok, ")", ctx);
+      }
+    }
+
     return tok;
   }
 
@@ -4155,16 +4185,7 @@ static Token *thing_attributes(Token *tok, void *arg) {
     return tok;
   }
 
-  // if (consume(&tok, tok, "aligned") || consume(&tok, tok, "__aligned__")) {
 
-  //   attr->is_aligned = true;
-  //   if (consume(&tok, tok, "(")) {
-  //     attr->align = const_expr(&tok, tok);
-  //     attr->align = 16; /* biggest alignment */
-
-  //   return tok;
-  //  }
-  // }
 
     if (consume(&tok, tok, "aligned") || consume(&tok, tok, "__aligned__"))
       {
@@ -5592,6 +5613,7 @@ static Node *primary(Token **rest, Token *tok)
 static Token *parse_typedef(Token *tok, Type *basety)
 {
   bool first = true;  
+  //TODO====need to manage specific case of typedef __attribute__((__vector_size__(16)));
   while (!consume(&tok, tok, ";"))
   {
     if (!first) {
@@ -5659,7 +5681,7 @@ Obj *find_func(char *name)
   while (sc->next)
     sc = sc->next;
 
-  VarScope *sc2 = hashmap_get(&sc->vars, name);
+  VarScope *sc2 = hashmap_get2(&sc->vars, name, strlen(name));
   if (sc2 && sc2->var && sc2->var->is_function)
     return sc2->var;
   return NULL;
@@ -5932,7 +5954,7 @@ Obj *parse(Token *tok)
       fullpath = extract_path(opt_o);
       strncat(fullpath, path, strlen(path));
     }
-    printf("%s %s %s\n", fullpath, filename, path);
+    //printf("%s %s %s\n", fullpath, filename, path);
     dotf = fopen(fullpath, "w");
     if (dotf == NULL)
     {
