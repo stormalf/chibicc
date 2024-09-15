@@ -24,7 +24,6 @@
 #include <limits.h>
 
 
-
 #define ROUNDUP(X, K)   (((X) + (K) - 1) & -(K))
 
 #ifndef __has_attribute

@@ -73,32 +73,12 @@ static void pop(char *arg)
 static void pushf(Type *ty) {
 
   switch (ty->vector_size) {
-    case 2:   // 16-bit vectors
-      println("  sub $4, %%rsp");       // 16-bit = 2 bytes, align to 4 bytes
-      println("  movw %%xmm0, (%%rsp)"); // Use movw for 16-bit data
-      depth++;
-      break;
-
-    case 4:   // 32-bit vectors
-      println("  sub $8, %%rsp");       // 32-bit = 4 bytes, align to 8 bytes
-      println("  movl %%xmm0, (%%rsp)"); // Use movl for 32-bit data
-      depth++;
-      break;
-
-    case 8:   // 64-bit vectors
-      println("  sub $8, %%rsp");       // 64-bit = 8 bytes, align to 8 bytes
-      println("  movq %%xmm0, (%%rsp)"); // Use movq for 64-bit data
-      depth++;
-      break;
-
     case 16:  // 128-bit vectors
-      println("  sub $16, %%rsp");      // 128-bit = 16 bytes, align to 16 bytes
-      println("  movaps %%xmm0, (%%rsp)"); // Use movaps for 128-bit data
-      depth++;
+      pushx();
       break;
 
     default:
-      println("  sub $8, %%rsp");
+      println("  push %%rax");
       println("  movsd %%xmm0, (%%rsp)");
       depth++;
       break;
@@ -107,28 +87,8 @@ static void pushf(Type *ty) {
 
 static void popf(Type *ty, int reg) {
   switch (ty->vector_size) {
-    case 2:   // 16-bit vectors
-      println("  movw (%%rsp), %%xmm%d", reg); // Use movw for 16-bit data
-      println("  add $4, %%rsp");       // 16-bit = 2 bytes, align to 4 bytes
-      depth--;
-      break;
-
-    case 4:   // 32-bit vectors
-      println("  movl (%%rsp), %%xmm%d", reg); // Use movl for 32-bit data
-      println("  add $8, %%rsp");       // 32-bit = 4 bytes, align to 8 bytes
-      depth--;
-      break;
-
-    case 8:   // 64-bit vectors
-      println("  movq (%%rsp), %%xmm%d", reg); // Use movq for 64-bit data
-      println("  add $8, %%rsp");       // 64-bit = 8 bytes, align to 8 bytes
-      depth--;
-      break;
-
     case 16:  // 128-bit vectors
-      println("  movaps (%%rsp), %%xmm%d", reg); // Use movaps for 128-bit data
-      println("  add $16, %%rsp");      // 128-bit = 16 bytes, align to 16 bytes
-      depth--;
+      popx(reg);
       break;
 
     default:
@@ -551,7 +511,7 @@ static void load(Type *ty)
       // Handle other types based on size and vector size
       if (ty->vector_size == 16) {
         if (ty->align >= 16) {
-          println("  movdqa (%%rax), %%xmm0");  // Aligned load for 128-bit vectors
+          println("  movaps (%%rax), %%xmm0");  // Aligned load for 128-bit vectors
         } else {
           println("  movdqu (%%rax), %%xmm0");  // Unaligned load for 128-bit vectors
         }
@@ -681,7 +641,13 @@ static void store(Type *ty)
       return;
 
     default:
-      if (ty->size == 1) {
+      if (ty->vector_size == 16) {
+        if (ty->align >= 16) {
+          println("  movdqa %%xmm0, (%%rdi)");  // Aligned load for 128-bit vectors
+        } else {
+          println("  movdqu %%xmm0, (%%rdi)");  // Unaligned load for 128-bit vectors
+        }
+      } else if (ty->size == 1) {
         println("  mov %%al, (%%rdi)");
       } else if (ty->size == 2) {
         println("  mov %%ax, (%%rdi)");
@@ -1033,17 +999,17 @@ static void push_args2(Node *args, bool first_pass)
   default:
     push();
   }
-  // if (args->realign_stack) {
-  //   pushreg("rbx");
-  // }
+  if (args->realign_stack) {
+    pushreg("rbx");
+  }
 
-      if (args->realign_stack) {
-        // Save the current stack pointer and align it
-        pushreg("rbx");                  // Save current stack pointer
-        println("  mov %%rsp, %%rbx");   // Save the current stack pointer in RBX
-        println("  and $-16, %%rsp");     // Align the stack pointer to a 16-byte boundary
-        println("  sub $16, %%rsp");      // Allocate space for local variables
-    }
+    //   if (args->realign_stack) {
+    //     // Save the current stack pointer and align it
+    //     //pushreg("rbx");                  // Save current stack pointer
+    //     println("  mov %%rsp, %%rbx");   // Save the current stack pointer in RBX
+    //     println("  and $-16, %%rsp");     // Align the stack pointer to a 16-byte boundary
+    //     println("  sub $16, %%rsp");      // Allocate space for local variables
+    // }
 }
 
 // Load function call arguments. Arguments are already evaluated and
@@ -1115,7 +1081,7 @@ static int push_args(Node *node)
         case 16:  // 128-bit vectors
           if (fp++ >= FP_MAX) {
             // Ensure proper stack alignment
-            if ((stack & 1) && arg->ty->vector_size >= 8) {
+            if ((stack & 1) && arg->ty->vector_size == 16) {
               arg->realign_stack = true;
               ++stack;
             }
@@ -1126,7 +1092,7 @@ static int push_args(Node *node)
 
         default:  // If no vector_size is specified, handle as default double
           if (fp++ >= FP_MAX) {
-            if ((stack & 1) && arg->ty->vector_size >= 8) {
+            if ((stack & 1) && arg->ty->vector_size == 16) {
               arg->realign_stack = true;
               ++stack;
             }
@@ -2620,7 +2586,7 @@ case ND_BITNOT:
   }
   }
 
-  if (node->lhs->ty->vector_size >= 2) {
+  if (node->lhs->ty->vector_size == 16) {
     gen_expr(node->rhs);
     pushx();
     gen_expr(node->lhs);
@@ -3572,9 +3538,6 @@ static void emit_data(Obj *prog)
     else
       println("  .globl %s", var->name);
 
-    // int align = (var->ty->kind == TY_ARRAY && var->ty->size >= 16)
-    //                 ? MAX(16, var->align)
-    //                 : var->align;
 
      // Adjust alignment for TY_ARRAY with size >= 16, TY_INT128, and vector size 16
         int align = var->align;
@@ -3584,10 +3547,6 @@ static void emit_data(Obj *prog)
             align = MAX(16, var->align);
         }
 
-        // println("  .align %d", align);
-        // println("  .type %s, @object", var->name);
-        // println("  .size %s, %d", var->name, var->ty->size);
-        // println("%s:", var->name);
 
     // Common symbol
     if (opt_fcommon && var->is_tentative)
@@ -3856,6 +3815,8 @@ void codegen(Obj *prog, FILE *out)
   assign_lvar_offsets(prog);
   emit_data(prog);
   emit_text(prog);
+  println("  .section  .note.GNU-stack,\"\",@progbits");
+
   //print offset for each variable
   if (isDebug)
     print_offset(prog);
