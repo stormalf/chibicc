@@ -61,9 +61,11 @@ static void rehash(HashMap *map)
 
 static bool match(HashEntry *ent, char *key, int keylen)
 {
+  if (ent->key && ent->keylen != keylen)
+    return false;
 
   return ent->key && ent->key != TOMBSTONE &&
-         ent->keylen == keylen && memcmp(ent->key, key, keylen) == 0;
+         ent->keylen == keylen && strncmp(ent->key, key, keylen) == 0;
 }
 
 static HashEntry *get_entry(HashMap *map, char *key, int keylen)
@@ -76,8 +78,9 @@ static HashEntry *get_entry(HashMap *map, char *key, int keylen)
   for (int i = 0; i < map->capacity; i++)
   {
     HashEntry *ent = &map->buckets[(hash + i) % map->capacity];
-    if (match(ent, key, keylen))
+    if (match(ent, key, keylen)) {
       return ent;
+    }
     if (ent->key == NULL)
       return NULL;
   }
@@ -103,7 +106,6 @@ static HashEntry *get_or_insert_entry(HashMap *map, char *key, int keylen)
   for (int i = 0; i < map->capacity; i++)
   {
     HashEntry *ent = &map->buckets[(hash + i) % map->capacity];
-
     if (match(ent, key, keylen))
       return ent;
 
@@ -114,15 +116,16 @@ static HashEntry *get_or_insert_entry(HashMap *map, char *key, int keylen)
     //   return ent;
     // }
 
+
     if (ent->key == NULL)
     {
       ent->key = key;
       ent->keylen = keylen;
-      //printf("======key: %d %.*s\n", keylen, keylen, key);
       map->used++;
       return ent;
     }
   }
+  
   unreachable();
 }
 

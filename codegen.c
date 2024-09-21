@@ -736,6 +736,8 @@ enum
 
 static int getTypeId(Type *ty)
 {
+  if (!ty)
+    return I32;
   switch (ty->kind)
   {
   case TY_CHAR:

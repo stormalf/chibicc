@@ -463,13 +463,29 @@ Node
   int unique_number;
 };
 
-typedef struct
-{
-  Obj *var;
-  Type *type_def;
-  Type *enum_ty;
-  int enum_val;
+// typedef struct
+// {
+//   Obj *var;
+//   Type *type_def;
+//   Type *enum_ty;
+//   int enum_val;
+// } VarScope;
+
+typedef struct TypedefEntry {
+    char *name;  // Name of the typedef
+    Type *type;  // The type associated with this typedef
+    int align;   // Alignment of the type
+    struct TypedefEntry *next;  // Pointer to the next entry in the list
+} TypedefEntry;
+
+
+typedef struct {
+    Obj *var;
+    TypedefEntry *typedefs;  // Linked list of typedefs at this scope level
+    Type *enum_ty;
+    int enum_val;
 } VarScope;
+
 
 Node *new_cast(Node *expr, Type *ty);
 int64_t const_expr(Token **rest, Token *tok);

@@ -200,6 +200,9 @@ static Node *parse_huge_val(double fval, Token *tok, Token **rest);
 static Token * old_style_params(Token **rest, Token *tok, Type *ty);
 static Type *old_params(Type *ty, int nbparms);
 
+static void add_typedef_to_scope(VarScope *sc, char *name, Type *type);
+static int type_align(Type *ty);
+
 static int align_down(int n, int align)
 {
   return align_to(n - align + 1, align);
@@ -492,18 +495,65 @@ static char *get_ident(Token *tok)
   return strndup(tok->loc, tok->len);
 }
 
-static Type *find_typedef(Token *tok)
-{
-
-  if (tok->kind == TK_IDENT)
-  {
-    VarScope *sc = find_var(tok);
-    if (sc)
-      return sc->type_def;
-  }
-  return NULL;
+static bool isTypedef(Token *tok) {
+    if (tok->kind == TK_IDENT) {
+        VarScope *sc = find_var(tok);
+        if (sc) {
+            for (TypedefEntry *entry = sc->typedefs; entry; entry = entry->next) {
+                // Compare token name with typedef name
+                if (strncmp(entry->name, tok->loc, tok->len) == 0) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
 }
 
+// static Type *find_typedef(Token *tok)
+// {
+
+//   if (tok->kind == TK_IDENT)
+//   {
+//     VarScope *sc = find_var(tok);
+//     if (sc)
+//       return sc->type_def;
+//   }
+//   return NULL;
+// }
+
+// static Type *find_typedef(Token *tok) {
+//     for (Scope *sc = scope; sc; sc = sc->next) {
+//         VarScope *var_scope = hashmap_get2(&sc->vars, tok->loc, tok->len);
+//         if (var_scope) {
+//             for (TypedefEntry *entry = var_scope->typedefs; entry; entry = entry->next) {
+//                 if (strncmp(entry->name, tok->loc, tok->len) == 0 &&
+//                     strlen(entry->name) == tok->len) {
+//                       printf("777======%d %s %d\n", entry->type->align, entry->name, entry->align);   
+//                     return entry->type;  // Return the type with correct alignment
+//                 }
+//             }
+//         }
+//     }
+//     return NULL;  // No matching typedef found
+// }
+
+static Type *find_typedef(Token *tok) {
+    for (Scope *sc = scope; sc; sc = sc->next) {
+        VarScope *var_scope = hashmap_get2(&sc->vars, tok->loc, tok->len);
+        if (var_scope) {
+            for (TypedefEntry *entry = var_scope->typedefs; entry; entry = entry->next) {
+                if (strncmp(entry->name, tok->loc, tok->len) == 0 &&
+                    strlen(entry->name) == tok->len) {
+                    //printf("777===Found typedef: %s with align %d\n", entry->name, entry->align);   
+                    entry->type->align = entry->align;
+                    return entry->type;  // Return the type with correct alignment
+                }
+            }
+        }
+    }
+    return NULL;  // No matching typedef found
+}
 
 
 
@@ -2249,7 +2299,7 @@ static bool is_typename(Token *tok)
       hashmap_put(&map, kw[i], (void *)1);
   }
 
-  return hashmap_get2(&map, tok->loc, tok->len) || find_typedef(tok);
+  return hashmap_get2(&map, tok->loc, tok->len) || isTypedef(tok);
 }
 
 // asm-stmt = "asm" ("volatile" | "inline")* "(" string-literal ")"
@@ -3734,21 +3784,21 @@ static Token *type_attributes(Token *tok, void *arg)
     return tok;
   }
 
-  if (consume(&tok, tok, "aligned") || consume(&tok, tok, "__aligned__"))
-      {
-        ctx->filename = PARSE_C;
-        ctx->funcname = "type_attributes";       
-        ctx->line_no = __LINE__ + 1;       
-        tok = skip(tok, "(", ctx);
-        //from COSMOPOLITAN adding is_aligned
-        ty->is_aligned = true;
-        ty->align = const_expr(&tok, tok);
-        ctx->filename = PARSE_C;
-        ctx->funcname = "type_attributes";     
-        ctx->line_no = __LINE__ + 1;       
-        tok = skip(tok, ")", ctx);
-        return tok;
-      }
+  // if (consume(&tok, tok, "aligned") || consume(&tok, tok, "__aligned__"))
+  //     {
+  //       ctx->filename = PARSE_C;
+  //       ctx->funcname = "type_attributes";       
+  //       ctx->line_no = __LINE__ + 1;       
+  //       tok = skip(tok, "(", ctx);
+  //       //from COSMOPOLITAN adding is_aligned
+  //       ty->is_aligned = true;
+  //       ty->align = const_expr(&tok, tok);
+  //       ctx->filename = PARSE_C;
+  //       ctx->funcname = "type_attributes";     
+  //       ctx->line_no = __LINE__ + 1;       
+  //       tok = skip(tok, ")", ctx);
+  //       return tok;
+  //     }
 
   //from COSMOPOLITAN adding ms_abi
   if (consume(&tok, tok, "ms_abi") || consume(&tok, tok, "__ms_abi__")) {
@@ -3771,7 +3821,7 @@ static Token *type_attributes(Token *tok, void *arg)
         ty->vector_size = vs;
         if (!ty->is_aligned) ty->align = vs;
     }
-
+    ty->align = vs;
     ctx->filename = PARSE_C;
     ctx->funcname = "type_attributes";        
     ctx->line_no = __LINE__ + 1;  
@@ -3797,6 +3847,46 @@ static Token *type_attributes(Token *tok, void *arg)
 
     return tok;
   }
+     // Handle vector_size attribute
+    // if (consume(&tok, tok, "vector_size") || consume(&tok, tok, "__vector_size__")) {
+    //     ctx->filename = PARSE_C;
+    //     ctx->funcname = "type_attributes";        
+    //     ctx->line_no = __LINE__ + 1;          
+    //     tok = skip(tok, "(", ctx);
+    //     int vs = const_expr(&tok, tok);
+    //     if (vs != 2 && vs != 4 && vs != 8 && vs != 16) {
+    //         error_tok(tok, "%s %d: unsupported vector_size %d; only 2, 4, 8 and 16 are supported", PARSE_C, __LINE__, vs);
+    //     }
+
+    //     // Set vector size and alignment
+    //     ty->vector_size = vs;
+    //     ty->size = vs; // Update size to match vector size
+
+    //     // Default alignment based on vector size if not previously aligned
+    //     if (!ty->is_aligned) {
+    //         ty->align = vs; // Set alignment to vector size by default
+    //     }
+
+    //     ctx->filename = PARSE_C;
+    //     ctx->funcname = "type_attributes";        
+    //     ctx->line_no = __LINE__ + 1;  
+    //     tok = skip(tok, ")", ctx);
+    // }
+
+    // Handle __aligned__ attribute
+    if (consume(&tok, tok, "__aligned__") || consume(&tok, tok, "aligned")) {
+        ctx->filename = PARSE_C;
+        ctx->funcname = "type_attributes";       
+        ctx->line_no = __LINE__ + 1;       
+        tok = skip(tok, "(", ctx);
+        ty->is_aligned = true;
+        ty->align = const_expr(&tok, tok); // Set the specified alignment
+        ctx->filename = PARSE_C;
+        ctx->funcname = "type_attributes";     
+        ctx->line_no = __LINE__ + 1;       
+        tok = skip(tok, ")", ctx);
+    }
+
 
   //from COSMOPOLITAN adding warn_if_not_aligned
   if (consume(&tok, tok, "warn_if_not_aligned") || consume(&tok, tok, "__warn_if_not_aligned__") ) {
@@ -5629,9 +5719,15 @@ static Token *parse_typedef(Token *tok, Type *basety)
       error_tok(tok, "%s %d: in parse_typedef : ty is null", PARSE_C, __LINE__);
     if (!ty->name)
       error_tok(ty->name_pos, "%s %d: in parse_typedef : typedef name omitted", PARSE_C, __LINE__);
-    //from COSMOPOLITAN adding other GNUC attributes
+
+    
     tok = attribute_list(tok, ty, type_attributes);      
-    push_scope(get_ident(ty->name))->type_def = ty;
+
+    //push_scope(get_ident(ty->name))->type_def = ty;
+    // Get the variable scope for this typedef
+    VarScope *sc = push_scope(get_ident(ty->name));
+    // Add this typedef to the typedefs list in VarScope
+    add_typedef_to_scope(sc, get_ident(ty->name), ty);
   }
   return tok;
 }
@@ -6492,4 +6588,35 @@ static Node *parse_huge_val(double fval, Token *tok, Token **rest) {
       tok = skip(tok, ")", ctx);
       *rest = tok;
       return node;
+}
+
+static void add_typedef_to_scope(VarScope *sc, char *name, Type *type) {
+    TypedefEntry *new_entry = calloc(1, sizeof(TypedefEntry));
+    if (!new_entry) {
+        error("%s: %s:%d: error: in add_typedef_to_scope : Memory allocation failed for TypedefEntry", PARSE_C, __FILE__, __LINE__);
+    }
+    new_entry->name = name;
+    new_entry->type = type;
+    new_entry->align = type->align; // Store the correct alignment
+    new_entry->next = sc->typedefs;
+    sc->typedefs = new_entry;
+}
+
+
+
+static int type_align(Type *ty) {
+    // If alignment is explicitly set, use it
+    if (ty->align > 0)
+        return ty->align;
+
+    // Otherwise, calculate default alignment based on type
+    switch (ty->kind) {
+    case TY_FLOAT:
+        return 4;
+    case TY_DOUBLE:
+        return 8;
+    // Add more cases for other types as needed
+    default:
+        return 1; // Default alignment for basic types
+    }
 }
