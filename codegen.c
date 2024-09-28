@@ -36,9 +36,7 @@ static void pushx(void);
 static void popx(int reg);
 void push2(void);
 void pop2(char *a, char *b);
-static int GetSseIntSuffix(Type *ty);
-static void restore_alignment(Node *args);
-static bool requires_vector_alignment(Node *args);
+
 
 
 
@@ -79,8 +77,8 @@ static void pushf(Type *ty) {
 
     default:
       println("  push %%rax");
-      println("  movsd %%xmm0, (%%rsp)");
-      depth++;
+  println("  movsd %%xmm0, (%%rsp)");
+  depth++;
       break;
   }
 }
@@ -92,9 +90,9 @@ static void popf(Type *ty, int reg) {
       break;
 
     default:
-      println("  movsd (%%rsp), %%xmm%d", reg);
-      println("  add $8, %%rsp");
-      depth--;      
+  println("  movsd (%%rsp), %%xmm%d", reg);
+  println("  add $8, %%rsp");
+  depth--;
       break;
   }
 }
@@ -418,89 +416,25 @@ static void load(Type *ty)
 {
   switch (ty->kind)
   {
-    case TY_ARRAY:
-    case TY_STRUCT:
-    case TY_UNION:
-    case TY_FUNC:
-    case TY_VLA:
+  case TY_ARRAY:
+  case TY_STRUCT:
+  case TY_UNION:
+  case TY_FUNC:
+  case TY_VLA:
       // Do not load arrays, structs, unions, functions, or VLAs into registers.
-      return;
+    return;
 
-    case TY_FLOAT:
-      switch (ty->vector_size) {
-        case 2:   // 16-bit vectors
-          if (ty->align >= 8) {
-            println("  movlps (%%rax), %%xmm0");  // Load 16-bit vectors with 64-bit alignment
-          } else {
-            println("  movlpd (%%rax), %%xmm0");  // Unaligned load
-          }
-          break;
+  case TY_FLOAT:
+      println("  movss (%%rax), %%xmm0");  // Default case if vector_size is not specified
+    return;
 
-        case 4:   // 32-bit vectors
-          println("  movss (%%rax), %%xmm0");  // Load 32-bit vectors
-          break;
+  case TY_DOUBLE:
+    println("  movsd (%%rax), %%xmm0");
+    return;
 
-        case 8:   // 64-bit vectors
-          if (ty->align >= 8) {
-            println("  movsd (%%rax), %%xmm0");  // Load 64-bit vectors with 64-bit alignment
-          } else {
-            println("  movdqu (%%rax), %%xmm0");  // Unaligned load
-          }
-          break;
-
-        case 16:  // 128-bit vectors
-          if (ty->align >= 16) {
-            println("  movaps (%%rax), %%xmm0");  // Load 128-bit vectors with 128-bit alignment
-          } else {
-            println("  movdqu (%%rax), %%xmm0");  // Unaligned load
-          }
-          break;
-
-        default:
-          println("  movss (%%rax), %%xmm0");  // Default case if vector_size is not specified
-          break;
-      }
-      return;
-
-    case TY_DOUBLE:
-      switch (ty->vector_size) {
-        case 2:   // 16-bit vectors (not typical for double, but included for completeness)
-          if (ty->align >= 16) {
-            println("  movapd (%%rax), %%xmm0");  // Load 16-bit vectors with 128-bit alignment
-          } else {
-            println("  movdqu (%%rax), %%xmm0");  // Unaligned load
-          }
-          break;
-
-        case 4:   // 32-bit vectors (not typical for double, but included for completeness)
-          println("  movsd (%%rax), %%xmm0");  // Load 32-bit vectors
-          break;
-
-        case 8:   // 64-bit vectors
-          if (ty->align >= 16) {
-            println("  movsd (%%rax), %%xmm0");  // Load 64-bit vectors with 128-bit alignment
-          } else {
-            println("  movdqu (%%rax), %%xmm0");  // Unaligned load
-          }
-          break;
-
-        case 16:  // 128-bit vectors
-          if (ty->align >= 16) {
-            println("  movapd (%%rax), %%xmm0");  // Load 128-bit vectors with 128-bit alignment
-          } else {
-            println("  movdqu (%%rax), %%xmm0");  // Unaligned load
-          }
-          break;
-
-        default:  // Default case when vector_size is not specified
-          println("  movsd (%%rax), %%xmm0");
-          break;
-      }
-      return;
-
-    case TY_LDOUBLE:
+  case TY_LDOUBLE:
       println("  fldt (%%rax)");  // Load long double
-      return;
+    return;
 
     case TY_INT128:
       println("  mov 8(%%rax), %%rdx");  // Load upper 64 bits into RDX
@@ -508,14 +442,7 @@ static void load(Type *ty)
       return;
 
     default:
-      // Handle other types based on size and vector size
-      if (ty->vector_size == 16) {
-        if (ty->align >= 16) {
-          println("  movaps (%%rax), %%xmm0");  // Aligned load for 128-bit vectors
-        } else {
-          println("  movdqu (%%rax), %%xmm0");  // Unaligned load for 128-bit vectors
-        }
-      } else if (ty->size == 1) {
+      if (ty->size == 1) {
         if (ty->is_unsigned) {
           println("  movzb (%%rax), %%eax");  // Zero-extend byte to 32-bit for unsigned
         } else {
@@ -548,92 +475,28 @@ static void store(Type *ty)
 
   switch (ty->kind)
   {
-    case TY_STRUCT:
-    case TY_UNION:
-      for (int i = 0; i < ty->size; i++)
-      {
-        println("  mov %d(%%rax), %%r8b", i);
-        println("  mov %%r8b, %d(%%rdi)", i);
-      }
-      return;
+  case TY_STRUCT:
+  case TY_UNION:
+    for (int i = 0; i < ty->size; i++)
+    {
+      println("  mov %d(%%rax), %%r8b", i);
+      println("  mov %%r8b, %d(%%rdi)", i);
+    }
+    return;
 
-    case TY_FLOAT:
-      switch (ty->vector_size) {
-        case 2:   // 16-bit vectors
-          if (ty->align >= 8) {
-            println("  movlps %%xmm0, (%%rdi)");  // Use movlps for 16-bit vectors
-          } else {
-            println("  movlpd %%xmm0, (%%rdi)");  // Unaligned load
-          }
-          break;
+  case TY_FLOAT:
+      // Default case for unspecified vector size
+    println("  movss %%xmm0, (%%rdi)");
+    return;
 
-        case 4:   // 32-bit vectors
-          println("  movss %%xmm0, (%%rdi)");  // Use movss for 32-bit vectors
-          break;
+  case TY_DOUBLE:
+      // Default case for unspecified vector size
+    println("  movsd %%xmm0, (%%rdi)");
+    return;
 
-        case 8:   // 64-bit vectors
-          if (ty->align >= 8) {
-            println("  movsd %%xmm0, (%%rdi)");  // Use movsd for 64-bit vectors
-          } else {
-            println("  movdqu %%xmm0, (%%rdi)");  // Unaligned load
-          }
-          break;
-
-        case 16:  // 128-bit vectors
-          if (ty->align >= 16) {
-            println("  movaps %%xmm0, (%%rdi)");  // Use movaps for aligned 128-bit vectors
-          } else {
-            println("  movdqu %%xmm0, (%%rdi)");  // Unaligned load
-          }
-          break;
-
-        default:
-          // Default case for unspecified vector size
-          println("  movss %%xmm0, (%%rdi)");
-          break;
-      }
-      return;
-
-    case TY_DOUBLE:
-      switch (ty->vector_size) {
-        case 2:   // 16-bit vectors
-          if (ty->align >= 16) {
-            println("  movapd %%xmm0, (%%rdi)");  // Use movapd for aligned 16-bit vectors
-          } else {
-            println("  movdqu %%xmm0, (%%rdi)");  // Unaligned load
-          }
-          break;
-
-        case 4:   // 32-bit vectors
-          println("  movsd %%xmm0, (%%rdi)");  // Use movsd for 32-bit vectors
-          break;
-
-        case 8:   // 64-bit vectors
-          if (ty->align >= 16) {
-            println("  movsd %%xmm0, (%%rdi)");  // Use movsd for aligned 64-bit vectors
-          } else {
-            println("  movdqu %%xmm0, (%%rdi)");  // Unaligned load
-          }
-          break;
-
-        case 16:  // 128-bit vectors
-          if (ty->align >= 16) {
-            println("  movapd %%xmm0, (%%rdi)");  // Use movapd for aligned 128-bit vectors
-          } else {
-            println("  movdqu %%xmm0, (%%rdi)");  // Unaligned load
-          }
-          break;
-
-        default:
-          // Default case for unspecified vector size
-          println("  movsd %%xmm0, (%%rdi)");
-          break;
-      }
-      return;
-
-    case TY_LDOUBLE:
-      println("  fstpt (%%rdi)");
-      return;
+  case TY_LDOUBLE:
+    println("  fstpt (%%rdi)");
+    return;
 
     case TY_INT128:
       println("  mov %%rax, (%%rdi)");
@@ -641,20 +504,14 @@ static void store(Type *ty)
       return;
 
     default:
-      if (ty->vector_size == 16) {
-        if (ty->align >= 16) {
-          println("  movdqa %%xmm0, (%%rdi)");  // Aligned load for 128-bit vectors
-        } else {
-          println("  movdqu %%xmm0, (%%rdi)");  // Unaligned load for 128-bit vectors
-        }
-      } else if (ty->size == 1) {
-        println("  mov %%al, (%%rdi)");
+      if (ty->size == 1) {
+    println("  mov %%al, (%%rdi)");
       } else if (ty->size == 2) {
-        println("  mov %%ax, (%%rdi)");
+    println("  mov %%ax, (%%rdi)");
       } else if (ty->size == 4) {
-        println("  mov %%eax, (%%rdi)");
+    println("  mov %%eax, (%%rdi)");
       } else if (ty->size == 8) {
-        println("  mov %%rax, (%%rdi)");
+    println("  mov %%rax, (%%rdi)");
       } else if (ty->size == 16) {
         // For 128-bit values (size == 16)
         println("  mov %%rax, (%%rdi)");
@@ -685,7 +542,7 @@ static void cmp_zero(Type *ty)
   case TY_INT128:
     println("  mov %%rax, %%r11");
     println("  or  %%rdx, %%r11");
-    return;    
+    return;
   }
 
   if (is_integer(ty) && ty->size <= 4)
@@ -942,8 +799,8 @@ static void push_struct(Type *ty) {
     int sz = align_to(ty->size, MAX(8, ty->align));
     
     // Adjust the stack pointer to make space for the structure
-    println("  sub $%d, %%rsp", sz);
-    depth += sz / 8;
+  println("  sub $%d, %%rsp", sz);
+  depth += sz / 8;
 
     // Copy the structure data from the source address (in rax) to the stack
     // Copy 8 bytes at a time, if possible
@@ -959,7 +816,7 @@ static void push_struct(Type *ty) {
                 println("  mov %%r10b, %d(%%rsp)", i + j);
             }
         }
-    }
+  }
 }
 
 
@@ -997,7 +854,7 @@ static void push_args2(Node *args, bool first_pass)
     // println("  mov %%rax, (%%rsp)");  // Store lower 64 bits
     // println("  mov %%rdx, 8(%%rsp)"); // Store upper 64 bits
     // depth += 2;      
-    break;    
+    break;
   default:
     push();
   }
@@ -1076,35 +933,12 @@ static int push_args(Node *node)
       break;
     case TY_FLOAT:
     case TY_DOUBLE:
-      switch (arg->ty->vector_size) {
-        case 2:   // 16-bit vectors
-        case 4:   // 32-bit vectors
-        case 8:   // 64-bit vectors
-        case 16:  // 128-bit vectors
-          if (fp++ >= FP_MAX) {
-            // Ensure proper stack alignment
-            if ((stack & 1) && arg->ty->vector_size == 16) {
-              arg->realign_stack = true;
-              ++stack;
-            }
-            arg->pass_by_stack = true;
-            ++stack;
-          }
-          break;
-
-        default:  // If no vector_size is specified, handle as default double
-          if (fp++ >= FP_MAX) {
-            if ((stack & 1) && arg->ty->vector_size == 16) {
-              arg->realign_stack = true;
-              ++stack;
-            }
-            arg->pass_by_stack = true;
-            ++stack;
-          }
-          break;
+      if (fp++ >= FP_MAX)
+      {
+        arg->pass_by_stack = true;
+        stack++;
       }
       break;
-
     case TY_LDOUBLE:
       arg->pass_by_stack = true;
       stack += 2;
@@ -1200,53 +1034,53 @@ static int push_args(Node *node)
 
 static void copy_ret_buffer(Obj *var)
 {
-    Type *ty = var->ty;
-    int gp = 0, fp = 0;
+  Type *ty = var->ty;
+  int gp = 0, fp = 0;
 
-    if (has_flonum1(ty))
-    {
+  if (has_flonum1(ty))
+  {
         assert(ty->size == 4 || ty->size == 8);
-        if (ty->size == 4)
+    if (ty->size == 4)
             println("  movss %%xmm0, %d(%%rbp)", var->offset);  // Handle float (4 bytes)
-        else
+    else
             println("  movsd %%xmm0, %d(%%rbp)", var->offset);  // Handle double (8 bytes)
-        fp++;
+    fp++;
+  }
+  else
+  {
+        // **Change 1: Handle the first 8 bytes for integer types (up to 64 bits)**
+    for (int i = 0; i < MIN(8, ty->size); i++)
+    {
+      println("  mov %%al, %d(%%rbp)", var->offset + i);
+      println("  shr $8, %%rax");
+    }
+    gp++;
+  }
+
+    // **Change 2: Handle the remaining bytes (for __int128, this covers bytes 9-16)**
+  if (ty->size > 8)
+  {
+    if (has_flonum2(ty))
+    {
+      assert(ty->size == 12 || ty->size == 16);
+      if (ty->size == 12)
+                println("  movss %%xmm%d, %d(%%rbp)", fp, var->offset + 8);  // Handle 12 bytes floating-point case
+      else
+                println("  movsd %%xmm%d, %d(%%rbp)", fp, var->offset + 8);  // Handle 16 bytes floating-point case
     }
     else
     {
-        // **Change 1: Handle the first 8 bytes for integer types (up to 64 bits)**
-        for (int i = 0; i < MIN(8, ty->size); i++)
-        {
-            println("  mov %%al, %d(%%rbp)", var->offset + i);
-            println("  shr $8, %%rax");
-        }
-        gp++;
-    }
-
-    // **Change 2: Handle the remaining bytes (for __int128, this covers bytes 9-16)**
-    if (ty->size > 8)
-    {
-        if (has_flonum2(ty))
-        {
-            assert(ty->size == 12 || ty->size == 16);
-            if (ty->size == 12)
-                println("  movss %%xmm%d, %d(%%rbp)", fp, var->offset + 8);  // Handle 12 bytes floating-point case
-            else
-                println("  movsd %%xmm%d, %d(%%rbp)", fp, var->offset + 8);  // Handle 16 bytes floating-point case
-        }
-        else
-        {
             // **Change 3: Use %dl and %rdx for the second 8 bytes (bytes 9-16)**
-            char *reg1 = (gp == 0) ? "%al" : "%dl";
-            char *reg2 = (gp == 0) ? "%rax" : "%rdx";
+      char *reg1 = (gp == 0) ? "%al" : "%dl";
+      char *reg2 = (gp == 0) ? "%rax" : "%rdx";
 
-            for (int i = 8; i < MIN(16, ty->size); i++)
-            {
-                println("  mov %s, %d(%%rbp)", reg1, var->offset + i);
-                println("  shr $8, %s", reg2);
-            }
-        }
+      for (int i = 8; i < MIN(16, ty->size); i++)
+      {
+        println("  mov %s, %d(%%rbp)", reg1, var->offset + i);
+        println("  shr $8, %s", reg2);
+      }
     }
+  }
 }
 
 
@@ -1464,7 +1298,7 @@ static void gen_expr(Node *node)
       switch (node->ty->vector_size) {
         case 2:  // 16-bit vectors (2 elements)
           println("  pshuflw $0, %%xmm1, %%xmm1");
-          println("  xorps %%xmm1, %%xmm0");
+      println("  xorps %%xmm1, %%xmm0");
           break;
 
         case 4:  // 32-bit vectors (4 elements)
@@ -1498,7 +1332,7 @@ static void gen_expr(Node *node)
       switch (node->ty->vector_size) {
         case 2:  // 16-bit vectors (2 elements)
           println("  punpcklqdq %%xmm1, %%xmm1");
-          println("  xorpd %%xmm1, %%xmm0");
+      println("  xorpd %%xmm1, %%xmm0");
           break;
 
         case 4:  // 32-bit vectors (4 elements)
@@ -1529,7 +1363,7 @@ static void gen_expr(Node *node)
       println("  neg %%rax");
       println("  adc $0, %%rdx");
       println("  neg %%rdx");
-      return;      
+      return;
     }
 
     println("  neg %%rax");
@@ -1565,6 +1399,7 @@ static void gen_expr(Node *node)
     gen_addr(node->lhs);
     push();
     gen_expr(node->rhs);
+
     if (node->lhs->kind == ND_MEMBER && node->lhs->member->is_bitfield)
     {
       println("  mov %%rax, %%r8");
@@ -1649,8 +1484,8 @@ static void gen_expr(Node *node)
   //       println("  not %%rax");
   //     }
   //   return;
-case ND_BITNOT:
-  gen_expr(node->lhs);
+  case ND_BITNOT:
+    gen_expr(node->lhs);
 
   if (node->lhs->ty->kind == TY_INT128) {
     // Handle 128-bit integers
@@ -1688,7 +1523,7 @@ case ND_BITNOT:
     // Handle scalar integers (non-vector, non-INT128)
     println("  not %%rax");
   }
-  return;
+    return;
 
 
   case ND_LOGAND:
@@ -1794,10 +1629,6 @@ case ND_BITNOT:
     }
 
 
-  // Align stack before the function call
-  // if (node->args->realign_stack && requires_vector_alignment(node->args)) {
-  //     restore_alignment(node->args);
-  // }
 
     // Function call
     println("  mov %%rax, %%r10");
@@ -1807,10 +1638,6 @@ case ND_BITNOT:
 
 
     depth -= stack_args;
-  // Restore stack alignment after the call, if necessary
-  // if (node->args->realign_stack && requires_vector_alignment(node->args)) {
-  //     restore_alignment(node->args);
-  // }
 
     // It looks like the most significant 48 or 56 bits in RAX may
     // contain garbage if a function return type is short or bool/char,
@@ -2505,41 +2332,41 @@ case ND_BITNOT:
     }
 
     switch (node->kind) {
-      case ND_ADD:
+    case ND_ADD:
         println("  add%c%c %%xmm1, %%xmm0", ps, sz);
-        return;
-      case ND_SUB:
+      return;
+    case ND_SUB:
         println("  sub%c%c %%xmm1, %%xmm0", ps, sz);
-        return;
-      case ND_MUL:
+      return;
+    case ND_MUL:
         println("  mul%c%c %%xmm1, %%xmm0", ps, sz);
-        return;
-      case ND_DIV:
+      return;
+    case ND_DIV:
         println("  div%c%c %%xmm1, %%xmm0", ps, sz);
-        return;
-      case ND_EQ:
-      case ND_NE:
-      case ND_LT:
-      case ND_LE:
+      return;
+    case ND_EQ:
+    case ND_NE:
+    case ND_LT:
+    case ND_LE:
         println("  ucomis%c %%xmm0, %%xmm1", sz);
 
         if (node->kind == ND_EQ) {
-          println("  sete %%al");
-          println("  setnp %%dl");
-          println("  and %%dl, %%al");
+        println("  sete %%al");
+        println("  setnp %%dl");
+        println("  and %%dl, %%al");
         } else if (node->kind == ND_NE) {
-          println("  setne %%al");
-          println("  setp %%dl");
-          println("  or %%dl, %%al");
+        println("  setne %%al");
+        println("  setp %%dl");
+        println("  or %%dl, %%al");
         } else if (node->kind == ND_LT) {
-          println("  seta %%al");
+        println("  seta %%al");
         } else {
-          println("  setae %%al");
-        }
+        println("  setae %%al");
+      }
 
-        println("  and $1, %%al");
-        println("  movzb %%al, %%rax");
-        return;
+      println("  and $1, %%al");
+      println("  movzb %%al, %%rax");
+      return;
     }
 
     error_tok(node->tok, "%s invalid expression", CODEGEN_C);
@@ -2588,12 +2415,7 @@ case ND_BITNOT:
   }
   }
 
-  if (node->lhs->ty->vector_size == 16) {
-    gen_expr(node->rhs);
-    pushx();
-    gen_expr(node->lhs);
-    popx(1);
-  } else if (node->rhs->ty->kind == TY_INT128) {
+if (node->rhs->ty->kind == TY_INT128) {
     gen_expr(node->rhs);
     push2();
     gen_expr(node->lhs);
@@ -2629,20 +2451,16 @@ case ND_BITNOT:
       println("  add %%rdi, %%rax");
       println("  adc %%rsi, %%rdx");
 
-    } else if (node->lhs->ty->vector_size >= 2) {
-      println("  padd%c %%xmm1, %%xmm0", GetSseIntSuffix(node->lhs->ty));
     } else {
-      println("  add %s, %s", di, ax);  
+    println("  add %s, %s", di, ax);
     }
     return;
   case ND_SUB:
       if (node->lhs->ty->kind == TY_INT128) {
         println("  sub %%rdi, %%rax");
         println("  sbb %%rsi, %%rdx");
-      } else if (node->lhs->ty->vector_size >= 2) {
-        println("  psub%c %%xmm1, %%xmm0", GetSseIntSuffix(node->lhs->ty));
-      } else {
-        println("  sub %s, %s", di, ax);
+      }  else {
+    println("  sub %s, %s", di, ax);
       }
     return;
   // case ND_MUL:
@@ -2716,96 +2534,10 @@ case ND_BITNOT:
     println("  add %%rdx, %%rsi");
     println("  mul %%rdi");
     println("  add %%rsi, %%rdx");
-  } else if (node->lhs->ty->vector_size == 16) {
-    switch (node->lhs->ty->kind) {
-      case TY_CHAR:
-        println("  movaps %%xmm1, %%xmm2");
-        println("  movaps %%xmm0, %%xmm3");
-        println("  punpcklbw %%xmm0, %%xmm3");
-        println("  punpcklbw %%xmm1, %%xmm2");            
-        println("  pmullw  %%xmm3, %%xmm2");
-        println("  punpckhbw %%xmm0, %%xmm0");                        
-        println("  pmullw %%xmm0, %%xmm1");                        
-        println("  packuswb %%xmm1, %%xmm0");
-        return;
-      case TY_SHORT:
-        println("  pmullw %%xmm1, %%xmm0");
-        return;
-      case TY_INT:
-        if (opt_sse4) {
-          println("  pmulld %%xmm1, %%xmm0");
-        } else {
-          println("  movaps %%xmm0, %%xmm2");
-          println("  psrlq $32, %%xmm0");
-          println("  pmuludq %%xmm1, %%xmm2");
-          println("  psrlq $32, %%xmm1");
-          println("  pmuludq %%xmm1, %%xmm0");              
-          println("  pshufd $8, %%xmm2, %%xmm2");  
-          println("  pshufd $8, %%xmm0, %%xmm1");              
-          println("  punpckldq  %%xmm1, %%xmm2");              
-          println("  movaps %%xmm2, %%xmm0");              
-        }
-        return;
-      case TY_LONG:
-        println("  movaps %%xmm1, %%xmm2");
-        println("  movaps %%xmm0, %%xmm3");
-        println("  pmuludq %%xmm1, %%xmm3");
-        println("  movaps %%xmm2, %%xmm4");
-        println("  movaps %%xmm0, %%xmm1");
-        println("  psrlq $32, %%xmm4");
-        println("  psrlq $32, %%xmm1");
-        println("  pmuludq %%xmm4, %%xmm0");
-        println("  pmuludq %%xmm2, %%xmm1");
-        println("  paddq %%xmm0, %%xmm1");
-        println("  psllq $32, %%xmm1");
-        println("  paddq %%xmm1, %%xmm3");
-        println("  movaps %%xmm3, %%xmm0");
-        return;
-      default:
-        unreachable();
-    }
-  } else if (node->lhs->ty->vector_size == 8) {
-    switch (node->lhs->ty->kind) {
-      case TY_INT:
-        println("  pmuludq %%xmm1, %%xmm0");
-        return;
-      case TY_LONG:
-        // Handle 64-bit integer multiplication if needed
-        println("  movaps %%xmm1, %%xmm2");
-        println("  pmuludq %%xmm1, %%xmm0");
-        println("  movaps %%xmm2, %%xmm1");
-        println("  psrlq $32, %%xmm1");
-        println("  pmuludq %%xmm1, %%xmm0");
-        println("  psllq $32, %%xmm0");
-        println("  paddq %%xmm1, %%xmm0");
-        return;
-      default:
-        unreachable();
-    }
-  } else if (node->lhs->ty->vector_size == 4) {
-    switch (node->lhs->ty->kind) {
-      case TY_INT:
-        println("  pmulld %%xmm1, %%xmm0");
-        return;
-      case TY_FLOAT:
-        println("  mulps %%xmm1, %%xmm0");
-        return;
-      default:
-        unreachable();
-    }
-  } else if (node->lhs->ty->vector_size == 2) {
-    // For vector size 2, which may refer to 16-bit vectors in a 128-bit register
-    switch (node->lhs->ty->kind) {
-      case TY_SHORT:
-        println("  pmullw %%xmm1, %%xmm0");
-        return;
-      default:
-        unreachable();
-    }
   } else {
     println("  imul %s, %s", di, ax);
   }
-  return;
+    return;
   // case ND_DIV:
   // case ND_MOD:
   //   if (node->lhs->ty->kind == TY_INT128) {
@@ -2859,7 +2591,7 @@ case ND_BITNOT:
   //   }
   //   return;
   case ND_DIV:
-case ND_MOD:
+  case ND_MOD:
   if (node->lhs->ty->kind == TY_INT128) {
     bool skew;
     if ((skew = (depth & 1))) {
@@ -2888,61 +2620,14 @@ case ND_MOD:
       println("  add $8, %%rsp");
       depth--;
     }
-  } else if (node->lhs->ty->vector_size == 16) {
-    // SSE does not have direct instructions for division or modulus on packed integers.
-    // Consider implementing custom logic or using a library call
-    error_tok(node->tok, "in gen_expr: %s %d no div/mod sse instruction", CODEGEN_C, __LINE__);
-  } else if (node->lhs->ty->vector_size == 8) {
-    // Handle 64-bit vector division or modulus if needed.
-    switch (node->lhs->ty->kind) {
-      case TY_INT:
-        // Handle 64-bit vector division if possible
-        // Example: using library routines or custom implementation
-        error_tok(node->tok, "in gen_expr: %s %d no div/mod sse instruction", CODEGEN_C, __LINE__);
-        break;
-      case TY_FLOAT:
-        if (node->kind == ND_DIV) {
-          println("  divps %%xmm1, %%xmm0");
-        } else {
-          error_tok(node->tok, "in gen_expr: %s %d no mod sse instruction for float", CODEGEN_C, __LINE__);
-        }
-        break;
-      default:
-        unreachable();
-    }
-  } else if (node->lhs->ty->vector_size == 4) {
-    // Handle 32-bit vector division or modulus if needed
-    switch (node->lhs->ty->kind) {
-      case TY_INT:
-        // Example: Handle 32-bit vector division using library routines or custom implementation
-        error_tok(node->tok, "in gen_expr: %s %d no div/mod sse instruction", CODEGEN_C, __LINE__);
-        break;
-      case TY_FLOAT:
-        if (node->kind == ND_DIV) {
-          println("  divps %%xmm1, %%xmm0");
-        } else {
-          error_tok(node->tok, "in gen_expr: %s %d no mod sse instruction for float", CODEGEN_C, __LINE__);
-        }
-        break;
-      default:
-        unreachable();
-    }
-  } else if (node->lhs->ty->vector_size == 2) {
-    // Handle 16-bit vector division or modulus if needed
-    switch (node->lhs->ty->kind) {
-      case TY_SHORT:
-        // Example: Handle 16-bit vector division using custom implementation
-        error_tok(node->tok, "in gen_expr: %s %d no div/mod sse instruction", CODEGEN_C, __LINE__);
-        break;
-      default:
-        unreachable();
-    }
   } else {
     // Handle standard integer division or modulus
     if (node->ty->is_unsigned) {
       println("  mov $0, %s", dx);
       println("  div %s", di);
-    } else {
+    }
+    else
+    {
       if (node->lhs->ty->size == 8)
         println("  cqo");
       else
@@ -2953,36 +2638,29 @@ case ND_MOD:
     if (node->kind == ND_MOD)
       println("  mov %%rdx, %%rax");
   }
-  return;
-
+    return;
   case ND_BITAND:
     if (node->lhs->ty->kind == TY_INT128) {
         println("  and %%rdi, %%rax");
         println("  and %%rsi, %%rdx");
-      } else if (node->lhs->ty->vector_size >= 2) {
-        println("  pand %%xmm1, %%xmm0");
       } else {
-        println("  and %s, %s", di, ax);
+    println("  and %s, %s", di, ax);
       }
     return;
   case ND_BITOR:
     if (node->lhs->ty->kind == TY_INT128) {
         println("  or %%rdi, %%rax");
         println("  or %%rsi, %%rdx");
-      } else if (node->lhs->ty->vector_size >= 2) {
-        println("  por %%xmm1, %%xmm0");
-      } else {
-        println("  or %s, %s", di, ax);
+      }  else {
+    println("  or %s, %s", di, ax);
       }
     return;
   case ND_BITXOR:
     if (node->lhs->ty->kind == TY_INT128) {
         println("  xor %%rdi, %%rax");
         println("  xor %%rsi, %%rdx");
-      } else if (node->lhs->ty->vector_size >= 2) {
-        println("  pxor %%xmm1, %%xmm0");
       } else {
-        println("  xor %s, %s", di, ax);
+    println("  xor %s, %s", di, ax);
       }
     return;
   case ND_EQ:
@@ -3036,130 +2714,27 @@ case ND_MOD:
             }
             return;
         }
-      } else if (node->lhs->ty->vector_size >= 2) {
-        switch (node->kind) {
-          case ND_EQ:
-            switch (node->lhs->ty->kind) {
-              case TY_CHAR:
-              case TY_SHORT:
-              case TY_LONG:
-              case TY_INT:
-                println("  pcmpeq%c %%xmm1, %%xmm0",
-                        GetSseIntSuffix(node->lhs->ty));
-                return;
-              default:
-                error_tok(node->tok, "in gen_expr: %s %d todo sse eq", CODEGEN_C, __LINE__);
-            }
-            return;
-          case ND_NE:
-            switch (node->lhs->ty->kind) {
-              case TY_CHAR:
-              case TY_SHORT:
-              case TY_INT:
-                println("  pcmpeq%c %%xmm1, %%xmm0",
-                        GetSseIntSuffix(node->lhs->ty));
-                println("  pcmpeqd %%xmm1, %%xmm1");
-                println("  andnps  %%xmm1, %%xmm0");
-                return;
-              default:
-                error_tok(node->tok, "in gen_expr: %s %d todo sse ne", CODEGEN_C, __LINE__);
-            }
-            return;
-          case ND_LT:
-            if (node->lhs->ty->is_unsigned) {
-              switch (node->lhs->ty->kind) {
-                case TY_CHAR:
-                case TY_SHORT:
-                  println("  psubus%c %%xmm0, %%xmm1",
-                          GetSseIntSuffix(node->lhs->ty));
-                  println("  movaps %%xmm1, %%xmm0");
-                  println("  xorps %%xmm1, %%xmm1");
-                  println("  pcmpeq%c %%xmm1, %%xmm0",
-                          GetSseIntSuffix(node->lhs->ty));
-                  println("  pcmpeqd %%xmm1, %%xmm1");
-                  println("  andnps %%xmm1, %%xmm0");
-                  return;
-                default:
-                  error_tok(node->tok, "in gen_expr: %s %d todo sse ltu", CODEGEN_C, __LINE__);
-              }
-            } else {
-              switch (node->lhs->ty->kind) {
-                case TY_CHAR:
-                case TY_SHORT:
-                case TY_LONG:
-                case TY_INT:
-                  println("  pcmpgt%c %%xmm0, %%xmm1",
-                          GetSseIntSuffix(node->lhs->ty));
-                  println("  movaps %%xmm1, %%xmm0");
-                  return;
-                default:
-                  error_tok(node->tok, "in gen_expr: %s %d todo sse lt %d", CODEGEN_C, __LINE__, node->lhs->ty->kind);
-              }
-            }
-            return;
-          case ND_LE:
-            if (node->lhs->ty->is_unsigned) {
-              switch (node->lhs->ty->kind) {
-                case TY_CHAR:
-                  println("  pminub %%xmm0, %%xmm1");
-                  println("  pcmpeqb %%xmm1, %%xmm0");
-                  return;
-                case TY_SHORT:
-                  println("  psubusw %%xmm1, %%xmm0");
-                  println("  xorps %%xmm1, %%xmm1");
-                  println("  pcmpeqw %%xmm1, %%xmm0");
-                  return;
-                case TY_INT:
-                  println("  mov  $-2147483648, %%eax");
-                  println("  movd %%eax, %%xmm2");
-                  println("  pshufd $0, %%xmm2");
-                  println("  pcmpgtd %%xmm1, %%xmm0");
-                  println("  pcmpeqd %%xmm1, %%xmm1");
-                  println("  andnps %%xmm1, %%xmm0");
-                  return;
-                default:
-                  error_tok(node->tok, "in gen_expr: %s %d todo sse leu", CODEGEN_C, __LINE__);
-              }
-            } else {
-              switch (node->lhs->ty->kind) {
-                case TY_SHORT:
-                  println("  pminsw %%xmm0, %%xmm1");
-                  println("  pcmpeqw %%xmm1, %%xmm0");
-                  return;
-                case TY_CHAR:
-                case TY_INT:
-                  println("  pcmpgt%c %%xmm1, %%xmm0",
-                          GetSseIntSuffix(node->lhs->ty));
-                  println("  pcmpeqd %%xmm1, %%xmm1");
-                  println("  andnps %%xmm1, %%xmm0");
-                  return;
-                default:
-                  error_tok(node->tok, "in gen_expr: %s %d todo sse le", CODEGEN_C, __LINE__);
-              }
-            }
-            return;
-        }
       } else {
         println("  cmp %s,%s", di, ax);
         if (node->kind == ND_EQ) {
-          println("  sete %%al");
+      println("  sete %%al");
         } else if (node->kind == ND_NE) {
-          println("  setne %%al");
+      println("  setne %%al");
         } else if (node->kind == ND_LT) {
           if (node->lhs->ty->is_unsigned) {
-            println("  setb %%al");
+        println("  setb %%al");
           } else {
-            println("  setl %%al");
-          }
+        println("  setl %%al");
+    }
         } else if (node->kind == ND_LE) {
           if (node->lhs->ty->is_unsigned) {
-            println("  setbe %%al");
+        println("  setbe %%al");
           } else {
-            println("  setle %%al");
+        println("  setle %%al");
           }
         }
-      }
-        
+    }
+
     println("  movzb %%al, %%rax");
     return;
   case ND_SHL:
@@ -3172,60 +2747,9 @@ case ND_MOD:
         println("  and $64, %%cl");
         println("  cmovne %%rax, %%rdx");
         println("  cmovne %%rdi, %%rax");
-    } else if (node->lhs->ty->vector_size == 16) {
-      // Handle 128-bit vector (16 bytes) shift left
-      switch (node->lhs->ty->kind) {
-        case TY_CHAR:
-          println("  psllb %%xmm1, %%xmm0"); // Shift left packed bytes (8-bit) in xmm0
-          break;
-        case TY_SHORT:
-          println("  psllw %%xmm1, %%xmm0"); // Shift left packed words (16-bit) in xmm0
-          break;
-        case TY_INT:
-          println("  pslld %%xmm1, %%xmm0"); // Shift left packed double words (32-bit) in xmm0
-          break;
-        case TY_LONG:
-          println("  psllq %%xmm1, %%xmm0"); // Shift left packed quadwords (64-bit) in xmm0
-          break;
-        default:
-          error_tok(node->tok, "in gen_expr: %s %d todo sse shl", CODEGEN_C, __LINE__);
-      }
-    } else if (node->lhs->ty->vector_size == 8) {
-      // Handle 64-bit vector (8 bytes) shift left
-      switch (node->lhs->ty->kind) {
-        case TY_CHAR:
-          println("  psllw %%xmm1, %%xmm0"); // Shift left packed words (16-bit) in xmm0
-          break;
-        case TY_SHORT:
-          println("  psllw %%xmm1, %%xmm0"); // Shift left packed words (16-bit) in xmm0
-          break;
-        case TY_INT:
-          println("  pslld %%xmm1, %%xmm0"); // Shift left packed double words (32-bit) in xmm0
-          break;
-        default:
-          error_tok(node->tok, "in gen_expr: %s %d todo sse shl 64-bit", CODEGEN_C, __LINE__);
-      }
-    } else if (node->lhs->ty->vector_size == 4) {
-      // Handle 32-bit vector (4 bytes) shift left
-      switch (node->lhs->ty->kind) {
-        case TY_INT:
-          println("  pslld %%xmm1, %%xmm0"); // Shift left packed double words (32-bit) in xmm0
-          break;
-        default:
-          error_tok(node->tok, "in gen_expr: %s %d todo sse shl 32-bit", CODEGEN_C, __LINE__);
-      }
-    } else if (node->lhs->ty->vector_size == 2) {
-      // Handle 16-bit vector (2 bytes) shift left
-      switch (node->lhs->ty->kind) {
-        case TY_SHORT:
-          println("  psllw %%xmm1, %%xmm0"); // Shift left packed words (16-bit) in xmm0
-          break;
-        default:
-          error_tok(node->tok, "in gen_expr: %s %d todo sse shl 16-bit", CODEGEN_C, __LINE__);
-      }
     } else {
       // Handle scalar shift left
-      println("  shl %%cl, %s", ax);
+    println("  shl %%cl, %s", ax);
     }
     return;
 
@@ -3288,7 +2812,7 @@ case ND_MOD:
   case ND_SHR:
   int c = count();
   // Move shift amount to CL register
-  println("  mov %%rdi, %%rcx");
+    println("  mov %%rdi, %%rcx");
 
   if (node->lhs->ty->kind == TY_INT128) {
     // Handle 128-bit shifts
@@ -3328,57 +2852,6 @@ case ND_MOD:
 
     println(".Lshift_done_%d:", c);
 
-  } else if (node->lhs->ty->vector_size == 16) {
-    // Handle SSE/AVX vector shifts (128-bit vectors)
-    switch (node->lhs->ty->kind) {
-      case TY_CHAR:
-        println("  psrld %%xmm1, %%xmm0"); // Logical shift right packed bytes (8-bit)
-        break;
-      case TY_SHORT:
-        println("  psrlw %%xmm1, %%xmm0"); // Logical shift right packed words (16-bit)
-        break;
-      case TY_INT:
-        println("  psrld %%xmm1, %%xmm0"); // Logical shift right packed double words (32-bit)
-        break;
-      case TY_LONG:
-        println("  psrlq %%xmm1, %%xmm0"); // Logical shift right packed quadwords (64-bit)
-        break;
-      default:
-        error_tok(node->tok, "in gen_expr: %s %d todo sse shr", CODEGEN_C, __LINE__);
-    }
-  } else if (node->lhs->ty->vector_size == 8) {
-    // Handle 64-bit vectors
-    switch (node->lhs->ty->kind) {
-      case TY_CHAR:
-        println("  psrlw %%xmm1, %%xmm0"); // Logical shift right packed words (16-bit)
-        break;
-      case TY_SHORT:
-        println("  psrlw %%xmm1, %%xmm0"); // Logical shift right packed words (16-bit)
-        break;
-      case TY_INT:
-        println("  psrld %%xmm1, %%xmm0"); // Logical shift right packed double words (32-bit)
-        break;
-      default:
-        error_tok(node->tok, "in gen_expr: %s %d todo sse shr 64-bit", CODEGEN_C, __LINE__);
-    }
-  } else if (node->lhs->ty->vector_size == 4) {
-    // Handle 32-bit vectors
-    switch (node->lhs->ty->kind) {
-      case TY_INT:
-        println("  psrld %%xmm1, %%xmm0"); // Logical shift right packed double words (32-bit)
-        break;
-      default:
-        error_tok(node->tok, "in gen_expr: %s %d todo sse shr 32-bit", CODEGEN_C, __LINE__);
-    }
-  } else if (node->lhs->ty->vector_size == 2) {
-    // Handle 16-bit vectors
-    switch (node->lhs->ty->kind) {
-      case TY_SHORT:
-        println("  psrlw %%xmm1, %%xmm0"); // Logical shift right packed words (16-bit)
-        break;
-      default:
-        error_tok(node->tok, "in gen_expr: %s %d todo sse shr 16-bit", CODEGEN_C, __LINE__);
-    }
   } else {
     // Handle scalar values
     if (node->lhs->ty->is_unsigned) {
@@ -3388,7 +2861,7 @@ case ND_MOD:
     }
   }
 
-  return;
+    return;
 
 
   }
@@ -3781,7 +3254,7 @@ static void emit_text(Obj *prog)
       case TY_INT128:
         store_gp(gp++, var->offset + 0, 8);
         store_gp(gp++, var->offset + 8, 8);
-        break;        
+        break;
       default:
         store_gp(gp++, var->offset, ty->size);
       }
@@ -4059,92 +3532,101 @@ static void print_offset(Obj *prog)
 
 void assign_lvar_offsets(Obj *prog) {
     for (Obj *fn = prog; fn; fn = fn->next) {
-        if (!fn->is_function)
-            continue;
+    if (!fn->is_function)
+      continue;
 
-        int top = 16;
-        int bottom = 0;
+    int top = 16;
+        int bottom = 32;
 
-        if (fn->alloca_bottom && fn->alloca_bottom->offset)
+        if (fn->alloca_bottom && fn->alloca_bottom->offset) {          
             bottom = abs(fn->alloca_bottom->offset);
+        }
 
-        int gp = 0, fp = 0;
+    int gp = 0, fp = 0;
 
-        // Assign offsets to pass-by-stack parameters.
+    // Assign offsets to pass-by-stack parameters.
         for (Obj *var = fn->params; var; var = var->next) {
-            if (var->offset) {
-                continue;
-            }
-            Type *ty = var->ty;
+      if (var->offset) {
+        continue;
+      }
+      Type *ty = var->ty;
+
+        // Use default alignment if not a vector
+        int align = ty->align;
+        // Only adjust alignment if the type is a vector
+        if (ty->is_vector) {
+            align = MAX(align, 16); // Ensure at least 16-byte alignment for vectors
+        }
+
 
             switch (ty->kind) {
-            case TY_STRUCT:
-            case TY_UNION:
-                if (ty->size <= 8) {
-                    bool fp1 = has_flonum(ty, 0, 8, 0);
-                    if (fp + fp1 < FP_MAX && gp + !fp1 < GP_MAX) {
-                        fp = fp + fp1;
-                        gp = gp + !fp1;
-                        continue;
-                    }
-                } else if (ty->size <= 16) {
-                    bool fp1 = has_flonum(ty, 0, 8, 0);
-                    bool fp2 = has_flonum(ty, 8, 16, 8);
+      case TY_STRUCT:
+      case TY_UNION:
+          if (ty->size <= 8) {
+            bool fp1 = has_flonum(ty, 0, 8, 0);
+            if (fp + fp1 < FP_MAX && gp + !fp1 < GP_MAX) {
+              fp = fp + fp1;
+              gp = gp + !fp1;
+              continue;
+            }
+          } else if (ty->size <= 16) {
+          bool fp1 = has_flonum(ty, 0, 8, 0);
+          bool fp2 = has_flonum(ty, 8, 16, 8);
                     if (fp + fp1 + fp2 < FP_MAX && gp + !fp1 + !fp2 < GP_MAX) {
-                        fp = fp + fp1 + fp2;
-                        gp = gp + !fp1 + !fp2;
-                        continue;
-                    }
-                }
-                break;
-            case TY_FLOAT:
-            case TY_DOUBLE:
-                if (fp++ < FP_MAX)
-                    continue;
-                break;
-            case TY_LDOUBLE:
-                break;
+            fp = fp + fp1 + fp2;
+            gp = gp + !fp1 + !fp2;
+            continue;
+          }
+        }
+        break;
+      case TY_FLOAT:
+      case TY_DOUBLE:
+        if (fp++ < FP_MAX)
+          continue;
+        break;
+      case TY_LDOUBLE:
+        break;
             case TY_INT128:
                 gp++;
                 if (gp++ < GP_MAX) continue;
                 break;
-            default:
-                if (gp++ < GP_MAX)
-                    continue;
-            }
+      default:
+        if (gp++ < GP_MAX)
+          continue;
+      }
 
             // Adjust top alignment based on the type's alignment requirement
-            int align = (ty->size >= 16 || ty->kind == TY_INT128 || ty->vector_size == 16) ? 16 : 8;
+            align = (ty->size >= 16 || ty->kind == TY_INT128 || ty->vector_size == 16 || ty->is_vector) ? 16 : 8;
             top = align_to(top, align);
-            var->offset = top;
+      var->offset = top;
             top += ty->size;
-        }
+    }
 
-        // Assign offsets to pass-by-register parameters and local variables.
+    // Assign offsets to pass-by-register parameters and local variables.
         for (Obj *var = fn->locals; var; var = var->next) {
             int align = var->align;
-            if ((var->ty->kind == TY_ARRAY && var->ty->size >= 16) ||
+            if ((var->ty->kind == TY_ARRAY && var->ty->size >= 16) || var->ty->is_vector ||
                 var->ty->kind == TY_INT128 ||
                 (var->ty->vector_size == 16)) {
                 align = MAX(16, var->align);
             }
 
-            if (isDebug)                      
-                printf("======bottom=%d kind=%d size=%d fn_bottom=%d fn_stack_size=%d name=%s funcname=%s\n", bottom, var->ty->kind, var->ty->size, fn->alloca_bottom->offset, fn->alloca_bottom->stack_size, var->name, var->funcname);
+      if (isDebug)                      
+        printf("======bottom=%d kind=%d size=%d fn_bottom=%d fn_stack_size=%d name=%s funcname=%s\n", bottom, var->ty->kind, var->ty->size, fn->alloca_bottom->offset, fn->alloca_bottom->stack_size, var->name, var->funcname);
 
-            if (var->offset) {
-                bottom += var->ty->size;
-                bottom = align_to(bottom, align);
-                continue;
-            }
+      if (var->offset) {
+        bottom += var->ty->size;
+        bottom = align_to(bottom, align);
+        continue;
+      }
 
-            bottom += var->ty->size;
-            bottom = align_to(bottom, align);
-            var->offset = -bottom;
-        }
-
-        fn->stack_size = align_to(bottom, 16);
+      bottom += var->ty->size;
+      bottom = align_to(bottom, align);
+      var->offset = -bottom;
     }
+
+    fn->stack_size = align_to(bottom, 16);
+  }
 }
 
 
@@ -4322,6 +3804,7 @@ int len = sizeof(newargreg64)/sizeof(newargreg64[0]);
       add_register_used(register8_to_64(newargreg8[i]));
   }
 
+
 }
 
 
@@ -4356,24 +3839,6 @@ void pop2(char *a, char *b) {
   depth--;  
 }
 
-//From @cosmopoilitan
-static int GetSseIntSuffix(Type *ty) {
-  switch (ty->kind) {
-    case TY_CHAR:
-      return 'b';
-    case TY_SHORT:
-      return 'w';
-    case TY_DOUBLE:
-    case TY_INT:
-      return 'd';
-    case TY_LONG:
-      return 'q';
-    case TY_FLOAT:
-      return 's'; 
-    default:
-      unreachable();
-  }
-}
 
 void pushreg(const char *arg) {
   println("  push %%%s", arg);
@@ -4382,22 +3847,4 @@ void pushreg(const char *arg) {
 
 
 
-static void restore_alignment(Node *args) {
-    if (args->realign_stack) {
-        // Realign stack if needed
-        println("  mov %%rsp, %%rbx"); // Save the current stack pointer
-        println("  and $-16, %%rsp");  // Align the stack pointer to 16 bytes
-        println("  sub $16, %%rsp");   // Allocate space for local variables
-        depth = (depth + 1) & ~1; // Adjust depth if necessary
-    }
-}
 
-
-static bool requires_vector_alignment(Node *args) {
-    for (Node *arg = args; arg; arg = arg->next) {
-        if (arg->ty->vector_size == 16) {
-            return true;
-        }
-    }
-    return false;
-}

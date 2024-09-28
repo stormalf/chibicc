@@ -379,9 +379,11 @@ static Initializer *new_initializer(Type *ty, bool is_flexible)
     error("%s: %s:%d: error: in new_initializer : init is null", PARSE_C, __FILE__, __LINE__);
   init->ty = ty;
 
+ 
+
   if (ty->kind == TY_ARRAY)
   {
-    if (is_flexible && ty->size < 0)
+    if (is_flexible && (ty->size < 0 || ty->array_len < 0))
     {
       init->is_flexible = true;
       return init;
@@ -389,7 +391,7 @@ static Initializer *new_initializer(Type *ty, bool is_flexible)
 
     init->children = calloc(ty->array_len, sizeof(Initializer *));
     if (init->children == NULL)
-      error("%s: %s:%d: error: in new_initializer : init->children is null", PARSE_C, __FILE__, __LINE__);
+      error("%s: %s:%d: error: in new_initializer : init->children is null %d %d", PARSE_C, __FILE__, __LINE__, ty->array_len, ty->size);
     for (int i = 0; i < ty->array_len; i++)
       init->children[i] = new_initializer(ty->base, false);
     return init;
@@ -843,7 +845,6 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     default:
       error_tok(tok, "%s %d: in declspec : invalid type", PARSE_C, __LINE__);
     }
-
     tok = tok->next;
     tok = attribute_list(tok, ty, type_attributes);
 
@@ -3837,12 +3838,13 @@ static Token *type_attributes(Token *tok, void *arg)
         error_tok(tok, "%s %d: unsupported vector_size %d; only 2, 4, 8 and 16 are supported", PARSE_C, __LINE__, vs);
     }
     if (vs != ty->vector_size) {
-        ty->size = vs;
+        //ty->size = vs;
         ty->vector_size = vs;
         if (!ty->is_aligned) ty->align = vs;
     }
     ty->align = vs;
     ty->is_vector = true;
+    //ty->size = vs;
     ctx->filename = PARSE_C;
     ctx->funcname = "type_attributes";        
     ctx->line_no = __LINE__ + 1;  
@@ -3863,6 +3865,8 @@ static Token *type_attributes(Token *tok, void *arg)
         ctx->funcname = "type_attributes";     
         ctx->line_no = __LINE__ + 1;       
         tok = skip(tok, ")", ctx);
+      } else if (consume(&tok, tok, "__may_alias__")) {
+
       }
     }
 
@@ -3935,6 +3939,16 @@ static Token *type_attributes(Token *tok, void *arg)
     return skip(tok, ")", ctx);
   }
 
+  if (consume(&tok, tok, "__target__") || 
+       consume(&tok, tok, "target")) {
+    ctx->filename = PARSE_C;
+    ctx->funcname = "type_attributes";        
+    ctx->line_no = __LINE__ + 1;          
+    tok = skip(tok, "(", ctx);
+    ConsumeStringLiteral(&tok, tok);
+    ctx->line_no = __LINE__ + 1;  
+    return skip(tok, ")", ctx);
+  }
 
 
   //from COSMOPOLITAN adding deprecated, may_alias, unused
@@ -4110,9 +4124,9 @@ static Token *type_attributes(Token *tok, void *arg)
     if (consume(&tok, tok, "sentinel") || consume(&tok, tok, "__sentinel__") ||
       consume(&tok, tok, "nonnull") || consume(&tok, tok, "__nonnull__") ||
       consume(&tok, tok, "optimize") || consume(&tok, tok, "__optimize__") ||
-      consume(&tok, tok, "target") || consume(&tok, tok, "__target__") ||
       consume(&tok, tok, "assume_aligned") || consume(&tok, tok, "__assume_aligned__") ||
       consume(&tok, tok, "alloc_size") || consume(&tok, tok, "__alloc_size__") ||
+      consume(&tok, tok, "__min_vector_width__") ||
       consume(&tok, tok, "attribute_alloc_size") || consume(&tok, tok, "__attribute_alloc_size__") ||
       consume(&tok, tok, "alloc_align") || consume(&tok, tok, "__alloc_align__")) {
     if (consume(&tok, tok, "(")) {
@@ -6693,4 +6707,3 @@ static void vector_initializer1(Token **rest, Token *tok, Initializer *init) {
 
      *rest = tok->next;
 }
-
