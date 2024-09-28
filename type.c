@@ -140,6 +140,10 @@ Type *array_of(Type *base, int len)
   Type *ty = new_type(TY_ARRAY, base->size * len, base->align);
   ty->base = base;
   ty->array_len = len;
+  if (base->is_vector) {
+    ty->is_vector = true;
+    ty->vector_size = base->vector_size;
+  }
   return ty;
 }
 
@@ -153,6 +157,21 @@ Type *vla_of(Type *base, Node *len)
 
 }
 
+
+// Type *vector_of(Type *base, int len) {
+//     if (!base)
+//       error("%s %d: in vector_of : base is null", TYPE_C, __LINE__);
+//     // Create a new type that represents an array of the base type
+//     Type *ty = new_type(TY_ARRAY, base->size, base->align); // Set to array kind
+//     ty->base = base;
+//     ty->is_vector = true;
+//     ty->array_len = len;
+//     ty->base->size = sizeof(base->size); 
+//     ty->align = base->align;      // Inherit alignment from base type
+//     ty->vector_size = base->vector_size; 
+//     //printf("=====%d %d %ld %ld\n", ty->base->size, ty->size, sizeof(float), sizeof(base->size));
+//     return ty;
+// }
 
 
 
