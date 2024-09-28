@@ -201,7 +201,9 @@ static Token * old_style_params(Token **rest, Token *tok, Type *ty);
 static Type *old_params(Type *ty, int nbparms);
 
 static void add_typedef_to_scope(VarScope *sc, char *name, Type *type);
-static int type_align(Type *ty);
+static void vector_initializer1(Token **rest, Token *tok, Initializer *init);
+static int count_vector_init_elements(Token *tok, Type *ty);
+
 
 static int align_down(int n, int align)
 {
@@ -437,6 +439,7 @@ static Obj *new_var(char *name, Type *ty)
   var->ty = ty;
   var->align = ty->align;
   push_scope(name)->var = var;
+  ty->is_vector = false;
   return var;
 }
 
@@ -947,7 +950,14 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
       // only in the parameter context.
       ty2 = pointer_to(ty2);
       ty2->name = name;
+    }else if (ty2->is_vector) {  
+      ty2->base = ty2;
+      ty2 = pointer_to(ty2->base);
+      ty2->is_vector = true;
+      ty2->name = name;
     }
+
+    
     if (is_old_style) {
       ArrayType[nbFunc][nbparms] = ty2;
       nbparms++;
@@ -1271,6 +1281,10 @@ static Type *typeof_specifier(Token **rest, Token *tok)
 static Node *compute_vla_size(Type *ty, Token *tok)
 {
   Node *node = new_node(ND_NULL_EXPR, tok);
+
+  // Return early if the type is a vector
+  if (ty->is_vector)
+    return node;
 
   if (ty->base) {
     node = new_binary(ND_COMMA, node, compute_vla_size(ty->base, tok), tok);
@@ -2011,9 +2025,15 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
 
   if (equal(tok, "{"))
   {
+    bool is_vector = false;
     // An initializer for a scalar variable can be surrounded by
     // braces. E.g. `int x = {3};`. Handle that case.
     while (!equal(tok, "}")) {
+      if (!is_vector && equal(tok->next->next, ",")) {
+        is_vector = true;
+        vector_initializer1(rest, tok, init);
+
+      } 
     initializer2(&tok, tok->next, init);
     }
     ctx->filename = PARSE_C;
@@ -3822,6 +3842,7 @@ static Token *type_attributes(Token *tok, void *arg)
         if (!ty->is_aligned) ty->align = vs;
     }
     ty->align = vs;
+    ty->is_vector = true;
     ctx->filename = PARSE_C;
     ctx->funcname = "type_attributes";        
     ctx->line_no = __LINE__ + 1;  
@@ -6604,19 +6625,72 @@ static void add_typedef_to_scope(VarScope *sc, char *name, Type *type) {
 
 
 
-static int type_align(Type *ty) {
-    // If alignment is explicitly set, use it
-    if (ty->align > 0)
-        return ty->align;
 
-    // Otherwise, calculate default alignment based on type
-    switch (ty->kind) {
-    case TY_FLOAT:
-        return 4;
-    case TY_DOUBLE:
-        return 8;
-    // Add more cases for other types as needed
-    default:
-        return 1; // Default alignment for basic types
+static int count_vector_init_elements(Token *tok, Type *ty) {
+    int count = 0;
+
+    // Check if the initializer has braces
+    if (!equal(tok, "{")) {
+        return 1; // If no braces, assume it's a single initializer
     }
+
+    //tok = tok->next; // Skip past the opening '{'
+
+    // Count the number of initializer elements
+    while (tok && !equal(tok, "}")) {
+        if (equal(tok, ",")) {
+            tok = tok->next; // Skip commas
+            continue; 
+        }
+
+        // Each valid initializer counts as one element
+        count++;
+        tok = tok->next; // Move to the next element
+    }
+
+    return count - 1; // Return total number of initializers
 }
+
+
+
+
+// vector-initializer1 = "{" initializer ("," initializer)* ","? "}"
+static void vector_initializer1(Token **rest, Token *tok, Initializer *init) {
+
+    // Count vector elements and create a new initializer for the vector
+    int len = count_vector_init_elements(tok, init->ty);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "vector_initializer1";        
+    ctx->line_no = __LINE__ + 1;  
+    tok = skip(tok, "{", ctx);
+    
+    init->ty->is_vector = true; 
+    *init = *new_initializer(array_of(init->ty, len), false);
+    bool first = true;
+
+    for (int i = 0; !consume_end(rest, tok); i++) {
+        if (!first) {
+            ctx->filename = PARSE_C;
+            ctx->funcname = "vector_initializer1";        
+            ctx->line_no = __LINE__ + 1;        
+            tok = skip(tok, ",", ctx);
+        }
+
+        first = false;
+
+        // If we have more elements than allowed, skip excess
+        if (i >= init->ty->array_len) {
+            tok = skip_excess_element(tok);
+            continue;
+        }
+
+        init->children[i]->expr =  assign(rest, tok);
+
+    tok = tok->next;
+  }
+
+
+
+     *rest = tok->next;
+}
+

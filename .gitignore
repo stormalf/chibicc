@@ -12,3 +12,6 @@
 /stage2
 /build
 /cmake-build-debug
+**/vgcore.*
+**/chibicc
+**/.qdrant-initialized

@@ -475,6 +475,7 @@ typedef struct TypedefEntry {
     char *name;  // Name of the typedef
     Type *type;  // The type associated with this typedef
     int align;   // Alignment of the type
+    bool is_vector;   // Flag to indicate if this is a vector type
     struct TypedefEntry *next;  // Pointer to the next entry in the list
 } TypedefEntry;
 
@@ -561,6 +562,7 @@ struct Type
   int array_len;
   //from COSMOPOLITAN adding vector_size
   int vector_size;
+  bool is_vector;    // Flag to indicate if this is a vector type
 
   // Variable-length array
   Node *vla_len; // # of elements
@@ -629,6 +631,7 @@ Type *pointer_to(Type *base);
 Type *func_type(Type *return_ty);
 Type *array_of(Type *base, int size);
 Type *vla_of(Type *base, Node *expr);
+Type *vector_of(Type *base, int len);
 Type *enum_type(void);
 Type *struct_type(void);
 void add_type(Node *node);

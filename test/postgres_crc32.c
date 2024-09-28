@@ -7,23 +7,14 @@
 typedef double __v2df __attribute__ ((__vector_size__ (16)));
 typedef long long __v2di __attribute__ ((__vector_size__ (16)));
 //typedef unsigned long long __v2du __attribute__ ((__vector_size__ (16)));
-typedef int __v4si __attribute__ ((__vector_size__ (16)));
+//typedef int __v4si __attribute__ ((__vector_size__ (16)));
 typedef unsigned int __v4su __attribute__ ((__vector_size__ (16)));
 typedef short __v8hi __attribute__ ((__vector_size__ (16)));
 typedef unsigned short __v8hu __attribute__ ((__vector_size__ (16)));
 //typedef char __v16qi __attribute__ ((__vector_size__ (16)));
-// typedef signed char __v16qs __attribute__ ((__vector_size__ (16)));
+//typedef signed char __v16qs __attribute__ ((__vector_size__ (16)));
 typedef unsigned char __v16qu __attribute__ ((__vector_size__ (16)));
-// typedef double __v2df;
-// typedef long long __v2di;
-// typedef unsigned long long __v2du ;
-// typedef int __v4si ;
-// typedef unsigned int __v4su ;
-// typedef short __v8hi ;
-// typedef unsigned short __v8hu ;
-// typedef char __v16qi ;
-// typedef signed char __v16qs ;
-// typedef unsigned char __v16qu ;
+
 
 
 // Function prototype
