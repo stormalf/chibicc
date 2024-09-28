@@ -137,12 +137,15 @@ Type *func_type(Type *return_ty)
 
 Type *array_of(Type *base, int len)
 {
+  if (!base)
+  error("%s %d: in array_of : base is null", TYPE_C, __LINE__); 
   Type *ty = new_type(TY_ARRAY, base->size * len, base->align);
   ty->base = base;
   ty->array_len = len;
   if (base->is_vector) {
     ty->is_vector = true;
     ty->vector_size = base->vector_size;
+    //ty->size = base->vector_size;
   }
   return ty;
 }
