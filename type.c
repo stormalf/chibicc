@@ -31,6 +31,8 @@ static Type *new_type(TypeKind kind, int size, int align)
   ty->kind = kind;
   ty->size = size;
   ty->align = align;
+  ty->is_vector = false;
+  ty->vector_size = 0;
   if (ty->kind == TY_INT128)
     ty->is_aligned = true;
   return ty;
@@ -291,8 +293,8 @@ void add_type(Node *node)
     return;
   }
   case ND_ASSIGN:
-    if (node->lhs->ty->kind == TY_ARRAY)
-      error_tok(node->lhs->tok, "%s %d: not an lvalue", TYPE_C, __LINE__);
+    if (node->lhs->ty->kind == TY_ARRAY && !node->lhs->ty->is_vector) 
+      error_tok(node->lhs->tok, "%s %d: not an lvalue %d", TYPE_C, __LINE__, node->lhs->ty->is_vector);
     if (node->lhs->ty->kind != TY_STRUCT && node->lhs->ty->kind != TY_UNION)
       node->rhs = new_cast(node->rhs, node->lhs->ty);
     node->ty = node->lhs->ty;
@@ -348,7 +350,7 @@ void add_type(Node *node)
   case ND_ADDR:
   {
     Type *ty = node->lhs->ty;
-    if (ty->kind == TY_ARRAY)
+    if (ty->kind == TY_ARRAY )
       node->ty = pointer_to(ty->base);
     else
       node->ty = pointer_to(ty);

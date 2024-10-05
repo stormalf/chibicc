@@ -20,15 +20,7 @@ int main(void) {
     for (int i = 0; i < 4; i++) {
         printf("v5[%d] = %f\n", i, v5[i]);
     }
-    // float x[4] = {1, 2, 3, 4};
-    // float y[4] = {1, 1, 1, 1};
-    
-    // memcpy(&v1, x, 16);
-    // memcpy(&v2, y, 16);
-    // v1 = v1 + v2;
-    // for (int i = 0; i < 4; i++) {
-    //     printf("v1[%d] = %f\n", i, v1[i]);
-    // }
+
 
     return 0;
 }

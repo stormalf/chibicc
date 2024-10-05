@@ -441,7 +441,6 @@ static Obj *new_var(char *name, Type *ty)
   var->ty = ty;
   var->align = ty->align;
   push_scope(name)->var = var;
-  ty->is_vector = false;
   return var;
 }
 
@@ -550,8 +549,8 @@ static Type *find_typedef(Token *tok) {
             for (TypedefEntry *entry = var_scope->typedefs; entry; entry = entry->next) {
                 if (strncmp(entry->name, tok->loc, tok->len) == 0 &&
                     strlen(entry->name) == tok->len) {
-                    //printf("777===Found typedef: %s with align %d\n", entry->name, entry->align);   
                     entry->type->align = entry->align;
+                    entry->type->is_vector = entry->is_vector;
                     return entry->type;  // Return the type with correct alignment
                 }
             }
@@ -952,9 +951,9 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
       ty2 = pointer_to(ty2);
       ty2->name = name;
     }else if (ty2->is_vector) {  
-      ty2->base = ty2;
+      //ty2->base = ty2;
       ty2 = pointer_to(ty2->base);
-      ty2->is_vector = true;
+      //ty2->is_vector = true;
       ty2->name = name;
     }
 
@@ -1101,6 +1100,8 @@ static Type *pointers(Token **rest, Token *tok, Type *ty)
 // declarator = pointers ("(" ident ")" | "(" declarator ")" | ident) type-suffix
 static Type *declarator(Token **rest, Token *tok, Type *ty)
 {
+
+
   //tok = attribute_list(tok, ty, type_attributes);
   ty = pointers(&tok, tok, ty);
   //tok->next = attribute_list(tok->next, ty, type_attributes);
@@ -1124,8 +1125,7 @@ static Type *declarator(Token **rest, Token *tok, Type *ty)
   }
   Token *name = NULL;
   Token *name_pos = tok;
-  
-  if (tok->kind == TK_IDENT)
+  if (tok->kind == TK_IDENT )
   {
     name = tok;
     tok = tok->next;
@@ -1286,6 +1286,8 @@ static Node *compute_vla_size(Type *ty, Token *tok)
   // Return early if the type is a vector
   if (ty->is_vector)
     return node;
+  if (ty == ty->base)
+    return node;
 
   if (ty->base) {
     node = new_binary(ND_COMMA, node, compute_vla_size(ty->base, tok), tok);
@@ -1342,10 +1344,9 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
     if (i++ > 0) {
       ctx->filename = PARSE_C;
       ctx->funcname = "declaration";      
-      ctx->line_no = __LINE__ + 2;  
+      ctx->line_no = __LINE__ + 1;  
       tok = skip(tok, ",", ctx);
     }
-
 
     Type *ty = declarator(&tok, tok, basety);
     if (!ty)
@@ -1382,7 +1383,6 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
       // Variable length arrays (VLAs) are translated to alloca() calls.
       // For example, `int x[n+2]` is translated to `tmp = n + 2,
       // x = alloca(tmp)`.
-      
       Obj *var = new_lvar(get_ident(ty->name), ty, NULL);
       Token *tok = ty->name;
       tok = attribute_list(tok, ty, type_attributes);
@@ -1398,8 +1398,14 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
     if (attr && attr->align)
       var->align = attr->align;
 
+   
     if (equal(tok, "="))
     {
+      if (equal(tok->next, "(") && is_typename(tok->next->next))
+      {
+        while (!equal(tok, ")")) 
+          tok = tok->next;
+      }
       Node *expr = lvar_initializer(&tok, tok->next, var);
       cur = cur->next = new_unary(ND_EXPR_STMT, expr, tok);
     }
@@ -2030,7 +2036,7 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
     // An initializer for a scalar variable can be surrounded by
     // braces. E.g. `int x = {3};`. Handle that case.
     while (!equal(tok, "}")) {
-      if (!is_vector && equal(tok->next->next, ",")) {
+      if (!is_vector &&  tok->next->kind == TK_NUM && equal(tok->next->next, ",")) {
         is_vector = true;
         vector_initializer1(rest, tok, init);
 
@@ -2109,8 +2115,10 @@ static Node *init_desg_expr(InitDesg *desg, Token *tok)
 
 static Node *create_lvar_init(Initializer *init, Type *ty, InitDesg *desg, Token *tok)
 {
-  if (ty->kind == TY_ARRAY)
+
+  if (ty->kind == TY_ARRAY || ty->is_vector)
   {
+
     Node *node = new_node(ND_NULL_EXPR, tok);
     for (int i = 0; i < ty->array_len; i++)
     {
@@ -2726,6 +2734,7 @@ static Node *compound_stmt(Token **rest, Token *tok)
 
   while (!equal(tok, "}"))
   {
+
     if (is_typename(tok) && !equal(tok->next, ":"))
     {
       VarAttr attr = {};
@@ -3420,6 +3429,17 @@ static Node *new_add(Node *lhs, Node *rhs, Token *tok)
   if (is_numeric(lhs->ty) && is_numeric(rhs->ty))
     return new_binary(ND_ADD, lhs, rhs, tok);
   
+      // Handle vector types
+  if (lhs->ty->is_vector || rhs->ty->is_vector) {
+    // For vectors, we assume that `base` should correspond to the scalar type (like float for float4).
+    Type *base_ty = lhs->ty->is_vector ? lhs->ty->base : rhs->ty->base;
+    if (!base_ty) {
+      error_tok(tok, "%s %d: in new_add: vector base type is null %d %d", PARSE_C, __LINE__, lhs->ty->is_vector, rhs->ty->is_vector);
+    }
+    rhs = new_binary(ND_MUL, rhs, new_long(base_ty->size, tok), tok);
+    return new_binary(ND_ADD, lhs, rhs, tok);
+  }
+
   if ((lhs->ty->base == NULL && rhs->ty->base == NULL) || (lhs->ty->base != NULL && rhs->ty->base != NULL)) {
     error_tok(tok, "%s %d: in new_add : invalid operands", PARSE_C, __LINE__);
   }
@@ -3958,7 +3978,8 @@ static Token *type_attributes(Token *tok, void *arg)
       consume(&tok, tok, "__transparent_union__") || consume(&tok, tok, "transparent_union")) {
     return tok;
   }
-  
+
+ 
   
   if (consume(&tok, tok, "noinline") ||
       consume(&tok, tok, "__noinline__") ||
@@ -4120,13 +4141,12 @@ static Token *type_attributes(Token *tok, void *arg)
     return tok;
   }
 
-
     if (consume(&tok, tok, "sentinel") || consume(&tok, tok, "__sentinel__") ||
       consume(&tok, tok, "nonnull") || consume(&tok, tok, "__nonnull__") ||
       consume(&tok, tok, "optimize") || consume(&tok, tok, "__optimize__") ||
+      consume(&tok, tok, "target") || consume(&tok, tok, "__target__") ||
       consume(&tok, tok, "assume_aligned") || consume(&tok, tok, "__assume_aligned__") ||
       consume(&tok, tok, "alloc_size") || consume(&tok, tok, "__alloc_size__") ||
-      consume(&tok, tok, "__min_vector_width__") ||
       consume(&tok, tok, "attribute_alloc_size") || consume(&tok, tok, "__attribute_alloc_size__") ||
       consume(&tok, tok, "alloc_align") || consume(&tok, tok, "__alloc_align__")) {
     if (consume(&tok, tok, "(")) {
@@ -4134,7 +4154,7 @@ static Token *type_attributes(Token *tok, void *arg)
         const_expr(&tok, tok);
         if (consume(&tok, tok, ")")) break;
         ctx->filename = PARSE_C;
-        ctx->funcname = "thing_attributes";        
+        ctx->funcname = "type_attributes";        
         ctx->line_no = __LINE__ + 1;          
         tok = skip(tok, ",", ctx);
       }
@@ -4600,8 +4620,7 @@ static Type *struct_union_decl(Token **rest, Token *tok)
 
   // Construct a struct object.
   struct_members(&tok, tok, ty);
-  tok = attribute_list(tok, ty, type_attributes);
-  *rest = tok;
+  *rest = attribute_list(tok, ty, type_attributes);
 
   if (tag)
   {
@@ -6316,6 +6335,12 @@ char *nodekind2str(NodeKind kind)
     return "BSWAP32";    //builtin bswap32
   case ND_BUILTIN_BSWAP64:
     return "BSWAP64";    //builtin bswap64          
+  case ND_BUILTIN_HUGE_VALF:
+    return "HUGE_VALF"; //builtin huge_valf
+  case ND_BUILTIN_HUGE_VAL:
+    return "HUGE_VAL";   //builtin huge_val
+  case ND_BUILTIN_HUGE_VALL:
+    return "HUGE_VALL";  //builtin huge_vall    
   case ND_ALLOC:
     return "ALLOCA";  //builtin alloca
   default:
@@ -6630,11 +6655,20 @@ static void add_typedef_to_scope(VarScope *sc, char *name, Type *type) {
     if (!new_entry) {
         error("%s: %s:%d: error: in add_typedef_to_scope : Memory allocation failed for TypedefEntry", PARSE_C, __FILE__, __LINE__);
     }
+    if (type->is_vector) {
+        int len = type->vector_size / type->size;
+        new_entry->type = array_of(type, len);
+        new_entry->is_vector = true;
+    } else {
+        new_entry->type = type;
+        new_entry->is_vector = false;
+    }
     new_entry->name = name;
-    new_entry->type = type;
+    //new_entry->type = type;
     new_entry->align = type->align; // Store the correct alignment
     new_entry->next = sc->typedefs;
     sc->typedefs = new_entry;
+    type->is_vector = false;
 }
 
 
@@ -6677,7 +6711,6 @@ static void vector_initializer1(Token **rest, Token *tok, Initializer *init) {
     ctx->funcname = "vector_initializer1";        
     ctx->line_no = __LINE__ + 1;  
     tok = skip(tok, "{", ctx);
-    
     init->ty->is_vector = true; 
     *init = *new_initializer(array_of(init->ty, len), false);
     bool first = true;
