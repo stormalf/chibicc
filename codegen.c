@@ -90,9 +90,9 @@ static void popf(Type *ty, int reg) {
       break;
 
     default:
-  println("  movsd (%%rsp), %%xmm%d", reg);
-  println("  add $8, %%rsp");
-  depth--;
+      println("  movsd (%%rsp), %%xmm%d", reg);
+      println("  add $8, %%rsp");
+      depth--;
       break;
   }
 }
@@ -407,7 +407,7 @@ static void gen_addr(Node *node)
     return;
   }
 
-  error_tok(node->tok, "%s not an lvalue", CODEGEN_C);
+  error_tok(node->tok, "%s:%d not an lvalue %d", CODEGEN_C, __LINE__, node->kind);
 }
 
 
@@ -1268,93 +1268,93 @@ static void gen_expr(Node *node)
   case ND_NEG:
     gen_expr(node->lhs);
 
-    // switch (node->ty->kind)
-    // {
-    // case TY_FLOAT:
-    //   println("  mov $1, %%rax");
-    //   println("  shl $31, %%rax");
-    //   println("  movq %%rax, %%xmm1");
-    //   if (node->ty->vector_size == 16) {
-    //     println("  pshufd $0, %%xmm1");
-    //   }
-    //   println("  xorps %%xmm1, %%xmm0");
-    //   return;
-    // case TY_DOUBLE:
-    //   println("  mov $1, %%rax");
-    //   println("  shl $63, %%rax");
-    //   println("  movq %%rax, %%xmm1");
-    //   if (node->ty->vector_size == 16) {
-    //     println("  pshufd $0b01000100, %%xmm1");
-    //   }      
-    //   println("  xorpd %%xmm1, %%xmm0");
-    //   return;
- switch (node->ty->kind) {
+    switch (node->ty->kind)
+    {
     case TY_FLOAT:
       println("  mov $1, %%rax");
       println("  shl $31, %%rax");
       println("  movq %%rax, %%xmm1");
-
-      // Handle different vector sizes
-      switch (node->ty->vector_size) {
-        case 2:  // 16-bit vectors (2 elements)
-          println("  pshuflw $0, %%xmm1, %%xmm1");
-      println("  xorps %%xmm1, %%xmm0");
-          break;
-
-        case 4:  // 32-bit vectors (4 elements)
-          println("  pshufd $0, %%xmm1, %%xmm1");
-          println("  xorps %%xmm1, %%xmm0");
-          break;
-
-        case 8:  // 64-bit vectors (8 elements)
-          println("  movaps %%xmm1, %%xmm2");
-          println("  punpckldq %%xmm1, %%xmm2");
-          println("  xorps %%xmm2, %%xmm0");
-          break;
-
-        case 16: // 128-bit vectors (4 elements, similar to 32-bit vectors)
-          println("  pshufd $0, %%xmm1, %%xmm1");
-          println("  xorps %%xmm1, %%xmm0");
-          break;
-
-        default: // Scalar float
-          println("  xorps %%xmm1, %%xmm0");
-          break;
+      if (node->ty->vector_size == 16) {
+        println("  pshufd $0, %%xmm1");
       }
+      println("  xorps %%xmm1, %%xmm0");
       return;
-
     case TY_DOUBLE:
       println("  mov $1, %%rax");
       println("  shl $63, %%rax");
       println("  movq %%rax, %%xmm1");
-
-      // Handle different vector sizes
-      switch (node->ty->vector_size) {
-        case 2:  // 16-bit vectors (2 elements)
-          println("  punpcklqdq %%xmm1, %%xmm1");
+      if (node->ty->vector_size == 16) {
+        println("  pshufd $0b01000100, %%xmm1");
+      }      
       println("  xorpd %%xmm1, %%xmm0");
-          break;
-
-        case 4:  // 32-bit vectors (4 elements)
-          println("  pshufd $0b01000100, %%xmm1, %%xmm1");
-          println("  xorpd %%xmm1, %%xmm0");
-          break;
-
-        case 8:  // 64-bit vectors (2 elements, similar to 128-bit vectors but only 2 elements)
-          println("  punpcklqdq %%xmm1, %%xmm1");
-          println("  xorpd %%xmm1, %%xmm0");
-          break;
-
-        case 16: // 128-bit vectors (2 elements, similar to 64-bit vectors)
-          println("  pshufd $0b01000100, %%xmm1, %%xmm1");
-          println("  xorpd %%xmm1, %%xmm0");
-          break;
-
-        default: // Scalar double
-          println("  xorpd %%xmm1, %%xmm0");
-          break;
-      }
       return;
+//  switch (node->ty->kind) {
+//     case TY_FLOAT:
+//       println("  mov $1, %%rax");
+//       println("  shl $31, %%rax");
+//       println("  movq %%rax, %%xmm1");
+
+//       // Handle different vector sizes
+//       switch (node->ty->vector_size) {
+//         case 2:  // 16-bit vectors (2 elements)
+//           println("  pshuflw $0, %%xmm1, %%xmm1");
+//       println("  xorps %%xmm1, %%xmm0");
+//           break;
+
+//         case 4:  // 32-bit vectors (4 elements)
+//           println("  pshufd $0, %%xmm1, %%xmm1");
+//           println("  xorps %%xmm1, %%xmm0");
+//           break;
+
+//         case 8:  // 64-bit vectors (8 elements)
+//           println("  movaps %%xmm1, %%xmm2");
+//           println("  punpckldq %%xmm1, %%xmm2");
+//           println("  xorps %%xmm2, %%xmm0");
+//           break;
+
+//         case 16: // 128-bit vectors (4 elements, similar to 32-bit vectors)
+//           println("  pshufd $0, %%xmm1, %%xmm1");
+//           println("  xorps %%xmm1, %%xmm0");
+//           break;
+
+//         default: // Scalar float
+//           println("  xorps %%xmm1, %%xmm0");
+//           break;
+//       }
+//       return;
+
+    // case TY_DOUBLE:
+    //   println("  mov $1, %%rax");
+    //   println("  shl $63, %%rax");
+    //   println("  movq %%rax, %%xmm1");
+
+    //   // Handle different vector sizes
+    //   switch (node->ty->vector_size) {
+    //     case 2:  // 16-bit vectors (2 elements)
+    //       println("  punpcklqdq %%xmm1, %%xmm1");
+    //   println("  xorpd %%xmm1, %%xmm0");
+    //       break;
+
+    //     case 4:  // 32-bit vectors (4 elements)
+    //       println("  pshufd $0b01000100, %%xmm1, %%xmm1");
+    //       println("  xorpd %%xmm1, %%xmm0");
+    //       break;
+
+    //     case 8:  // 64-bit vectors (2 elements, similar to 128-bit vectors but only 2 elements)
+    //       println("  punpcklqdq %%xmm1, %%xmm1");
+    //       println("  xorpd %%xmm1, %%xmm0");
+    //       break;
+
+    //     case 16: // 128-bit vectors (2 elements, similar to 64-bit vectors)
+    //       println("  pshufd $0b01000100, %%xmm1, %%xmm1");
+    //       println("  xorpd %%xmm1, %%xmm0");
+    //       break;
+
+    //     default: // Scalar double
+    //       println("  xorpd %%xmm1, %%xmm0");
+    //       break;
+    //   }
+    //   return;
 
     case TY_LDOUBLE:
       println("  fchs");
@@ -1491,34 +1491,6 @@ static void gen_expr(Node *node)
     // Handle 128-bit integers
     println("  not %%rax");
     println("  not %%rdx");
-  } else if (node->lhs->ty->vector_size) {
-    // For vector sizes, initialize xmm1 to all 1s (for bitwise NOT)
-    println("  pcmpeqd %%xmm1, %%xmm1");
-
-    switch (node->lhs->ty->vector_size) {
-      case 2:  // 16-bit vectors
-        println("  pshuflw $0, %%xmm1, %%xmm1");
-        println("  pxor %%xmm1, %%xmm0");
-        break;
-
-      case 4:  // 32-bit vectors
-        println("  pshufd $0, %%xmm1, %%xmm1");
-        println("  pxor %%xmm1, %%xmm0");
-        break;
-
-      case 8:  // 64-bit vectors
-        // Replicate the value for 64-bit chunks
-        println("  punpcklqdq %%xmm1, %%xmm1");
-        println("  pxor %%xmm1, %%xmm0");
-        break;
-
-      case 16: // 128-bit vectors
-        println("  pxor %%xmm1, %%xmm0");  // Already handled by pcmpeqd and pxor
-        break;
-
-      default:
-        error_tok(node->tok, "Unsupported vector size for ND_BITNOT");
-    }
   } else {
     // Handle scalar integers (non-vector, non-INT128)
     println("  not %%rax");
@@ -3536,7 +3508,7 @@ void assign_lvar_offsets(Obj *prog) {
       continue;
 
     int top = 16;
-        int bottom = 32;
+        int bottom = 0;
 
         if (fn->alloca_bottom && fn->alloca_bottom->offset) {          
             bottom = abs(fn->alloca_bottom->offset);

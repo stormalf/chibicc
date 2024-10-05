@@ -21,7 +21,7 @@
 #include <stdio.h>
 typedef float float4a1 __attribute__((__vector_size__(16), __aligned__(1)));
 typedef double __v2df __attribute__ ((__vector_size__ (16)));
-//typedef long long __v2di __attribute__ ((__vector_size__ (16)));
+typedef long long __v2di __attribute__ ((__vector_size__ (16)));
 typedef unsigned int __v4su __attribute__ ((__vector_size__ (16)));
 typedef short __v8hi __attribute__ ((__vector_size__ (16)));
 typedef unsigned short __v8hu __attribute__ ((__vector_size__ (16)));
@@ -30,19 +30,19 @@ typedef signed char __v16qs __attribute__ ((__vector_size__ (16)));
 typedef unsigned char __v16qu __attribute__ ((__vector_size__ (16)));
 
 
-// typedef float float4 __attribute__((__vector_size__(16)));
-// typedef float float4a16 __attribute__((__vector_size__(16), __aligned__(16)));
-// typedef char byte16 __attribute__((__vector_size__(16)));
-// typedef unsigned char ubyte16 __attribute__((__vector_size__(16)));
-// typedef double double2 __attribute__((__vector_size__(16)));
-// typedef double double2a1 __attribute__((__vector_size__(16), __aligned__(1)));
-// typedef double double2a16 __attribute__((__vector_size__(16), __aligned__(16)));
+typedef float float4 __attribute__((__vector_size__(16)));
+typedef float float4a16 __attribute__((__vector_size__(16), __aligned__(16)));
+typedef char byte16 __attribute__((__vector_size__(16)));
+typedef unsigned char ubyte16 __attribute__((__vector_size__(16)));
+typedef double double2 __attribute__((__vector_size__(16)));
+typedef double double2a1 __attribute__((__vector_size__(16), __aligned__(1)));
+typedef double double2a16 __attribute__((__vector_size__(16), __aligned__(16)));
 /* SSE2 */
-//typedef long long __v2di __attribute__ ((__vector_size__ (16)));
-//typedef unsigned long long __v2du __attribute__ ((__vector_size__ (16)));
-//typedef int __v4si __attribute__ ((__vector_size__ (16)));
+typedef long long __v2di __attribute__ ((__vector_size__ (16)));
+typedef unsigned long long __v2du __attribute__ ((__vector_size__ (16)));
+typedef int __v4si __attribute__ ((__vector_size__ (16)));
 
-void process_vector(float4a1 *vec) {
+void process_vector(float4a1 vec) {
     for (int i = 0; i < 4; i++) {
         printf("vec[%d] = %f\n", i, vec[i]);
     }
@@ -50,64 +50,64 @@ void process_vector(float4a1 *vec) {
 
 
 int main(void) {
-    // printf("sizeof(float4) = %ld\n", sizeof(float4));
-    // printf("sizeof(float4a1) = %ld\n", sizeof(float4a1));
-    // printf("sizeof(float4a16) = %ld\n", sizeof(float4a16));
-    // printf("sizeof(double2) = %ld\n", sizeof(double2));
-    // printf("sizeof(double2) = %ld\n", sizeof(double2a1));
-    // printf("sizeof(double2) = %ld\n", sizeof(double2a16));
-    // printf(" _Alignof(float4) = %ld\n",  _Alignof(float4));
-    // printf(" _Alignof(float4a1) = %ld\n",  _Alignof(float4a1));
-    // printf(" _Alignof(float4a16) = %ld\n",  _Alignof(float4a16));
-    // printf(" _Alignof(double2) = %ld\n",  _Alignof(double2));
-    // printf(" _Alignof(double2a1) = %ld\n",  _Alignof(double2a1));
-    // printf(" _Alignof(double2a16) = %ld\n",  _Alignof(double2a16));
-    // printf(" _Alignof(double2) = %ld\n",  _Alignof(double2));
+    printf("sizeof(float4) = %ld\n", sizeof(float4));
+    printf("sizeof(float4a1) = %ld\n", sizeof(float4a1));
+    printf("sizeof(float4a16) = %ld\n", sizeof(float4a16));
+    printf("sizeof(double2) = %ld\n", sizeof(double2));
+    printf("sizeof(double2) = %ld\n", sizeof(double2a1));
+    printf("sizeof(double2) = %ld\n", sizeof(double2a16));
+    printf(" _Alignof(float4) = %ld\n",  _Alignof(float4));
+    printf(" _Alignof(float4a1) = %ld\n",  _Alignof(float4a1));
+    printf(" _Alignof(float4a16) = %ld\n",  _Alignof(float4a16));
+    printf(" _Alignof(double2) = %ld\n",  _Alignof(double2));
+    printf(" _Alignof(double2a1) = %ld\n",  _Alignof(double2a1));
+    printf(" _Alignof(double2a16) = %ld\n",  _Alignof(double2a16));
+    printf(" _Alignof(double2) = %ld\n",  _Alignof(double2));
     
-  // ASSERT(16, sizeof(float4));
-  // ASSERT(16, sizeof(float4a1));
-  // ASSERT(16, sizeof(float4a16));
-  // ASSERT(16, sizeof(double2));
-  // ASSERT(16, sizeof(double2a1));
-  // ASSERT(16, sizeof(double2a16));
-  // ASSERT(16, _Alignof(float4));
-  // ASSERT(1, _Alignof(float4a1));
-  // ASSERT(16, _Alignof(float4a16));
-  // ASSERT(16, _Alignof(double2));
-  // ASSERT(1, _Alignof(double2a1));
-  // ASSERT(16, _Alignof(double2a16));
+  ASSERT(16, sizeof(float4));
+  ASSERT(16, sizeof(float4a1));
+  ASSERT(16, sizeof(float4a16));
+  ASSERT(16, sizeof(double2));
+  ASSERT(16, sizeof(double2a1));
+  ASSERT(16, sizeof(double2a16));
+  ASSERT(16, _Alignof(float4));
+  ASSERT(1, _Alignof(float4a1));
+  ASSERT(16, _Alignof(float4a16));
+  ASSERT(16, _Alignof(double2));
+  ASSERT(1, _Alignof(double2a1));
+  ASSERT(16, _Alignof(double2a16));
 
 
-    // float4 v1;
-    // float4 v2;
-    // float x[4] = {1, 2, 3, 4};
-    // float y[4] = {1, 1, 1, 1};
-    // printf("v1: %p, x: %p\n", (void*)&v1, (void*)x);
-    // memcpy(&v1, x, 16);
-    // memcpy(&v2, y, 16);
-    // v1 = v1 + v2;
-    // process_vector(v1);
-    // memcpy(x, &v1, 16);
-    //ASSERT(2, x[0]);
+    float4 v1;
+    float4 v2;
+    float x[4] = {1, 2, 3, 4};
+    float y[4] = {1, 1, 1, 1};
+    printf("v1: %p, x: %p\n", (void*)&v1, (void*)x);
+    memcpy(&v1, x, 16);
+    memcpy(&v2, y, 16);
+    //v1 = v1 + v2;
+    process_vector(v1);
+    memcpy(x, &v1, 16);
+    ASSERT(2, x[0]);
     // TODO(jart): fix me
-    /* //ASSERT(3, x[1]); */
-    /* //ASSERT(4, x[2]); */
-    /* //ASSERT(5, x[3]); */
+    ASSERT(3, x[1]); 
+    ASSERT(4, x[2]); 
+    ASSERT(5, x[3]); 
     float4a1 v3 = {12, 2, 3, 14};
     for (int i = 0; i < 4; i++) {
         printf("v3[%d] = %f\n", i, v3[i]);
     }
-    process_vector(&v3);
+    process_vector(v3);
 
-    // byte16 v;
-    // float x1[4] = {1, 2, 3, 4};
-    // float x2[4];
-    //memcpy(&v, x1, 16);
+    byte16 v;
+    float x1[4] = {1, 2, 3, 4};
+    float x2[4];
+    memcpy(&v, x1, 16);
     //__builtin_ia32_movntdq(x1, &v);
-    //memcpy(x2, &v, 16);
-    //ASSERT(1, x2[0]);
+    memcpy(x2, &v, 16);
+    ASSERT(1, x2[0]);
     // TODO(jart): fix me
-    /* //ASSERT(2, x[1]); */
+    ASSERT(2, x[1]); 
 
 
   return 0;
