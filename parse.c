@@ -5794,6 +5794,84 @@ static Node *primary(Token **rest, Token *tok)
     return to_assign(node);
   }
   
+  if (equal(tok, "__sync_fetch_and_or"))
+  {
+      ctx->filename = PARSE_C;
+      ctx->funcname = "primary";
+      ctx->line_no = __LINE__ + 1;
+      tok = skip(tok->next, "(", ctx);
+      
+      // Parse the object
+      Node *obj = new_unary(ND_DEREF, assign(&tok, tok), tok);
+      
+      ctx->filename = PARSE_C;
+      ctx->funcname = "primary";
+      ctx->line_no = __LINE__ + 1;
+      tok = skip(tok, ",", ctx);
+      
+      // Parse the value to be ORed
+      Node *val = assign(&tok, tok);
+      
+      // Use ND_BITOR to represent the OR operation
+      Node *node = new_binary(ND_BITOR, obj, val, tok);
+      
+      node->atomic_fetch = true;  // Mark as atomic fetch operation
+      *rest = tok->next;
+      return to_assign(node);
+  }
+
+  if (equal(tok, "__sync_fetch_and_xor"))
+  {
+      ctx->filename = PARSE_C;
+      ctx->funcname = "primary";
+      ctx->line_no = __LINE__ + 1;
+      tok = skip(tok->next, "(", ctx);
+      
+      // Parse the object
+      Node *obj = new_unary(ND_DEREF, assign(&tok, tok), tok);
+      
+      ctx->filename = PARSE_C;
+      ctx->funcname = "primary";
+      ctx->line_no = __LINE__ + 1;
+      tok = skip(tok, ",", ctx);
+      
+      // Parse the value to be XORed
+      Node *val = assign(&tok, tok);
+      
+      // Use ND_BITXOR to represent the XOR operation
+      Node *node = new_binary(ND_BITXOR, obj, val, tok);
+      
+      node->atomic_fetch = true;  // Mark as atomic fetch operation
+      *rest = tok->next;
+      return to_assign(node);
+  }
+
+  if (equal(tok, "__sync_fetch_and_and"))
+  {
+      ctx->filename = PARSE_C;
+      ctx->funcname = "primary";
+      ctx->line_no = __LINE__ + 1;
+      tok = skip(tok->next, "(", ctx);
+      
+      // Parse the object
+      Node *obj = new_unary(ND_DEREF, assign(&tok, tok), tok);
+      
+      ctx->filename = PARSE_C;
+      ctx->funcname = "primary";
+      ctx->line_no = __LINE__ + 1;
+      tok = skip(tok, ",", ctx);
+      
+      // Parse the value to be ANDed
+      Node *val = assign(&tok, tok);
+      
+      // Use ND_BITAND to represent the AND operation
+      Node *node = new_binary(ND_BITAND, obj, val, tok);
+      
+      node->atomic_fetch = true;  // Mark as atomic fetch operation
+      *rest = tok->next;
+      return to_assign(node);
+  }
+
 
   if (equal(tok, "__builtin_atomic_fetch_op"))
   {
