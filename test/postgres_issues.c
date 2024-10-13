@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdarg.h>
+#include "test.h"
+
 typedef int64_t int64;
 typedef uint64_t uint64;
 typedef int32_t int32;
@@ -334,9 +336,11 @@ int main() {
 
     // Simulate acquiring and releasing the spinlock
     s_lock(&lock, __FILE__, __LINE__, __func__);
-    printf("Lock acquired\n");
+    printf("Lock acquired %d\n", lock);
+    ASSERT(1, lock);
     s_unlock(&lock);
-    printf("Lock released\n");
+    printf("Lock released %d\n", lock);
+    ASSERT(0, lock);
 
     return 0;
 }

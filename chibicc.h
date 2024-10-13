@@ -543,6 +543,7 @@ struct Type
   bool is_pointer;   // true if it's a pointer
   Type *pointertype; // store the pointer type int, char...
   Type *origin;      // for type compatibility check
+  Type *decl_next;    // forward declarations
 
   // Pointer-to or array-of type. We intentionally use the same member
   // to represent pointer/array duality in C.
@@ -635,6 +636,9 @@ Type *vector_of(Type *base, int len);
 Type *enum_type(void);
 Type *struct_type(void);
 void add_type(Node *node);
+bool is_bitfield(Node *node);
+bool is_array(Type *ty);
+Type *new_qualified_type(Type *ty);
 
 
 char *nodekind2str(NodeKind kind);

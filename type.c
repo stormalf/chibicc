@@ -38,6 +38,21 @@ static Type *new_type(TypeKind kind, int size, int align)
   return ty;
 }
 
+Type *new_qualified_type(Type *ty) {
+  if (ty->origin)
+    ty = ty->origin;
+
+  Type *ret = calloc(1, sizeof(Type));
+  *ret = *ty;
+  ret->origin = ty;
+
+  if (ty->size < 0) {
+    ret->decl_next = ty->decl_next;
+    ty->decl_next = ret;
+  }
+  return ret;
+}
+
 bool is_integer(Type *ty)
 {
   TypeKind k = ty->kind;
@@ -55,6 +70,37 @@ bool is_numeric(Type *ty)
 {
   return is_integer(ty) || is_flonum(ty);
 }
+
+bool is_array(Type *ty) {
+  return ty->kind == TY_ARRAY || ty->kind == TY_VLA;
+}
+
+bool is_bitfield(Node *node) {
+  return node->kind == ND_MEMBER && node->member->is_bitfield;
+}
+
+static bool is_bitfield2(Node *node, int *width) {
+  switch (node->kind) {
+  case ND_ASSIGN:
+    return is_bitfield2(node->lhs, width);
+  case ND_COMMA:
+    return is_bitfield2(node->rhs, width);
+  case ND_STMT_EXPR: {
+    Node *stmt = node->body;
+    while (stmt->next)
+      stmt = stmt->next;
+    if (stmt->kind == ND_EXPR_STMT)
+      return is_bitfield2(stmt->lhs, width);
+  }
+  case ND_MEMBER:
+    if (!node->member->is_bitfield)
+      return false;
+    *width = node->member->bit_width;
+    return true;
+  }
+  return false;
+}
+
 
 bool is_compatible(Type *t1, Type *t2)
 {
@@ -350,10 +396,14 @@ void add_type(Node *node)
   case ND_ADDR:
   {
     Type *ty = node->lhs->ty;
-    if (ty->kind == TY_ARRAY )
-      node->ty = pointer_to(ty->base);
-    else
-      node->ty = pointer_to(ty);
+  //   if (ty->kind == TY_ARRAY )
+  //     node->ty = pointer_to(ty->base);
+  //   else
+  //     node->ty = pointer_to(ty);
+  //   return;
+  // }
+  //from @fuhsnn add_type():Remove overaggressive array decaying
+    node->ty = pointer_to(ty);
     return;
   }
   case ND_DEREF:

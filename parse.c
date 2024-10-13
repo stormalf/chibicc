@@ -107,7 +107,7 @@ static Obj *locals;
 // Likewise, global variables are accumulated to this list.
 static Obj *globals;
 
-static Scope *scope = &(Scope){};
+static Scope *scope = &(Scope){0};
 
 // Points to the function object the parser is currently parsing.
 static Obj *current_fn;
@@ -205,10 +205,17 @@ static void vector_initializer1(Token **rest, Token *tok, Initializer *init);
 static int count_vector_init_elements(Token *tok, Type *ty);
 
 
+// static int align_down(int n, int align)
+// {
+//   return align_to(n - align + 1, align);
+// }
+// Round down `n` to the nearest multiple of `align`.
+// For instance, align_down(10, 8) returns 8 and align_down(15, 8) returns 8.
 static int align_down(int n, int align)
 {
-  return align_to(n - align + 1, align);
+    return (n / align) * align;
 }
+
 
 static void enter_scope(void)
 {
@@ -259,8 +266,8 @@ static Type *find_tag(Token *tok)
   return NULL;
 }
 
-static Node *new_node(NodeKind kind, Token *tok)
-{
+
+static Node *new_node(NodeKind kind, Token *tok) {
   static int count = 0;
   Node *node = calloc(1, sizeof(Node));
   if (node == NULL)
@@ -307,6 +314,7 @@ static Node *new_double(double fval, Token *tok)
 {
   Node *node = new_node(ND_NUM, tok);
   node->fval = fval;
+  node->ty = ty_double;
   return node;
 }
 
@@ -330,6 +338,13 @@ static Node *new_ulong(long val, Token *tok)
   Node *node = new_node(ND_NUM, tok);
   node->val = val;
   node->ty = ty_ulong;
+  return node;
+}
+
+static Node *new_boolean(bool val, Token *tok) {
+  Node *node = new_node(ND_NUM, tok);
+  node->val = val;
+  node->ty = ty_bool;
   return node;
 }
 
@@ -362,6 +377,17 @@ Node *new_cast(Node *expr, Type *ty)
   node->ty = copy_type(ty);
   return node;
 }
+
+static void apply_cv_qualifier(Node *node, Type *ty2) {
+  add_type(node);
+  Type *ty = node->ty;
+  if (ty->is_const < ty2->is_const || ty->is_volatile < ty2->is_volatile) {
+    node->ty = new_qualified_type(ty);
+    node->ty->is_const = ty->is_const | ty2->is_const;
+    node->ty->is_volatile = ty->is_volatile | ty2->is_volatile;
+  }
+}
+
 
 static VarScope *push_scope(char *name)
 {
@@ -402,7 +428,7 @@ static Initializer *new_initializer(Type *ty, bool is_flexible)
     // Count the number of struct members.
     int len = 0;
     for (Member *mem = ty->members; mem; mem = mem->next)
-      len++;
+      mem->idx = len++;
 
 
     init->children = calloc(len, sizeof(Initializer *));
@@ -691,11 +717,16 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
       ctx->funcname = "declspec";          
       ctx->line_no = __LINE__ + 1;  
       tok = skip(tok->next, "(", ctx);
-
+      // if (is_typename(tok))
+      //   attr->align = typename(&tok, tok)->align;
+      // else
+      //   attr->align = const_expr(&tok, tok);
+      int align;
       if (is_typename(tok))
-        attr->align = typename(&tok, tok)->align;
+        align = typename(&tok, tok)->align;
       else
-        attr->align = const_expr(&tok, tok);
+        align = const_expr(&tok, tok);
+      attr->align = MAX(attr->align, align);      
       ctx->filename = PARSE_C;
       ctx->funcname = "declspec";          
       ctx->line_no = __LINE__ + 1;       
@@ -1012,7 +1043,9 @@ static Type *array_dimensions(Token **rest, Token *tok, Type *ty)
     return array_of(ty, -1);
   }
 
-  Node *expr = conditional(&tok, tok);
+  //from @fuhsnn  array_dimensions(): Accept assign-expr for VLA size
+  //Node *expr = conditional(&tok, tok);
+  Node *expr = assign(&tok, tok);
   ctx->filename = PARSE_C;
   ctx->funcname = "array_dimensions";  
   ctx->line_no = __LINE__ + 1;
@@ -1347,7 +1380,7 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
       ctx->line_no = __LINE__ + 1;  
       tok = skip(tok, ",", ctx);
     }
-
+    int alt_align = attr ? attr->align : 0;
     Type *ty = declarator(&tok, tok, basety);
     if (!ty)
       error_tok(tok, "%s %d: in declaration : ty is null", PARSE_C, __LINE__);
@@ -1361,6 +1394,10 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
     {
       // static local variable
       Obj *var = new_anon_gvar(ty);
+      //from @fuhsnn fix Handle local static _Thread_local
+      var->is_tls = attr->is_tls;
+      if (alt_align)
+        var->align = alt_align;
       push_scope(get_ident(ty->name))->var = var;
       if (equal(tok, "="))
         gvar_initializer(&tok, tok->next, var);
@@ -1395,13 +1432,16 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
     }
     
     Obj *var = new_lvar(get_ident(ty->name), ty, NULL);
-    if (attr && attr->align)
-      var->align = attr->align;
+    if (alt_align)
+      var->align = alt_align;
+    // if (attr && attr->align)
+    //   var->align = attr->align;
 
    
     if (equal(tok, "="))
     {
-      if (equal(tok->next, "(") && is_typename(tok->next->next))
+      //temp fix for issue with typedef cast after =
+      if (equal(tok->next, "(") && isTypedef(tok->next->next))
       {
         while (!equal(tok, ")")) 
           tok = tok->next;
@@ -2219,6 +2259,8 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
 {
   if (ty->kind == TY_ARRAY)
   {
+    if (init->expr)
+      error_tok(init->expr->tok, "%s %d: in write_gvar_data : array initializer must be an initializer list", PARSE_C, __LINE__);
     int sz = ty->base->size;
     for (int i = 0; i < ty->array_len; i++)
       cur = write_gvar_data(cur, init->children[i], ty->base, buf, offset + sz * i);
@@ -2232,8 +2274,11 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
       if (mem->is_bitfield)
       {
         Node *expr = init->children[mem->idx]->expr;
+        // if (!expr)
+        //   break;
         if (!expr)
-          break;
+          continue;
+        add_type(expr);
 
         char *loc = buf + offset + mem->offset;
         uint64_t oldval = read_buf(loc, mem->ty->size);
@@ -2879,14 +2924,26 @@ int64_t eval2(Node *node, char ***label)
       return (uint64_t)eval(node->lhs) >> eval(node->rhs);
     return eval(node->lhs) >> eval(node->rhs);
   case ND_EQ:
+    //from @fuhsnn fixing when lhs is a float
+    if (is_flonum(node->lhs->ty))
+      return eval_double(node->lhs) == eval_double(node->rhs);
     return eval(node->lhs) == eval(node->rhs);
   case ND_NE:
+    //from @fuhsnn fixing when lhs is a float
+    if (is_flonum(node->lhs->ty))
+      return eval_double(node->lhs) != eval_double(node->rhs);
     return eval(node->lhs) != eval(node->rhs);
   case ND_LT:
+    //from @fuhsnn fixing when lhs is a float
+    if (is_flonum(node->lhs->ty))
+      return eval_double(node->lhs) < eval_double(node->rhs);
     if (node->lhs->ty->is_unsigned)
       return (uint64_t)eval(node->lhs) < eval(node->rhs);
     return eval(node->lhs) < eval(node->rhs);
   case ND_LE:
+    //from @fuhsnn fixing when lhs is a float
+    if (is_flonum(node->lhs->ty))
+      return eval_double(node->lhs) <= eval_double(node->rhs);
     if (node->lhs->ty->is_unsigned)
       return (uint64_t)eval(node->lhs) <= eval(node->rhs);
     return eval(node->lhs) <= eval(node->rhs);
@@ -2895,6 +2952,9 @@ int64_t eval2(Node *node, char ***label)
   case ND_COMMA:
     return eval2(node->rhs, label);
   case ND_NOT:
+    //from @fuhsnn fixing when lhs is a float
+    if (is_flonum(node->lhs->ty))
+      return !eval_double(node->lhs);
     return !eval(node->lhs);
   case ND_BITNOT:
     return ~eval(node->lhs);
@@ -2903,7 +2963,7 @@ int64_t eval2(Node *node, char ***label)
   case ND_LOGOR:
     return eval(node->lhs) || eval(node->rhs);
   case ND_CAST:
-  {
+  {        
     int64_t val = eval2(node->lhs, label);
     if (is_integer(node->ty))
     {
@@ -2927,7 +2987,7 @@ int64_t eval2(Node *node, char ***label)
   case ND_MEMBER:
     
     if (!label) {
-      error_tok(node->tok, "%s  %d: in eval2 : not a compile-time constant", PARSE_C, __LINE__ );
+      error_tok(node->tok, "%s:%d: in eval2 : not a compile-time constant", PARSE_C, __LINE__ );
     }
     if (node->ty->kind != TY_ARRAY) {
       error_tok(node->tok, "%s %d: in eval2 : invalid initializer", PARSE_C, __LINE__);
@@ -2949,8 +3009,12 @@ int64_t eval2(Node *node, char ***label)
   case ND_NUM:
     return node->val;
     // fixing issue #115
+  // case ND_DEREF:
+  //   return eval2(node->lhs, label);
+  //from @fuhsnn eval2():Evaluate ND_DEREF for TY_ARRAY
   case ND_DEREF:
-
+    if (node->ty->kind != TY_ARRAY)
+      error_tok(node->tok, "%s:%d: in eval2 : not a compile-time constant", PARSE_C, __LINE__);
     return eval2(node->lhs, label);
   }
   error_tok(node->tok, "%s %d: in eval2 : not a compile-time constant3", PARSE_C, __LINE__);
@@ -3632,7 +3696,8 @@ static Node *unary(Token **rest, Token *tok)
   {
     Node *lhs = cast(rest, tok->next);
     add_type(lhs);
-    if (lhs->kind == ND_MEMBER && lhs->member->is_bitfield)
+    //if (lhs->kind == ND_MEMBER && lhs->member->is_bitfield)
+    if (is_bitfield(lhs))
       error_tok(tok, "%s %d: in unary : cannot take address of bitfield", PARSE_C, __LINE__);
     return new_unary(ND_ADDR, lhs, tok);
   }
@@ -3647,7 +3712,13 @@ static Node *unary(Token **rest, Token *tok)
     add_type(node);
     if (node->ty->kind == TY_FUNC)
       return node;
-    return new_unary(ND_DEREF, node, tok);
+
+    Type *ty = node->ty;
+    node = new_unary(ND_DEREF, node, tok);
+    if (is_array(ty))
+      apply_cv_qualifier(node, ty);
+    return node;
+    //return new_unary(ND_DEREF, node, tok);
   }
 
   if (equal(tok, "!"))
@@ -3682,7 +3753,7 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
 {
   Member head = {};
   Member *cur = &head;
-  int idx = 0;
+  //int idx = 0;
 
   while (!equal(tok, "}"))
   {
@@ -3698,7 +3769,7 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
       if (mem == NULL)
         error("%s: %s:%d: error: in struct_members : mem is null", PARSE_C, __FILE__, __LINE__);
       mem->ty = basety;
-      mem->idx = idx++;
+      //mem->idx = idx++;
       mem->align = attr.align ? attr.align : mem->ty->align;
       cur = cur->next = mem;
       continue;
@@ -3728,7 +3799,7 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
         basety = declspec(&tok, tok, &attr);
       mem->ty = declarator(&tok, tok, basety);
       mem->name = mem->ty->name;
-      mem->idx = idx++;
+      //mem->idx = idx++;
       mem->align = attr.align ? attr.align : mem->ty->align;
 
       if (consume(&tok, tok, ":"))
@@ -3745,16 +3816,16 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
     }
   }
 
-  if (idx == 0)
-  {
-    Member *mem = calloc(1, sizeof(Member));
-    if (mem == NULL)
-      error("%s: %s:%d: error: in struct_members : mem is null", PARSE_C, __FILE__, __LINE__);
-    mem->ty = ty_char;
-    mem->idx = 0;
-    mem->align = mem->ty->align;
-    cur = cur->next = mem;
-  }
+  // if (idx == 0)
+  // {
+  //   Member *mem = calloc(1, sizeof(Member));
+  //   if (mem == NULL)
+  //     error("%s: %s:%d: error: in struct_members : mem is null", PARSE_C, __FILE__, __LINE__);
+  //   mem->ty = ty_char;
+  //   mem->idx = 0;
+  //   mem->align = mem->ty->align;
+  //   cur = cur->next = mem;
+  // }
 
   // If the last element is an array of incomplete type, it's
   // called a "flexible array member". It should behave as if
@@ -4627,9 +4698,20 @@ static Type *struct_union_decl(Token **rest, Token *tok)
     // If this is a redefinition, overwrite a previous type.
     // Otherwise, register the struct type.
     Type *ty2 = hashmap_get2(&scope->tags, tag->loc, tag->len);
-    if (ty2)
-    {
-      *ty2 = *ty;
+    // if (ty2)
+    // {
+    //   *ty2 = *ty;
+    //   return ty2;
+    // }
+    if (ty2) {
+      for (Type *t = ty2; t; t = t->decl_next) {
+        t->size = ty->size;
+        t->align = MAX(t->align, ty->align);
+        t->members = ty->members;
+        t->is_flexible = ty->is_flexible;
+        t->is_packed = ty->is_packed;
+        t->origin = ty;
+      }
       return ty2;
     }
 
@@ -4853,7 +4935,12 @@ static Node *postfix(Token **rest, Token *tok)
       ctx->funcname = "postfix";        
       ctx->line_no = __LINE__ + 1;           
       tok = skip(tok, "]", ctx);
+      
+      add_type(node);
+      Type *ty = node->ty;
       node = new_unary(ND_DEREF, new_add(node, idx, start), start);
+      if (is_array(ty))
+        apply_cv_qualifier(node, ty);
       continue;
     }
 
@@ -4867,8 +4954,14 @@ static Node *postfix(Token **rest, Token *tok)
     if (equal(tok, "->"))
     {
       // x->y is short for (*x).y
+      add_type(node);
+      Type *ty = node->ty;
       node = new_unary(ND_DEREF, node, tok);
       node = struct_ref(node, tok->next);
+
+      if (is_array(ty))
+        apply_cv_qualifier(node, ty);
+
       tok = tok->next->next;
       continue;
     }
@@ -4934,8 +5027,11 @@ static Node *funcall(Token **rest, Token *tok, Node *fn)
     {
       // If parameter type is omitted (e.g. in "..."), float
       // arguments are promoted to double.
-      arg = new_cast(arg, ty_double);
-    }
+      arg = new_cast(arg, ty_double);      
+    } else if (is_array(arg->ty))
+        arg = new_cast(arg, pointer_to(arg->ty->base));
+      else if (arg->ty->kind == TY_FUNC)
+        arg = new_cast(arg, pointer_to(arg->ty));
 
     cur = cur->next = arg;
   }
@@ -5063,75 +5159,138 @@ static Node *primary(Token **rest, Token *tok)
   }
 
 
-  if (equal(tok, "sizeof") && equal(tok->next, "(") && is_typename(tok->next->next))
-  {
-    Type *ty = typename(&tok, tok->next->next);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";        
-    ctx->line_no = __LINE__ + 1;      
-    *rest = skip(tok, ")", ctx);
-   
-   // Check if the type is incomplete
-    if (ty->kind == TY_UNION && ty->size < 0) {
-      error_tok(tok, "%s %d: in primary : incomplete type for sizeof", PARSE_C, __LINE__);
-    }
-
-    if (ty->kind == TY_VLA)
-    {
-      if (ty->vla_size)
-        return new_var_node(ty->vla_size, tok);
-
-      Node *lhs = compute_vla_size(ty, tok);
-      Node *rhs = new_var_node(ty->vla_size, tok);
-      return new_binary(ND_COMMA, lhs, rhs, tok);
-    }
-
-    return new_ulong(ty->size, start);
-  }
-
   if (equal(tok, "sizeof"))
   {
+    Type *ty;
 
-    Node *node = unary(rest, tok->next);
-    add_type(node);
+    if (equal(tok->next, "(") && is_typename(tok->next->next)) {      
+      ty = typename(&tok, tok->next->next);
+      ctx->filename = PARSE_C;
+      ctx->funcname = "primary";        
+      ctx->line_no = __LINE__ + 1;      
+      *rest = skip(tok, ")", ctx);
+      if (ty->kind == TY_VLA)
+        {
+          if (ty->vla_size)
+            return new_var_node(ty->vla_size, tok);
 
-    // Check if the type is incomplete
-    if (node->ty->kind == TY_UNION && node->ty->size < 0)
-      error_tok(tok, "%s %d: in primary : incomplete type for sizeof", PARSE_C, __LINE__);
-          
-    //trying to fix =====ISS-166 segmentation fault 
-    if (node->ty->kind == TY_VLA)
-    {
-      if (node->ty->vla_size)
-        return new_var_node(node->ty->vla_size, tok);
+          Node *lhs = compute_vla_size(ty, tok);
+          Node *rhs = new_var_node(ty->vla_size, tok);
+          return new_binary(ND_COMMA, lhs, rhs, tok);
+        }
 
-      Node *lhs = compute_vla_size(node->ty, tok);
-      Node *rhs = new_var_node(node->ty->vla_size, tok);
-      return new_binary(ND_COMMA, lhs, rhs, tok);
+        return new_ulong(ty->size, start);
+      } else {
+      Node *node = unary(rest, tok->next);
+      add_type(node);
+
+
+      // Check if the type is incomplete
+      if (node->ty->kind == TY_UNION && node->ty->size < 0)
+        error_tok(tok, "%s %d: in primary : incomplete type for sizeof", PARSE_C, __LINE__);
+            
+      //trying to fix =====ISS-166 segmentation fault 
+      if (node->ty->kind == TY_VLA)
+      {
+        if (node->ty->vla_size)
+          return new_var_node(node->ty->vla_size, tok);
+        return compute_vla_size(node->ty, tok);
+
+        // Node *lhs = compute_vla_size(node->ty, tok);
+        // Node *rhs = new_var_node(node->ty->vla_size, tok);
+        // return new_binary(ND_COMMA, lhs, rhs, tok);
+      }
+      if (node->ty->size < 0)
+        error_tok(tok, "%s %d: in primary : incomplete type for sizeof", PARSE_C, __LINE__);
+
+      if (node->ty->kind == TY_STRUCT && node->ty->is_flexible) {
+        Member *mem = node->ty->members;
+        while (mem->next)
+          mem = mem->next;
+        if (mem->ty->kind == TY_ARRAY)
+          return new_ulong((node->ty->size - mem->ty->size), tok);
+      }
+
+      
+      // if (node->ty->kind == TY_VLA)
+      //   return new_var_node(node->ty->vla_size, tok);
+      return new_ulong(node->ty->size, tok);   
+
     }
-
-    // if (node->ty->kind == TY_VLA)
-    //   return new_var_node(node->ty->vla_size, tok);
-    return new_ulong(node->ty->size, tok);
   }
 
+  // if (equal(tok, "sizeof"))
+  // {
 
-  if (equal(tok, "_Alignof") && equal(tok->next, "(") && is_typename(tok->next->next))
-  {
-    Type *ty = typename(&tok, tok->next->next);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";        
-    ctx->line_no = __LINE__ + 1;      
-    *rest = skip(tok, ")", ctx);
-    return new_ulong(ty->align, tok);
+  //   Node *node = unary(rest, tok->next);
+  //   add_type(node);
+
+  //   // Check if the type is incomplete
+  //   if (node->ty->kind == TY_UNION && node->ty->size < 0)
+  //     error_tok(tok, "%s %d: in primary : incomplete type for sizeof", PARSE_C, __LINE__);
+          
+  //   //trying to fix =====ISS-166 segmentation fault 
+  //   if (node->ty->kind == TY_VLA)
+  //   {
+  //     if (node->ty->vla_size)
+  //       return new_var_node(node->ty->vla_size, tok);
+
+  //     Node *lhs = compute_vla_size(node->ty, tok);
+  //     Node *rhs = new_var_node(node->ty->vla_size, tok);
+  //     return new_binary(ND_COMMA, lhs, rhs, tok);
+  //   }
+
+  //   // if (node->ty->kind == TY_VLA)
+  //   //   return new_var_node(node->ty->vla_size, tok);
+  //   return new_ulong(node->ty->size, tok);
+  // }
+
+
+  // if (equal(tok, "_Alignof") && equal(tok->next, "(") && is_typename(tok->next->next))
+  // {
+  //   Type *ty = typename(&tok, tok->next->next);
+  //   ctx->filename = PARSE_C;
+  //   ctx->funcname = "primary";        
+  //   ctx->line_no = __LINE__ + 1;      
+  //   *rest = skip(tok, ")", ctx);
+  //   return new_ulong(ty->align, tok);
+  // }
+
+  // if (equal(tok, "_Alignof"))
+  // {
+  //   Node *node = unary(rest, tok->next);
+  //   add_type(node);
+  //   while (is_array(node->ty))
+  //     node->ty = node->ty->base;
+  //   return new_ulong(node->ty->align, tok);
+  // }
+
+  //from @fuhsnn merging alignof
+  if (equal(tok, "_Alignof") || equal(tok, "alignof") ||  equal(tok, "__alignof__")) {
+    Token *start = tok;
+    Type *ty;
+    if (equal(tok->next, "(") && is_typename(tok->next->next)) {
+      ty = typename(&tok, tok->next->next);
+      ctx->filename = PARSE_C;
+      ctx->funcname = "primary";        
+      ctx->line_no = __LINE__ + 1;   
+      *rest = skip(tok, ")", ctx);
+    } else {
+      Node *node = unary(rest, tok->next);
+      switch (node->kind) {
+      case ND_MEMBER:
+        return new_ulong(MAX(node->member->ty->align, node->member->align), start);
+      case ND_VAR:
+        return new_ulong(node->var->align, start);
+      }
+      add_type(node);
+      ty = node->ty;
+    }
+    while (is_array(ty))
+      ty = ty->base;
+    return new_ulong(ty->align, start);
   }
 
-  if (equal(tok, "_Alignof"))
-  {
-    Node *node = unary(rest, tok->next);
-    add_type(node);
-    return new_ulong(node->ty->align, tok);
-  }
 
   if (equal(tok, "_Generic"))
     return generic_selection(rest, tok->next);
@@ -5175,12 +5334,10 @@ static Node *primary(Token **rest, Token *tok)
     // Determine if the expression is constant
     bool is_constant = false;
 
-    if (expr->tok->kind == TK_NUM || expr->tok->kind == TK_STR) {
+    if (expr->tok->kind == TK_NUM || expr->tok->kind == TK_STR || is_const_expr(expr)) {
         // Consider numeric and character literals as constants
         is_constant = true;
     }
-    // Optionally, you can add more checks for other constant expressions
-
     return new_num(is_constant ? 1 : 0, start);
   }
 
@@ -5229,6 +5386,9 @@ static Node *primary(Token **rest, Token *tok)
         // Update the type context for the next member lookup
         tstruct = member->ty;
 
+        if (tstruct->kind == TY_UNION) {
+            offset = 0; // Union members all have offset 0.
+        }
         // Move to the next token
         tok = tok->next;
 
@@ -5731,6 +5891,16 @@ static Node *primary(Token **rest, Token *tok)
     Obj *var = new_string_literal(tok->str, tok->ty);
     *rest = tok->next;
     return new_var_node(var, tok);
+  }
+
+  if (equal(tok, "false")) {
+    *rest = tok->next;
+    return new_boolean(0, tok);
+  }
+
+  if (equal(tok, "true")) {
+    *rest = tok->next;
+    return new_boolean(1, tok);
   }
 
   if (tok->kind == TK_NUM)

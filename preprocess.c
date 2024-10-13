@@ -1487,7 +1487,7 @@ void init_macros(void)
   define_macro("_Float128x", "long double");
 
   if (opt_fbuiltin) {
-  //define_macro("offsetof", "__builtin_offsetof");
+   define_macro("offsetof", "__builtin_offsetof");
   //define_macro("memcpy", "__builtin_memcpy");
   //define_macro("memset", "__builtin_memset");
   }

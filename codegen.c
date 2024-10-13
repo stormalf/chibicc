@@ -102,7 +102,8 @@ static void popf(Type *ty, int reg) {
 // align_to(5, 8) returns 8 and align_to(11, 8) returns 16.
 int align_to(int n, int align)
 {
-  return (n + align - 1) / align * align;
+  //return (n + align - 1) / align * align;
+  return ((n + align - 1) / align) * align;
 }
 
 char *reg_dx(int sz)
@@ -384,9 +385,27 @@ static void gen_addr(Node *node)
     gen_addr(node->rhs);
     return;
   case ND_MEMBER:
-    gen_addr(node->lhs);
-    println("  add $%d, %%rax", node->member->offset);
-    return;
+    // gen_addr(node->lhs);
+    // println("  add $%d, %%rax", node->member->offset);
+    // return;
+    //fix from @fuhsnn on some issues with members
+    switch(node->lhs->kind) {
+      case ND_FUNCALL:
+        if (!node->lhs->ret_buffer)
+          break;
+      case ND_ASSIGN:
+      case ND_COND:
+      case ND_STMT_EXPR:
+        if (node->lhs->ty->kind != TY_STRUCT && node->lhs->ty->kind != TY_UNION)
+          break;
+        gen_expr(node->lhs);
+        println("  add $%d, %%rax", node->member->offset);
+        return;
+      default:
+        gen_addr(node->lhs);
+        println("  add $%d, %%rax", node->member->offset);
+        return;
+      }    
   case ND_FUNCALL:
     if (node->ret_buffer)
     {
@@ -1147,6 +1166,8 @@ static void copy_struct_mem(void)
     println("  mov %d(%%rax), %%dl", i);
     println("  mov %%dl, %d(%%rdi)", i);
   }
+  //from @fuhsnn Copy returned-by-stack aggregate's pointer to rax
+  println("  mov %%rdi, %%rax");
 }
 
 static void builtin_alloca(void)
@@ -1380,6 +1401,12 @@ static void gen_expr(Node *node)
     Member *mem = node->member;
     if (mem->is_bitfield)
     {
+      //from @fuhsnn bitfield boolean returned -1 instead of 1
+      if (mem->ty->kind == TY_BOOL) {
+        println("  shr $%d, %%rax", mem->bit_offset);
+        println("  and $1, %%eax");
+        return;
+      }
       println("  shl $%d, %%rax", 64 - mem->bit_width - mem->bit_offset);
       if (mem->ty->is_unsigned)
         println("  shr $%d, %%rax", 64 - mem->bit_width);
@@ -1431,6 +1458,7 @@ static void gen_expr(Node *node)
       println("  mov %%r8, %%rax");
       return;
     }
+
 
     store(node->ty);
     return;
@@ -2998,6 +3026,9 @@ static void emit_data(Obj *prog)
     // Common symbol
     if (opt_fcommon && var->is_tentative)
     {
+      //from @fuhsnn incomplete array assuming to have one element
+      if (var->ty->kind == TY_ARRAY && var->ty->size < 0)
+        var->ty->size = var->ty->base->size;
       println("  .comm %s, %d, %d", var->name, var->ty->size, align);
       continue;
     }

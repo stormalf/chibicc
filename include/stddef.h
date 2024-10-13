@@ -26,7 +26,8 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
  */
 #define __builtin_choose_expr(cond, true_expr, false_expr) (cond ? true_expr : false_expr)
 #define _Pragma(message) 
-
+/* Offset of member MEMBER in a struct of type TYPE. */
+#define offsetof(TYPE, MEMBER) __builtin_offsetof (TYPE, MEMBER)
 
 #if (!defined(_STDDEF_H) && !defined(_STDDEF_H_) && !defined(_ANSI_STDDEF_H) \
      && !defined(__STDDEF_H__)) \
@@ -406,8 +407,7 @@ typedef __WINT_TYPE__ wint_t;
 
 #ifdef _STDDEF_H
 
-/* Offset of member MEMBER in a struct of type TYPE. */
-#define offsetof(TYPE, MEMBER) __builtin_offsetof (TYPE, MEMBER)
+
 
 #if (defined (__STDC_VERSION__) && __STDC_VERSION__ >= 201112L) \
   || (defined(__cplusplus) && __cplusplus >= 201103L)

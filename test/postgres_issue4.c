@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stddef.h>  // Required for offsetof
+#include "test.h"
 
 #define PGSTAT_KIND_MIN 1
 #define PGSTAT_KIND_MAX	256		/* Maximum ID allowed */
@@ -18,16 +19,16 @@ void pgstat_checkpointer_init_shmem_cb(void *stats) { printf("Checkpointer init_
 void pgstat_io_init_shmem_cb(void *stats) { printf("IO init_shmem_cb called with %p\n", stats); }
 void pgstat_slru_init_shmem_cb(void *stats) { printf("SLRU init_shmem_cb called with %p\n", stats); }
 void pgstat_wal_init_shmem_cb(void *stats) { printf("WAL init_shmem_cb called with %p\n", stats); }
-void pgstat_database_flush_cb(void) {}
-void pgstat_database_reset_timestamp_cb(void) {}
-void pgstat_relation_flush_cb(void) {}
-void pgstat_relation_delete_pending_cb(void) {}
-void pgstat_function_flush_cb(void) {}
-void pgstat_subscription_flush_cb(void) {}
-void pgstat_subscription_reset_timestamp_cb(void) {}
-void pgstat_replslot_reset_timestamp_cb(void) {}
-void pgstat_replslot_to_serialized_name_cb(void) {}
-void pgstat_replslot_from_serialized_name_cb(void) {}
+void pgstat_database_flush_cb(void) { printf("database flush\n"); }
+void pgstat_database_reset_timestamp_cb(void) { printf("database reset timestamp\n"); }
+void pgstat_relation_flush_cb(void) { printf("pgstat_relation_flush_cb\n"); }
+void pgstat_relation_delete_pending_cb(void) { printf("pgstat_relation_delete_pending_cb\n"); }
+void pgstat_function_flush_cb(void) { printf("pgstat_function_flush_cb\n"); }
+void pgstat_subscription_flush_cb(void) { printf("pgstat_subscription_flush_cb\n"); }
+void pgstat_subscription_reset_timestamp_cb(void) { printf("pgstat_subscription_reset_timestamp_cb\n"); }
+void pgstat_replslot_reset_timestamp_cb(void) { printf("pgstat_replslot_reset_timestamp_cb\n"); }
+void pgstat_replslot_to_serialized_name_cb(void) { printf("pgstat_replslot_to_serialized_name_cb\n"); }
+void pgstat_replslot_from_serialized_name_cb(void) { printf("pgstat_replslot_from_serialized_name_cb\n"); }
 
 
 typedef int PgStat_Kind;
@@ -94,7 +95,7 @@ typedef struct PgStat_ShmemControl {
 
 // Updated PgStat_KindInfo array with missing elements
 static const PgStat_KindInfo pgstat_kind_builtin_infos[PGSTAT_KIND_BUILTIN_SIZE] = {
-    //[0] = {0},  // Placeholder for index 0
+    [0] = {0},  // Placeholder for index 0
 
     [1] = {
         .name = "database",
@@ -225,7 +226,7 @@ int main(void)
     }
 
     /* Initialize fixed-numbered stats */
-    for (PgStat_Kind kind = PGSTAT_KIND_MIN; kind <= PGSTAT_KIND_MAX; kind++)
+    for (PgStat_Kind kind = PGSTAT_KIND_MIN; kind <= 6; kind++)
     {
         const PgStat_KindInfo *kind_info = pgstat_get_kind_info(kind);
         char *ptr = NULL;
@@ -247,12 +248,15 @@ int main(void)
                 }
                 ptr = ctl->custom_data[idx];
             }
-
-            if (kind_info->init_shmem_cb) {
-                kind_info->init_shmem_cb(ptr);
-            } else {
-                printf("init_shmem_cb is NULL for kind %d %d\n", kind, kind_info->shared_size);
-            }
+            printf("Initializing %s with shared size %u\n", kind_info->name, kind_info->shared_size);
+            printf("init_shmem_cb is NULL for kind %d %d %d %d %ld %d\n", kind, sizeof(PgStatShared_Archiver), kind_info->shared_size, kind, sizeof(kind_info), kind_info->fixed_amount);
+            ASSERT(4, sizeof(PgStatShared_Archiver));
+            ASSERT(4, kind_info->shared_size);
+            ASSERT(6, kind);
+            ASSERT(8,  sizeof(kind_info));
+            ASSERT(1, kind_info->fixed_amount);
+            kind_info->init_shmem_cb(ptr);
+            
         }
     }
     printf("Initialization complete\n");

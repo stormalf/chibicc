@@ -491,16 +491,17 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
     CC=chibicc  CFLAGS="-g -O0" ./configure --host x86_64-linux-gnu --without-icu --without-readline
     make
     make check
-    Program received signal SIGSEGV, Segmentation fault.
-    #0  MemoryChunkSetHdrMask () at ../../../../src/include/utils/memutils_memorychunk.h:164
-    #1  0x0000000001f001b9 in AllocSetAlloc () at aset.c:885
-    the initdb command produced by chibicc failed with segmentation fault.
+    running bootstrap script ... 2024-10-13 14:13:23.589 CEST [178158] PANIC: stuck spinlock detected at LockBufHdr, bufmgr.c:5781
+    Aborted (core dumped)
+    child process exited with exit code 134
 
 
 ## TODO
 
 - trying to compile other C projects from source to see what is missing or which bug we have with chibicc.
-- trying to fix issue with vector m128 and operations on them.
+- trying to fix issue with vector m128 and operations on them (and trying to fix other vectors sizes 2, 4, 8).
+- trying to fix issues with bitfields
+- trying to fix issues with alignas.
 
 
 ## issues and pull requests fixed
@@ -536,7 +537,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.23        Improvement: diagnose overflow in integer constant expression #96  from @pmor13. Fixing issue with old C style (K&R) when parameters order don't correspond to parameter definition. Adding \__LINE__ in parse.c in all error_tok messages. Removing \__builtin_memcpy \__builtin_memset macro from preprocess.c that causes segmentation fault on zlib project. Adding other tests from @cosmopolitan. Adding \__GNUC__ macro and fixing all issues caused by this defined macro. Defining _Pragma macro that does nothing to keep compatibility with \__GNUC__. Fixing regression on struct members. Fixed on test case from curl. Renaming GNUC_compatibility to 1.0.23. Managing store_gp with size 16. Fixing issue with curl. Fixing last issue with curl due to sizeof_int and sizeof_long not taken in account (adding them in stddef.h). Fixing issue ISS-146 with semun. Fixing issue with \__builtin_clz that gives incorrect result. And adding \__builtin_ctzl and \__builtin_clzl. Adding \__builtin_isnan (ISS-175). Fixing issue with lock not correctly managed in extended assembly (ISS-174). Fxing other issues with extended assembly and adding several tests. Adding \__builtin_bswapxx (16, 32, 64). Adding __int128 support (work in progress). Adding -msse3 and -msse4 options Fixing issue with offsetof segmentation fault in postgres (ISS-176). Fixing  check for typedef specifier/attribute not strict enough #142 suggested by @samkho. Managing vectors (work in progress). Temp fix for casting (typedef). 
+1.0.23        Improvement: diagnose overflow in integer constant expression #96  from @pmor13. Fixing issue with old C style (K&R) when parameters order don't correspond to parameter definition. Adding \__LINE__ in parse.c in all error_tok messages. Removing \__builtin_memcpy \__builtin_memset macro from preprocess.c that causes segmentation fault on zlib project. Adding other tests from @cosmopolitan. Adding \__GNUC__ macro and fixing all issues caused by this defined macro. Defining _Pragma macro that does nothing to keep compatibility with \__GNUC__. Fixing regression on struct members. Fixed on test case from curl. Renaming GNUC_compatibility to 1.0.23. Managing store_gp with size 16. Fixing issue with curl. Fixing last issue with curl due to sizeof_int and sizeof_long not taken in account (adding them in stddef.h). Fixing issue ISS-146 with semun. Fixing issue with \__builtin_clz that gives incorrect result. And adding \__builtin_ctzl and \__builtin_clzl. Adding \__builtin_isnan (ISS-175). Fixing issue with lock not correctly managed in extended assembly (ISS-174). Fxing other issues with extended assembly and adding several tests. Adding \__builtin_bswapxx (16, 32, 64). Adding __int128 support (work in progress). Adding -msse3 and -msse4 options Fixing issue with offsetof segmentation fault in postgres (ISS-176). Fixing  check for typedef specifier/attribute not strict enough #142 suggested by @samkho. Managing vectors (work in progress). Temp fix for casting (typedef). Merging Alignof (fixes from @fuhsnn slimcc). Merging sizeof (fixes from @fuhsnn slimcc). Removing fix for issue #36 about empty struct.
 
 ## old release notes
 
