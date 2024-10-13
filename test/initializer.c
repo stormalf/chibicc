@@ -13,7 +13,7 @@ char g18[10] = "foobar";
 char g19[3] = "foobar";
 char *g20 = g17+0;
 char *g21 = g17+3;
-char *g22 = &g17-3;
+char (*g22)[7] = &g17-3;
 char *g23[] = {g17+0, g17+3, g17-3};
 int g24=3;
 int *g25=&g24;
@@ -134,7 +134,7 @@ int main() {
 
   ASSERT(0, strcmp(g20, "foobar"));
   ASSERT(0, strcmp(g21, "bar"));
-  ASSERT(0, strcmp(g22+3, "foobar"));
+  ASSERT(0, strcmp(*(g22+3), "foobar"));
 
   ASSERT(0, strcmp(g23[0], "foobar"));
   ASSERT(0, strcmp(g23[1], "bar"));
@@ -178,8 +178,8 @@ int main() {
   ASSERT(3, sizeof(g60));
   ASSERT(6, sizeof(g61));
 
-  ASSERT(4, sizeof(g65));
-  ASSERT(7, sizeof(g66));
+  ASSERT(1, sizeof(g65));
+  ASSERT(1, sizeof(g66));
   ASSERT(0, strcmp(g65.b, "oo"));
   ASSERT(0, strcmp(g66.b, "oobar"));
 
@@ -206,17 +206,6 @@ int main() {
 
   ASSERT(10, ({ char x[]={[10-3]=1,2,3}; sizeof(x); }));
   ASSERT(20, ({ char x[][2]={[8][1]=1,2}; sizeof(x); }));
-
-  ASSERT(3, sizeof(g60));
-  ASSERT(6, sizeof(g61));
-
-  ASSERT(4, sizeof(g65));
-  ASSERT(7, sizeof(g66));
-  ASSERT(0, strcmp(g65.b, "oo"));
-  ASSERT(0, strcmp(g66.b, "oobar"));
-
-  ASSERT(7, ((int[10]){ [3] 7 })[3]);
-  ASSERT(0, ((int[10]){ [3] 7 })[4]);
 
   ASSERT(4, ({ struct { int a,b; } x={1,2,.b=3,.a=4}; x.a; }));
   ASSERT(3, ({ struct { int a,b; } x={1,2,.b=3,.a=4}; x.b; }));

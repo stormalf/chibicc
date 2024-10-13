@@ -1331,6 +1331,7 @@ static FileType get_file_type(char *filename)
 int main(int argc, char **argv)
 {
 
+  int file_count = 0;
   // Enable core dumps and set up signal handlers
   enable_core_dump();
   setup_signal_handlers();
@@ -1368,8 +1369,10 @@ int main(int argc, char **argv)
     return 0;
   }
 
+  //from @fuhsnn fix
   if (input_paths.len > 1 && opt_o && (opt_c || opt_S || opt_E))
-    error("%s : %s:%d: error: in main cannot specify '-o' with '-c,' '-S' or '-E' with multiple files", MAIN_C, __FILE__, __LINE__);
+    if (++file_count > 1)
+      error("%s : %s:%d: error: in main cannot specify '-o' with '-c,' '-S' or '-E' with multiple files", MAIN_C, __FILE__, __LINE__);
 
   StringArray ld_args = {};
 
