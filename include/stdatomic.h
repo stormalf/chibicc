@@ -38,6 +38,7 @@ typedef enum {
 #define kill_dependency(x) (x)
 #define atomic_thread_fence(order)
 #define atomic_signal_fence(order)
+#define __atomic_thread_fence(order)
 #define atomic_is_lock_free(x) 1
 
 // #define atomic_load(addr) (*(addr))
@@ -88,6 +89,10 @@ typedef enum {
 
 #define atomic_exchange(obj, val) __builtin_atomic_exchange((obj), (val))
 #define atomic_exchange_explicit(obj, val, order) __builtin_atomic_exchange((obj), (val))
+#define __atomic_exchange_n(obj, val, order) __builtin_atomic_exchange_n((obj), (val), (order))
+#define __atomic_compare_exchange_n(obj, expected, desired, weak, success_memorder, failure_memorder) \
+    __builtin_compare_and_swap((obj), (expected), (desired))
+
 
 // #define atomic_flag_test_and_set(obj) atomic_exchange((obj), 1)
 // #define atomic_flag_test_and_set_explicit(obj, order) atomic_exchange((obj), 1)

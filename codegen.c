@@ -25,6 +25,8 @@ static char *newargreg32[] =  {"%ecx",  "%ebx", "%edx", "%eax", "%edi", "%r8d", 
 static char *newargreg64[] =  {"%rcx",  "%rbx", "%rdx", "%rax", "%rdi", "%r8",  "%r9",  "r10",  "r11" };
 static char *registerUsed[] = {"free",  "free", "free", "free", "free", "free", "free", "free", "free"};
 
+static int last_loc_line = 0;
+
 extern int64_t eval(Node *node);
 
 static Obj *current_fn;
@@ -1219,8 +1221,12 @@ static void HandleAtomicArithmetic(Node *node, const char *op) {
 // Generate code for a given node.
 static void gen_expr(Node *node)
 {
+  if (node->tok->line_no != last_loc_line) {
+        println("  .loc %d %u", node->tok->file->file_no, node->tok->line_no);
+        last_loc_line = node->tok->line_no;
+    }
 
-  println("  .loc %d %u", node->tok->file->file_no, node->tok->line_no);
+  //println("  .loc %d %u", node->tok->file->file_no, node->tok->line_no);
 
   switch (node->kind)
   {
@@ -2871,7 +2877,11 @@ if (node->rhs->ty->kind == TY_INT128) {
 
 static void gen_stmt(Node *node)
 {
-  println("  .loc %d %u", node->tok->file->file_no, node->tok->line_no);
+  if (node->tok->line_no != last_loc_line) {
+        println("  .loc %d %u", node->tok->file->file_no, node->tok->line_no);
+        last_loc_line = node->tok->line_no;
+  }
+  //println("  .loc %d %u", node->tok->file->file_no, node->tok->line_no);
 
   switch (node->kind)
   {
@@ -3539,11 +3549,11 @@ void assign_lvar_offsets(Obj *prog) {
       continue;
 
     int top = 16;
-        int bottom = 0;
+    int bottom = 0;
 
-        if (fn->alloca_bottom && fn->alloca_bottom->offset) {          
-            bottom = abs(fn->alloca_bottom->offset);
-        }
+    if (fn->alloca_bottom && fn->alloca_bottom->offset) {          
+        bottom = abs(fn->alloca_bottom->offset);
+    }
 
     int gp = 0, fp = 0;
 
