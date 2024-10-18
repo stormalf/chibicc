@@ -204,6 +204,9 @@ static void add_typedef_to_scope(VarScope *sc, char *name, Type *type);
 static void vector_initializer1(Token **rest, Token *tok, Initializer *init);
 static int count_vector_init_elements(Token *tok, Type *ty);
 
+//from @fuhsnn
+static int64_t eval_sign_extend(Type *ty, uint64_t val);
+
 
 // static int align_down(int n, int align)
 // {
@@ -2964,21 +2967,38 @@ int64_t eval2(Node *node, char ***label)
     return eval(node->lhs) || eval(node->rhs);
   case ND_CAST:
   {        
-    int64_t val = eval2(node->lhs, label);
-    if (is_integer(node->ty))
-    {
-      switch (node->ty->size)
-      {
-      case 1:
-        return node->ty->is_unsigned ? (uint8_t)val : (int8_t)val;
-      case 2:
-        return node->ty->is_unsigned ? (uint16_t)val : (int16_t)val;
-      case 4:
-        return node->ty->is_unsigned ? (uint32_t)val : (int32_t)val;
+  //   int64_t val = eval2(node->lhs, label);
+  //   if (is_integer(node->ty))
+  //   {
+  //     switch (node->ty->size)
+  //     {
+  //     case 1:
+  //       return node->ty->is_unsigned ? (uint8_t)val : (int8_t)val;
+  //     case 2:
+  //       return node->ty->is_unsigned ? (uint16_t)val : (int16_t)val;
+  //     case 4:
+  //       return node->ty->is_unsigned ? (uint32_t)val : (int32_t)val;
+  //     }
+  //   }
+  //   return val;
+  // }
+    if (is_flonum(node->lhs->ty)) {
+        if (node->ty->kind == TY_BOOL)
+          return !!eval_double(node->lhs);
+        if (node->ty->size == 8 && node->ty->is_unsigned)
+          return (uint64_t)eval_double(node->lhs);
+        return eval_sign_extend(node->ty, eval_double(node->lhs));
       }
+      if (node->ty->kind == TY_BOOL) {
+        if (node->lhs->kind == ND_VAR && is_array(node->lhs->ty))
+          return 1;
+        return !!eval2(node->lhs, label);
+      }
+      int64_t val = eval2(node->lhs, label);
+      if (is_integer(node->ty))
+        return eval_sign_extend(node->ty, val);
+      return val;
     }
-    return val;
-  }
   case ND_ADDR:
     return eval_rval(node->lhs, label);
   case ND_LABEL_VAL:
@@ -3080,6 +3100,8 @@ bool is_const_expr(Node *node)
   
   return false;
 }
+
+
 
 int64_t const_expr(Token **rest, Token *tok)
 {
@@ -3843,7 +3865,7 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
 static Token *attribute_list(Token *tok, void *arg, Token *(*f)(Token *, void *)) 
 {
 
-  while (consume(&tok, tok, "__attribute__"))
+  while (consume(&tok, tok, "__attribute__") || consume(&tok, tok, "__attribute"))
   {
 
     ctx->filename = PARSE_C;
@@ -3890,27 +3912,27 @@ static Token *type_attributes(Token *tok, void *arg)
         return tok;
       }
 
-  if (equal(tok->next, ")") && consume(&tok, tok, "__aligned__"))
+  if ((equal(tok->next, ")") && consume(&tok, tok, "__aligned__")) || (equal(tok->next, ")") && consume(&tok, tok, "aligned")) )
   {
     ty->is_aligned = true;
     return tok;
   }
 
-  // if (consume(&tok, tok, "aligned") || consume(&tok, tok, "__aligned__"))
-  //     {
-  //       ctx->filename = PARSE_C;
-  //       ctx->funcname = "type_attributes";       
-  //       ctx->line_no = __LINE__ + 1;       
-  //       tok = skip(tok, "(", ctx);
-  //       //from COSMOPOLITAN adding is_aligned
-  //       ty->is_aligned = true;
-  //       ty->align = const_expr(&tok, tok);
-  //       ctx->filename = PARSE_C;
-  //       ctx->funcname = "type_attributes";     
-  //       ctx->line_no = __LINE__ + 1;       
-  //       tok = skip(tok, ")", ctx);
-  //       return tok;
-  //     }
+  if (consume(&tok, tok, "aligned") || consume(&tok, tok, "__aligned__"))
+      {
+        ctx->filename = PARSE_C;
+        ctx->funcname = "type_attributes";       
+        ctx->line_no = __LINE__ + 1;       
+        tok = skip(tok, "(", ctx);
+        //from COSMOPOLITAN adding is_aligned
+        ty->is_aligned = true;
+        ty->align = const_expr(&tok, tok);
+        ctx->filename = PARSE_C;
+        ctx->funcname = "type_attributes";     
+        ctx->line_no = __LINE__ + 1;       
+        tok = skip(tok, ")", ctx);
+        return tok;
+      }
 
   //from COSMOPOLITAN adding ms_abi
   if (consume(&tok, tok, "ms_abi") || consume(&tok, tok, "__ms_abi__")) {
@@ -4395,29 +4417,28 @@ static Token *thing_attributes(Token *tok, void *arg) {
     return tok;
   }
 
-  if (equal(tok->next, ")") && consume(&tok, tok, "__aligned__"))
+  if ((equal(tok->next, ")") && consume(&tok, tok, "__aligned__")) || (equal(tok->next, ")") && consume(&tok, tok, "aligned"))  )
   {
     attr->is_aligned = true;
     return tok;
   }
 
 
-
-    if (consume(&tok, tok, "aligned") || consume(&tok, tok, "__aligned__"))
-      {
-        ctx->filename = PARSE_C;
-        ctx->funcname = "thing_attributes";       
-        ctx->line_no = __LINE__ + 1;       
-        tok = skip(tok, "(", ctx);
-        //from COSMOPOLITAN adding is_aligned
-        attr->is_aligned = true;
-        attr->align = const_expr(&tok, tok);
-        ctx->filename = PARSE_C;
-        ctx->funcname = "thing_attributes";     
-        ctx->line_no = __LINE__ + 1;       
-        tok = skip(tok, ")", ctx);
-        return tok;
-      }
+  if (consume(&tok, tok, "aligned") || consume(&tok, tok, "__aligned__"))
+    {
+      ctx->filename = PARSE_C;
+      ctx->funcname = "thing_attributes";       
+      ctx->line_no = __LINE__ + 1;       
+      tok = skip(tok, "(", ctx);
+      //from COSMOPOLITAN adding is_aligned
+      attr->is_aligned = true;
+      attr->align = const_expr(&tok, tok);
+      ctx->filename = PARSE_C;
+      ctx->funcname = "thing_attributes";     
+      ctx->line_no = __LINE__ + 1;       
+      tok = skip(tok, ")", ctx);
+      return tok;
+    }
 
   if (consume(&tok, tok, "warn_if_not_aligned") || consume(&tok, tok, "__warn_if_not_aligned__")) {
     ctx->filename = PARSE_C;
@@ -5317,6 +5338,7 @@ static Node *primary(Token **rest, Token *tok)
     return new_num(is_compatible(t1, t2), start);
   }
 
+
   if (equal(tok, "__builtin_constant_p")) {
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";        
@@ -5718,6 +5740,7 @@ static Node *primary(Token **rest, Token *tok)
   if (equal(tok, "__builtin_atomic_clear")) {
     return ParseAtomic2(ND_CLEAR, tok, rest);
   }
+  
   if (equal(tok, "__sync_lock_test_and_set")) {
     Node *node = new_node(ND_TESTANDSET, tok);
     ctx->filename = PARSE_C;
@@ -6988,3 +7011,15 @@ static void vector_initializer1(Token **rest, Token *tok, Initializer *init) {
 
      *rest = tok->next;
 }
+
+
+static int64_t eval_sign_extend(Type *ty, uint64_t val) {
+  switch (ty->size) {
+  case 1: return ty->is_unsigned ? (uint8_t)val : (int64_t)(int8_t)val;
+  case 2: return ty->is_unsigned ? (uint16_t)val : (int64_t)(int16_t)val;
+  case 4: return ty->is_unsigned ? (uint32_t)val : (int64_t)(int32_t)val;
+  case 8: return val;
+  }
+  unreachable();
+}
+

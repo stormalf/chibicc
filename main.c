@@ -694,7 +694,7 @@ static void parse_args(int argc, char **argv)
     }
 
 
-    if (!strcmp(argv[i], "Wl,-rpath,"))
+    if (!strcmp(argv[i], "Wl,-rpath,") || !strcmp(argv[i], "-rpath"))
     {
       char *tmp = argv[++i];
       check_parms_length(tmp);
