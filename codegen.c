@@ -41,7 +41,6 @@ void pop2(char *a, char *b);
 
 
 
-
 __attribute__((format(printf, 1, 2))) static void println(char *fmt, ...)
 {
   va_list ap;
@@ -79,8 +78,8 @@ static void pushf(Type *ty) {
 
     default:
       println("  push %%rax");
-  println("  movsd %%xmm0, (%%rsp)");
-  depth++;
+      println("  movsd %%xmm0, (%%rsp)");
+      depth++;
       break;
   }
 }
@@ -773,6 +772,8 @@ static void cast(Type *from, Type *to)
 // members in its byte range [lo, hi).
 static bool has_flonum(Type *ty, int lo, int hi, int offset)
 {
+
+
   if (ty->kind == TY_STRUCT || ty->kind == TY_UNION)
   {
     for (Member *mem = ty->members; mem; mem = mem->next)
@@ -802,27 +803,12 @@ static bool has_flonum2(Type *ty)
   return has_flonum(ty, 8, 16, 0);
 }
 
-// static void push_struct(Type *ty)
-// {
-//   int sz = align_to(ty->size, 8);
-//   println("  sub $%d, %%rsp", sz);
-//   depth += sz / 8;
-
-//   for (int i = 0; i < ty->size; i++)
-//   {
-//     println("  mov %d(%%rax), %%r10b", i);
-//     println("  mov %%r10b, %d(%%rsp)", i);
-//   }
-// }
 
 static void push_struct(Type *ty) {
     // Align the size of the structure to the maximum of 8 or its alignment
     int sz = align_to(ty->size, MAX(8, ty->align));
-    
-    // Adjust the stack pointer to make space for the structure
-  println("  sub $%d, %%rsp", sz);
-  depth += sz / 8;
-
+    println("  sub $%d, %%rsp", sz);
+    depth += sz / 8;
     // Copy the structure data from the source address (in rax) to the stack
     // Copy 8 bytes at a time, if possible
     for (int i = 0; i < ty->size; i += 8) {
@@ -855,6 +841,7 @@ static void push_args2(Node *args, bool first_pass)
 
   switch (args->ty->kind)
   {
+
   case TY_STRUCT:
   case TY_UNION:
     push_struct(args->ty);
@@ -951,7 +938,9 @@ static int push_args(Node *node)
           stack += align_to(ty->size, 8) / 8;
         }
       }
+
       break;
+    
     case TY_FLOAT:
     case TY_DOUBLE:
       if (fp++ >= FP_MAX)
@@ -984,7 +973,7 @@ static int push_args(Node *node)
       }
     }
   }
-
+  
   if ((depth + stack) % 2 == 1)
   {
     println("  sub $8, %%rsp");
@@ -1006,6 +995,7 @@ static int push_args(Node *node)
   return stack;
 }
 
+
 // static void copy_ret_buffer(Obj *var)
 // {
 //   Type *ty = var->ty;
@@ -1013,15 +1003,16 @@ static int push_args(Node *node)
 
 //   if (has_flonum1(ty))
 //   {
-//     assert(ty->size == 4 || 8 <= ty->size);
+//     assert(ty->size == 4 || ty->size == 8);
 //     if (ty->size == 4)
-//       println("  movss %%xmm0, %d(%%rbp)", var->offset);
+//             println("  movss %%xmm0, %d(%%rbp)", var->offset);  // Handle float (4 bytes)
 //     else
-//       println("  movsd %%xmm0, %d(%%rbp)", var->offset);
+//             println("  movsd %%xmm0, %d(%%rbp)", var->offset);  // Handle double (8 bytes)
 //     fp++;
 //   }
 //   else
 //   {
+//         // **Change 1: Handle the first 8 bytes for integer types (up to 64 bits)**
 //     for (int i = 0; i < MIN(8, ty->size); i++)
 //     {
 //       println("  mov %%al, %d(%%rbp)", var->offset + i);
@@ -1030,20 +1021,23 @@ static int push_args(Node *node)
 //     gp++;
 //   }
 
+//     // **Change 2: Handle the remaining bytes (for __int128, this covers bytes 9-16)**
 //   if (ty->size > 8)
 //   {
 //     if (has_flonum2(ty))
 //     {
 //       assert(ty->size == 12 || ty->size == 16);
 //       if (ty->size == 12)
-//         println("  movss %%xmm%d, %d(%%rbp)", fp, var->offset + 8);
+//                 println("  movss %%xmm%d, %d(%%rbp)", fp, var->offset + 8);  // Handle 12 bytes floating-point case
 //       else
-//         println("  movsd %%xmm%d, %d(%%rbp)", fp, var->offset + 8);
+//                 println("  movsd %%xmm%d, %d(%%rbp)", fp, var->offset + 8);  // Handle 16 bytes floating-point case
 //     }
 //     else
 //     {
+//             // **Change 3: Use %dl and %rdx for the second 8 bytes (bytes 9-16)**
 //       char *reg1 = (gp == 0) ? "%al" : "%dl";
 //       char *reg2 = (gp == 0) ? "%rax" : "%rdx";
+
 //       for (int i = 8; i < MIN(16, ty->size); i++)
 //       {
 //         println("  mov %s, %d(%%rbp)", reg1, var->offset + i);
@@ -1055,53 +1049,58 @@ static int push_args(Node *node)
 
 static void copy_ret_buffer(Obj *var)
 {
-  Type *ty = var->ty;
-  int gp = 0, fp = 0;
+    Type *ty = var->ty;
+    int gp = 0, fp = 0;
 
-  if (has_flonum1(ty))
-  {
-        assert(ty->size == 4 || ty->size == 8);
-    if (ty->size == 4)
+    if (has_flonum1(ty)) {
+
+        // Allow sizes 4, 8, 12, and 16 for floating-point types
+        assert(ty->size == 4 || ty->size == 8 || ty->size == 12 || ty->size == 16);
+
+        if (ty->size == 4) {
             println("  movss %%xmm0, %d(%%rbp)", var->offset);  // Handle float (4 bytes)
-    else
+        } else if (ty->size == 8) {
             println("  movsd %%xmm0, %d(%%rbp)", var->offset);  // Handle double (8 bytes)
-    fp++;
-  }
-  else
-  {
+        } else if (ty->size == 12 || ty->size == 16) {
+            // Split the 12 or 16 bytes into two parts, handle the first 8 bytes
+            println("  movsd %%xmm0, %d(%%rbp)", var->offset);  // Handle first 8 bytes
+            // Handle the remaining bytes (4 or 8 bytes)
+            if (ty->size == 12) {
+                println("  movss %%xmm1, %d(%%rbp)", var->offset + 8);  // Handle the remaining 4 bytes
+            } else if (ty->size == 16) {
+                println("  movsd %%xmm1, %d(%%rbp)", var->offset + 8);  // Handle the remaining 8 bytes
+            }
+        }
+        fp++;
+    } else {
         // **Change 1: Handle the first 8 bytes for integer types (up to 64 bits)**
-    for (int i = 0; i < MIN(8, ty->size); i++)
-    {
-      println("  mov %%al, %d(%%rbp)", var->offset + i);
-      println("  shr $8, %%rax");
+        for (int i = 0; i < MIN(8, ty->size); i++) {
+            println("  mov %%al, %d(%%rbp)", var->offset + i);
+            println("  shr $8, %%rax");
+        }
+        gp++;
     }
-    gp++;
-  }
 
     // **Change 2: Handle the remaining bytes (for __int128, this covers bytes 9-16)**
-  if (ty->size > 8)
-  {
-    if (has_flonum2(ty))
-    {
-      assert(ty->size == 12 || ty->size == 16);
-      if (ty->size == 12)
+    if (ty->size > 8) {
+        if (has_flonum2(ty)) {
+            assert(ty->size == 12 || ty->size == 16);
+            if (ty->size == 12) {
                 println("  movss %%xmm%d, %d(%%rbp)", fp, var->offset + 8);  // Handle 12 bytes floating-point case
-      else
+            } else {
                 println("  movsd %%xmm%d, %d(%%rbp)", fp, var->offset + 8);  // Handle 16 bytes floating-point case
-    }
-    else
-    {
+            }
+        } else {
             // **Change 3: Use %dl and %rdx for the second 8 bytes (bytes 9-16)**
-      char *reg1 = (gp == 0) ? "%al" : "%dl";
-      char *reg2 = (gp == 0) ? "%rax" : "%rdx";
+            char *reg1 = (gp == 0) ? "%al" : "%dl";
+            char *reg2 = (gp == 0) ? "%rax" : "%rdx";
 
-      for (int i = 8; i < MIN(16, ty->size); i++)
-      {
-        println("  mov %s, %d(%%rbp)", reg1, var->offset + i);
-        println("  shr $8, %s", reg2);
-      }
+            for (int i = 8; i < MIN(16, ty->size); i++) {
+                println("  mov %s, %d(%%rbp)", reg1, var->offset + i);
+                println("  shr $8, %s", reg2);
+            }
+        }
     }
-  }
 }
 
 
@@ -1644,6 +1643,7 @@ static void gen_expr(Node *node)
 
 
     depth -= stack_args;
+    printf("STACK========%d %d\n", stack_args, depth);
 
     // It looks like the most significant 48 or 56 bits in RAX may
     // contain garbage if a function return type is short or bool/char,
@@ -3275,6 +3275,7 @@ static void emit_text(Obj *prog)
 
     // Emit code
     gen_stmt(fn->body);
+    printf("DEPTH=====%d\n", depth);
     assert(depth == 0);
 
     // [https://www.sigbus.info/n1570#5.1.2.2.3p1] The C spec defines
@@ -3857,7 +3858,5 @@ void pushreg(const char *arg) {
   println("  push %%%s", arg);
   depth++;
 }
-
-
 
 

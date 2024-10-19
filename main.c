@@ -1206,7 +1206,6 @@ static void run_linker(StringArray *inputs, char *output)
   strarray_push(&arr, "elf_x86_64");
   strarray_push(&arr, "-allow-multiple-definition");
 
-
   //for some projects like POSTGRES it seems that the specific path for the project 
   //should be defined first
   for (int i = 0; i < ld_extra_args.len; i++) {
@@ -1261,6 +1260,9 @@ static void run_linker(StringArray *inputs, char *output)
   {
     strarray_push(&arr, "-dynamic-linker");
     strarray_push(&arr, "/lib64/ld-linux-x86-64.so.2");
+    //adding -lm to fix issue with math.h
+    strarray_push(&arr, "-lm");
+
 
   }
 
