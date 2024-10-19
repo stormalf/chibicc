@@ -241,6 +241,9 @@ static Type *get_common_type(Type *ty1, Type *ty2)
 
   //======ISS-158 trying to fix issue with "parse.c: in struct_ref : not a struct nor a union" when in a macro definition we have (size_t)-1 ? NULL : (n) - 1
   //assuming that if one is void it returns the second type that could be void also or different type.
+  if (!ty2)
+    return ty1;
+    
   if (ty1->base) {
     if (ty1->base->kind == TY_VOID)
       if (ty2->base)

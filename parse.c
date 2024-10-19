@@ -1932,9 +1932,7 @@ static void struct_initializer2(Token **rest, Token *tok, Initializer *init, Mem
       *rest = start;
       return;
     }
-
-    printf("======%s\n", tok->loc);
-
+    
     initializer2(&tok, tok, init->children[mem->idx]);
   }
   *rest = tok;
