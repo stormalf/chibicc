@@ -1020,14 +1020,56 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
   return ty;
 }
 
-// array-dimensions = ("static" | "restrict")* const-expr? "]" type-suffix
-static Type *array_dimensions(Token **rest, Token *tok, Type *ty)
-{
+// // array-dimensions = ("static" | "restrict")* const-expr? "]" type-suffix
+// static Type *array_dimensions(Token **rest, Token *tok, Type *ty)
+// {
 
-  while (equal(tok, "static") || equal(tok, "restrict") || equal(tok, "__restrict") || equal(tok, "__restrict__"))
+//   while (equal(tok, "static") || equal(tok, "restrict") || equal(tok, "__restrict") || equal(tok, "__restrict__") || equal(tok, "const") || equal(tok, "volatile"))
+//     tok = tok->next;
+
+//   // trying to fix issue with regex
+//   //=======if the params contains a variable int __nmatch and the next parameter used this variable it fails with undefined variable
+//   if (tok->kind == TK_IDENT && equal(tok->next, "]"))
+//   {
+
+//     VarScope *sc = find_var(tok);
+//     if (sc == NULL)
+//       tok = tok->next;
+//   }
+
+//   if (equal(tok, "]"))
+//   {
+//     ty = type_suffix(rest, tok->next, ty);
+
+//     if (!ty)
+//       error_tok(tok, "%s %d: in array_dimensions : ty is null", PARSE_C, __LINE__);
+//     return array_of(ty, -1);
+//   }
+
+//   //from @fuhsnn  array_dimensions(): Accept assign-expr for VLA size
+//   //Node *expr = conditional(&tok, tok);
+//   Node *expr = assign(&tok, tok);
+//   ctx->filename = PARSE_C;
+//   ctx->funcname = "array_dimensions";  
+//   ctx->line_no = __LINE__ + 1;
+//   tok = skip(tok, "]", ctx);
+//   if (!ty)
+//     error_tok(tok, "%s %d: in array_dimensions : ty is null", PARSE_C, __LINE__);
+//   ty = type_suffix(rest, tok, ty);
+//   tok = attribute_list(tok, ty, type_attributes);
+//   if (ty->kind == TY_VLA || !is_const_expr(expr))
+//     return vla_of(ty, expr);
+//   return array_of(ty, eval(expr));
+// }
+
+
+// array-dimensions = ("static" | "restrict")* const-expr? "]" type-suffix
+static Type *array_dimensions(Token **rest, Token *tok, Type *ty) {
+
+  while (equal(tok, "static") || equal(tok, "restrict") || equal(tok, "__restrict") || equal(tok, "__restrict__") || equal(tok, "const") || equal(tok, "volatile"))
     tok = tok->next;
 
-  // trying to fix issue with regex
+  // temp fix for now with regex. 
   //=======if the params contains a variable int __nmatch and the next parameter used this variable it fails with undefined variable
   if (tok->kind == TK_IDENT && equal(tok->next, "]"))
   {
@@ -1037,29 +1079,29 @@ static Type *array_dimensions(Token **rest, Token *tok, Type *ty)
       tok = tok->next;
   }
 
-  if (equal(tok, "]"))
-  {
-    ty = type_suffix(rest, tok->next, ty);
-
-    if (!ty)
-      error_tok(tok, "%s %d: in array_dimensions : ty is null", PARSE_C, __LINE__);
+  if (consume(&tok, tok, "]") ||
+      (equal(tok, "*") && consume(&tok, tok->next, "]"))) {
+    if (equal(tok, "["))
+      ty = array_dimensions(&tok, tok->next, ty);
+    *rest = tok;
     return array_of(ty, -1);
   }
 
-  //from @fuhsnn  array_dimensions(): Accept assign-expr for VLA size
-  //Node *expr = conditional(&tok, tok);
   Node *expr = assign(&tok, tok);
+  add_type(expr);
   ctx->filename = PARSE_C;
   ctx->funcname = "array_dimensions";  
-  ctx->line_no = __LINE__ + 1;
+  ctx->line_no = __LINE__ + 1;    
   tok = skip(tok, "]", ctx);
-  if (!ty)
-    error_tok(tok, "%s %d: in array_dimensions : ty is null", PARSE_C, __LINE__);
-  ty = type_suffix(rest, tok, ty);
-  tok = attribute_list(tok, ty, type_attributes);
-  if (ty->kind == TY_VLA || !is_const_expr(expr))
-    return vla_of(ty, expr);
-  return array_of(ty, eval(expr));
+
+  if (equal(tok, "["))
+    ty = array_dimensions(&tok, tok->next, ty);
+  *rest = tok;
+
+  if (ty->kind != TY_VLA && is_const_expr(expr))
+    return array_of(ty, eval(expr));
+
+  return vla_of(ty, expr);
 }
 
 // type-suffix = "(" func-params
@@ -1247,12 +1289,14 @@ static Type *enum_specifier(Token **rest, Token *tok)
 
   if (tag && !equal(tok, "{"))
   {
-    Type *ty = find_tag(tag);
-    if (!ty)
-      error_tok(tag, "%s %d: in enum_specifier : unknown enum type", PARSE_C, __LINE__);
-    if (ty->kind != TY_ENUM)
+    Type *ty2 = find_tag(tag);
+    if (!ty2)
+      warn_tok(tag, "%s %d: in enum_specifier : unknown enum type", PARSE_C, __LINE__);
+    if (ty2 && ty2->kind != TY_ENUM)
       error_tok(tag, "%s %d: in enum_specifier : not an enum tag", PARSE_C, __LINE__);
     *rest = tok;
+    if (ty2)
+      return ty2;
     return ty;
   }
   ctx->filename = PARSE_C;
@@ -1889,6 +1933,8 @@ static void struct_initializer2(Token **rest, Token *tok, Initializer *init, Mem
       return;
     }
 
+    printf("======%s\n", tok->loc);
+
     initializer2(&tok, tok, init->children[mem->idx]);
   }
   *rest = tok;
@@ -1988,6 +2034,7 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
   if (!init)
     error("%s: %s:%d: error: in initializer2 :  init is null %s", PARSE_C, __FILE__, __LINE__, tok->loc);
 
+
   if (init->ty->kind == TY_ARRAY && tok->kind == TK_STR)
   {
     string_initializer(rest, tok, init);
@@ -2058,7 +2105,6 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
       init->expr = expr;
       return;
     }
-
 
     struct_initializer2(rest, tok, init, init->ty->members);
     return;
@@ -4136,6 +4182,7 @@ static Token *type_attributes(Token *tok, void *arg)
       consume(&tok, tok, "no_sanitize_undefined") ||
       consume(&tok, tok, "__no_sanitize_undefined__") ||
       consume(&tok, tok, "no_profile_instrument_function") ||
+      consume(&tok, tok, "stdcall") ||
       consume(&tok, tok, "__no_profile_instrument_function__")) 
     {
         return tok;
@@ -4575,6 +4622,7 @@ static Token *thing_attributes(Token *tok, void *arg) {
       consume(&tok, tok, "no_sanitize_undefined") ||
       consume(&tok, tok, "__no_sanitize_undefined__") ||
       consume(&tok, tok, "no_profile_instrument_function") ||
+      consume(&tok, tok, "stdcall") ||
       consume(&tok, tok, "__no_profile_instrument_function__")) 
     {
         return tok;

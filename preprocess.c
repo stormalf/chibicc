@@ -1088,8 +1088,9 @@ static void read_line_marker(Token **rest, Token *tok)
     error_tok(tok, "%s: in read_line_marker : invalid line marker", PREPROCESS_C);
 
   // fix issue with negative number that cause Assembler less number than one
-  start->file->line_delta = tok->val - start->line_no;
-
+  //start->file->line_delta = tok->val - start->line_no;
+  // fix from @fuhsnn Line control off by one 
+  start->file->line_delta = tok->val - start->line_no - 1;
   tok = tok->next;
   if (tok->kind == TK_EOF)
     return;
@@ -1423,6 +1424,12 @@ void init_macros(void)
   define_macro("__USHRT_MAX__", "65535");
   define_macro("__LONG_LONG_MAX__", "9223372036854775807");
   define_macro("__LONG_LONG_MIN__", "-9223372036854775807");
+  define_macro("__PTRDIFF_TYPE__", "long int");
+  define_macro("__WCHAR_TYPE__", "int");
+  define_macro("__WINT_TYPE__", "unsigned int");
+  define_macro("__INTMAX_TYPE__", "long int");
+  define_macro("__UINTMAX_TYPE__", "long unsigned int");
+
   //define_macro("SIZEOF_INT", "4");
   define_macro("__SIZEOF_LONG_DOUBLE__", "8");
   define_macro("__SIZEOF_LONG_LONG__", "8");
@@ -1688,5 +1695,4 @@ Token *preprocess3(Token *tok)
   cur->next = tok;
   return head.next;
 }
-
 
