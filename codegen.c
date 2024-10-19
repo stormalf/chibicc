@@ -1643,7 +1643,6 @@ static void gen_expr(Node *node)
 
 
     depth -= stack_args;
-    printf("STACK========%d %d\n", stack_args, depth);
 
     // It looks like the most significant 48 or 56 bits in RAX may
     // contain garbage if a function return type is short or bool/char,
@@ -3275,7 +3274,6 @@ static void emit_text(Obj *prog)
 
     // Emit code
     gen_stmt(fn->body);
-    printf("DEPTH=====%d\n", depth);
     assert(depth == 0);
 
     // [https://www.sigbus.info/n1570#5.1.2.2.3p1] The C spec defines

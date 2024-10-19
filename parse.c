@@ -1220,7 +1220,7 @@ static Type *declarator(Token **rest, Token *tok, Type *ty)
 // abstract-declarator = pointers ("(" abstract-declarator ")")? type-suffix
 static Type *abstract_declarator(Token **rest, Token *tok, Type *ty)
 {
-
+  tok = attribute_list(tok, ty, type_attributes);
   ty = pointers(&tok, tok, ty);
 
   if (equal(tok, "("))
@@ -7070,4 +7070,5 @@ static int64_t eval_sign_extend(Type *ty, uint64_t val) {
   }
   unreachable();
 }
+
 
