@@ -1932,8 +1932,17 @@ static void struct_initializer2(Token **rest, Token *tok, Initializer *init, Mem
       *rest = start;
       return;
     }
-    
-    initializer2(&tok, tok, init->children[mem->idx]);
+
+    //fixing c-Testsuite 205.
+    //initializer2(&tok, tok, init->children[mem->idx]);
+    // Arrays and vectors inside structs need to handle their elements with braces
+      if (mem->ty->kind == TY_ARRAY) {
+            array_initializer2(&tok, tok, init->children[mem->idx], mem->idx);
+      } else {
+          // For scalar members, just assign directly
+          initializer2(&tok, tok, init->children[mem->idx]);
+      }
+
   }
   *rest = tok;
 }
@@ -2103,7 +2112,6 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
       init->expr = expr;
       return;
     }
-
     struct_initializer2(rest, tok, init, init->ty->members);
     return;
   }

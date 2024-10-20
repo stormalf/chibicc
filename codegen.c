@@ -1200,6 +1200,7 @@ static void builtin_alloca(void)
   println("  mov %%rax, %d(%%rbp)", current_fn->alloca_bottom->offset);
 }
 
+
 //from cosmopolitan
 static void HandleAtomicArithmetic(Node *node, const char *op) {
   gen_expr(node->lhs);

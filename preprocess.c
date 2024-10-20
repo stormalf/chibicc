@@ -1286,12 +1286,14 @@ static Token *preprocess2(Token *tok)
     if (tok->at_bol)
       continue;
 
+    //from @fuhsnn warning management
     if (equal(tok, "warning"))
     {
-      if (tok->next->str != NULL)
-        printf("warning: %s\n", tok->next->str);
-      tok = skip_line(tok->next->next);
-      continue;
+      warn_tok(tok, "warning");
+        do {
+          tok = tok->next;
+        }while (!tok->at_bol);     
+      continue;    
     }
     error_tok(tok, "%s: in preprocess2 : invalid preprocessor directive", PREPROCESS_C);
   }

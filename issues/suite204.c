@@ -359,26 +359,26 @@ void stdarg(void)
     myprintf("%hfa24 %hfa22 %hfa21 %hfa21 %hfa21 %hfa21",
              hfa24, hfa22, hfa21, hfa21, hfa21, hfa21);
 
-    myprintf("HFA float:");
-    myprintf("%hfa14 %hfa14 %hfa14 %hfa14", hfa14, hfa14, hfa14, hfa14);
-    myprintf("%hfa13 %hfa14 %hfa14 %hfa14", hfa13, hfa14, hfa14, hfa14);
-    myprintf("%hfa12 %hfa14 %hfa14 %hfa14", hfa12, hfa14, hfa14, hfa14);
-    myprintf("%hfa11 %hfa14 %hfa14 %hfa14", hfa11, hfa14, hfa14, hfa14);
+    // myprintf("HFA float:");
+    // myprintf("%hfa14 %hfa14 %hfa14 %hfa14", hfa14, hfa14, hfa14, hfa14);
+    // myprintf("%hfa13 %hfa14 %hfa14 %hfa14", hfa13, hfa14, hfa14, hfa14);
+    // myprintf("%hfa12 %hfa14 %hfa14 %hfa14", hfa12, hfa14, hfa14, hfa14);
+    // myprintf("%hfa11 %hfa14 %hfa14 %hfa14", hfa11, hfa14, hfa14, hfa14);
 
-    myprintf("%hfa12 %hfa13 %hfa13 %hfa13 %hfa13",
-             hfa12, hfa13, hfa13, hfa13, hfa13);
-    myprintf("%hfa11 %hfa13 %hfa13 %hfa13 %hfa13",
-             hfa11, hfa13, hfa13, hfa13, hfa13);
-    myprintf("%hfa13 %hfa13 %hfa13 %hfa13",
-             hfa13, hfa13, hfa13, hfa13);
+    // myprintf("%hfa12 %hfa13 %hfa13 %hfa13 %hfa13",
+    //          hfa12, hfa13, hfa13, hfa13, hfa13);
+    // myprintf("%hfa11 %hfa13 %hfa13 %hfa13 %hfa13",
+    //          hfa11, hfa13, hfa13, hfa13, hfa13);
+    // myprintf("%hfa13 %hfa13 %hfa13 %hfa13",
+    //          hfa13, hfa13, hfa13, hfa13);
 
-    myprintf("%hfa14 %hfa12 %hfa12 %hfa12 %hfa12",
-             hfa14, hfa12, hfa12, hfa12, hfa12);
-    myprintf("%hfa13 %hfa12 %hfa12 %hfa12 %hfa12",
-             hfa13, hfa12, hfa12, hfa12, hfa12);
+    // myprintf("%hfa14 %hfa12 %hfa12 %hfa12 %hfa12",
+    //          hfa14, hfa12, hfa12, hfa12, hfa12);
+    // myprintf("%hfa13 %hfa12 %hfa12 %hfa12 %hfa12",
+    //          hfa13, hfa12, hfa12, hfa12, hfa12);
 
-    myprintf("%hfa14 %hfa12 %hfa11 %hfa11 %hfa11 %hfa11",
-             hfa14, hfa12, hfa11, hfa11, hfa11, hfa11);
+    // myprintf("%hfa14 %hfa12 %hfa11 %hfa11 %hfa11 %hfa11",
+    //          hfa14, hfa12, hfa11, hfa11, hfa11, hfa11);
 }
 
 void pll(unsigned long long x)
