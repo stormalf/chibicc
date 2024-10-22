@@ -1256,11 +1256,13 @@ static bool is_end(Token *tok)
 
 static bool consume_end(Token **rest, Token *tok)
 {
+
   if (equal(tok, "}"))
   {
     *rest = tok->next;
     return true;
   }
+
 
   if (equal(tok, ",") && equal(tok->next, "}"))
   {
@@ -1849,6 +1851,7 @@ static void array_initializer2(Token **rest, Token *tok, Initializer *init, int 
 
   for (; i < init->ty->array_len && !is_end(tok); i++)
   {
+
     Token *start = tok;
     if (i > 0) {
       ctx->filename = PARSE_C;
@@ -1869,22 +1872,26 @@ static void array_initializer2(Token **rest, Token *tok, Initializer *init, int 
 }
 
 // struct-initializer1 = "{" initializer ("," initializer)* ","? "}"
-static void struct_initializer1(Token **rest, Token *tok, Initializer *init)
+static void struct_initializer1(Token **rest, Token *tok, Initializer *init, bool is_braces)
 {
-  ctx->filename = PARSE_C;
-  ctx->funcname = "struct_initializer1";        
-  ctx->line_no = __LINE__ + 1;          
-  tok = skip(tok, "{", ctx);
+
+  //if(is_braces)  {       
+    ctx->filename = PARSE_C;
+    ctx->funcname = "struct_initializer1";        
+    ctx->line_no = __LINE__ + 1; 
+    tok = skip(tok, "{", ctx);
+  //}
 
   Member *mem = init->ty->members;
   bool first = true;
 
   while (!consume_end(rest, tok))
   {
+
     if (!first) {
       ctx->filename = PARSE_C;
       ctx->funcname = "struct_initializer1";        
-      ctx->line_no = __LINE__ + 1;         
+      ctx->line_no = __LINE__ + 1;  
       tok = skip(tok, ",", ctx);
     }
 
@@ -1899,16 +1906,18 @@ static void struct_initializer1(Token **rest, Token *tok, Initializer *init)
     }
 
     if (mem)
-    {
-      initializer2(&tok, tok, init->children[mem->idx]);
-      mem = mem->next;
-    }
-    else
-    {
-      tok = skip_excess_element(tok);
-    }
+      {
+        initializer2(&tok, tok, init->children[mem->idx]);
+        mem = mem->next;
+      }
+      else
+      {
+        tok = skip_excess_element(tok);
+      }
   }
 }
+
+ 
 
 // struct-initializer2 = initializer ("," initializer)*
 static void struct_initializer2(Token **rest, Token *tok, Initializer *init, Member *mem)
@@ -1937,7 +1946,7 @@ static void struct_initializer2(Token **rest, Token *tok, Initializer *init, Mem
     //initializer2(&tok, tok, init->children[mem->idx]);
     // Arrays and vectors inside structs need to handle their elements with braces
       if (mem->ty->kind == TY_ARRAY) {
-            array_initializer2(&tok, tok, init->children[mem->idx], mem->idx);
+            array_initializer2(&tok, tok, init->children[mem->idx], 0);
       } else {
           // For scalar members, just assign directly
           initializer2(&tok, tok, init->children[mem->idx]);
@@ -1946,6 +1955,8 @@ static void struct_initializer2(Token **rest, Token *tok, Initializer *init, Mem
   }
   *rest = tok;
 }
+
+
 
 static void union_initializer(Token **rest, Token *tok, Initializer *init)
 {
@@ -2098,7 +2109,7 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
   {
     if (equal(tok, "{"))
     {
-      struct_initializer1(rest, tok, init);
+      struct_initializer1(rest, tok, init, true);
       return;
     }
 
