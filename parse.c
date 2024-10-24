@@ -206,6 +206,9 @@ static int count_vector_init_elements(Token *tok, Type *ty);
 
 //from @fuhsnn
 static int64_t eval_sign_extend(Type *ty, uint64_t val);
+static Obj *eval_var(Node *expr, bool allow_local);
+static bool is_const_var(Obj *var) ;
+static bool is_str_tok(Token **rest, Token *tok, Token **str_tok);
 
 
 // static int align_down(int n, int align)
@@ -1492,11 +1495,15 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
       //temp fix for issue with typedef cast after =
       if (equal(tok->next, "(") && isTypedef(tok->next->next))
       {
-        while (!equal(tok, ")")) 
-          tok = tok->next;
+        if (ty->kind == TY_ARRAY && ty->is_vector)
+        {
+         while (!equal(tok, ")")) 
+           tok = tok->next;
+        }
       }
       Node *expr = lvar_initializer(&tok, tok->next, var);
       cur = cur->next = new_unary(ND_EXPR_STMT, expr, tok);
+     
     }
 
     //ISS-146
@@ -1849,6 +1856,7 @@ static void array_initializer2(Token **rest, Token *tok, Initializer *init, int 
     *init = *new_initializer(array_of(init->ty->base, len), false);
   }
 
+
   for (; i < init->ty->array_len && !is_end(tok); i++)
   {
 
@@ -1872,15 +1880,12 @@ static void array_initializer2(Token **rest, Token *tok, Initializer *init, int 
 }
 
 // struct-initializer1 = "{" initializer ("," initializer)* ","? "}"
-static void struct_initializer1(Token **rest, Token *tok, Initializer *init, bool is_braces)
+static void struct_initializer1(Token **rest, Token *tok, Initializer *init)
 {
-
-  //if(is_braces)  {       
-    ctx->filename = PARSE_C;
-    ctx->funcname = "struct_initializer1";        
-    ctx->line_no = __LINE__ + 1; 
-    tok = skip(tok, "{", ctx);
-  //}
+  ctx->filename = PARSE_C;
+  ctx->funcname = "struct_initializer1";        
+  ctx->line_no = __LINE__ + 1; 
+  tok = skip(tok, "{", ctx);
 
   Member *mem = init->ty->members;
   bool first = true;
@@ -1904,6 +1909,8 @@ static void struct_initializer1(Token **rest, Token *tok, Initializer *init, boo
       mem = mem->next;
       continue;
     }
+
+
 
     if (mem)
       {
@@ -1941,6 +1948,7 @@ static void struct_initializer2(Token **rest, Token *tok, Initializer *init, Mem
       *rest = start;
       return;
     }
+
 
     //fixing c-Testsuite 205.
     //initializer2(&tok, tok, init->children[mem->idx]);
@@ -2040,76 +2048,46 @@ static void initializer3(Token **rest, Token *tok, Initializer *init)
   }
 }
 
+
 // initializer = string-initializer | array-initializer
 //             | struct-initializer | union-initializer
 //             | assign
-static void initializer2(Token **rest, Token *tok, Initializer *init)
-{
+static void initializer2(Token **rest, Token *tok, Initializer *init) {
 
   // trying to fix issue #62
   if (equal(tok, ","))
     return;
+
   if (!init)
     error("%s: %s:%d: error: in initializer2 :  init is null %s", PARSE_C, __FILE__, __LINE__, tok->loc);
 
-
-  if (init->ty->kind == TY_ARRAY && tok->kind == TK_STR)
-  {
-    string_initializer(rest, tok, init);
-    return;
-  }
-
-  // issue #107 with array string initialized by function-like e.g : static const char vlc_usage[] = N_(str)
-  if (init->ty->kind == TY_ARRAY && equal(tok, "("))
-  {
-    if (equal(tok, "("))
-    {
-      if (init->ty->base->kind == TY_CHAR && tok->next->kind == TK_STR)
-      {
-        ctx->filename = PARSE_C;
-        ctx->funcname = "initializer2";        
-        ctx->line_no = __LINE__ + 1;           
-        tok = skip(tok, "(", ctx);
-        initializer2(&tok, tok, init);
-        ctx->filename = PARSE_C;
-        ctx->funcname = "initializer2";        
-        ctx->line_no = __LINE__ + 1;           
-        *rest = skip(tok, ")", ctx);
+  if (init->ty->kind == TY_ARRAY && is_integer(init->ty->base)) {
+    Token *start = tok;
+    Token *str_tok;
+    if (equal(tok, "{") && is_str_tok(&tok, tok->next, &str_tok)) {
+      if (consume(rest, tok, "}")) {
+        string_initializer(&tok, str_tok, init);
         return;
       }
+      tok = start;
+    }
+    if (is_str_tok(rest, tok, &str_tok)) {
+      string_initializer(&tok, str_tok, init);
       return;
     }
   }
 
-  if (init->ty->kind == TY_ARRAY)
-  {
+  if (init->ty->kind == TY_ARRAY) {
     if (equal(tok, "{"))
-    {
-      if (init->ty->base->kind == TY_CHAR && tok->next->kind == TK_STR)
-      {
-        ctx->filename = PARSE_C;
-        ctx->funcname = "initializer2";        
-        ctx->line_no = __LINE__ + 1;           
-        tok = skip(tok, "{", ctx);
-        initializer2(&tok, tok, init);
-        ctx->filename = PARSE_C;
-        ctx->funcname = "initializer2";        
-        ctx->line_no = __LINE__ + 1;           
-        *rest = skip(tok, "}", ctx);
-        return;
-      }
       array_initializer1(rest, tok, init);
-      return;
-    }
-    array_initializer2(rest, tok, init, 0);
+    else
+      array_initializer2(rest, tok, init, 0);
     return;
   }
 
-  if (init->ty->kind == TY_STRUCT)
-  {
-    if (equal(tok, "{"))
-    {
-      struct_initializer1(rest, tok, init, true);
+  if (init->ty->kind == TY_STRUCT) {
+    if (equal(tok, "{")) {
+      struct_initializer1(rest, tok, init);
       return;
     }
 
@@ -2118,26 +2096,39 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
     // Handle that case first.
     Node *expr = assign(rest, tok);
     add_type(expr);
-    if (expr->ty->kind == TY_STRUCT)
-    {
+    if (expr->ty->kind == TY_STRUCT) {
       init->expr = expr;
       return;
     }
+
+    if (!init->ty->members)
+      error_tok(tok, "%s: %s:%d: error: in initializer2 :  initializer for empty aggregate requires explicit braces", PARSE_C, __FILE__, __LINE__);
+
     struct_initializer2(rest, tok, init, init->ty->members);
     return;
   }
 
+  if (init->ty->kind == TY_UNION) {
+    if (equal(tok, "{")) {
+      union_initializer(rest, tok, init);
+      return;
+    }
 
-  if (init->ty->kind == TY_UNION )
-  {
+    Node *expr = assign(rest, tok);
+    add_type(expr);
+    if (expr->ty->kind == TY_UNION) {
+      init->expr = expr;
+      return;
+    }
+    if (!init->ty->members)
+      error_tok(tok, "%s: %s:%d: error: in initializer2 :  initializer for empty aggregate requires explicit braces", PARSE_C, __FILE__, __LINE__);
 
-    union_initializer(rest, tok, init);
+    init->mem = init->ty->members;
+    initializer2(rest, tok, init->children[0]);
     return;
-
   }
 
-  if (equal(tok, "{"))
-  {
+  if (equal(tok, "{")) {
     bool is_vector = false;
     // An initializer for a scalar variable can be surrounded by
     // braces. E.g. `int x = {3};`. Handle that case.
@@ -2146,19 +2137,21 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
         is_vector = true;
         vector_initializer1(rest, tok, init);
 
-      } 
-    initializer2(&tok, tok->next, init);
+       } 
+      // An initializer for a scalar variable can be surrounded by
+      // braces. E.g. `int x = {3};`. Handle that case.
+      initializer2(&tok, tok->next, init);
     }
     ctx->filename = PARSE_C;
     ctx->funcname = "initializer2";        
-    ctx->line_no = __LINE__ + 1;       
+    ctx->line_no = __LINE__ + 1;   
     *rest = skip(tok, "}", ctx);
     return;
   }
 
   init->expr = assign(rest, tok);
-
 }
+
 
 static Type *copy_struct_type(Type *ty)
 {
@@ -2182,11 +2175,13 @@ static Type *copy_struct_type(Type *ty)
 static Initializer *initializer(Token **rest, Token *tok, Type *ty, Type **new_ty)
 {
   Initializer *init = new_initializer(ty, true);
+  // Check for a compound literal: a token that starts with '(' followed by a typename
   
   initializer2(rest, tok, init);
 
   if ((ty->kind == TY_STRUCT || ty->kind == TY_UNION) && ty->is_flexible)
   {
+
     ty = copy_struct_type(ty);
     Member *mem = ty->members;
     while (mem->next)
@@ -2234,7 +2229,10 @@ static Node *create_lvar_init(Initializer *init, Type *ty, InitDesg *desg, Token
     }
     return node;
   }
-
+  if (init->expr) {
+    Node *lhs = init_desg_expr(desg, tok);
+    return new_binary(ND_ASSIGN, lhs, init->expr, tok);
+  }
   if (ty->kind == TY_STRUCT && !init->expr)
   {
     Node *node = new_node(ND_NULL_EXPR, tok);
@@ -2323,8 +2321,10 @@ static void write_buf(char *buf, uint64_t val, int sz)
 static Relocation *
 write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int offset)
 {
+
   if (ty->kind == TY_ARRAY)
   {
+
     if (init->expr)
       error_tok(init->expr->tok, "%s %d: in write_gvar_data : array initializer must be an initializer list", PARSE_C, __LINE__);
     int sz = ty->base->size;
@@ -2332,7 +2332,7 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
       cur = write_gvar_data(cur, init->children[i], ty->base, buf, offset + sz * i);
     return cur;
   }
-
+  if (!init->expr) {
   if (ty->kind == TY_STRUCT)
   {
     for (Member *mem = ty->members; mem; mem = mem->next)
@@ -2355,8 +2355,10 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
       }
       else
       {
+
         cur = write_gvar_data(cur, init->children[mem->idx], mem->ty, buf,
                               offset + mem->offset);
+        
       }
     }
     return cur;
@@ -2370,8 +2372,40 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
                            init->mem->ty, buf, offset);
   }
 
-  if (!init->expr)
     return cur;
+  }
+  
+  add_type(init->expr);
+  
+   // Check if the initializer is a compound literal
+  if (is_compatible(ty, init->expr->ty)) {
+    int sofs = 0;
+    Obj *var = eval_var(init->expr,  false);
+    if (var && var->init_data && !var->is_weak && (is_const_var(var) || var->is_compound_lit)) {
+
+      Relocation *srel = var->rel;
+      while (srel && srel->offset < sofs)
+        srel = srel->next;
+
+      for (int pos = 0; pos < ty->size && (pos + sofs) < var->ty->size;) {
+        if (srel && srel->offset == (pos + sofs)) {
+          // Create new relocation
+          cur = cur->next = calloc(1, sizeof(Relocation));
+          cur->offset = (pos + offset);
+          cur->label = srel->label;
+          cur->addend = srel->addend;
+
+          srel = srel->next;
+          pos += 8;
+        } else {
+          // Copy initialization data from compound literal
+          buf[(pos + offset)] = var->init_data[(pos + sofs)];
+          pos++;
+        }
+      }
+      return cur;
+    }
+  }
 
   if (ty->kind == TY_FLOAT)
   {
@@ -2382,6 +2416,11 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
   if (ty->kind == TY_DOUBLE)
   {
     *(double *)(buf + offset) = eval_double(init->expr);
+    return cur;
+  }
+  if (ty->kind == TY_LDOUBLE)
+  {
+    *(long double *)(buf + offset) = eval_double(init->expr);
     return cur;
   }
 
@@ -2410,6 +2449,7 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
 // initializer list contains a non-constant expression.
 static void gvar_initializer(Token **rest, Token *tok, Obj *var)
 {
+
 
   Initializer *init = initializer(rest, tok, var->ty, &var->ty);
 
@@ -3029,22 +3069,7 @@ int64_t eval2(Node *node, char ***label)
   case ND_LOGOR:
     return eval(node->lhs) || eval(node->rhs);
   case ND_CAST:
-  {        
-  //   int64_t val = eval2(node->lhs, label);
-  //   if (is_integer(node->ty))
-  //   {
-  //     switch (node->ty->size)
-  //     {
-  //     case 1:
-  //       return node->ty->is_unsigned ? (uint8_t)val : (int8_t)val;
-  //     case 2:
-  //       return node->ty->is_unsigned ? (uint16_t)val : (int16_t)val;
-  //     case 4:
-  //       return node->ty->is_unsigned ? (uint32_t)val : (int32_t)val;
-  //     }
-  //   }
-  //   return val;
-  // }
+  {          
     if (is_flonum(node->lhs->ty)) {
         if (node->ty->kind == TY_BOOL)
           return !!eval_double(node->lhs);
@@ -3080,9 +3105,10 @@ int64_t eval2(Node *node, char ***label)
     if (!label) {
       error_tok(node->tok, "%s %d : in eval2 : not a compile-time constant", PARSE_C, __LINE__);
     }
-      //trying to fix ======ISS-145 compiling util-linux failed with invalid initalizer2 
+
+    //trying to fix ======ISS-145 compiling util-linux failed with invalid initalizer2 
     if (node->var->ty->kind != TY_ARRAY && node->var->ty->kind != TY_FUNC && node->var->ty->kind != TY_INT) {
-      error_tok(node->tok, "%s %d: in eval2 : invalid initializer2", PARSE_C, __LINE__);
+      error_tok(node->tok, "%s %d: in eval2 : invalid initializer2 %d", PARSE_C, __LINE__, node->var->ty->kind);
     }
       //trying to fix ======ISS-145 compiling util-linux failed with invalid initalizer2 
     if (node->var->ty->kind == TY_INT)
@@ -4982,8 +5008,7 @@ static Node *postfix(Token **rest, Token *tok)
     if (scope->next == NULL)
     {
       Obj *var = new_anon_gvar(ty);
-      // gvar_initializer(rest, tok, var);
-      // return new_var_node(var, start);
+      var->is_compound_lit = true;
       gvar_initializer(&tok, tok, var);
       node = new_var_node(var, start);
     }
@@ -5221,6 +5246,33 @@ static Node *primary(Token **rest, Token *tok)
 
   Token *start = tok;
 
+  // if (equal(tok, "(") && equal(tok->next, "(") && is_typename(tok->next->next))
+  // {
+  //   printf("======compound literal found==\n %s", tok->loc);
+  //   // Compound literal
+  //   Node *node;
+  //   Type *ty = typename(&tok, tok->next->next);
+  //   ctx->filename = PARSE_C;
+  //   ctx->funcname = "postfix";        
+  //   ctx->line_no = __LINE__ + 1;         
+  //   tok = skip(tok, ")", ctx);
+
+  //   if (scope->next == NULL)
+  //   {
+  //     Obj *var = new_anon_gvar(ty);
+  //     var->is_compound_lit = true;
+  //     gvar_initializer(&tok, tok, var);
+  //     node = new_var_node(var, start);
+  //   }
+  //   else
+  //   {
+  //     Obj *var = new_lvar("", ty, NULL);
+  //     Node *lhs = lvar_initializer(&tok, tok, var);
+  //     Node *rhs = new_var_node(var, tok);
+  //     node = new_binary(ND_COMMA, lhs, rhs, start->next->next);
+  //   }
+  //   return node;
+  // }
 
   if ((equal(tok, "(") && equal(tok->next, "{")))
   {
@@ -5305,51 +5357,6 @@ static Node *primary(Token **rest, Token *tok)
     }
   }
 
-  // if (equal(tok, "sizeof"))
-  // {
-
-  //   Node *node = unary(rest, tok->next);
-  //   add_type(node);
-
-  //   // Check if the type is incomplete
-  //   if (node->ty->kind == TY_UNION && node->ty->size < 0)
-  //     error_tok(tok, "%s %d: in primary : incomplete type for sizeof", PARSE_C, __LINE__);
-          
-  //   //trying to fix =====ISS-166 segmentation fault 
-  //   if (node->ty->kind == TY_VLA)
-  //   {
-  //     if (node->ty->vla_size)
-  //       return new_var_node(node->ty->vla_size, tok);
-
-  //     Node *lhs = compute_vla_size(node->ty, tok);
-  //     Node *rhs = new_var_node(node->ty->vla_size, tok);
-  //     return new_binary(ND_COMMA, lhs, rhs, tok);
-  //   }
-
-  //   // if (node->ty->kind == TY_VLA)
-  //   //   return new_var_node(node->ty->vla_size, tok);
-  //   return new_ulong(node->ty->size, tok);
-  // }
-
-
-  // if (equal(tok, "_Alignof") && equal(tok->next, "(") && is_typename(tok->next->next))
-  // {
-  //   Type *ty = typename(&tok, tok->next->next);
-  //   ctx->filename = PARSE_C;
-  //   ctx->funcname = "primary";        
-  //   ctx->line_no = __LINE__ + 1;      
-  //   *rest = skip(tok, ")", ctx);
-  //   return new_ulong(ty->align, tok);
-  // }
-
-  // if (equal(tok, "_Alignof"))
-  // {
-  //   Node *node = unary(rest, tok->next);
-  //   add_type(node);
-  //   while (is_array(node->ty))
-  //     node->ty = node->ty->base;
-  //   return new_ulong(node->ty->align, tok);
-  // }
 
   //from @fuhsnn merging alignof
   if (equal(tok, "_Alignof") || equal(tok, "alignof") ||  equal(tok, "__alignof__")) {
@@ -6033,7 +6040,7 @@ static Node *primary(Token **rest, Token *tok)
 
     if (sc)
     {
-      
+
       if (sc->var)
         return new_var_node(sc->var, tok);
       if (sc->enum_ty)
@@ -7089,3 +7096,40 @@ static int64_t eval_sign_extend(Type *ty, uint64_t val) {
 }
 
 
+static bool is_const_var(Obj *var) {
+  Type *ty = var->ty;
+  for (; ty && ty->kind == TY_ARRAY; ty = ty->base)
+    if (ty->is_const)
+      return true;
+  return ty->is_const;
+}
+
+static Obj *eval_var(Node *expr, bool allow_local) {
+
+  if (expr->kind != ND_VAR)
+    return NULL;
+
+  Obj *var = expr->var;
+  if (!var)
+    return NULL;
+
+
+  if (var->is_compound_lit)
+    return var;
+
+  return NULL;
+}
+
+
+static bool is_str_tok(Token **rest, Token *tok, Token **str_tok) {
+  if (equal(tok, "(") && is_str_tok(&tok, tok->next, str_tok) &&
+    consume(rest, tok, ")"))
+    return true;
+
+  if (tok->kind == TK_STR) {
+    *str_tok = tok;
+    *rest = tok->next;
+    return true;
+  }
+  return false;
+}

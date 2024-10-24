@@ -3020,6 +3020,8 @@ static void emit_data(Obj *prog)
 
     if (var->is_static)
       println("  .local %s", var->name);
+    else if (var->is_weak)
+      println("  .weak %s", var->name);
     else
       println("  .globl %s", var->name);
 

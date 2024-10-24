@@ -227,6 +227,7 @@ struct Obj
   Type *ty;       // Type
   Token *tok;     // representative token
   bool is_local;  // local or global/function
+  bool is_compound_lit; //to handle compound literals
   int align;      // alignment
 
   // Local variable
@@ -579,6 +580,7 @@ struct Type
   bool is_weak;
   char *visibility;
 
+  bool is_compound_lit; // Flag to indicate if this type is a compound literal
   // Function type
   Type *return_ty;
   Type *params;
