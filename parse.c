@@ -100,6 +100,7 @@ static Token* ArrayToken[50][50];
 static Token* ArrayTokenOrder[50][50];
 static int order = 0;
 static bool is_old_style = false;
+
 // All local variable instances created during parsing are
 // accumulated to this list.
 static Obj *locals;
@@ -209,6 +210,7 @@ static int64_t eval_sign_extend(Type *ty, uint64_t val);
 static Obj *eval_var(Node *expr, bool allow_local);
 static bool is_const_var(Obj *var) ;
 static bool is_str_tok(Token **rest, Token *tok, Token **str_tok);
+static char *token_to_string(Token *tok);
 
 
 // static int align_down(int n, int align)
@@ -812,6 +814,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     else
       unreachable();
 
+
     switch (counter)
     {
     case VOID:
@@ -892,6 +895,8 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     ty->is_atomic = true;
   }
   *rest = tok;
+
+
   return ty;
 }
 
@@ -3964,7 +3969,7 @@ static Token *attribute_list(Token *tok, void *arg, Token *(*f)(Token *, void *)
     tok = skip(tok, "(", ctx);
     ctx->filename = PARSE_C;
     ctx->funcname = "attribute_list";        
-    ctx->line_no = __LINE__ + 1;       
+    ctx->line_no = __LINE__ + 1;    
     tok = skip(tok, "(", ctx);
     
     bool first = true;
@@ -3973,7 +3978,7 @@ static Token *attribute_list(Token *tok, void *arg, Token *(*f)(Token *, void *)
       if (!first) {
         ctx->filename = PARSE_C;
         ctx->funcname = "attribute_list";        
-        ctx->line_no = __LINE__ + 1;       
+        ctx->line_no = __LINE__ + 1;     
         tok = skip(tok, ",", ctx);
       }
       first = false;
@@ -4075,31 +4080,7 @@ static Token *type_attributes(Token *tok, void *arg)
 
     return tok;
   }
-     // Handle vector_size attribute
-    // if (consume(&tok, tok, "vector_size") || consume(&tok, tok, "__vector_size__")) {
-    //     ctx->filename = PARSE_C;
-    //     ctx->funcname = "type_attributes";        
-    //     ctx->line_no = __LINE__ + 1;          
-    //     tok = skip(tok, "(", ctx);
-    //     int vs = const_expr(&tok, tok);
-    //     if (vs != 2 && vs != 4 && vs != 8 && vs != 16) {
-    //         error_tok(tok, "%s %d: unsupported vector_size %d; only 2, 4, 8 and 16 are supported", PARSE_C, __LINE__, vs);
-    //     }
 
-    //     // Set vector size and alignment
-    //     ty->vector_size = vs;
-    //     ty->size = vs; // Update size to match vector size
-
-    //     // Default alignment based on vector size if not previously aligned
-    //     if (!ty->is_aligned) {
-    //         ty->align = vs; // Set alignment to vector size by default
-    //     }
-
-    //     ctx->filename = PARSE_C;
-    //     ctx->funcname = "type_attributes";        
-    //     ctx->line_no = __LINE__ + 1;  
-    //     tok = skip(tok, ")", ctx);
-    // }
 
     // Handle __aligned__ attribute
     if (consume(&tok, tok, "__aligned__") || consume(&tok, tok, "aligned")) {
@@ -4162,6 +4143,25 @@ static Token *type_attributes(Token *tok, void *arg)
     return tok;
   }
 
+ // Handle __cleanup__ attribute
+  if (consume(&tok, tok, "cleanup") || consume(&tok, tok, "__cleanup__")) {
+      ctx->filename = PARSE_C;
+      ctx->funcname = "type_attributes";        
+      ctx->line_no = __LINE__ + 1;
+      tok = skip(tok, "(", ctx);  
+      if (tok->kind != TK_IDENT)  
+          error_tok(tok, "%s %d: expected identifier in __cleanup__", PARSE_C, __LINE__);
+
+      // Store the cleanup function name
+      ty->cleanup_func =  token_to_string(tok); 
+
+      tok = tok->next;  
+      ctx->filename = PARSE_C;
+      ctx->funcname = "type_attributes";        
+      ctx->line_no = __LINE__ + 1; 
+      tok = skip(tok, ")", ctx); 
+      return tok;
+  }
  
   
   if (consume(&tok, tok, "noinline") ||
@@ -5001,6 +5001,8 @@ static Node *postfix(Token **rest, Token *tok)
     // Compound literal
     Token *start = tok;
     Type *ty = typename(&tok, tok->next);
+    if (ty->kind == TY_VLA)
+      error_tok(tok, "%s %d: in postfix : compound literals cannot be VLA", PARSE_C, __LINE__);
     ctx->filename = PARSE_C;
     ctx->funcname = "postfix";        
     ctx->line_no = __LINE__ + 1;         
@@ -7134,3 +7136,24 @@ static bool is_str_tok(Token **rest, Token *tok, Token **str_tok) {
   }
   return false;
 }
+
+
+// Function to convert a token to a string
+static char *token_to_string(Token *tok) {
+    // Allocate memory for the new string (+1 for null terminator)
+    char *str = malloc(tok->len + 1);
+    if (!str) {
+        // Handle allocation failure (you may want to use your own error handling)
+        error("%s: %s:%d: error: in token_to_string : Memory allocation failed for str", PARSE_C, __FILE__, __LINE__);
+    }
+    
+    // Copy the token's characters into the new string
+    strncpy(str, tok->loc, tok->len);
+    
+    // Null-terminate the string
+    str[tok->len] = '\0';
+    
+    return str;
+}
+
+

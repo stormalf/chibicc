@@ -715,6 +715,11 @@ static void parse_args(int argc, char **argv)
       continue;
     }
 
+    if (!strcmp(argv[i], "-rdynamic")) {
+      strarray_push(&input_paths, "-Wl,--export-dynamic");
+      continue;
+    }
+
 
     // These options are ignored for now.
     if (!strncmp(argv[i], "-O", 2) ||
@@ -763,12 +768,13 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "--print-search-dirs") || 
         !strcmp(argv[i], "-fdiagnostics-show-option") || 
         !strcmp(argv[i], "-Xc") ||
-        !strcmp(argv[i], "-Aa") ||
-        !strcmp(argv[i], "-rdynamic") ||        
+        !strcmp(argv[i], "-Aa") ||  
         !strcmp(argv[i], "-w") ||
         !strcmp(argv[i], "--param=ssp-buffer-size=4") ||
         !strcmp(argv[i], "-fno-lto") ||
-        !strcmp(argv[i], "-c99")
+        !strcmp(argv[i], "-c99") ||
+        !strcmp(argv[i], "-fdiagnostics-color=always")  ||
+        !strcmp(argv[i], "-mfpmath=sse") 
         )
       continue;
 
