@@ -22,7 +22,7 @@ typedef __va_elem va_list[1];
 static void *__va_arg_mem(__va_elem *ap, int sz, int align) {
   void *p = ap->overflow_arg_area;
   if (align > 8)
-    p = (int) (p + 15) / 16 * 16;
+    p = (p + 15) / 16 * 16;
   ap->overflow_arg_area = ((unsigned long)p + sz + 7) / 8 * 8;
   return p;
 }
