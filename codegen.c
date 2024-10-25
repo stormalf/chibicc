@@ -804,25 +804,51 @@ static bool has_flonum2(Type *ty)
 }
 
 
+// static void push_struct(Type *ty) {
+//     // Align the size of the structure to the maximum of 8 or its alignment
+//     int sz = align_to(ty->size, MAX(8, ty->align));
+//     println("  sub $%d, %%rsp", sz);
+//     depth += sz / 8;
+//     // Copy the structure data from the source address (in rax) to the stack
+//     // Copy 8 bytes at a time, if possible
+//     for (int i = 0; i < ty->size; i += 8) {
+//         if (ty->size - i >= 8) {
+//             // Copy 8 bytes
+//             println("  mov %d(%%rax), %%r10", i);
+//             println("  mov %%r10, %d(%%rsp)", i);
+//         } else {
+//             // If the remaining bytes are less than 8, copy them byte by byte
+//             for (int j = 0; j < ty->size - i; j++) {
+//                 println("  mov %d(%%rax), %%r10b", i + j);
+//                 println("  mov %%r10b, %d(%%rsp)", i + j);
+//             }
+//         }
+//   }
+// }
+
+static bool pass_by_reg(Type *ty, int gp, int fp) {
+  if (ty->size > 16)
+    return false;
+
+  int fp_inc = has_flonum1(ty) + (ty->size > 8 && has_flonum2(ty));
+  int gp_inc = !has_flonum1(ty) + (ty->size > 8 && !has_flonum2(ty));
+
+  if (fp_inc && (fp + fp_inc > FP_MAX))
+    return false;
+  if (gp_inc && (gp + gp_inc > GP_MAX))
+    return false;
+
+  return true;
+}
+
 static void push_struct(Type *ty) {
-    // Align the size of the structure to the maximum of 8 or its alignment
-    int sz = align_to(ty->size, MAX(8, ty->align));
-    println("  sub $%d, %%rsp", sz);
-    depth += sz / 8;
-    // Copy the structure data from the source address (in rax) to the stack
-    // Copy 8 bytes at a time, if possible
-    for (int i = 0; i < ty->size; i += 8) {
-        if (ty->size - i >= 8) {
-            // Copy 8 bytes
-            println("  mov %d(%%rax), %%r10", i);
-            println("  mov %%r10, %d(%%rsp)", i);
-        } else {
-            // If the remaining bytes are less than 8, copy them byte by byte
-            for (int j = 0; j < ty->size - i; j++) {
-                println("  mov %d(%%rax), %%r10b", i + j);
-                println("  mov %%r10b, %d(%%rsp)", i + j);
-            }
-        }
+  int sz = align_to(ty->size, 8);
+  println("  sub $%d, %%rsp", sz);
+  depth += sz / 8;
+
+  for (int i = 0; i < ty->size; i++) {
+    println("  mov %d(%%rax), %%r10b", i);
+    println("  mov %%r10b, %d(%%rsp)", i);
   }
 }
 
@@ -917,29 +943,37 @@ static int push_args(Node *node)
     {
     case TY_STRUCT:
     case TY_UNION:
-      if (ty->size > 16)
-      {
-        arg->pass_by_stack = true;
-        stack += align_to(ty->size, 8) / 8;
-      }
-      else
-      {
-        bool fp1 = has_flonum1(ty);
-        bool fp2 = has_flonum2(ty);
-
-        if (fp + fp1 + fp2 < FP_MAX && gp + !fp1 + !fp2 < GP_MAX)
-        {
-          fp = fp + fp1 + fp2;
-          gp = gp + !fp1 + !fp2;
-        }
-        else
-        {
+      if (pass_by_reg(ty, gp, fp)) {
+          fp += has_flonum1(ty) + (ty->size > 8 && has_flonum2(ty));
+          gp += !has_flonum1(ty) + (ty->size > 8 && !has_flonum2(ty));
+        } else {
           arg->pass_by_stack = true;
           stack += align_to(ty->size, 8) / 8;
         }
-      }
+        break;    
+      // if (ty->size > 16)
+      // {
+      //   arg->pass_by_stack = true;
+      //   stack += align_to(ty->size, 8) / 8;
+      // }
+      // else
+      // {
+      //   bool fp1 = has_flonum1(ty);
+      //   bool fp2 = has_flonum2(ty);
 
-      break;
+      //   if (fp + fp1 + fp2 < FP_MAX && gp + !fp1 + !fp2 < GP_MAX)
+      //   {
+      //     fp = fp + fp1 + fp2;
+      //     gp = gp + !fp1 + !fp2;
+      //   }
+      //   else
+      //   {
+      //     arg->pass_by_stack = true;
+      //     stack += align_to(ty->size, 8) / 8;
+      //   }
+      // }
+
+      // break;
     
     case TY_FLOAT:
     case TY_DOUBLE:
@@ -1592,28 +1626,43 @@ static void gen_expr(Node *node)
       {
       case TY_STRUCT:
       case TY_UNION:
-        if (ty->size > 16)
+          if (!pass_by_reg(ty, gp, fp))
           continue;
 
-        bool fp1 = has_flonum1(ty);
-        bool fp2 = has_flonum2(ty);
+        if (has_flonum1(ty))
+          popf(ty, fp++);
+        else
+          pop(argreg64[gp++]);
 
-        if (fp + fp1 + fp2 < FP_MAX && gp + !fp1 + !fp2 < GP_MAX)
-        {
-          if (fp1)
+        if (ty->size > 8) {
+          if (has_flonum2(ty))
             popf(ty, fp++);
           else
             pop(argreg64[gp++]);
-
-          if (ty->size > 8)
-          {
-            if (fp2)
-              popf(ty, fp++);
-            else
-              pop(argreg64[gp++]);
-          }
         }
         break;
+        // if (ty->size > 16)
+        //   continue;
+
+        // bool fp1 = has_flonum1(ty);
+        // bool fp2 = has_flonum2(ty);
+
+        // if (fp + fp1 + fp2 < FP_MAX && gp + !fp1 + !fp2 < GP_MAX)
+        // {
+        //   if (fp1)
+        //     popf(ty, fp++);
+        //   else
+        //     pop(argreg64[gp++]);
+
+        //   if (ty->size > 8)
+        //   {
+        //     if (fp2)
+        //       popf(ty, fp++);
+        //     else
+        //       pop(argreg64[gp++]);
+        //   }
+        // }
+        // break;
       case TY_FLOAT:
       case TY_DOUBLE:
         if (fp < FP_MAX)
@@ -1641,7 +1690,6 @@ static void gen_expr(Node *node)
     println("  mov $%d, %%rax", fp);
     println("  call *%%r10");
     println("  add $%d, %%rsp", stack_args * 8);
-
 
     depth -= stack_args;
 
@@ -3020,8 +3068,6 @@ static void emit_data(Obj *prog)
 
     if (var->is_static)
       println("  .local %s", var->name);
-    else if (var->is_weak)
-      println("  .weak %s", var->name);
     else
       println("  .globl %s", var->name);
 
@@ -3277,6 +3323,7 @@ static void emit_text(Obj *prog)
 
     // Emit code
     gen_stmt(fn->body);
+
     assert(depth == 0);
 
     // [https://www.sigbus.info/n1570#5.1.2.2.3p1] The C spec defines
@@ -3577,23 +3624,29 @@ void assign_lvar_offsets(Obj *prog) {
             switch (ty->kind) {
       case TY_STRUCT:
       case TY_UNION:
-          if (ty->size <= 8) {
-            bool fp1 = has_flonum(ty, 0, 8, 0);
-            if (fp + fp1 < FP_MAX && gp + !fp1 < GP_MAX) {
-              fp = fp + fp1;
-              gp = gp + !fp1;
-              continue;
-            }
-          } else if (ty->size <= 16) {
-          bool fp1 = has_flonum(ty, 0, 8, 0);
-          bool fp2 = has_flonum(ty, 8, 16, 8);
-                    if (fp + fp1 + fp2 < FP_MAX && gp + !fp1 + !fp2 < GP_MAX) {
-            fp = fp + fp1 + fp2;
-            gp = gp + !fp1 + !fp2;
-            continue;
-          }
+        if (pass_by_reg(ty, gp, fp)) {
+          fp += has_flonum1(ty) + (ty->size > 8 && has_flonum2(ty));
+          gp += !has_flonum1(ty) + (ty->size > 8 && !has_flonum2(ty));
+          continue;
         }
         break;
+        //   if (ty->size <= 8) {
+        //     bool fp1 = has_flonum(ty, 0, 8, 0);
+        //     if (fp + fp1 < FP_MAX && gp + !fp1 < GP_MAX) {
+        //       fp = fp + fp1;
+        //       gp = gp + !fp1;
+        //       continue;
+        //     }
+        //   } else if (ty->size <= 16) {
+        //   bool fp1 = has_flonum(ty, 0, 8, 0);
+        //   bool fp2 = has_flonum(ty, 8, 16, 8);
+        //             if (fp + fp1 + fp2 < FP_MAX && gp + !fp1 + !fp2 < GP_MAX) {
+        //     fp = fp + fp1 + fp2;
+        //     gp = gp + !fp1 + !fp2;
+        //     continue;
+        //   }
+        // }
+        // break;
       case TY_FLOAT:
       case TY_DOUBLE:
         if (fp++ < FP_MAX)
@@ -3859,5 +3912,3 @@ void pushreg(const char *arg) {
   println("  push %%%s", arg);
   depth++;
 }
-
-
