@@ -1697,4 +1697,3 @@ Token *preprocess3(Token *tok)
   cur->next = tok;
   return head.next;
 }
-

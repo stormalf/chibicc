@@ -3285,6 +3285,7 @@ static void emit_text(Obj *prog)
     int gp = 0, fp = 0;
     for (Obj *var = fn->params; var; var = var->next)
     {
+
       if (var->offset > 0)
         continue;
 
@@ -3321,10 +3322,13 @@ static void emit_text(Obj *prog)
       }
     }
 
+
+
     // Emit code
     gen_stmt(fn->body);
 
     assert(depth == 0);
+
 
     // [https://www.sigbus.info/n1570#5.1.2.2.3p1] The C spec defines
     // a special rule for the main function. Reaching the end of the

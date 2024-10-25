@@ -586,6 +586,7 @@ struct Type
   Type *params;
   bool is_variadic;
   Type *next;
+  char *cleanup_func;  // Store the name of the cleanup function
 };
 
 // Struct member
