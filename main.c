@@ -20,6 +20,7 @@ bool opt_fpie;
 bool opt_shared;
 bool opt_sse3;
 bool opt_sse4;
+bool opt_g;
 
 static FileType opt_x;
 static StringArray opt_include;
@@ -720,11 +721,18 @@ static void parse_args(int argc, char **argv)
       continue;
     }
 
+    if (!strncmp(argv[i], "-g", 2)) {
+      if (argv[i][2] == '0')
+        opt_g = false;
+      else
+        opt_g = true;
+      continue;
+    }
+
 
     // These options are ignored for now.
     if (!strncmp(argv[i], "-O", 2) ||
         !strncmp(argv[i], "-W", 2) ||
-        !strncmp(argv[i], "-g", 2) ||
         !strncmp(argv[i], "-P", 2) || 
         !strcmp(argv[i], "-ffreestanding") ||
         !strcmp(argv[i], "-fno-omit-frame-pointer") ||

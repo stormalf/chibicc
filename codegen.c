@@ -41,7 +41,7 @@ void pop2(char *a, char *b);
 
 
 
-__attribute__((format(printf, 1, 2))) static void println(char *fmt, ...)
+__attribute__((format(printf, 1, 2))) void println(char *fmt, ...)
 {
   va_list ap;
   va_start(ap, fmt);
@@ -3371,9 +3371,14 @@ void codegen(Obj *prog, FILE *out)
   emit_text(prog);
   println("  .section  .note.GNU-stack,\"\",@progbits");
 
+
   //print offset for each variable
-  if (isDebug)
+  if (isDebug) {
     print_offset(prog);
+  }
+  //generate dwarf info
+  if (opt_g)
+    generate_dwarf_info(prog);
 }
 
 

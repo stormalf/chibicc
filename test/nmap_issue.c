@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stddef.h>
+#include "test.h"
 
 #define LUA_TUSERDATA 0x00  // Example type for userdata
 #define makevariant(t, v) ((t) | ((v) << 4))
@@ -77,6 +78,7 @@ void create_userdata(lua_State *L, int nuvalue, size_t size) {
     size_t userdata_size = sizeudata(nuvalue, size);
     GCObject *userdata = luaC_newobj(L, LUA_VUSERDATA, userdata_size);
     printf("Allocated userdata of size: %zu\n", userdata_size);
+    ASSERT(40, userdata_size);
 }
 
 // Main function

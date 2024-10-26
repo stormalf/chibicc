@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include "test.h"
 
 // Declare an integer variable that must not be optimized away
 int xyzzy __attribute__((__used__, __retain__));
@@ -14,6 +15,7 @@ int get_value() {
 int main() {
     initialize_variable(); // Set the value of xyzzy
     printf("Value of xyzzy: %d\n", get_value()); // Print the value
+    ASSERT(42, get_value());
 
     return 0;
 }

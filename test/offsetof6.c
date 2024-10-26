@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <stddef.h>
-
+#include "test.h"
 // Define the Udata structure
 typedef struct {
     struct {
@@ -22,9 +22,12 @@ int main() {
     
     // Print the calculated offset
     printf("Offset of uv in Udata: %zu\n", offset_uv);
+    ASSERT(16, offset_uv);
     
     // Additional check for the size of Udata
     printf("Size of Udata: %zu\n", sizeof(Udata));
+
+    ASSERT(48, sizeof(Udata));
 
     return 0;
 }
