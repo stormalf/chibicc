@@ -369,6 +369,7 @@ typedef enum
   ND_BUILTIN_CTZLL, //builtin ctzll
   ND_POPCOUNT,    //builtin popcount
   ND_EXPECT,    //builtin expect
+  ND_ABORT,    //builtin abort
   ND_RETURN_ADDR,    //builtin return address
   ND_BUILTIN_ADD_OVERFLOW,  //builtin add overflow
   ND_BUILTIN_SUB_OVERFLOW,  //builtin sub overflow

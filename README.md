@@ -488,15 +488,16 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
     CC=chibicc  CFLAGS="-g -O0" ./configure --host x86_64-linux-gnu --without-icu --without-readline
     make
     make check
-
+    failed : "performing post-bootstrap initialization ... 2024-10-26 11:52:38.760 CEST [415899] FATAL: negative bitmapset member not allowed"
 
 
 ## TODO
 
 - trying to compile other C projects from source to see what is missing or which bug we have with chibicc.
-- trying to fix issue with vector m128 and operations on them (and trying to fix other vectors sizes 2, 4, 8).
-- trying to fix issues with bitfields.
-- trying to fix issues with alignas.
+- trying to fix issue with vector m128 and operations on them (and trying to fix other vectors sizes 2, 4, 8). For now no operation on vectors is supported.
+- trying to fix issues with bitfields. Different results with gcc and chibicc and slimcc.
+- trying to fix issues with alignas. Different results with gcc and chibicc and slimcc.
+
 
 
 ## issues and pull requests fixed
@@ -532,7 +533,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.23        Improvement: diagnose overflow in integer constant expression #96  from @pmor13. Fixing issue with old C style (K&R) when parameters order don't correspond to parameter definition. Adding \__LINE\__ in parse.c in all error_tok messages. Removing \__builtin_memcpy \__builtin_memset macro from preprocess.c that causes segmentation fault on zlib project. Adding other tests from @cosmopolitan. Adding \__GNUC__ macro and fixing all issues caused by this defined macro. Defining _Pragma macro that does nothing to keep compatibility with \__GNUC__. Fixing regression on struct members. Fixed on test case from curl. Renaming GNUC_compatibility to 1.0.23. Managing store_gp with size 16. Fixing issues with curl test due to sizeof_int and sizeof_long not taken in account (adding them in stddef.h). Fixing issue ISS-146 with semun. Fixing issue with \__builtin_clz that gives incorrect result. And adding \__builtin_ctzl and \__builtin_clzl. Adding \__builtin_isnan (ISS-175). Fixing issue with lock not correctly managed in extended assembly (ISS-174). Fxing other issues with extended assembly and adding several tests. Adding \__builtin_bswapxx (16, 32, 64). Adding __int128 support (work in progress). Adding -msse3 and -msse4 options Fixing issue with offsetof segmentation fault in postgres (ISS-176). Fixing  check for typedef specifier/attribute not strict enough #142 suggested by @samkho. Managing vectors (work in progress). Temp fix for casting (typedef). Merging Alignof (fixes from @fuhsnn slimcc). Merging sizeof (fixes from @fuhsnn slimcc). Removing fix for issue #36 about empty struct. Adding \__sync_fetch_and_or, \__sync_fetch_and_xor and \__sync_fetch_and_and. Fixing issues found during nmap compile (due to __attribute and some missing macros). Fixing line management from @fuhsnn. Fixing issue with attribute in abstract_declarator. Fixing issue with initializer in complex struct array. Fixing issue with c-testsuite 216 and 204 (fix from @fuhsnn/slimcc). Adding -rdynamic option (from @fuhsnn). Adding weak alias support (tested successfully with lxc).
+1.0.23        Improvement: diagnose overflow in integer constant expression #96  from @pmor13. Fixing issue with old C style (K&R) when parameters order don't correspond to parameter definition. Adding \__LINE\__ in parse.c in all error_tok messages. Removing \__builtin_memcpy \__builtin_memset macro from preprocess.c that causes segmentation fault on zlib project. Adding other tests from @cosmopolitan. Adding \__GNUC__ macro and fixing all issues caused by this defined macro. Defining _Pragma macro that does nothing to keep compatibility with \__GNUC__. Fixing regression on struct members. Fixed on test case from curl. Renaming GNUC_compatibility to 1.0.23. Managing store_gp with size 16. Fixing issues with curl test due to sizeof_int and sizeof_long not taken in account (adding them in stddef.h). Fixing issue ISS-146 with semun. Fixing issue with \__builtin_clz that gives incorrect result. And adding \__builtin_ctzl and \__builtin_clzl. Adding \__builtin_isnan (ISS-175). Fixing issue with lock not correctly managed in extended assembly (ISS-174). Fxing other issues with extended assembly and adding several tests. Adding \__builtin_bswapxx (16, 32, 64). Adding __int128 support (work in progress). Adding -msse3 and -msse4 options Fixing issue with offsetof segmentation fault in postgres (ISS-176). Fixing  check for typedef specifier/attribute not strict enough #142 suggested by @samkho. Managing vectors (work in progress). Temp fix for casting (typedef). Merging Alignof (fixes from @fuhsnn slimcc). Merging sizeof (fixes from @fuhsnn slimcc). Removing fix for issue #36 about empty struct. Adding \__sync_fetch_and_or, \__sync_fetch_and_xor and \__sync_fetch_and_and. Fixing issues found during nmap compile (due to __attribute and some missing macros). Fixing line management from @fuhsnn. Fixing issue with attribute in abstract_declarator. Fixing issue with initializer in complex struct array. Fixing issue with c-testsuite 216 and 204 (fix from @fuhsnn/slimcc). Adding -rdynamic option (from @fuhsnn). Adding weak alias support (tested successfully with lxc). Adding __builtin_abort.
 
 ## old release notes
 
