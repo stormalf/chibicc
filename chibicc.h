@@ -224,6 +224,7 @@ struct Obj
   Obj *next;
   char *name;     // Variable name
   char *funcname; // function name
+  char *alias_name; // alias name for function when weak attribute
   Type *ty;       // Type
   Token *tok;     // representative token
   bool is_local;  // local or global/function
@@ -586,7 +587,8 @@ struct Type
   Type *params;
   bool is_variadic;
   Type *next;
-  char *cleanup_func;  // Store the name of the cleanup function
+  Type *attrs;
+  char *alias_name; // alias name for function when weak attribute
 };
 
 // Struct member

@@ -3215,6 +3215,13 @@ static void emit_text(Obj *prog)
 
   for (Obj *fn = prog; fn; fn = fn->next)
   {
+    // Emit alias if fn->alias_name is set
+    if (fn->alias_name) {
+      // Handle weak alias
+      println("  .weak %s", fn->name);                 // Mark the function as weak
+      println("  .set %s, %s", fn->name, fn->alias_name);  // Define alias
+    }
+
     if (!fn->is_function || !fn->is_definition)
       continue;
 
@@ -3328,6 +3335,8 @@ static void emit_text(Obj *prog)
     gen_stmt(fn->body);
 
     assert(depth == 0);
+
+
 
 
     // [https://www.sigbus.info/n1570#5.1.2.2.3p1] The C spec defines

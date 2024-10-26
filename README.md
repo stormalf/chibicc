@@ -327,6 +327,10 @@ openssl : https://github.com/openssl/openssl.git
     make
 
     make test
+    All tests successful.
+    Files=291, Tests=3585, 497 wallclock secs ( 9.83 usr  0.91 sys + 368.16 cusr 94.85 csys = 473.75 CPU)
+    Result: PASS
+
     
 
 openssh-portable : https://github.com/openssh/openssh-portable.git
@@ -461,18 +465,8 @@ to be able to use meson with chibicc (meson doesn't know chibicc compiler), I ch
 
 lxc: https://github.com/lxc/lxc.git
 
-    Due to use of __attribute__((weak(alias))) in lxc/src/lxc/lxc.c, the linker is not able to find the symbols in the lxc library.
     CC=chibicc \
-    CFLAGS="-fpic -Dlxc_attach_main=main -Dlxc_autostart_main=main -Dlxc_destroy_main=main -Dlxc_config_main=main -Dlxc_stop_main=main -Dlxc_info_main=main \
-    -Dlxc_checkpoint_main=main -Dlxc_cgroup_main=main -Dlxc_freeze_main=main -Dlxc_unfreeze_main=main -Dlxc_copy_main=main -Dlxc_device_main=main -Dlxc_execute_main=main \
-    -Dlxc_monitor_main=main -Dlxc_snapshot_main=main -Dlxc_console_main=main  -Dlxc_ls_main=main -Dlxc_create_main=main -Dlxc_start_main=main -Dlxc_unshare_main=main \
-    -Dlxc_wait_main=main -Dlxc_top_main=main" \
-    LDFLAGS="-fpic -Wl,--undefined,lxc_attach_main -Wl,--undefined,lxc_autostart_main -Wl,--undefined,lxc_destroy_main -Wl,--undefined,lxc_config_main \
-    -Wl,--undefined,lxc_stop_main -Wl,--undefined,lxc_info_main -Wl,--undefined,lxc_checkpoint_main -Wl,--undefined,lxc_cgroup_main -Wl,--undefined,lxc_freeze_main \
-    -Wl,--undefined,lxc_unfreeze_main -Wl,--undefined,lxc_copy_main -Wl,--undefined,lxc_device_main -Wl,--undefined,lxc_execute_main -Wl,--undefined,lxc_monitor_main \
-    -Wl,--undefined,lxc_snapshot_main -Wl,--undefined,lxc_console_main -Wl,--undefined,lxc_ls_main -Wl,--undefined,lxc_create_main -Wl,--undefined,lxc_start_main \
-    -Wl,--undefined,lxc_start_main -Wl,--undefined,lxc_unshare_main -Wl,--undefined,lxc_wait_main -Wl,--undefined,lxc_top_main" \
-    meson build && cd build && meson compile
+    CFLAGS="-fpic" LDFLAGS="-fpic" meson build && cd build && meson compile
 
 
 ## Limits
@@ -538,7 +532,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.23        Improvement: diagnose overflow in integer constant expression #96  from @pmor13. Fixing issue with old C style (K&R) when parameters order don't correspond to parameter definition. Adding \__LINE\__ in parse.c in all error_tok messages. Removing \__builtin_memcpy \__builtin_memset macro from preprocess.c that causes segmentation fault on zlib project. Adding other tests from @cosmopolitan. Adding \__GNUC__ macro and fixing all issues caused by this defined macro. Defining _Pragma macro that does nothing to keep compatibility with \__GNUC__. Fixing regression on struct members. Fixed on test case from curl. Renaming GNUC_compatibility to 1.0.23. Managing store_gp with size 16. Fixing issues with curl test due to sizeof_int and sizeof_long not taken in account (adding them in stddef.h). Fixing issue ISS-146 with semun. Fixing issue with \__builtin_clz that gives incorrect result. And adding \__builtin_ctzl and \__builtin_clzl. Adding \__builtin_isnan (ISS-175). Fixing issue with lock not correctly managed in extended assembly (ISS-174). Fxing other issues with extended assembly and adding several tests. Adding \__builtin_bswapxx (16, 32, 64). Adding __int128 support (work in progress). Adding -msse3 and -msse4 options Fixing issue with offsetof segmentation fault in postgres (ISS-176). Fixing  check for typedef specifier/attribute not strict enough #142 suggested by @samkho. Managing vectors (work in progress). Temp fix for casting (typedef). Merging Alignof (fixes from @fuhsnn slimcc). Merging sizeof (fixes from @fuhsnn slimcc). Removing fix for issue #36 about empty struct. Adding \__sync_fetch_and_or, \__sync_fetch_and_xor and \__sync_fetch_and_and. Fixing issues found during nmap compile (due to __attribute and some missing macros). Fixing line management from @fuhsnn. Fixing issue with attribute in abstract_declarator. Fixing issue with initializer in complex struct array. Fixing issue with c-testsuite 216 and 204 (fix from @fuhsnn/slimcc). Adding -rdynamic option (from @fuhsnn).
+1.0.23        Improvement: diagnose overflow in integer constant expression #96  from @pmor13. Fixing issue with old C style (K&R) when parameters order don't correspond to parameter definition. Adding \__LINE\__ in parse.c in all error_tok messages. Removing \__builtin_memcpy \__builtin_memset macro from preprocess.c that causes segmentation fault on zlib project. Adding other tests from @cosmopolitan. Adding \__GNUC__ macro and fixing all issues caused by this defined macro. Defining _Pragma macro that does nothing to keep compatibility with \__GNUC__. Fixing regression on struct members. Fixed on test case from curl. Renaming GNUC_compatibility to 1.0.23. Managing store_gp with size 16. Fixing issues with curl test due to sizeof_int and sizeof_long not taken in account (adding them in stddef.h). Fixing issue ISS-146 with semun. Fixing issue with \__builtin_clz that gives incorrect result. And adding \__builtin_ctzl and \__builtin_clzl. Adding \__builtin_isnan (ISS-175). Fixing issue with lock not correctly managed in extended assembly (ISS-174). Fxing other issues with extended assembly and adding several tests. Adding \__builtin_bswapxx (16, 32, 64). Adding __int128 support (work in progress). Adding -msse3 and -msse4 options Fixing issue with offsetof segmentation fault in postgres (ISS-176). Fixing  check for typedef specifier/attribute not strict enough #142 suggested by @samkho. Managing vectors (work in progress). Temp fix for casting (typedef). Merging Alignof (fixes from @fuhsnn slimcc). Merging sizeof (fixes from @fuhsnn slimcc). Removing fix for issue #36 about empty struct. Adding \__sync_fetch_and_or, \__sync_fetch_and_xor and \__sync_fetch_and_and. Fixing issues found during nmap compile (due to __attribute and some missing macros). Fixing line management from @fuhsnn. Fixing issue with attribute in abstract_declarator. Fixing issue with initializer in complex struct array. Fixing issue with c-testsuite 216 and 204 (fix from @fuhsnn/slimcc). Adding -rdynamic option (from @fuhsnn). Adding weak alias support (tested successfully with lxc).
 
 ## old release notes
 
