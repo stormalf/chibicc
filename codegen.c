@@ -1425,22 +1425,104 @@ static void gen_expr(Node *node)
   }
   case ND_BUILTIN_CLZ: {
     gen_expr(node->builtin_val); // Generate code for the expression
-    println("  bsr %%rax, %%rax"); // Bit Scan Reverse to find the highest set bit
+    println("  bsr %%eax, %%eax"); // Bit Scan Reverse to find the highest set bit
     println("  xor $31, %%eax"); // Count leading zeros
-    println("  mov $31, %%edx");
-    println("  cmovz %%edx, %%eax"); // If input was zero, set result to 32
+    return;
+  }
+  case ND_BUILTIN_CLZLL:
+  case ND_BUILTIN_CLZL: {
+    gen_expr(node->builtin_val); // Generate code for the expression
+    println("  bsr %%rax, %%rax");       // Calculate number of leading zeros for 64-bit
+    println("  xor $63, %%eax");       // Special handling if input was -1
+
     return;
   }
   case ND_BUILTIN_CTZ: {
-    // Built-in version
     gen_expr(node->builtin_val); // Generate code for the expression
-    println("  bsf %%rax, %%rax"); // Bit Scan Forward to find the lowest set bit
-    println("  mov $32, %%edx"); // Prepare a value of 32 in edx
-    println("  cmovz %%edx, %%eax"); // If input was zero, set result to 32
+    println("  bsf %%eax, %%eax"); // Bit Scan Forward to find the lowest set bit
     return;
   }
+  case ND_BUILTIN_CTZLL:
+  case ND_BUILTIN_CTZL: {
+    gen_expr(node->builtin_val); // Generate code for the expression
+    println("  bsf %%rax, %%rax"); // Bit Scan Forward to find the lowest set bit
+    return;
+  }
+
+  case ND_BUILTIN_BSWAP16: {
+      gen_expr(node->builtin_val);  // Generate code for the expression
+      println("  mov %%ax, %%dx");  // Move the lower 16 bits of the result into dx
+      println("  rol $8, %%dx");    // Rotate the bits in dx by 8 bits to the left
+      println("  mov %%dx, %%ax");  // Move the result back into ax
+      return;
+  }
+
+  case ND_BUILTIN_BSWAP32: {
+      gen_expr(node->builtin_val);  // Generate code for the expression
+      println("  bswap %%eax");     // Reverse the byte order of the 32-bit value in eax
+      return;
+  }
+
+  case ND_BUILTIN_BSWAP64: {
+      gen_expr(node->builtin_val);  // Generate code for the expression
+      println("  bswap %%rax");     // Reverse the byte order of the 64-bit value in rax
+      return;
+  }  
+
+  case ND_BUILTIN_INFF:
+  case ND_BUILTIN_HUGE_VALF: {
+      // Loading the bit pattern for positive infinity in 32-bit single precision (float)
+      println("  mov $0x7f800000, %%eax");  // Load the bit pattern 0x7f800000 into eax (single precision positive infinity)
+      println("  movd %%eax, %%xmm0"); 
+      return;
+  }
+
+  // For __builtin_huge_val
+  case ND_BUILTIN_HUGE_VAL: {
+      // Loading the bit pattern for positive infinity in 64-bit double precision
+      println("  mov $0x7ff0000000000000, %%rax");  
+      println("  movq %%rax, %%xmm0");      
+      return;
+  }
+
+  // For __builtin_huge_vall
+  case ND_BUILTIN_HUGE_VALL: {
+    println("  push $0x7f800000"); 
+    println("  flds (%%rsp)"); 
+    println("  pop %%rax"); 
+    return;
+  }
+
+  // For __builtin_frame_address
+  case ND_BUILTIN_FRAME_ADDRESS: {
+    int c = count();  // Unique label counter
+    // Get the level argument from the stack
+    println("  mov %%rdi, %%rax"); // Move the level argument into rax
+    
+    // Check if level is 0
+    println("  cmp $0, %%rax");
+    println("  je .Lframe_address_%d", c);
+    
+    // For level > 0, we need to follow the frame pointers
+    // We will need to move up the stack `level` times
+    // Note: The actual implementation depends on how you manage stack frames
+    println("  mov %%rbp, %%rcx"); // Move current frame pointer to rcx
+    println("  sub $1, %%rax");   // Decrement level (level - 1)
+    println(".Lframe_address_loop%d:", c);
+    println("  test %%rax, %%rax"); // Check if level == 0
+    println("  jz .Lframe_address_done%d", c);
+    println("  mov (%%rcx), %%rcx"); // Move up one frame
+    println("  sub $1, %%rax"); // Decrement level
+    println("  jmp .Lframe_address_loop%d", c);
+    println(".Lframe_address_done%d:", c);
+    println("  mov %%rcx, %%rax"); // Return the frame pointer
+
+    println(".Lframe_address_%d:", c);
+    println("  mov %%rbp, %%rax"); // Return the current frame pointer
+    return;
+  }
+
   case ND_POPCOUNT:
-    // Built-in version
     gen_expr(node->builtin_val); // Generate code for the expression
     println("  popcnt %%rax, %%rax"); // Count the number of set bits
     return;
@@ -1641,6 +1723,24 @@ static void gen_expr(Node *node)
   case ND_UNREACHABLE:
     println("  // __builtin_unreachable: no code generation needed");
     return;
+  
+  case ND_BUILTIN_ISNAN: {
+    gen_expr(node->builtin_val);  // Generate code for the expression
+    if (node->builtin_val->ty->kind == TY_FLOAT) {
+        // Use movss to move the float value and then compare
+        println("  movss %%xmm0, %%xmm1");
+        println("  ucomiss %%xmm1, %%xmm1");
+    } else {
+        // Use ucomisd for double
+        println("  ucomisd %%xmm0, %%xmm0");
+    }
+
+    println("  setp %%al");
+    println("  movzx %%al, %%eax");
+    return;
+  }
+
+  
   case ND_EXCH:
   {
     gen_expr(node->lhs);
@@ -1756,8 +1856,15 @@ static void gen_expr(Node *node)
     println("\txor\t%%eax,%%eax");
     println("\tmov\t%s,(%%rdi)", reg_ax(node->ty->size));
     return;
-
-
+  case ND_ALLOC:
+    // Evaluate the size expression and store the result in RAX
+    gen_expr(node->lhs); // Assume size to allocate is in RAX
+    // Allocate space on the stack
+    println("  mov %%rax, %%rdi"); // Move size to RDI (or appropriate register)
+    println("  sub %%rdi, %%rsp"); // Allocate space on the stack
+    println("  mov %%rsp, %%rax"); // Store the new stack pointer (allocated memory address) in RAX
+    return;
+  
   }
 
   switch (node->lhs->ty->kind)
@@ -2169,22 +2276,53 @@ static void emit_data(Obj *prog)
 
 static void store_fp(int r, int offset, int sz)
 {
-  switch (sz)
-  {
+  switch (sz) {
+  case 2:
+    // movw is used for 2-byte (16-bit) words
+    println("  movw %%xmm%d, %d(%%rbp)", r, offset);
+    return;
   case 4:
     println("  movss %%xmm%d, %d(%%rbp)", r, offset);
     return;
   case 8:
     println("  movsd %%xmm%d, %d(%%rbp)", r, offset);
     return;
+  case 16:
+    println("  movaps %%xmm%d, %d(%%rbp)", r, offset); // movaps for 16-byte (128-bit) vector
+    return;
   }
+  printf("===== r=%d offset=%d sz=%d\n", r, offset, sz);
   unreachable();
 }
 
-static void store_gp(int r, int offset, int sz)
-{
-  switch (sz)
-  {
+// static void store_gp(int r, int offset, int sz)
+// {
+//   switch (sz)
+//   {
+//   case 1:
+//     println("  mov %s, %d(%%rbp)", argreg8[r], offset);
+//     return;
+//   case 2:
+//     println("  mov %s, %d(%%rbp)", argreg16[r], offset);
+//     return;
+//   case 4:
+//     println("  mov %s, %d(%%rbp)", argreg32[r], offset);
+//     return;
+//   case 8:
+//     println("  mov %s, %d(%%rbp)", argreg64[r], offset);
+//     return;
+//   default:
+//     for (int i = 0; i < sz; i++)
+//     {
+//       println("  mov %s, %d(%%rbp)", argreg8[r], offset + i);
+//       println("  shr $8, %s", argreg64[r]);
+//     }
+//     return;
+//   }
+// }
+
+static void store_gp(int r, int offset, int sz) {
+  switch (sz) {
   case 1:
     println("  mov %s, %d(%%rbp)", argreg8[r], offset);
     return;
@@ -2197,15 +2335,19 @@ static void store_gp(int r, int offset, int sz)
   case 8:
     println("  mov %s, %d(%%rbp)", argreg64[r], offset);
     return;
+  case 16:
+    // Assuming we can use xmm registers to store 128 bits
+    println("  movdqu %%xmm%d, %d(%%rbp)", r, offset);
+    return;
   default:
-    for (int i = 0; i < sz; i++)
-    {
+    for (int i = 0; i < sz; i++) {
       println("  mov %s, %d(%%rbp)", argreg8[r], offset + i);
       println("  shr $8, %s", argreg64[r]);
     }
     return;
   }
 }
+
 
 static void emit_text(Obj *prog)
 {
@@ -2741,3 +2883,5 @@ int len = sizeof(newargreg64)/sizeof(newargreg64[0]);
   }
 
 }
+
+

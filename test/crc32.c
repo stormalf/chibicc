@@ -1167,3 +1167,7 @@ uLong op;
 {
     return multmodp(op, crc1) ^ crc2;
 }
+
+int main() {
+    return 0;
+}

@@ -44,6 +44,8 @@ typedef struct
     int indexArray;     //store the index element of array
     int offsetArray;     //store the index of array
     int offsetStruct;   //store the offset of the struct
+    bool isq;   //true if  q: 8-bit registers (al, bl, cl, dl)
+    bool isl;  //true if l: 32-bit registers (eax, ebx, ecx, edx)
 } AsmInput;
 
 typedef struct
@@ -68,6 +70,8 @@ typedef struct
     int offsetArray;     //store the index of array
     int offsetStruct;   //store the offset of the struct
     bool inputToGenerate;   //true if it's the corresponding input should be generated
+    bool isq;   //true if  q: 8-bit registers (al, bl, cl, dl)
+    bool isl;  //true if l: 32-bit registers (eax, ebx, ecx, edx)
 } AsmOutput;
 
 typedef struct
@@ -231,7 +235,10 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     error("%s %s:%d: error: in extended_asm function extended_asm :input_asm_str is null!", EXTASM_C, __FILE__, __LINE__);
                 if (!asmExt->input[nbInput]->reg)
                     error("%s %s:%d: error: in extended_asm function extended_asm :asmExt->input[nbInput]->reg is null!", EXTASM_C, __FILE__, __LINE__);
-                input_asm_str = subst_asm(input_asm_str, asmExt->input[nbInput]->reg, asmExt->input[nbInput]->variableNumber);
+                if (asmExt->input[nbInput]->isAddress)
+                    input_asm_str = subst_asm(input_asm_str, asmExt->input[nbInput]->reg64, asmExt->input[nbInput]->variableNumber);
+                else
+                    input_asm_str = subst_asm(input_asm_str, asmExt->input[nbInput]->reg, asmExt->input[nbInput]->variableNumber);
                 // concatenate the input final strings to add to the assembly
                 strncat(input_final, input_asm_str, strlen(input_asm_str));
             }  else { //to manage the case of no input
@@ -266,9 +273,17 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
         tok = tok->next;
     }
 
+   //case of no input need to generate input for output
+    if (hasOutput && !hasInput){
+        input_for_output = generate_input_for_output();
+        if (input_for_output != NULL) {
+                strncat(asm_str, input_for_output, strlen(input_for_output));
+            }
+    }
+
     if (hasOutput) {
         //replace each %9 by the correct output register
-
+        char *tmp_asm = calloc(1, sizeof(char) * 500);
         for (int i = 0; i < nbOutput; i++)
         {
             if (asmExt->output[i]->isAddress) {
@@ -276,16 +291,17 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 strncat(tmp, "(", 2);
                 strncat(tmp, asmExt->output[i]->reg64, strlen(asmExt->output[i]->reg64) );
                 strncat(tmp, ")", 2);
-                asm_str = subst_asm(template, tmp, asmExt->output[i]->variableNumber);
+                tmp_asm = subst_asm(template, tmp, asmExt->output[i]->variableNumber);
                 free(tmp);
             }else {
-                asm_str = subst_asm(template, asmExt->output[i]->reg, asmExt->output[i]->variableNumber);
+                tmp_asm = subst_asm(template, asmExt->output[i]->reg, asmExt->output[i]->variableNumber);                
+                }
             }
-        }
-        
-        
+        strncat(asm_str, tmp_asm, strlen(tmp_asm));
 
     }
+
+
 
     if (hasInput) {
         //replace each %9 by the correct input register
@@ -298,15 +314,15 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 strncat(tmp, ")", 2);
                 asm_str = subst_asm(template, tmp, asmExt->input[i]->variableNumber);
                 free(tmp);
-            }else 
+            }else {
                 asm_str = subst_asm(template, asmExt->input[i]->reg, asmExt->input[i]->variableNumber); 
 
+            }
         }
 
         //generate the input instructions before the output 
         if (input_final != NULL)
         {  
-
             input_for_output = generate_input_for_output();
             //input_for_output can be NULL if no input to generate for output
             //generate first the input for output and then the input for the rest of the template
@@ -318,6 +334,7 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 strncat(input_final, asm_str, strlen(asm_str));        
             }
             asm_str = input_final;            
+
         }
     }
 
@@ -398,6 +415,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             else if (!strncmp(tok->str, "=q", tok->len) || !strncmp(tok->str, "+q", tok->len))
             {
                 asmExt->output[nbOutput]->isMemory = true;
+                asmExt->output[nbOutput]->isq = true;
                 if (!strncmp(tok->str, "=q", tok->len))
                     asmExt->output[nbOutput]->prefix = "=";
                 else {
@@ -411,6 +429,24 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 asmExt->output[nbOutput]->inputToGenerate = true;
                 
             }
+            else if (!strncmp(tok->str, "=l", tok->len) || !strncmp(tok->str, "+l", tok->len))
+            {
+                asmExt->output[nbOutput]->isMemory = true;
+                asmExt->output[nbOutput]->isl = true;
+                if (!strncmp(tok->str, "=l", tok->len))
+                    asmExt->output[nbOutput]->prefix = "=";
+                else {
+                    asmExt->output[nbOutput]->prefix = "+";
+                }
+                asmExt->output[nbOutput]->reg = specific_register_available("%rdx");
+                if (!asmExt->output[nbOutput]->reg)
+                    error("%s : %s:%d: error: in output_asm function :reg is null!", EXTASM_C, __FILE__, __LINE__);
+                asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg;                
+                asmExt->output[nbOutput]->letter = 'l';
+                asmExt->output[nbOutput]->inputToGenerate = true;
+                
+            }
+
             // assuming that it's =a =b ???
             else if (!strncmp(tok->str, "=a", tok->len) || !strncmp(tok->str, "=b", tok->len) || !strncmp(tok->str, "=c", tok->len) || !strncmp(tok->str, "=d", tok->len))
             {
@@ -884,11 +920,26 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(nbOutput + nbInput);
             asmExt->input[nbInput]->index = nbOutput + nbInput;
             asmExt->input[nbInput]->reg = specific_register_available("%r10");
+            asmExt->input[nbInput]->isq = true;
             if (!asmExt->input[nbInput]->reg)
                  error("%s : %s:%d: error: in input_asm function input_asm :reg is null!", EXTASM_C, __FILE__, __LINE__);            
             asmExt->input[nbInput]->reg64 = asmExt->input[nbInput]->reg;
             asmExt->input[nbInput]->letter = 'q';
         }        
+        else if (tok->kind == TK_STR && !strncmp(tok->str, "l", tok->len))
+        {
+
+            asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(nbOutput + nbInput);
+            asmExt->input[nbInput]->index = nbOutput + nbInput;
+            asmExt->input[nbInput]->reg = specific_register_available("%r10");
+            asmExt->input[nbInput]->isl = true;
+            if (!asmExt->input[nbInput]->reg)
+                 error("%s : %s:%d: error: in input_asm function input_asm :reg is null!", EXTASM_C, __FILE__, __LINE__);            
+            asmExt->input[nbInput]->reg64 = asmExt->input[nbInput]->reg;
+            asmExt->input[nbInput]->letter = 'l';
+        }        
+
+
         else if (tok->kind == TK_STR && !strncmp(tok->str, "r", tok->len))
         {
             asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(nbOutput + nbInput);
@@ -1162,7 +1213,7 @@ char *generate_input_asm(char *input_str)
         strncat(tmp, ";\n", 3);
         return tmp;
     }
-    else if (asmExt->input[nbInput]->isVariable)
+    else if (asmExt->input[nbInput]->isVariable && !asmExt->input[nbInput]->isAddress)
     {
         strncat(tmp, "\n", 3);
         strncat(tmp, opcode(asmExt->input[nbInput]->size), strlen(opcode(asmExt->input[nbInput]->size)));
@@ -1170,6 +1221,25 @@ char *generate_input_asm(char *input_str)
         strncat(tmp, ", ", 3);
         strncat(tmp, asmExt->input[nbInput]->variableNumber, strlen(asmExt->input[nbInput]->variableNumber));
         strncat(tmp, ";\n", 3);
+        return tmp;
+    }
+    else if (asmExt->input[nbInput]->isAddress)
+    {
+        strncat(tmp, "\n", 3);
+        strncat(tmp, opcode(8), strlen(opcode(8)));
+        strncat(tmp, load_variable(asmExt->input[nbInput]->offset), strlen(load_variable(asmExt->input[nbInput]->offset)));
+        strncat(tmp, ", ", 3);
+        strncat(tmp, asmExt->input[nbInput]->variableNumber, strlen(asmExt->input[nbInput]->variableNumber));
+        strncat(tmp, ";\n", 3);
+        if (asmExt->input[nbInput]->letter != 'm') {
+            strncat(tmp, opcode(8), 8);
+            strncat(tmp, "(", 2);
+            strncat(tmp, asmExt->input[nbInput]->reg64, strlen(asmExt->input[nbInput]->reg64));
+            strncat(tmp, ")", 2);
+            strncat(tmp, ", ", 3);
+            strncat(tmp, asmExt->input[nbInput]->reg64, strlen(asmExt->input[nbInput]->reg64));
+            strncat(tmp, "\n", 3);        
+        }
         return tmp;
     }
     //case immediate value
@@ -1184,6 +1254,7 @@ char *generate_input_asm(char *input_str)
         strncat(tmp, ";\n", 3);
         return tmp;
     }
+
     error("%s : %s:%d: error: in extended_asm function generate_input_asm : unexpected error!", EXTASM_C, __FILE__, __LINE__);
     //return NULL;
 }
@@ -1245,7 +1316,7 @@ char *generate_output_asm(char *output_str)
     }
 
     //Trying to fix ======ISS-164 case it's a struct with address we need to generate the correct output for the specified struct member
-    if (asmExt->output[nbOutput]->isAddress && asmExt->output[nbOutput]->isStruct) {
+    if (asmExt->output[nbOutput]->isAddress && asmExt->output[nbOutput]->isStruct && strncmp(asmExt->output[nbOutput]->prefix, "=", 2)) {
         strncat(tmp, "\n", 3);
         strncat(tmp, "  movq ", 8);
         strncat(tmp, load_variable(asmExt->output[nbOutput]->offset), strlen(load_variable(asmExt->output[nbOutput]->offset)));
@@ -1328,6 +1399,8 @@ char *opcode(int size)
         return "\n  movl ";
     case 8:
         return "\n  movq ";
+    case 16:
+        return "\n  mov ";        
     default:
         error("%s: %s:%d: error: in opcode : size %d unexpected!", EXTASM_C, __FILE__, __LINE__, size);
     }
@@ -1413,7 +1486,7 @@ char *generate_input_for_output() {
 
     for (int i = 0; i < nbOutput; i++)
     {
-        //not sure yet about in which case exactly we need to generate the input for the output
+      //not sure yet about in which case exactly we need to generate the input for the output
       //not sure yet about in which case exactly we need to generate the input for the output
         if ((asmExt->output[i]->offset != 0 && (!strncmp(asmExt->output[i]->prefix, "+", 2) || asmExt->output[i]->isAddress))) {
             if (asmExt->output[i]->isVariable && !asmExt->output[i]->isAddress)
@@ -1431,12 +1504,11 @@ char *generate_input_for_output() {
                     strncat(tmp, load_variable(asmExt->output[i]->offset), strlen(load_variable(asmExt->output[i]->offset)));
                     strncat(tmp, ", ", 3);
                     strncat(tmp, asmExt->output[i]->reg64, strlen(asmExt->output[i]->reg64));
-                    strncat(tmp, ";\n", 3);    
+                    strncat(tmp, ";\n", 3);                       
                 }       
-     
         }
-
 
     }
     return tmp;
 }
+

@@ -31,7 +31,7 @@ void error(char *fmt, ...)
   vfprintf(stderr, fmt, ap);
   fprintf(stderr, "\n");
   va_end(ap);
-  exit(9);
+  exit(1);
 }
 
 // Reports an error message in the following format.
@@ -75,7 +75,7 @@ void error_at(char *loc, char *fmt, ...)
   va_start(ap, fmt);
   verror_at(current_file->name, current_file->contents, line_no, loc, fmt, ap);
   va_end(ap);
-  exit(8);
+  exit(1);
 }
 
 void error_tok(Token *tok, char *fmt, ...)
@@ -84,7 +84,7 @@ void error_tok(Token *tok, char *fmt, ...)
   va_start(ap, fmt);
   verror_at(tok->file->name, tok->file->contents, tok->line_no, tok->loc, fmt, ap);
   va_end(ap);
-  exit(7);
+  exit(1);
 }
 
 
@@ -535,7 +535,13 @@ static bool convert_pp_int(Token *tok)
     base = 8;
   }
 
-  int64_t val = strtoul(p, &p, base);
+   errno = 0; // Clear errno before calling strtoul
+  int64_t val = strtoull(p, &p, base);
+  // Check for overflow
+  // if (errno == ERANGE || val > ULLONG_MAX ) {
+  //     warn_tok(tok, "%s %d: in convert_pp_int : integer overflow", TOKENIZE_C, __LINE__);
+  //     return false;
+  // }
 
   // Read U, L or LL suffixes.
   bool l = false;

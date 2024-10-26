@@ -1403,11 +1403,11 @@ void init_macros(void)
   define_macro("__SIZEOF_DOUBLE__", "8");
   define_macro("__SIZEOF_FLOAT__", "4");
   define_macro("__SIZEOF_INT__", "4");
-  define_macro("SIZEOF_INT", "4");
+  //define_macro("SIZEOF_INT", "4");
   define_macro("__SIZEOF_LONG_DOUBLE__", "8");
   define_macro("__SIZEOF_LONG_LONG__", "8");
   define_macro("__SIZEOF_LONG__", "8");
-  define_macro("SIZEOF_LONG", "8");
+  //define_macro("SIZEOF_LONG", "8");
   define_macro("__SIZEOF_POINTER__", "8");
   define_macro("__SIZEOF_PTRDIFF_T__", "8");
   define_macro("__SIZEOF_SHORT__", "2");
@@ -1437,7 +1437,24 @@ void init_macros(void)
   define_macro("__x86_64", "1");
   define_macro("__x86_64__", "1");
   define_macro("__GNU__", "1");
-  //define_macro("__INTEL_COMPILER", "1");
+  define_macro("__INTEL_COMPILER", "1");
+  define_macro("HAVE_GCC__SYNC_CHAR_TAS", "1");
+  define_macro("HAVE_GCC__SYNC_INT32_TAS", "1");
+  define_macro("HAVE_GCC__SYNC_INT32_CAS", "1");
+  define_macro("HAVE_GCC__SYNC_INT64_CAS", "1");
+  define_macro("HAVE_GCC__ATOMIC_INT32_CAS", "1"); 
+  define_macro("HAVE_GCC__ATOMIC_INT64_CAS", "1");
+  define_macro("HAVE_LONG_INT_64", "1");
+  define_macro("HAVE_LONG_LONG_INT_64", "1");
+  define_macro("__ATOMIC_RELAXED", "0");
+  define_macro("__ATOMIC_CONSUME", "1");
+  define_macro("__ATOMIC_ACQUIRE", "2");
+  define_macro("__ATOMIC_RELEASE", "3");
+  define_macro("__ATOMIC_ACQ_REL", "4");
+  define_macro("__ATOMIC_SEQ_CST", "5");
+  define_macro("offsetof", "__builtin_offsetof");
+  define_macro("__builtin_choose_expr(cond, true_expr, false_expr)", "(cond ? true_expr : false_expr)");
+  //define_macro("__GNUC__", "9");
   define_macro("HAVE_ATTRIBUTE_PACKED", "1");
   define_macro("linux", "1");
   define_macro("unix", "1");
@@ -1447,11 +1464,11 @@ void init_macros(void)
   define_macro("__ORDER_LITTLE_ENDIAN__", "1234");  
   define_macro("__ORDER_BIG_ENDIAN__", "4321");
   define_macro("__BYTE_ORDER__", "__ORDER_LITTLE_ENDIAN__");
-  define_macro("USE_BUILTINS", "1");
-  if (opt_fbuiltin) {
-    define_macro("memcpy", "__builtin_memcpy");
-    define_macro("memset", "__builtin_memset");
-  }
+  //define_macro("USE_BUILTINS", "1");
+  // if (opt_fbuiltin) {
+  //   define_macro("memcpy", "__builtin_memcpy");
+  //   define_macro("memset", "__builtin_memset");
+  // }
 
 
   add_builtin("__FILE__", file_macro);

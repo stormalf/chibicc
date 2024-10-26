@@ -94,11 +94,12 @@ static void print_string_array(StringArray *arr) {
 static void print_include_directories() {
 
     // Add standard include paths.
-    strarray_push(&include_paths, "/usr/local/include");
+    strarray_push(&include_paths, "./include");
     strarray_push(&include_paths, "/usr/local/include/x86_64-linux-gnu/chibicc");
+    strarray_push(&include_paths, "/usr/local/include");
     strarray_push(&include_paths, "/usr/include/x86_64-linux-gnu");
     strarray_push(&include_paths, "/usr/include");
-    //strarray_push(&include_paths, "/usr/lib/gcc/x86_64-linux-gnu/11/include");
+    strarray_push(&include_paths, "/usr/lib/gcc/x86_64-linux-gnu/11/include");
     //strarray_push(&include_paths, "/usr/include/chibicc/include");
     #if defined(__APPLE__) && defined(__MACH__)
     strarray_push(&include_paths, "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include");
@@ -168,11 +169,12 @@ static void add_default_include_paths(char *argv0)
   strarray_push(&include_paths, format("%s/include", dirname(strdup(argv0))));
 
   // Add standard include paths.
-  strarray_push(&include_paths, "/usr/local/include");
+  strarray_push(&include_paths, "./include");
   strarray_push(&include_paths, "/usr/local/include/x86_64-linux-gnu/chibicc");
+  strarray_push(&include_paths, "/usr/local/include");
   strarray_push(&include_paths, "/usr/include/x86_64-linux-gnu");
   strarray_push(&include_paths, "/usr/include");
-  //strarray_push(&include_paths, "/usr/lib/gcc/x86_64-linux-gnu/11/include");
+  strarray_push(&include_paths, "/usr/lib/gcc/x86_64-linux-gnu/11/include");
   //strarray_push(&include_paths, "/usr/include/chibicc/include");
   #if defined(__APPLE__) && defined(__MACH__)
   strarray_push(&include_paths, "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include");
@@ -755,7 +757,8 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-rdynamic") ||        
         !strcmp(argv[i], "-w") ||
         !strcmp(argv[i], "--param=ssp-buffer-size=4") ||
-        !strcmp(argv[i], "-fno-lto") 
+        !strcmp(argv[i], "-fno-lto") ||
+        !strcmp(argv[i], "-c99")
         )
       continue;
 
@@ -893,7 +896,7 @@ static void run_subprocess(char **argv)
 
     execvp(argv[0], argv);
     fprintf(stderr, "%s : %s:%d: error: in run_subprocess exec failed: %s: %s\n", MAIN_C, __FILE__, __LINE__, argv[0], strerror(errno));
-    _exit(99);
+    _exit(1);
   }
 
   // Wait for the child process to finish.
@@ -1203,8 +1206,8 @@ static void run_linker(StringArray *inputs, char *output)
 
 
   //enabling verbose mode for linker in case of debug
-  if (isDebug)
-    strarray_push(&arr, "--verbose=1");
+  // if (isDebug)
+  //   strarray_push(&arr, "--verbose=1");
 
   char *libpath = find_libpath();
   char *gcc_libpath = find_gcc_libpath();
@@ -1241,7 +1244,7 @@ static void run_linker(StringArray *inputs, char *output)
   strarray_push(&arr, "-L/usr/lib");
   strarray_push(&arr, "-L/lib");   
   strarray_push(&arr, "-L.");
-  //strarray_push(&arr, "-L/usr/lib/gcc/x86_64-linux-gnu/11/x86_64-linux-gnu");
+  strarray_push(&arr, "-L/usr/lib/gcc/x86_64-linux-gnu/11/x86_64-linux-gnu");
 
 
   if (!opt_static)
@@ -1282,8 +1285,8 @@ static void run_linker(StringArray *inputs, char *output)
   strarray_push(&arr, format("%s/crtn.o", libpath));
   strarray_push(&arr, NULL);
 
-  if (isDebug)
-      print_string_array(&arr);    
+  // if (isDebug)
+  //     print_string_array(&arr);    
   run_subprocess(arr.data);
 }
 
@@ -1334,7 +1337,7 @@ int main(int argc, char **argv)
     if (f == NULL)
     {
       error("%s : %s:%d: error: in main Issue with -debug or -printparameter, file not opened!", MAIN_C, __FILE__, __LINE__);
-      exit(2);
+      exit(1);
     }
   }
 
