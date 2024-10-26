@@ -7303,7 +7303,13 @@ static bool find_member_offset_recursive(Type *tstruct, Token *tok, int *offset)
 
                 // Ensure the next token is a valid index (integer)
                 if (index_token && index_token->kind == TK_NUM) { // Check if it's a number token
-                    int index = index_token->val; // Use the integer value from the token
+                    int index = 0;
+                    if (index_token->ty->kind == TY_FLOAT || index_token->ty->kind == TY_DOUBLE || index_token->ty->kind == TY_LDOUBLE) {
+                        index = index_token->fval;
+                    } else {
+                        index = index_token->val; 
+                    }
+                    
                     *offset += m->offset + (index * size_of_type(m->ty->base)); // Calculate offset
 
                     // Look for the closing ']'
@@ -7350,15 +7356,41 @@ static bool find_member_offset_recursive(Type *tstruct, Token *tok, int *offset)
 // Helper function to get the size of a type
 static int size_of_type(Type *type) {
     switch (type->kind) {
+        case TY_VOID:
+            return sizeof(void);
+        case TY_BOOL: 
+            return sizeof(bool);
+        case TY_CHAR:
+            return sizeof(char);
+        case TY_SHORT:
+            return sizeof(short);
+        case TY_LONG:
+            return sizeof(long);
         case TY_INT:
             return sizeof(int);
         case TY_FLOAT:
             return sizeof(float);
         case TY_DOUBLE:
             return sizeof(double);
+        case TY_LDOUBLE:
+            return sizeof(long double);
+        case TY_INT128:
+            return sizeof(__int128);
+        case TY_PTR:
+            return sizeof(void *);
+        case TY_FUNC:
+            return sizeof(void *);
+        case TY_ARRAY:
+            return type->array_len * size_of_type(type->base);
+        case TY_VLA:
+            return sizeof(void *);
+        case TY_STRUCT:
+        case TY_UNION:
+            return type->size;
         // Add cases for other types as necessary
         default:
-            return 0; // Unknown type size
+          error("%s: %s:%d: error: in size_of_type : type not managed %d", PARSE_C, __FILE__, __LINE__, type->kind);
+            //return 0; // Unknown type size
     }
 }
 

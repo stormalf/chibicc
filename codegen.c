@@ -3355,6 +3355,7 @@ static void emit_text(Obj *prog)
     println("  mov %%rbp, %%rsp");
     println("  pop %%rbp");
     println("  ret");
+    println(".size %s, .-%s", fn->name, fn->name);
   }
 }
 

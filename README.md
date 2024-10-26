@@ -72,7 +72,10 @@ or
         -A print Abstract Syntax Tree in a log file in /tmp/chibicc.log
         -msse3 enabling sse3 support
         -msse4 enabling sse4 support
+        -nostdlib  Do not use the standard system startup files or libraries when linking
+        -nostdinc Do not use the standard system header files when compiling
         chibicc [ -o <path> ] <file>
+
 
 ## compile
 
@@ -234,7 +237,6 @@ List of options ignored :
     "-flto"
     "-flto=8"
     "-pedantic"
-    "-nostdinc"
     "-mno-red-zone"
     "-fvisibility=default"
     "-Werror=invalid-command-line-argument"

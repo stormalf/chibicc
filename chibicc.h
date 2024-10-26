@@ -99,8 +99,10 @@ this " PRODUCT " contains only some differences for now like new parameters\n"
 -dM Print macro definitions in -E mode instead of normal output\n \
 -print print all tokens in a log file in /tmp/chibicc.log \n \
 -A print Abstract Syntax Tree in a log file in /tmp/chibicc.log \n \
--msse3 enabling sse3 support \
--msse4 enabling sse4 support \
+-msse3 enabling sse3 support \n\
+-msse4 enabling sse4 support \n \
+-nostdlib  Do not use the standard system startup files or libraries when linking \n \
+-nostdinc Do not use the standard system header files when compiling \n \
 chibicc [ -o <path> ] <file>\n"
 
 typedef struct Type Type;
