@@ -774,7 +774,7 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-fno-lto") ||
         !strcmp(argv[i], "-c99") ||
         !strcmp(argv[i], "-fdiagnostics-color=always")  ||
-        !strcmp(argv[i], "-mfpmath=sse") 
+        !strcmp(argv[i], "-mfpmath=sse")        
         )
       continue;
 
@@ -1495,3 +1495,4 @@ bool startsWith(const char *restrict string, const char *restrict prefix)
 
     return 1;
 }
+

@@ -35,10 +35,10 @@ struct Scope
   HashMap vars;
   HashMap tags;
 };
-
+typedef struct VarAttr VarAttr;
 // Variable attributes such as typedef or extern.
-typedef struct
-{
+struct VarAttr
+{  
   bool is_typedef;
   bool is_static;
   bool is_extern;
@@ -58,7 +58,9 @@ typedef struct
   bool is_no_caller_saved_registers;
   char *section;
   char *visibility;
-} VarAttr;
+  VarAttr *attrs;
+  char *alias_name; //to store alias name for function when weak attribute
+};
 
 // This struct represents a variable initializer. Since initializers
 // can be nested (e.g. `int x[2][2] = {{1, 2}, {3, 4}}`), this struct
@@ -100,7 +102,8 @@ static Token* ArrayToken[50][50];
 static Token* ArrayTokenOrder[50][50];
 static int order = 0;
 static bool is_old_style = false;
-
+static Type * current_type;
+static VarAttr * current_attr;
 // All local variable instances created during parsing are
 // accumulated to this list.
 static Obj *locals;
@@ -210,7 +213,6 @@ static int64_t eval_sign_extend(Type *ty, uint64_t val);
 static Obj *eval_var(Node *expr, bool allow_local);
 static bool is_const_var(Obj *var) ;
 static bool is_str_tok(Token **rest, Token *tok, Token **str_tok);
-static char *token_to_string(Token *tok);
 
 
 // static int align_down(int n, int align)
@@ -548,33 +550,6 @@ static bool isTypedef(Token *tok) {
     return false;
 }
 
-// static Type *find_typedef(Token *tok)
-// {
-
-//   if (tok->kind == TK_IDENT)
-//   {
-//     VarScope *sc = find_var(tok);
-//     if (sc)
-//       return sc->type_def;
-//   }
-//   return NULL;
-// }
-
-// static Type *find_typedef(Token *tok) {
-//     for (Scope *sc = scope; sc; sc = sc->next) {
-//         VarScope *var_scope = hashmap_get2(&sc->vars, tok->loc, tok->len);
-//         if (var_scope) {
-//             for (TypedefEntry *entry = var_scope->typedefs; entry; entry = entry->next) {
-//                 if (strncmp(entry->name, tok->loc, tok->len) == 0 &&
-//                     strlen(entry->name) == tok->len) {
-//                       printf("777======%d %s %d\n", entry->type->align, entry->name, entry->align);   
-//                     return entry->type;  // Return the type with correct alignment
-//                 }
-//             }
-//         }
-//     }
-//     return NULL;  // No matching typedef found
-// }
 
 static Type *find_typedef(Token *tok) {
     for (Scope *sc = scope; sc; sc = sc->next) {
@@ -952,6 +927,7 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
       skip(tok, ")", ctx);
       break;
     }
+
     Type *ty2 = declspec(&tok, tok, NULL);
     tok = attribute_list(tok, ty2, type_attributes);
     //Type *backup = ty2;
@@ -1188,9 +1164,9 @@ static Type *declarator(Token **rest, Token *tok, Type *ty)
 {
 
 
-  //tok = attribute_list(tok, ty, type_attributes);
+  tok = attribute_list(tok, ty, type_attributes);
   ty = pointers(&tok, tok, ty);
-  //tok->next = attribute_list(tok->next, ty, type_attributes);
+  tok->next = attribute_list(tok->next, ty, type_attributes);
 
 
   if (equal(tok, "(") && !is_typename(tok->next) && !equal(tok->next, ")"))
@@ -2670,6 +2646,8 @@ static Node *stmt(Token **rest, Token *tok)
     ctx->funcname = "stmt";        
     ctx->line_no = __LINE__ + 1;    
     tok = skip(tok, ":", ctx);
+    VarAttr attr = {};
+    tok = attribute_list(tok, &attr, thing_attributes);
     node->label = new_unique_name();
     node->lhs = stmt(rest, tok);
     node->begin = begin;
@@ -2874,9 +2852,10 @@ static Node *stmt(Token **rest, Token *tok)
     labels = node;
     return node;
   }
-  if (equal(tok, "{")) 
+  if (equal(tok, "{")) {
+    
     return compound_stmt(rest, tok->next);
-
+  }
 
   return expr_stmt(rest, tok);
 }
@@ -2891,10 +2870,11 @@ static Node *compound_stmt(Token **rest, Token *tok)
 
   while (!equal(tok, "}"))
   {
-
+    VarAttr attr = {};
+    tok = attribute_list(tok, &attr, thing_attributes);
     if (is_typename(tok) && !equal(tok->next, ":"))
     {
-      VarAttr attr = {};
+      //VarAttr attr = {};
       Type *basety = declspec(&tok, tok, &attr);
       if (attr.is_typedef)
       {
@@ -2918,7 +2898,7 @@ static Node *compound_stmt(Token **rest, Token *tok)
     else
     {
       //case specific of fallthrough
-      VarAttr attr= {};
+      //VarAttr attr= {};
       tok = attribute_list(tok, &attr, thing_attributes);
       cur = cur->next = stmt(&tok, tok);
     }
@@ -3979,10 +3959,11 @@ static Token *attribute_list(Token *tok, void *arg, Token *(*f)(Token *, void *)
         ctx->filename = PARSE_C;
         ctx->funcname = "attribute_list";        
         ctx->line_no = __LINE__ + 1;     
+        //printf("======tok=%.*s ==%s\n", tok->len, tok->loc, tok->loc);
         tok = skip(tok, ",", ctx);
       }
       first = false;
-            tok = f(tok, arg);
+      tok = f(tok, arg);
     }
     ctx->filename = PARSE_C;
     ctx->funcname = "attribute_list";        
@@ -4153,7 +4134,7 @@ static Token *type_attributes(Token *tok, void *arg)
           error_tok(tok, "%s %d: expected identifier in __cleanup__", PARSE_C, __LINE__);
 
       // Store the cleanup function name
-      ty->cleanup_func =  token_to_string(tok); 
+      current_type = copy_type(ty); 
 
       tok = tok->next;  
       ctx->filename = PARSE_C;
@@ -4384,7 +4365,13 @@ static Token *type_attributes(Token *tok, void *arg)
 
   if (consume(&tok, tok, "weak") || consume(&tok, tok, "__weak__")) {
     //int __attribute__((weak, alias("lxc_attach_main"))) main(int argc, char *argv[]);
-    ty->is_weak = true;
+    ty->is_weak = true;    
+    consume(&tok, tok, ",");
+    if (consume(&tok, tok, "alias")) {
+      tok = skip(tok, "(", ctx);
+      ty->alias_name = ConsumeStringLiteral(&tok, tok); // Capture alias name
+      tok = skip(tok, ")", ctx);
+    }
     return tok;
   }
 
@@ -4413,6 +4400,12 @@ static Token *thing_attributes(Token *tok, void *arg) {
   if (consume(&tok, tok, "weak") || consume(&tok, tok, "__weak__")) {
     //int __attribute__((weak, alias("lxc_attach_main"))) main(int argc, char *argv[]);
     attr->is_weak = true;
+    consume(&tok, tok, ",");
+    if (consume(&tok, tok, "alias")) {
+      tok = skip(tok, "(", ctx);
+      attr->alias_name = ConsumeStringLiteral(&tok, tok); // Capture alias name
+      tok = skip(tok, ")", ctx);
+    }
     return tok;
   }
 
@@ -4604,6 +4597,28 @@ static Token *thing_attributes(Token *tok, void *arg) {
   }
 
  
+ 
+ // Handle __cleanup__ attribute
+  if (consume(&tok, tok, "cleanup") || consume(&tok, tok, "__cleanup__")) {
+      ctx->filename = PARSE_C;
+      ctx->funcname = "thing_attributes";        
+      ctx->line_no = __LINE__ + 1;
+      tok = skip(tok, "(", ctx);  
+      if (tok->kind != TK_IDENT)  
+          error_tok(tok, "%s %d: expected identifier in __cleanup__", PARSE_C, __LINE__);
+
+      // Store the cleanup function name
+      current_attr = attr;
+
+      tok = tok->next;
+      ctx->filename = PARSE_C;
+      ctx->funcname = "thing_attributes";        
+      ctx->line_no = __LINE__ + 1; 
+      tok = skip(tok, ")", ctx); 
+      return tok;
+  }
+ 
+
   if (consume(&tok, tok, "noinline") ||
       consume(&tok, tok, "__noinline__") ||
       consume(&tok, tok, "const") ||
@@ -5025,7 +5040,7 @@ static Node *postfix(Token **rest, Token *tok)
   }
   else
   {
-    
+
     node = primary(&tok, tok);
   }
 
@@ -5249,34 +5264,6 @@ static Node *primary(Token **rest, Token *tok)
 
   Token *start = tok;
 
-  // if (equal(tok, "(") && equal(tok->next, "(") && is_typename(tok->next->next))
-  // {
-  //   printf("======compound literal found==\n %s", tok->loc);
-  //   // Compound literal
-  //   Node *node;
-  //   Type *ty = typename(&tok, tok->next->next);
-  //   ctx->filename = PARSE_C;
-  //   ctx->funcname = "postfix";        
-  //   ctx->line_no = __LINE__ + 1;         
-  //   tok = skip(tok, ")", ctx);
-
-  //   if (scope->next == NULL)
-  //   {
-  //     Obj *var = new_anon_gvar(ty);
-  //     var->is_compound_lit = true;
-  //     gvar_initializer(&tok, tok, var);
-  //     node = new_var_node(var, start);
-  //   }
-  //   else
-  //   {
-  //     Obj *var = new_lvar("", ty, NULL);
-  //     Node *lhs = lvar_initializer(&tok, tok, var);
-  //     Node *rhs = new_var_node(var, tok);
-  //     node = new_binary(ND_COMMA, lhs, rhs, start->next->next);
-  //   }
-  //   return node;
-  // }
-
   if ((equal(tok, "(") && equal(tok->next, "{")))
   {
     // This is a GNU statement expresssion.
@@ -5466,7 +5453,7 @@ static Node *primary(Token **rest, Token *tok)
         // Find the member in the current structure
         Member *member = NULL;
         for (Member *m = tstruct->members; m; m = m->next) {
-            if (m->name->len == tok->len &&
+            if (m->name && m->name->len == tok->len &&
                 !memcmp(m->name->loc, tok->loc, m->name->len)) {
                 member = m;
                 break;
@@ -6199,7 +6186,7 @@ static void mark_live(Obj *var)
 
 static Token *function(Token *tok, Type *basety, VarAttr *attr)
 {
-  
+
   Type *ty = declarator(&tok, tok, basety);
   if (!ty)
     error_tok(tok, "%s %d: in function : ty is null", PARSE_C, __LINE__);
@@ -6227,10 +6214,11 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
     fn->is_definition = equal(tok, "{");
     fn->is_static = attr->is_static || (attr->is_inline && !attr->is_extern);
     fn->is_inline = attr->is_inline;
+    fn->alias_name = basety->alias_name;
   }
-  
   //from COSMOPOLITAN adding other GNUC attributes
-  fn->is_weak |= attr->is_weak;
+  //fn->is_weak |= attr->is_weak;
+  fn->is_weak = attr->is_weak || basety->is_weak;
   fn->section = fn->section ?: attr->section;
   fn->is_ms_abi |= attr->is_ms_abi;
   fn->visibility = fn->visibility ?: attr->visibility;
@@ -6242,6 +6230,8 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   fn->is_no_instrument_function |= attr->is_no_instrument_function;
   fn->is_force_align_arg_pointer |= attr->is_force_align_arg_pointer;
   fn->is_no_caller_saved_registers |= attr->is_no_caller_saved_registers;
+
+
 
   fn->is_root = !(fn->is_static && fn->is_inline);
 
@@ -6434,7 +6424,7 @@ Obj *parse(Token *tok)
 
   char *path;
   char *fullpath = calloc(1, sizeof(char) * 400);;
-  char *filename;
+  //char *filename;
   if (isDotfile && dotf == NULL)
   {
     if (base_file == NULL && opt_o == NULL)
@@ -6446,7 +6436,7 @@ Obj *parse(Token *tok)
     if (opt_o != NULL)
     {
 
-      filename = extract_filename(opt_o);
+      //filename = extract_filename(opt_o);
       fullpath = extract_path(opt_o);
       strncat(fullpath, path, strlen(path));
     }
@@ -7137,23 +7127,5 @@ static bool is_str_tok(Token **rest, Token *tok, Token **str_tok) {
   return false;
 }
 
-
-// Function to convert a token to a string
-static char *token_to_string(Token *tok) {
-    // Allocate memory for the new string (+1 for null terminator)
-    char *str = malloc(tok->len + 1);
-    if (!str) {
-        // Handle allocation failure (you may want to use your own error handling)
-        error("%s: %s:%d: error: in token_to_string : Memory allocation failed for str", PARSE_C, __FILE__, __LINE__);
-    }
-    
-    // Copy the token's characters into the new string
-    strncpy(str, tok->loc, tok->len);
-    
-    // Null-terminate the string
-    str[tok->len] = '\0';
-    
-    return str;
-}
 
 
