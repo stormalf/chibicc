@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <string.h>
+//#include "test.h"
 char g3 = 3;
 short g4 = 4;
 int g5 = 5;
@@ -39,9 +40,8 @@ T65 g65 = {'f','o','o',0};
 T65 g66 = {'f','o','o','b','a','r',0};
 
 int main() {
-    //ASSERT(0, strcmp(g22+3, "foobar"));
-    int i = strcmp(g22+3, "foobar");
-    printf("%d\n", i);
 
+    int i = strcmp(g22+3, "foobar");
+    printf("%u\n", i);
     return 0;
 }

@@ -4869,6 +4869,7 @@ static Type *struct_decl(Token **rest, Token *tok)
 
   if (ty->size < 0)
     return ty;
+  ty->size = MAX(ty->size, 0);
 
   // Assign offsets within the struct to members.
   int bits = 0;
@@ -4918,6 +4919,7 @@ static Type *union_decl(Token **rest, Token *tok)
   if (ty->size < 0)
     return ty;
 
+  ty->size = MAX(ty->size, 0);
   // If union, we don't have to assign offsets because they
   // are already initialized to zero. We need to compute the
   // alignment and the size though.
@@ -6288,7 +6290,8 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   fn->is_force_align_arg_pointer |= attr->is_force_align_arg_pointer;
   fn->is_no_caller_saved_registers |= attr->is_no_caller_saved_registers;
 
-
+  fn->file_no = tok->file->file_no;
+  fn->line_no = tok->line_no; 
 
   fn->is_root = !(fn->is_static && fn->is_inline);
 

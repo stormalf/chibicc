@@ -1,4 +1,8 @@
 #include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "test.h"
 size_t
 strlcpy(dst, src, siz)
 char *dst;
@@ -33,5 +37,12 @@ size_t siz;
 
 int main(void)
 {
+    char *s = "Hello, World!";
+    char *d = malloc(strlen(s));
+    printf("s: %s\n", s);
+    strlcpy(d, s, strlen(s) + 1);
+    printf("d: %s\n", d);
+    ASSERT(13, strlen(d));
+    free(d);
     return 0;
 }

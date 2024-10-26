@@ -277,6 +277,12 @@ struct Obj
   bool is_live;
   bool is_root;
   StringArray refs;
+
+  //for dwarf 
+  int file_no; // Index or number to identify the source file
+  int line_no; // Line number where the variable or function is defined
+  bool is_prototyped; // Whether the function is prototyped or not
+
 };
 
 // Global variable can be initialized either by a constant expression
@@ -667,6 +673,7 @@ void print_debug_tokens(char *currentfilename, char *function, Token *tok);
 //
 
 void codegen(Obj *prog, FILE *out);
+void println(char *fmt, ...);
 int align_to(int n, int align);
 char *reg_ax(int sz);
 char *reg_bx(int sz);
@@ -755,6 +762,7 @@ extern char *extract_filename(char *tmpl);
 extern char *extract_path(char *tmpl);
 extern bool opt_sse3;
 extern bool opt_sse4;
+extern bool opt_g;
 
 //
 // extended_asm.c
@@ -779,3 +787,10 @@ int retrieve_output_index_from_letter(char letter);
 char *retrieveVariableNumber(int index);
 char *generate_input_for_output(void);
 char *generate_return_rax(Token *retval);
+
+
+//
+// dwarf.c
+//
+
+void generate_dwarf_info(Obj *prog);
