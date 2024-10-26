@@ -1,4 +1,5 @@
 #include <stddef.h>
+#include <stdio.h>
 #define NID_sha1 64
 #define NID_sha224 675
 #define NID_sha256 672
@@ -34,24 +35,25 @@ static const unsigned char der_aid_mgf1SHA512_256Identifier[] = {
     case NID_sha##bits:                                       \
         var = der_aid_mgf1SHA##bits##Identifier;              \
         var##_sz = sizeof(der_aid_mgf1SHA##bits##Identifier); \
+        printf("sizeof=%ld\n", sizeof(der_aid_mgf1SHA##bits##Identifier)); \
         break;
 
 int main(void)
 {
-    int maskgenhashalg_nid = 0;
+    int maskgenhashalg_nid = 64;
     const unsigned char *maskgenalg = NULL;
     size_t maskgenalg_sz = 0;
 
     switch (maskgenhashalg_nid)
     {
     case NID_sha1:
-        break;
-        // MGF1_SHA_CASE(224, maskgenalg);
-        // MGF1_SHA_CASE(256, maskgenalg);
-        // MGF1_SHA_CASE(384, maskgenalg);
-        // MGF1_SHA_CASE(512, maskgenalg);
+        MGF1_SHA_CASE(224, maskgenalg);
+        MGF1_SHA_CASE(256, maskgenalg);
+        MGF1_SHA_CASE(384, maskgenalg);
+        MGF1_SHA_CASE(512, maskgenalg);
         MGF1_SHA_CASE(512_224, maskgenalg);
         MGF1_SHA_CASE(512_256, maskgenalg);
+        break;
     default:
         return 0;
     }

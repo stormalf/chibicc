@@ -21,6 +21,7 @@
 #include <signal.h>
 #include <sys/resource.h>
 #include <stdatomic.h>
+#include <limits.h>
 
 
 
@@ -38,7 +39,7 @@
 #endif
 
 #define PRODUCT "chibicc"
-#define VERSION "1.0.22.4"
+#define VERSION "1.0.22.5"
 #define MAXLEN 501
 #define DEFAULT_TARGET_MACHINE "x86_64-linux-gnu"
 
@@ -357,7 +358,11 @@ typedef enum
   ND_BUILTIN_MEMCPY, //builtin memcpy
   ND_BUILTIN_MEMSET, //builtin memset
   ND_BUILTIN_CLZ, //builtin clz
+  ND_BUILTIN_CLZL, //builtin clz
+  ND_BUILTIN_CLZLL, //builtin clzl
   ND_BUILTIN_CTZ, //builtin ctz
+  ND_BUILTIN_CTZL, //builtin ctzl
+  ND_BUILTIN_CTZLL, //builtin ctzll
   ND_POPCOUNT,    //builtin popcount
   ND_EXPECT,    //builtin expect
   ND_RETURN_ADDR,    //builtin return address
@@ -365,6 +370,16 @@ typedef enum
   ND_BUILTIN_SUB_OVERFLOW,  //builtin sub overflow
   ND_BUILTIN_MUL_OVERFLOW, //builtin mul overflow
   ND_UNREACHABLE,   //builtin unreachable
+  ND_ALLOC,   //builtin alloca
+  ND_BUILTIN_INFF, //builtin inff
+  ND_BUILTIN_ISNAN, //builtin isnan
+  ND_BUILTIN_BSWAP16, //builtin bswap16
+  ND_BUILTIN_BSWAP32, //builtin bswap32
+  ND_BUILTIN_BSWAP64, //builtin bswap64
+  ND_BUILTIN_HUGE_VALF, //builtin huge_valf
+  ND_BUILTIN_HUGE_VAL, //builtin huge_val
+  ND_BUILTIN_HUGE_VALL, //builtin huge_vall
+  ND_BUILTIN_FRAME_ADDRESS, //builtin frame_address
 } NodeKind;
 
 // AST node type
@@ -563,6 +578,7 @@ struct Member
 };
 
 extern Type *ty_void;
+extern Type *ty_void_ptr;
 extern Type *ty_bool;
 
 extern Type *ty_char;

@@ -304,9 +304,8 @@ curl : https://github.com/curl/curl.git
         CCLD     curl
 
     make test
-    TESTDONE: 1635 tests were considered during 418 seconds.
-    TESTDONE: 1314 tests out of 1316 reported OK: 99%
-    TESTFAIL: These test cases failed: 557 1119
+    TESTDONE: 1722 tests were considered during 3895 seconds.
+    TESTDONE: 1392 tests out of 1392 reported OK: 100%
 
 
 openssl : https://github.com/openssl/openssl.git
@@ -485,16 +484,24 @@ VLC : https://github.com/videolan/vlc.git
     VLC doesn't compile with chibicc some issues to fix later.
 
 
-postgres: https://github.com/postgres/postgres.git 
+postgres: https://github.com/postgres/postgres.git  (in case of bad network use git clone --filter=blob:none --depth=1 https://github.com/postgres/postgres.git --branch master)
 
-    CC=chibicc  ./configure --host x86_64-linux-gnu --disable-spinlocks
+    CC=chibicc  CFLAGS="-g -DHASH_DEBUG=1" ./configure --host x86_64-linux-gnu --disable-spinlocks
+    CC=chibicc  CFLAGS="-g -O0 -DHASH_DEBUG=1"  CXXFLAGS="-g -O0 -DHASH_DEBUG=1" ./configure --host x86_64-linux-gnu --without-icu --without-readline 
     make
     make check
-    Program received signal SIGSEGV, Segmentation fault.
-    #0  MemoryChunkSetHdrMask () at ../../../../src/include/utils/memutils_memorychunk.h:164
-    #1  0x0000000001f001b9 in AllocSetAlloc () at aset.c:885
-    the initdb command produced by chibicc failed with segmentation fault.
-
+	Program received signal SIGSEGV, Segmentation fault.
+    0x0000000001af1374 in hash_initial_lookup () at dynahash.c:1769
+    1769            segp = hashp->dir[segment_num];
+    (gdb) bt
+    #0  0x0000000001af1374 in hash_initial_lookup () at dynahash.c:1769
+    #1  0x0000000001af5d8a in hash_search_with_hash_value () at dynahash.c:1009
+    #2  0x0000000001af6d8d in hash_search () at dynahash.c:960
+    #3  0x0000000001bd8174 in pg_tzset () at pgtz.c:260
+    #4  0x0000000001bd8617 in pg_timezone_initialize () at pgtz.c:370
+    #5  0x0000000001b3a404 in InitializeGUCOptions () at guc.c:1538
+    #6  0x0000000001245ba6 in PostmasterMain () at postmaster.c:573
+    #7  0x0000000000ef5f48 in main () at main.c:197
 
 ## TODO
 
@@ -535,10 +542,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.22.4        Fixing some issues with extended assembly (new test cases), adding r11 and r10 registers and adding "D" and "S" support for input and output.
-                Removing -fsanitize=cfi not supported by gcc. Adding core dump and segfault handler to have useful information when a segfault occurs.
-                Adding debug information for linker. Changing the order of extra linker parameters because if the specific path defined for a project is not the first one, it seems that the linker doesn't find the libraries (#ISS-173). Adding  support for `chibicc -xc -E -v -` to print the include directories. 
-                Ignoring two other attributes for compatibility with GCC :  \__attribute__((fallthrough)) and \__attribute__((nonnull(1))). Adding a trick to fix the issue with lxc project in the README.md and Makefile. Adding some test cases for builtin functions to test with chibicc for later. Adding macro \__builtin_choose_expr in stddef.h to fix issue found in the lxc project. Adding warning messages in purple like gcc. Fixing issue with extended assembly when atomic_sync_bool_compare_and_swap. Taking in account in extended assembly (-value) to negate the value. Adding builtin function __sync_fetch_and_add and __sync_fetch_and_sub. Adding other builtin_functions like gcc. Adding print AST with option -A (from @cosmopolitan).
+1.0.22.5        Improvement: diagnose overflow in integer constant expression #96  from @pmor13. Fixing issue with old C style (K&R) when parameters order don't correspond to parameter definition. Adding \__LINE__ in parse.c in all error_tok messages. Removing \__builtin_memcpy \__builtin_memset macro from preprocess.c that causes segmentation fault on zlib project. Adding other tests from @cosmopolitan. Reporting some fixes from 1.0.23 to this version. Fixing last issue with curl due to sizeof_int and sizeof_long not taken in account (adding them in stddef.h). Fixing issue with semun (ISS-146). Fixing issue with \__builtin_clz that gives incorrect result. And adding \__builtin_ctzl and \__builtin_clzl. Adding __builtin_isnan (ISS-175) and __builtin_inff. Fixing issue with lock not correctly managed in extended assembly (ISS-174). Fxing other issues with extended assembly and adding several tests. Adding \__builtin_bswapxx (16, 32, 64). Experimenting the stddef.h from gcc and managing some issues with offsetof.
 
 
 ## old release notes

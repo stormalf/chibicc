@@ -266,6 +266,8 @@ void add_type(Node *node)
     usual_arith_conv(&node->lhs, &node->rhs);
     node->ty = ty_int;
     return;
+  case ND_ALLOC:
+    add_type(node->lhs);  
   case ND_FUNCALL:
     node->ty = node->func_ty->return_ty;
     return;
@@ -384,6 +386,7 @@ void add_type(Node *node)
     add_type(node->lhs);
     node->ty = ty_bool;
     return;
+  case ND_BUILTIN_FRAME_ADDRESS:    
   case ND_RETURN_ADDR:
     add_type(node->lhs);
     node->ty = ty_void_ptr;
@@ -396,12 +399,29 @@ void add_type(Node *node)
     add_type(node->builtin_dest);
     node->ty = ty_bool;
     return;
+  case ND_BUILTIN_ISNAN:
+    add_type(node->builtin_val);
+    node->ty = ty_bool;
+    return;    
   case ND_BUILTIN_CTZ:
+  case ND_BUILTIN_CTZL:
+  case ND_BUILTIN_CTZLL:
   case ND_BUILTIN_CLZ:
+  case ND_BUILTIN_CLZL:
+  case ND_BUILTIN_CLZLL:
+  case ND_BUILTIN_BSWAP32:
   case ND_POPCOUNT:
     add_type(node->builtin_val);
     node->ty = ty_int;
     return;
+  case ND_BUILTIN_BSWAP16:
+    add_type(node->builtin_val);
+    node->ty = ty_short;
+    return;   
+  case ND_BUILTIN_BSWAP64:
+    add_type(node->builtin_val);
+    node->ty = ty_long;
+    return;        
   case ND_EXCH_N:
   case ND_FETCHADD:
   case ND_FETCHSUB:
@@ -422,5 +442,13 @@ void add_type(Node *node)
       error_tok(node->cas_addr->tok, "%s %d: pointer expected", TYPE_C, __LINE__);
     node->ty = node->lhs->ty->base;
     return;
+  case ND_BUILTIN_HUGE_VALF:
+      node->ty = ty_float;
+      return;
+  case ND_BUILTIN_HUGE_VAL:      
+  case ND_BUILTIN_HUGE_VALL:
+  case ND_BUILTIN_INFF:
+    node->ty = ty_ldouble;
+    return;    
   }
 }
