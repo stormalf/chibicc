@@ -479,6 +479,8 @@ void add_type(Node *node)
     add_type(node->lhs);
     node->ty = ty_bool;
     return;
+  case ND_ABORT:
+    return;
   case ND_BUILTIN_FRAME_ADDRESS:
   case ND_RETURN_ADDR:
     add_type(node->lhs);

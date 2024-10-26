@@ -1970,6 +1970,10 @@ static void gen_expr(Node *node)
     println("  mov %%rdi, %%rax");
     return;
   }   
+  case ND_ABORT: {
+    println("  call abort"); 
+    return;
+  }
   case ND_RETURN_ADDR: {
     // Generate code to get the frame pointer of the current function
     println("  mov %%rbp, %%rax");
@@ -3925,3 +3929,4 @@ void pushreg(const char *arg) {
   println("  push %%%s", arg);
   depth++;
 }
+

@@ -31,6 +31,7 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 #define offsetof(TYPE, MEMBER) __builtin_offsetof (TYPE, MEMBER)
 //#define offsetof(type, member) ((size_t)&(((type *)0)->member))
 
+
 #if (!defined(_STDDEF_H) && !defined(_STDDEF_H_) && !defined(_ANSI_STDDEF_H) \
      && !defined(__STDDEF_H__)) \
     || defined(__need_wchar_t) || defined(__need_size_t) \

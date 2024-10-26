@@ -64,7 +64,7 @@ static const char kTypeKindStr[17][8] = {
 };
 
 
-static const char kNodeKindStr[89][22] = {
+static const char kNodeKindStr[91][22] = {
     "NULL_EXPR",  "ADD",     "SUB",       "MUL",       "DIV",       "NEG",
     "MOD",        "BITAND",  "BITOR",     "BITXOR",    "SHL",       "SHR",
     "EQ",         "NE",      "LT",        "LE",        "ASSIGN",    "COND",
@@ -80,7 +80,7 @@ static const char kNodeKindStr[89][22] = {
     "BUILTIN_ADD_OVERFLOW", "BUILTIN_SUB_OVERFLOW",  "BUILTIN_MUL_OVERFLOW", "UNREACHABLE",  
     "BUILTIN_CLZL", "BUILTIN_CLZLL", "BUILTIN_CTZL", "BUILTIN_CTZLL", "BUILTIN_INFF", "BUILTIN_ISNAN",
     "BUILTIN_BSWAP16", "BUILTIN_BSWAP32", "BUILTIN_BSWAP64", "BUILTIN_HUGE_VALF", "BUILTIN_HUGE_VAL",
-    "BUILTIN_HUGE_VALL", "BUILTIN_FRAME_ADDRESS",
+    "BUILTIN_HUGE_VALL", "BUILTIN_FRAME_ADDRESS", "ABORT", "EXPECT",
 };
 
 
