@@ -234,48 +234,22 @@ static void emit_dwarf_register_location(int reg) {
 
 
 static void emit_dwarf_headers() {
-    // Start of the .debug_abbrev section
-    println("  .section .debug_abbrev");
-    println("begin_abbrev:");
-    println("  .byte 0x00");  // Zero termination
-    // Emit the abbreviations
-    println("  .byte 0x01");  // Abbreviation code for DW_TAG_compile_unit
-    println("  .byte 0x01");  // Children: DW_CHILDREN_yes
-    println("  .byte 0x0E");  // Attribute: DW_AT_producer
-    println("  .byte 0x01");  // Form: DW_FORM_string
-    println("  .byte 0x00");  // End of the abbreviation entry
+        // println("  .section .debug_info");
+        // println("begin_debug_info:");
+        // println("  .long 0");
+        // println("  .word 4");
+        // println("  .long begin_abbrev");
+        // println("  .uleb128 0x3");
+        // println("  .byte 0x0");
+        // println("  .byte 0x0");
+        // println("end_debug_info:");
+        // println("  .section .debug_abbrev");
+        // println("begin_abbrev:");
+        // println("  .byte 0x00");
+        // println("  .byte 0x01");
+        // println("  .byte 0x01");
+        // println("  ");
 
-    // Zero-termination of the .debug_abbrev section
-    println("  .byte 0x05");  // Zero termination
-    // End of the .debug_abbrev section
-    println("end_abbrev:");
-
-    // Now start the .debug_info section
-    println("  .section .debug_info");
-    println("begin_debug_info:");
-
-    // Length of the debug_info (we will fill this in later)
-    println("  .long 0");  // Placeholder for the length, to be filled in later
-
-    // Version number (2 bytes)
-    println("  .word 4");  // DWARF version 4
-
-    // Abbreviation offset (4 bytes) - should point to the begin_abbrev section Abbrev Offset: 0xb08
-    println("  .long begin_abbrev - begin_debug_info");  // Correct offset to the abbreviation section
-
-    // Pointer size (1 byte)
-    println("  .byte 8");  // Pointer size: 8 bytes for 64-bit
-
-    // Emit your function's DWARF information here...
-
-    // Now we finalize the length of the .debug_info section
-    println("  .long end_debug_info - begin_debug_info - 4");  // Fill in the correct length minus this field
-
-    // End of the .debug_info section
-    println("end_debug_info:");
-
-    // Return to .debug_info section for subsequent data
-    println("  .section .debug_info");
 }
 
 
