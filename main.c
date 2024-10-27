@@ -1152,14 +1152,11 @@ static void cc1(void)
 
 static void assemble(char *input, char *output)
 {
-  char *cmd[] = {"as", "-c", input, "-o", output, NULL};
+  char *cmd[] = {"as",  "-c", input, "-o", output, NULL};
   run_subprocess(cmd);
 }
 
-// static void symbolic_link(char *input, char *output) {
-//   char *cmd[] = {"ln", "-s", "-f", output, input, NULL};
-//   run_subprocess(cmd);
-// }
+
 
 void dump_machine(void)
 {

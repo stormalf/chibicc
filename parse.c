@@ -214,7 +214,7 @@ static Obj *eval_var(Node *expr, bool allow_local);
 static bool is_const_var(Obj *var) ;
 static bool is_str_tok(Token **rest, Token *tok, Token **str_tok);
 static bool find_member_offset_recursive(Type *tstruct, Token *tok, int *offset);
-static int size_of_type(Type *type);
+
 
 // static int align_down(int n, int align)
 // {
@@ -488,6 +488,7 @@ static Obj *new_lvar(char *name, Type *ty, char *funcname)
   var->is_local = true;
   var->next = locals;
   var->order = order;
+  var->is_weak = ty->is_weak;
   if (!funcname)
     funcname = current_fn->funcname;
   var->funcname = funcname;
@@ -503,6 +504,7 @@ static Obj *new_lvar(char *name, Type *ty, char *funcname)
 
 static Obj *new_gvar(char *name, Type *ty)
 {
+
   Obj *var = new_var(name, ty);
   var->next = globals;
   var->is_static = true;
@@ -861,7 +863,15 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
       error_tok(tok, "%s %d: in declspec : invalid type", PARSE_C, __LINE__);
     }
     tok = tok->next;
-    tok = attribute_list(tok, ty, type_attributes);
+    //to fix attributes after on before the identifier
+    if (attr) {      
+      tok = attribute_list(tok, attr, thing_attributes);
+      tok->next = attribute_list(tok->next, attr, thing_attributes);
+    } else {      
+      tok = attribute_list(tok, ty, type_attributes);
+      tok->next = attribute_list(tok->next, ty, type_attributes);
+    }
+
 
   }
 
@@ -999,7 +1009,6 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
     ty->params = old_params(head.next, nbparms);
   } else 
     ty->params = head.next;
-
   ty->is_variadic = is_variadic;
   *rest = tok->next;
   return ty;
@@ -6245,12 +6254,14 @@ static void mark_live(Obj *var)
 
 static Token *function(Token *tok, Type *basety, VarAttr *attr)
 {
-
+  
   Type *ty = declarator(&tok, tok, basety);
   if (!ty)
     error_tok(tok, "%s %d: in function : ty is null", PARSE_C, __LINE__);
   if (!ty->name)
     error_tok(ty->name_pos, "%s %d: in function : function name omitted", PARSE_C, __LINE__);
+  //in case of attributes are after the function name
+  tok = attribute_list(tok, ty, type_attributes);
   char *name_str = get_ident(ty->name);
 
   Obj *fn = find_func(name_str);
@@ -6273,11 +6284,10 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
     fn->is_definition = equal(tok, "{");
     fn->is_static = attr->is_static || (attr->is_inline && !attr->is_extern);
     fn->is_inline = attr->is_inline;
-    fn->alias_name = basety->alias_name;
+    fn->alias_name = attr->alias_name;
   }
   //from COSMOPOLITAN adding other GNUC attributes
-  //fn->is_weak |= attr->is_weak;
-  fn->is_weak = attr->is_weak || basety->is_weak;
+  fn->is_weak |= attr->is_weak;  
   fn->section = fn->section ?: attr->section;
   fn->is_ms_abi |= attr->is_ms_abi;
   fn->visibility = fn->visibility ?: attr->visibility;
@@ -6371,7 +6381,6 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
 static Token *global_variable(Token *tok, Type *basety, VarAttr *attr)
 {
   bool first = true;
-
   while (!consume(&tok, tok, ";"))
   {
     if (!first) {
@@ -6387,7 +6396,6 @@ static Token *global_variable(Token *tok, Type *basety, VarAttr *attr)
       error_tok(tok, "%s %d: in global_variable : ty is null", PARSE_C, __LINE__);    
     if (!ty->name)
       error_tok(ty->name_pos, "%s %d: in global_variable : variable name omitted", PARSE_C, __LINE__);
-
     Obj *var = new_gvar(get_ident(ty->name), ty);
       //from COSMOPOLITAN adding other GNUC attributes
     tok = attribute_list(tok, attr, thing_attributes);
@@ -6405,6 +6413,7 @@ static Token *global_variable(Token *tok, Type *basety, VarAttr *attr)
     }
 
     var->is_weak = attr->is_weak;
+    var->alias_name = attr->alias_name;
     var->section = attr->section;
     var->visibility = attr->visibility;
     var->is_aligned = var->is_aligned | attr->is_aligned;
@@ -6435,6 +6444,7 @@ static bool is_function(Token *tok)
   Type *ty = declarator(&tok, tok, &dummy);
   if (!ty)
     error_tok(tok, "%s %d: in is_function : ty is null", PARSE_C, __LINE__);
+
 
   return ty->kind == TY_FUNC;
 }
@@ -7310,7 +7320,7 @@ static bool find_member_offset_recursive(Type *tstruct, Token *tok, int *offset)
                         index = index_token->val; 
                     }
                     
-                    *offset += m->offset + (index * size_of_type(m->ty->base)); // Calculate offset
+                    *offset += m->offset + (index * m->ty->base->size); // Calculate offset
 
                     // Look for the closing ']'
                     if (index_token->next && equal(index_token->next, "]")) {
@@ -7353,44 +7363,5 @@ static bool find_member_offset_recursive(Type *tstruct, Token *tok, int *offset)
     return false; // Member not found
 }
 
-// Helper function to get the size of a type
-static int size_of_type(Type *type) {
-    switch (type->kind) {
-        case TY_VOID:
-            return sizeof(void);
-        case TY_BOOL: 
-            return sizeof(bool);
-        case TY_CHAR:
-            return sizeof(char);
-        case TY_SHORT:
-            return sizeof(short);
-        case TY_LONG:
-            return sizeof(long);
-        case TY_INT:
-            return sizeof(int);
-        case TY_FLOAT:
-            return sizeof(float);
-        case TY_DOUBLE:
-            return sizeof(double);
-        case TY_LDOUBLE:
-            return sizeof(long double);
-        case TY_INT128:
-            return sizeof(__int128);
-        case TY_PTR:
-            return sizeof(void *);
-        case TY_FUNC:
-            return sizeof(void *);
-        case TY_ARRAY:
-            return type->array_len * size_of_type(type->base);
-        case TY_VLA:
-            return sizeof(void *);
-        case TY_STRUCT:
-        case TY_UNION:
-            return type->size;
-        // Add cases for other types as necessary
-        default:
-          error("%s: %s:%d: error: in size_of_type : type not managed %d", PARSE_C, __FILE__, __LINE__, type->kind);
-            //return 0; // Unknown type size
-    }
-}
+
 
