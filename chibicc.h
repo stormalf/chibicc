@@ -596,7 +596,6 @@ struct Type
   Type *params;
   bool is_variadic;
   Type *next;
-  Type *attrs;
   char *alias_name; // alias name for function when weak attribute
 };
 
