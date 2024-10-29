@@ -58,7 +58,6 @@ struct VarAttr
   bool is_no_caller_saved_registers;
   char *section;
   char *visibility;
-  VarAttr *attrs;
   char *alias_name; //to store alias name for function when weak attribute
 };
 
@@ -483,7 +482,6 @@ static Obj *new_var(char *name, Type *ty)
 
 static Obj *new_lvar(char *name, Type *ty, char *funcname)
 {
-
   Obj *var = new_var(name, ty);
   var->is_local = true;
   var->next = locals;
@@ -864,7 +862,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     }
     tok = tok->next;
     //to fix attributes after on before the identifier
-    if (attr) {      
+    if (attr && !attr->is_typedef)  {      
       tok = attribute_list(tok, attr, thing_attributes);
       tok->next = attribute_list(tok->next, attr, thing_attributes);
     } else {      
@@ -1104,7 +1102,7 @@ static Type *array_dimensions(Token **rest, Token *tok, Type *ty) {
 static Type *type_suffix(Token **rest, Token *tok, Type *ty)
 {
   tok->next = attribute_list(tok->next, ty, type_attributes);
-  
+
   if (equal(tok, "("))
   {
     //in case of old style K&R we omit the parameters inside parenthesis and we parse the parameters that 
@@ -1199,6 +1197,7 @@ static Type *declarator(Token **rest, Token *tok, Type *ty)
   Token *name_pos = tok;
   if (tok->kind == TK_IDENT )
   {
+
     name = tok;
     tok = tok->next;
   }
@@ -1432,7 +1431,6 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
     if (!ty->name)
       error_tok(ty->name_pos, "%s %d: in declaration : variable name omitted", PARSE_C, __LINE__);
     tok = attribute_list(tok, attr, thing_attributes);
-   
     if (attr && attr->is_static)
     {
       // static local variable
@@ -1473,7 +1471,7 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
       cur = cur->next = new_unary(ND_EXPR_STMT, expr, tok);
       continue;
     }
-    
+
     Obj *var = new_lvar(get_ident(ty->name), ty, NULL);
     if (alt_align)
       var->align = alt_align;
@@ -2124,7 +2122,7 @@ static void initializer2(Token **rest, Token *tok, Initializer *init) {
     // An initializer for a scalar variable can be surrounded by
     // braces. E.g. `int x = {3};`. Handle that case.
     while (!equal(tok, "}")) {
-      if (!is_vector &&  tok->next->kind == TK_NUM && equal(tok->next->next, ",")) {
+      if (!is_vector &&  equal(tok, "{") && tok->next->kind == TK_NUM && equal(tok->next->next, ",")) {
         is_vector = true;
         vector_initializer1(rest, tok, init);
 
@@ -4034,7 +4032,7 @@ static Token *type_attributes(Token *tok, void *arg)
     tok = skip(tok, "(", ctx);
     int vs = const_expr(&tok, tok);
     if (vs != 2 && vs != 4 && vs != 8 && vs != 16) {
-        error_tok(tok, "%s %d: unsupported vector_size %d; only 2, 4, 8 and 16 are supported", PARSE_C, __LINE__, vs);
+        error_tok(tok, "%s %d: in type_attributes: unsupported vector_size %d; only 2, 4, 8 and 16 are supported", PARSE_C, __LINE__, vs);
     }
     if (vs != ty->vector_size) {
         //ty->size = vs;
@@ -4141,7 +4139,7 @@ static Token *type_attributes(Token *tok, void *arg)
       ctx->line_no = __LINE__ + 1;
       tok = skip(tok, "(", ctx);  
       if (tok->kind != TK_IDENT)  
-          error_tok(tok, "%s %d: expected identifier in __cleanup__", PARSE_C, __LINE__);
+          error_tok(tok, "%s %d: in type_attributes: expected identifier in __cleanup__", PARSE_C, __LINE__);
 
       // Store the cleanup function name
       current_type = copy_type(ty); 
@@ -4411,6 +4409,7 @@ static Token *thing_attributes(Token *tok, void *arg) {
     warn_tok(tok, "in thing_attributes: %s %d: attr is null", PARSE_C, __LINE__);
     return tok;
   }
+
 
   if (consume(&tok, tok, "weak") || consume(&tok, tok, "__weak__")) {
     //int __attribute__((weak, alias("lxc_attach_main"))) main(int argc, char *argv[]);
@@ -4701,7 +4700,7 @@ static Token *thing_attributes(Token *tok, void *arg) {
       consume(&tok, tok, "__retain__") || 
       consume(&tok, tok, "transaction_pure") || 
       consume(&tok, tok, "transaction_may_cancel_outer") || 
-      consume(&tok, tok, "transaction_callable") ||       
+      consume(&tok, tok, "transaction_callable") ||             
       consume(&tok, tok, "__no_profile_instrument_function__")) 
     {
         return tok;
@@ -6168,14 +6167,13 @@ static Token *parse_typedef(Token *tok, Type *basety)
       tok = skip(tok, ",", ctx);
     }
     first = false;
-
     Type *ty = declarator(&tok, tok, basety);
     if (!ty)
       error_tok(tok, "%s %d: in parse_typedef : ty is null", PARSE_C, __LINE__);
     if (!ty->name)
       error_tok(ty->name_pos, "%s %d: in parse_typedef : typedef name omitted", PARSE_C, __LINE__);
 
-    
+   
     tok = attribute_list(tok, ty, type_attributes);      
 
     //push_scope(get_ident(ty->name))->type_def = ty;
