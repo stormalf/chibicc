@@ -28,8 +28,9 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 #define _Pragma(message) 
 /* Offset of member MEMBER in a struct of type TYPE. */
 
-#define offsetof(TYPE, MEMBER) __builtin_offsetof (TYPE, MEMBER)
-//#define offsetof(type, member) ((size_t)&(((type *)0)->member))
+//#define offsetof(TYPE, MEMBER) __builtin_offsetof (TYPE, MEMBER)
+#define offsetof(type, member) ((size_t)&(((type *)0)->member))
+
 
 
 #if (!defined(_STDDEF_H) && !defined(_STDDEF_H_) && !defined(_ANSI_STDDEF_H) \

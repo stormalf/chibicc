@@ -116,6 +116,12 @@ bool is_compatible(Type *t1, Type *t2)
   if (t1->kind != t2->kind)
     return false;
 
+  if ((t1->kind == TY_VLA && t2->kind == TY_VLA) ||
+    (t1->kind == TY_VLA && t2->kind == TY_ARRAY) ||
+    (t1->kind == TY_ARRAY && t2->kind == TY_VLA))
+    return is_compatible(t1->base, t2->base);
+
+
   switch (t1->kind)
   {
   case TY_CHAR:
