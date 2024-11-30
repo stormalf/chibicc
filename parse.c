@@ -212,7 +212,7 @@ static int64_t eval_sign_extend(Type *ty, uint64_t val);
 static Obj *eval_var(Node *expr, bool allow_local);
 static bool is_const_var(Obj *var) ;
 static bool is_str_tok(Token **rest, Token *tok, Token **str_tok);
-static bool find_member_offset_recursive(Type *tstruct, Token *tok, int *offset);
+
 
 
 // static int align_down(int n, int align)
@@ -964,7 +964,7 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
 
     Token *name = ty2->name;
 
-    if (ty2->kind == TY_ARRAY)
+    if (ty2->kind == TY_ARRAY || ty2->kind == TY_VLA)
     {
       // "array of T" is converted to "pointer to T" only in the parameter
       // context. For example, *argv[] is converted to **argv by this.
@@ -3939,7 +3939,14 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
   {
     cur->ty = array_of(cur->ty->base, 0);
     ty->is_flexible = true;
+    cur->ty->is_flexible = true;
   }
+  // if (cur != &head && cur->ty->kind == TY_VLA ) {
+  //   cur->ty = vla_of(cur->ty->base, 0);
+  //   ty->is_flexible = true;
+  //   cur->ty->is_flexible = true;
+  // }
+
   *rest = tok->next;
   ty->members = head.next;
 }
@@ -5061,7 +5068,6 @@ static Node *postfix(Token **rest, Token *tok)
   }
   else
   {
-
     node = primary(&tok, tok);
   }
 
@@ -5318,16 +5324,23 @@ static Node *primary(Token **rest, Token *tok)
       ctx->funcname = "primary";        
       ctx->line_no = __LINE__ + 1;      
       *rest = skip(tok, ")", ctx);
-      if (ty->kind == TY_VLA)
-        {
-          if (ty->vla_size)
-            return new_var_node(ty->vla_size, tok);
+     
+      // if (ty->kind == TY_VLA)
+      //   {
+      //     if (ty->vla_size)
+      //       return new_var_node(ty->vla_size, tok);
 
-          Node *lhs = compute_vla_size(ty, tok);
-          Node *rhs = new_var_node(ty->vla_size, tok);
-          return new_binary(ND_COMMA, lhs, rhs, tok);
-        }
+      //     Node *lhs = compute_vla_size(ty, tok);
+      //     Node *rhs = new_var_node(ty->vla_size, tok);
+      //     return new_binary(ND_COMMA, lhs, rhs, tok);
+      //   }
 
+      if (ty->kind == TY_VLA) {
+        if (ty->vla_size)
+          return new_var_node(ty->vla_size, tok);
+        return compute_vla_size(ty, tok);
+      }
+      
         return new_ulong(ty->size, start);
       } else {
       Node *node = unary(rest, tok->next);
@@ -5446,118 +5459,6 @@ static Node *primary(Token **rest, Token *tok)
     return new_num(is_constant ? 1 : 0, start);
   }
 
-
-  // if (equal(tok, "__builtin_offsetof")) {
-  //   ctx->filename = PARSE_C;
-  //   ctx->funcname = "primary";        
-  //   ctx->line_no = __LINE__ + 1;          
-  //   tok = skip(tok->next, "(", ctx);
-  //   Token *stok = tok;
-
-  //   // Parse the structure type
-  //   Type *tstruct = typename(&tok, tok);
-  //   if (tstruct->kind != TY_STRUCT && tstruct->kind != TY_UNION) {
-  //       error_tok(stok, "%s %d: in primary : not a structure or union type", PARSE_C, __LINE__);
-  //   }
-
-  //   ctx->filename = PARSE_C;
-  //   ctx->funcname = "primary";        
-  //   ctx->line_no = __LINE__ + 1;          
-  //   tok = skip(tok, ",", ctx);
-  //   int offset = 0;
-
-  //   while (true) {
-  //       if (tok->kind != TK_IDENT) {
-  //           error_tok(tok, "%s %d: in primary : expected member name", PARSE_C, __LINE__);
-  //       }
-
-  //       // Find the member in the current structure
-  //       Member *member = NULL;
-  //       for (Member *m = tstruct->members; m; m = m->next) {
-  //           if (m->name)
-  //             printf("======m->name->loc=%s\n", m->name->loc);
-  //           if (m->name && m->name->len == tok->len &&
-  //               !memcmp(m->name->loc, tok->loc, m->name->len)) {
-  //               member = m;
-  //               break;
-  //           }
-  //       }
-        
-
-  //       if (!member) {
-  //           error_tok(tok, "%s %d: in primary : no such member", PARSE_C, __LINE__);
-  //       }
-
-  //       // Add the member's offset to the running total
-  //       offset += member->offset;
-
-  //       // Update the type context for the next member lookup
-  //       tstruct = member->ty;
-
-  //       if (tstruct->kind == TY_UNION) {
-  //           offset = 0; // Union members all have offset 0.
-  //       }
-  //       // Move to the next token
-  //       tok = tok->next;
-
-  //   // Check if it's an array subscript
-  //       if (equal(tok, "[")) {
-  //           tok = tok->next;
-  //           int index = strtol(tok->loc, NULL, 10);
-  //           offset += index * member->ty->size; // Add array index offset
-  //           // Move to the closing bracket
-  //           tok = tok->next;
-  //           ctx->filename = PARSE_C;
-  //           ctx->funcname = "primary";        
-  //           ctx->line_no = __LINE__ + 1;          
-  //           tok = skip(tok, "]", ctx);
-  //       }
-
-  //       // If we've reached the end or the next member access ('.'), break or continue
-  //       if (equal(tok, ")")) {
-  //           break;
-  //       } else if (equal(tok, ".")) {
-  //           tok = tok->next;
-  //       } else {
-  //           error_tok(tok, "%s %d: in primary : unexpected token", PARSE_C, __LINE__);
-  //       }
-  //   }
-  //   ctx->filename = PARSE_C;
-  //   ctx->funcname = "primary";        
-  //   ctx->line_no = __LINE__ + 1;          
-  //   *rest = skip(tok, ")", ctx);
-  //   return new_ulong(offset, stok);
-  // }
-
-  if (equal(tok, "__builtin_offsetof")) {
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";        
-    ctx->line_no = __LINE__ + 1;  
-    tok = skip(tok->next, "(", ctx);
-    Token *start_tok = tok;
-
-    // Parse the struct or union type
-    Type *tstruct = typename(&tok, tok);
-    if (tstruct->kind != TY_STRUCT && tstruct->kind != TY_UNION) {
-        error_tok(start_tok, "%s %d: in primary : expected struct or union type for offsetof", PARSE_C, __LINE__);
-    }
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";        
-    ctx->line_no = __LINE__ + 1;  
-    tok = skip(tok, ",", ctx);
-
-    int offset = 0;
-    if (!find_member_offset_recursive(tstruct, tok, &offset)) {
-        error_tok(tok, "%s %d: in primary : no such member", PARSE_C, __LINE__);
-    }
-    while (!equal(tok, ")"))
-      tok = tok->next;
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";        
-    ctx->line_no = __LINE__ + 1;  
-    *rest = skip(tok, ")", ctx);
-    return new_ulong(offset, start_tok);
-}
 
 
   //trying to fix ===== some builtin functions linked to mmx/emms
@@ -6385,6 +6286,8 @@ static Token *global_variable(Token *tok, Type *basety, VarAttr *attr)
       ctx->filename = PARSE_C;
       ctx->funcname = "global_variable";        
       ctx->line_no = __LINE__ + 1;         
+      if (!equal(tok, ","))
+        printf("=======tok=%s\n", tok->loc);
       tok = skip(tok, ",", ctx);
     }
     first = false;
@@ -6396,7 +6299,7 @@ static Token *global_variable(Token *tok, Type *basety, VarAttr *attr)
       error_tok(ty->name_pos, "%s %d: in global_variable : variable name omitted", PARSE_C, __LINE__);
     Obj *var = new_gvar(get_ident(ty->name), ty);
       //from COSMOPOLITAN adding other GNUC attributes
-    tok = attribute_list(tok, attr, thing_attributes);
+    tok = attribute_list(tok, ty, type_attributes);
 
     if (consume(&tok, tok, "asm") || consume(&tok, tok, "__asm__")) {
       ctx->filename = PARSE_C;
@@ -7198,168 +7101,5 @@ static bool is_str_tok(Token **rest, Token *tok, Token **str_tok) {
   }
   return false;
 }
-
-
-// // Recursive function to find a member offset within a potentially nested struct or union
-// static bool find_member_offset_recursive(Type *tstruct, Token *tok, int *offset) {
-//     // Traverse each member in the current struct or union
-//     for (Member *m = tstruct->members; m; m = m->next) {
-//         // Check for a name match
-//         if (m->name && m->name->len == tok->len && 
-//             !memcmp(m->name->loc, tok->loc, m->name->len)) {
-//             // If matched, add this member's offset and return
-//             *offset += m->offset;
-//             return true;
-//         }
-
-//         // If the member is itself a struct or union, recurse into it
-//         if (m->ty->kind == TY_STRUCT || m->ty->kind == TY_UNION) {
-//             // Preserve the current offset value for backtracking
-//             int current_offset = *offset;
-
-//             // Update offset with the member's offset and recurse
-//             *offset += m->offset;
-//             if (find_member_offset_recursive(m->ty, tok, offset)) {
-//                 return true; // Found in nested structure
-//             }
-
-//             // Backtrack if the member was not found within this nested struct/union
-//             *offset = current_offset;
-//         }
-//     }
-
-//     return false; // Member not found
-// }
-
-// // Recursive function to find a member offset within a potentially nested struct or union
-// static bool find_member_offset_recursive(Type *tstruct, Token *tok, int *offset) {
-//     // Traverse each member in the current struct or union
-//     for (Member *m = tstruct->members; m; m = m->next) {
-//         // Check for a name match
-//         if (m->name && m->name->len == tok->len && 
-//             !memcmp(m->name->loc, tok->loc, m->name->len)) {
-            
-//             // If matched, add this member's offset
-//             *offset += m->offset;
-
-//             // Check if there's further nested access (e.g., "." for a member within a struct)
-//             if (tok->next && equal(tok->next, ".")) {
-//                 // Ensure the current member is a struct or union for further traversal
-//                 if (m->ty->kind != TY_STRUCT && m->ty->kind != TY_UNION) {
-//                     return false; // Invalid access; member isn't a struct/union
-//                 }
-
-//                 // Move to the next member token after the dot
-//                 return find_member_offset_recursive(m->ty, tok->next->next, offset);
-//             }
-
-//             // If no further nested access, we have the final offset
-//             return true;
-//         }
-
-//         // If the member is itself a struct or union, recurse into it
-//         if (m->ty->kind == TY_STRUCT || m->ty->kind == TY_UNION) {
-//             // Preserve the current offset for backtracking
-//             int current_offset = *offset;
-
-//             // Update offset with this member's offset and recurse
-//             *offset += m->offset;
-//             if (find_member_offset_recursive(m->ty, tok, offset)) {
-//                 return true; // Found in nested structure
-//             }
-
-//             // Backtrack if the member was not found in this nested struct/union
-//             *offset = current_offset;
-//         }
-//     }
-
-//     return false; // Member not found
-// }
-
-// Recursive function to find a member offset within a potentially nested struct or union
-static bool find_member_offset_recursive(Type *tstruct, Token *tok, int *offset) {
-    // Traverse each member in the current struct or union
-    for (Member *m = tstruct->members; m; m = m->next) {
-        // Check for a name match
-        if (m->name && m->name->len == tok->len && 
-            !memcmp(m->name->loc, tok->loc, m->name->len)) {
-            
-            // If matched, add this member's offset
-            *offset += m->offset;
-
-            // Check if there's further nested access (e.g., "." for a member within a struct)
-            if (tok->next && equal(tok->next, ".")) {
-                // Ensure the current member is a struct or union for further traversal
-                if (m->ty->kind != TY_STRUCT && m->ty->kind != TY_UNION) {
-                    return false; // Invalid access; member isn't a struct/union
-                }
-
-                // Move to the next member token after the dot
-                return find_member_offset_recursive(m->ty, tok->next->next, offset);
-            }
-
-            // If no further nested access, we have the final offset
-            return true;
-        }
-
-        // If the member is an array
-        if (m->ty->kind == TY_ARRAY) {
-            // Check for an index token (next token should be an integer)
-            if (tok->next && equal(tok->next, "[")) {
-                // Move past the '[' token
-                Token *index_token = tok->next->next;
-
-                // Ensure the next token is a valid index (integer)
-                if (index_token && index_token->kind == TK_NUM) { // Check if it's a number token
-                    int index = 0;
-                    if (index_token->ty->kind == TY_FLOAT || index_token->ty->kind == TY_DOUBLE || index_token->ty->kind == TY_LDOUBLE) {
-                        index = index_token->fval;
-                    } else {
-                        index = index_token->val; 
-                    }
-                    
-                    *offset += m->offset + (index * m->ty->base->size); // Calculate offset
-
-                    // Look for the closing ']'
-                    if (index_token->next && equal(index_token->next, "]")) {
-                        // Move past the closing ']'
-                        if (index_token->next->next && equal(index_token->next->next, ".")) {
-                            // If there’s further nested access, ensure the current member is a struct or union
-                            if (m->ty->base->kind != TY_STRUCT && m->ty->base->kind != TY_UNION) {
-                                return false; // Invalid access; member isn't a struct/union
-                            }
-
-                            // Move to the next member token after the dot
-                            return find_member_offset_recursive(m->ty->base, index_token->next->next->next, offset);
-                        }
-
-                        // If no further nested access, we have the final offset
-                        return true;
-                    }
-                }
-
-                return false; // Invalid array access
-            }
-        }
-
-        // If the member is itself a struct or union, recurse into it
-        if (m->ty->kind == TY_STRUCT || m->ty->kind == TY_UNION) {
-            // Preserve the current offset for backtracking
-            int current_offset = *offset;
-
-            // Update offset with this member's offset and recurse
-            *offset += m->offset;
-            if (find_member_offset_recursive(m->ty, tok, offset)) {
-                return true; // Found in nested structure
-            }
-
-            // Backtrack if the member was not found in this nested struct/union
-            *offset = current_offset;
-        }
-    }
-
-    return false; // Member not found
-}
-
 
 

@@ -746,7 +746,6 @@ static void parse_args(int argc, char **argv)
     }
 
 
-
     // These options are ignored for now.
     if (!strncmp(argv[i], "-O", 2) ||
         !strncmp(argv[i], "-W", 2) ||
