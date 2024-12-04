@@ -501,7 +501,11 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
 - trying to fix issues with alignas. Different results with gcc and chibicc and slimcc.
 - trying to implement a builtin_offsetof function.
 
+## LIMITS and BUGS
 
+    vector operations are not supported and causes crashes or wrong results.
+    Issue with flexible array during postgres compilation. What's strange is by adding a custom __builtin_offsetof function it seems to work and cause issue much later in postgres.
+    But I don't see for now the link between the issue in fmgr.c:1547 and the offsetof.
 
 ## issues and pull requests fixed
 
