@@ -1454,6 +1454,7 @@ void init_macros(void)
   define_macro("alignof", "_Alignof");
   define_macro("__amd64", "1");
   define_macro("__amd64__", "1");
+  define_macro("__CLASSIC_C__", "1");
   define_macro("__CHIBICC__", "1");
   define_macro("__const__", "const");
   define_macro("__gnu_linux__", "1");
@@ -1469,7 +1470,7 @@ void init_macros(void)
   define_macro("__x86_64", "1");
   define_macro("__x86_64__", "1");
   define_macro("__GNU__", "1");
-  define_macro("__INTEL_COMPILER", "1");
+  //define_macro("__INTEL_COMPILER", "1");
   define_macro("__GNUC__", "9");
   define_macro("__GNUC_MINOR__", "1");
   define_macro("__GNUC_PATCHLEVEL__ ", "1");
