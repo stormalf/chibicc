@@ -540,7 +540,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.23.1     Fixing issue when compiling chibicc with chibicc and extended assembly without input and output. Fixing issue with -v that exit without compiling when files are passed to the compiler. From @fuhsnn Adjust ABI with unnamed function parameter. From @enh use explicit .section specifications rather than .data/.text and fixing long double size and use .byte/.short/.long/.quad as appropriate and only output .align for >1 byte alignment.
+1.0.23.1     Fixing issue when compiling chibicc with chibicc and extended assembly without input and output. Fixing issue with -v that exit without compiling when files are passed to the compiler. From @fuhsnn Adjust ABI with unnamed function parameter. From @enh use explicit .section specifications rather than .data/.text and fixing long double size and use .byte/.short/.long/.quad as appropriate and only output .align for >1 byte alignment. Fixing issue with missing braces for compound statement (ISS-183).
 
 ## old release notes
 

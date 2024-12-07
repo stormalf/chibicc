@@ -213,6 +213,8 @@ static Obj *eval_var(Node *expr, bool allow_local);
 static bool is_const_var(Obj *var) ;
 static bool is_str_tok(Token **rest, Token *tok, Token **str_tok);
 
+static Node *compound_stmt2(Token **rest, Token *tok);
+
 
 
 // static int align_down(int n, int align)
@@ -2656,7 +2658,11 @@ static Node *stmt(Token **rest, Token *tok)
     VarAttr attr = {};
     tok = attribute_list(tok, &attr, thing_attributes);
     node->label = new_unique_name();
-    node->lhs = stmt(rest, tok);    
+    if (is_typename(tok)) {
+      node->lhs = compound_stmt2(rest, tok);
+    } else {
+      node->lhs = stmt(rest, tok);    
+    }
     node->begin = begin;
     node->end = end;
     node->case_next = current_switch->case_next;
@@ -2675,7 +2681,11 @@ static Node *stmt(Token **rest, Token *tok)
     ctx->line_no = __LINE__ + 1;        
     tok = skip(tok->next, ":", ctx);
     node->label = new_unique_name();
-    node->lhs = stmt(rest, tok);
+    if (is_typename(tok)) {
+      node->lhs = compound_stmt2(rest, tok);
+    } else {
+      node->lhs = stmt(rest, tok);
+    }
     current_switch->default_case = node;
     return node;
   }
@@ -2874,7 +2884,6 @@ static Node *compound_stmt(Token **rest, Token *tok)
   Node head = {};
   Node *cur = &head;
   enter_scope();
-
   while (!equal(tok, "}") )
   {
     VarAttr attr = {};
@@ -2921,8 +2930,65 @@ static Node *compound_stmt(Token **rest, Token *tok)
     if (node->body != NULL)
       fprintf(dotf, "%s%d -> %s%d\n", nodekind2str(node->kind), node->unique_number, nodekind2str(node->body->kind), node->body->unique_number);
   }
-
   *rest = tok->next;
+  return node;
+}
+
+// compound-stmt = (typedef | declaration | stmt)* 
+//case of missing braces for compound statement
+static Node *compound_stmt2(Token **rest, Token *tok)
+{
+  Node *node = new_node(ND_BLOCK, tok);
+  Node head = {};
+  Node *cur = &head;
+  enter_scope();
+  while (!equal(tok, "}") && !equal(tok, "case") && !equal(tok, "default"))
+  {
+    VarAttr attr = {};
+    tok = attribute_list(tok, &attr, thing_attributes);
+    if (is_typename(tok) && !equal(tok->next, ":"))
+    {
+      //VarAttr attr = {};
+      Type *basety = declspec(&tok, tok, &attr);
+      if (attr.is_typedef)
+      {
+        tok = parse_typedef(tok, basety);
+        continue;
+      }
+
+      if (is_function(tok))
+      {
+        tok = function(tok, basety, &attr);
+        continue;
+      }
+
+      if (attr.is_extern)
+      {
+        tok = global_variable(tok, basety, &attr);
+        continue;
+      }
+      cur = cur->next = declaration(&tok, tok, basety, &attr);
+    }
+    else
+    {
+      //case specific of fallthrough
+      //VarAttr attr= {};
+      tok = attribute_list(tok, &attr, thing_attributes);
+      cur = cur->next = stmt(&tok, tok);
+    }
+    add_type(cur);
+  }
+
+  leave_scope();
+
+  node->body = head.next;
+
+  if (isDotfile && dotf != NULL)
+  {
+    if (node->body != NULL)
+      fprintf(dotf, "%s%d -> %s%d\n", nodekind2str(node->kind), node->unique_number, nodekind2str(node->body->kind), node->body->unique_number);
+  }
+  *rest = tok;
   return node;
 }
 
