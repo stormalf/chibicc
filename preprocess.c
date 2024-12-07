@@ -1433,7 +1433,8 @@ void init_macros(void)
   define_macro("__UINTMAX_TYPE__", "long unsigned int");
 
   //define_macro("SIZEOF_INT", "4");
-  define_macro("__SIZEOF_LONG_DOUBLE__", "8");
+  //from @enh fixing long double size
+  define_macro("__SIZEOF_LONG_DOUBLE__", "16");
   define_macro("__SIZEOF_LONG_LONG__", "8");
   define_macro("__SIZEOF_LONG__", "8");
   //define_macro("SIZEOF_LONG", "8");

@@ -96,6 +96,7 @@ int main() {
   ASSERT(4, sizeof(1f/2));
   ASSERT(8, sizeof(1.0/2));
 
+  ASSERT(16, __SIZEOF_LONG_DOUBLE__);
   ASSERT(16, sizeof(long double));
 
   ASSERT(1, sizeof(main));
