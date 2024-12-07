@@ -2521,70 +2521,6 @@ if (node->rhs->ty->kind == TY_INT128) {
     println("  sub %s, %s", di, ax);
       }
     return;
-  // case ND_MUL:
-  //       if (node->lhs->ty->kind == TY_INT128) {
-  //       println("  imul %%rdi, %%rdx");
-  //       println("  imul %%rax, %%rsi");
-  //       println("  add %%rdx, %%rsi");
-  //       println("  mul %%rdi");
-  //       println("  add %%rsi, %%rdx");
-  //     } else if (node->lhs->ty->vector_size == 16) {
-  //       switch (node->lhs->ty->kind) {
-  //         case TY_CHAR:
-  //           println("  movaps %%xmm1, %%xmm2");
-  //           println("  movaps %%xmm0, %%xmm3");
-  //           println("  punpcklbw %%xmm0, %%xmm3");
-  //           println("  punpcklbw %%xmm1, %%xmm2");            
-  //           println("  pmullw  %%xmm3, %%xmm2");
-  //           println("  punpckhbw %%xmm0, %%xmm0");                        
-  //           println("  pcmpeqd %%xmm3, %%xmm3");                        
-  //           println("  punpckhbw %%xmm1, %%xmm1");                        
-  //           println("  pmullw %%xmm0, %%xmm1");                        
-  //           println("  andps %%xmm3, %%xmm2");                        
-  //           println("  movaps %%xmm2, %%xmm0");                        
-  //           println("  andps %%xmm3, %%xmm1");                        
-  //           println("  packuswb %%xmm1, %%xmm0");  
-  //           return;                      
-  //         case TY_SHORT:
-  //           println("  pmullw %%xmm1, %%xmm0");
-  //           return;
-  //         case TY_INT:
-  //           if (opt_sse4) {
-  //             println("  pmulld %%xmm1, %%xmm0");
-  //           } else {
-  //             println("  movaps %%xmm0, %%xmm2");
-  //             println("  psrlq $32, %%xmm0");
-  //             println("  pmuludq %%xmm1, %%xmm2");
-  //             println("  psrlq $32, %%xmm1");
-  //             println("  pmuludq %%xmm1, %%xmm0");              
-  //             println("  pshufd $8, %%xmm2, %%xmm2");  
-  //             println("  pshufd $8, %%xmm0, %%xmm1");              
-  //             println("  punpckldq  %%xmm1, %%xmm2");              
-  //             println("  movaps %%xmm2, %%xmm0");              
-  //             //return;
-  //           }
-  //         case TY_LONG:
-  //           println("  movaps %%xmm1, %%xmm2");
-  //           println("  movaps %%xmm0, %%xmm3");
-  //           println("  pmuludq %%xmm1, %%xmm3");
-  //           println("  movaps %%xmm2, %%xmm4");
-  //           println("  movaps %%xmm0, %%xmm1");
-  //           println("  psrlq $32, %%xmm4");
-  //           println("  psrlq $32, %%xmm1");
-  //           println("  pmuludq %%xmm4, %%xmm0");
-  //           println("  pmuludq %%xmm2, %%xmm1");
-  //           println("  paddq %%xmm0, %%xmm1");
-  //           println("  psllq $32, %%xmm1");
-  //           println("  paddq %%xmm1, %%xmm3");
-  //           println("  movaps %%xmm3, %%xmm0");
-  //           return;
-  //         default:
-  //           unreachable();
-  //       }
-  //     } else {
-  //       println("  imul %s, %s", di, ax);
-  //     }
-  //   return;
   case ND_MUL:
   if (node->lhs->ty->kind == TY_INT128) {
     println("  imul %%rdi, %%rdx");
@@ -2596,58 +2532,6 @@ if (node->rhs->ty->kind == TY_INT128) {
     println("  imul %s, %s", di, ax);
   }
     return;
-  // case ND_DIV:
-  // case ND_MOD:
-  //   if (node->lhs->ty->kind == TY_INT128) {
-  //     bool skew;
-  //     if ((skew = (depth & 1))) {
-  //       println("  sub $8, %%rsp");
-  //       depth++;
-  //     }
-  //     println("  mov %%rsi, %%rcx");
-  //     println("  mov %%rdx, %%rsi");
-  //     println("  mov %%rdi, %%rdx");
-  //     println("  mov %%rax, %%rdi");
-
-  //     if (node->kind == ND_DIV) {
-  //       if (node->ty->is_unsigned) {
-  //         println("  call __udivti3");
-  //       } else {
-  //         println("  call __divti3");
-  //       }
-  //     } else {
-  //       if (node->ty->is_unsigned) {
-  //         println("  call __umodti3");
-  //       } else {
-  //         println("  call __modti3");
-  //       }
-  //     }
-  //     if (skew) {
-  //       println("  add $8, %%rsp");
-  //       depth--;
-  //     }
-  //   } else if (node->lhs->ty->vector_size == 16) {
-  //       error_tok(node->tok, "in gen_expr: %s %d no div/mod sse instruction", CODEGEN_C, __LINE__);
-  //   } else {
-
-  //     if (node->ty->is_unsigned)
-  //     {
-  //       println("  mov $0, %s", dx);
-  //       println("  div %s", di);
-  //     }
-  //     else
-  //     {
-  //       if (node->lhs->ty->size == 8)
-  //         println("  cqo");
-  //       else
-  //         println("  cdq");
-  //       println("  idiv %s", di);
-  //     }
-
-  //     if (node->kind == ND_MOD)
-  //       println("  mov %%rdx, %%rax");
-  //   }
-  //   return;
   case ND_DIV:
   case ND_MOD:
   if (node->lhs->ty->kind == TY_INT128) {
@@ -2810,118 +2694,59 @@ if (node->rhs->ty->kind == TY_INT128) {
     println("  shl %%cl, %s", ax);
     }
     return;
-
-  // case ND_SHR:
-  //   int c = count();
-  //   // Move shift amount to CL register
-  //   println("  mov %%rdi, %%rcx");
-
-  //   if (node->lhs->ty->kind == TY_INT128) {
-  //     // Handle 128-bit shifts
-  //     if (node->lhs->ty->is_unsigned) {
-  //       // Handle unsigned 128-bit shift right
-  //       println("  cmp $64, %%rcx");
-  //       println("  ja .Lshift_gt64_unsigned_%d", c);
-
-  //       // Common shift logic for shifts within 64 bits
-  //       println("  shrd %%cl, %%rdx, %%rax");  // Shift right double
-  //       println("  shr %%cl, %%rdx");          // Logical shift of upper 64 bits
-  //       println("  jmp .Lshift_done_%d", c);
-
-  //       // Handle shifts greater than 63 bits
-  //       println(".Lshift_gt64_unsigned_%d:", c);
-  //       println("  sub $64, %%rcx");           // Adjust shift amount
-  //       println("  mov %%rdx, %%rax");         // Move high bits to low
-  //       println("  shr %%cl, %%rax");          // Logical shift remaining bits in %%rax
-  //       println("  xor %%rdx, %%rdx");         // Clear %%rdx (upper 64 bits)
-  //   } else {
-  //       // Handle signed 128-bit shift right (arithmetic)
-  //       println("  cmp $64, %%rcx");
-  //       println("  ja .Lshift_gt64_signed_%d", c);
-
-  //       // Common shift logic for shifts within 64 bits
-  //       println("  shrd %%cl, %%rdx, %%rax");  // Shift right double
-  //       println("  sar %%cl, %%rdx");          // Arithmetic shift of upper 64 bits
-  //       println("  jmp .Lshift_done_%d", c);
-
-  //       // Handle shifts greater than 63 bits
-  //       println(".Lshift_gt64_signed_%d:", c);
-  //       println("  sub $64, %%rcx");           // Adjust shift amount
-  //       println("  mov %%rdx, %%rax");         // Move high bits to low
-  //       println("  sar %%cl, %%rax");          // Arithmetic shift remaining bits in %%rax
-  //       println("  sar $63, %%rdx");           // Sign extend %%rdx to fill with sign bit
-  //   }
-
-  //   println(".Lshift_done_%d:", c);
-
-  // } else if (node->lhs->ty->vector_size == 16) {
-  //   // Handle SSE/AVX vector shifts (not implemented here)
-  //   error_tok(node->tok, "in gen_expr: %s %d todo sse shift", CODEGEN_C, __LINE__);
-  // } else {
-  //   // Handle other types (non-128-bit)
-  //   if (node->lhs->ty->is_unsigned) {
-  //       println("  shr %%cl, %s", ax);  // Logical shift for unsigned
-  //   } else {
-  //       println("  sar %%cl, %s", ax);  // Arithmetic shift for signed
-  //   }
-  // } 
-
-  //   return;
-  case ND_SHR:
-  int c = count();
-  // Move shift amount to CL register
+  case ND_SHR: {
+    int c = count();
+    // Move shift amount to CL register
     println("  mov %%rdi, %%rcx");
+    if (node->lhs->ty->kind == TY_INT128) {
+      // Handle 128-bit shifts
+      if (node->lhs->ty->is_unsigned) {
+        // Handle unsigned 128-bit shift right
+        println("  cmp $64, %%rcx");
+        println("  ja .Lshift_gt64_unsigned_%d", c);
 
-  if (node->lhs->ty->kind == TY_INT128) {
-    // Handle 128-bit shifts
-    if (node->lhs->ty->is_unsigned) {
-      // Handle unsigned 128-bit shift right
-      println("  cmp $64, %%rcx");
-      println("  ja .Lshift_gt64_unsigned_%d", c);
+        // Common shift logic for shifts within 64 bits
+        println("  shrd %%cl, %%rdx, %%rax");  // Shift right double
+        println("  shr %%cl, %%rdx");          // Logical shift of upper 64 bits
+        println("  jmp .Lshift_done_%d", c);
 
-      // Common shift logic for shifts within 64 bits
-      println("  shrd %%cl, %%rdx, %%rax");  // Shift right double
-      println("  shr %%cl, %%rdx");          // Logical shift of upper 64 bits
-      println("  jmp .Lshift_done_%d", c);
+        // Handle shifts greater than 63 bits
+        println(".Lshift_gt64_unsigned_%d:", c);
+        println("  sub $64, %%rcx");           // Adjust shift amount
+        println("  mov %%rdx, %%rax");         // Move high bits to low
+        println("  shr %%cl, %%rax");          // Logical shift remaining bits in %%rax
+        println("  xor %%rdx, %%rdx");         // Clear %%rdx (upper 64 bits)
+      } else {
+        // Handle signed 128-bit shift right (arithmetic)
+        println("  cmp $64, %%rcx");
+        println("  ja .Lshift_gt64_signed_%d", c);
 
-      // Handle shifts greater than 63 bits
-      println(".Lshift_gt64_unsigned_%d:", c);
-      println("  sub $64, %%rcx");           // Adjust shift amount
-      println("  mov %%rdx, %%rax");         // Move high bits to low
-      println("  shr %%cl, %%rax");          // Logical shift remaining bits in %%rax
-      println("  xor %%rdx, %%rdx");         // Clear %%rdx (upper 64 bits)
-    } else {
-      // Handle signed 128-bit shift right (arithmetic)
-      println("  cmp $64, %%rcx");
-      println("  ja .Lshift_gt64_signed_%d", c);
+        // Common shift logic for shifts within 64 bits
+        println("  shrd %%cl, %%rdx, %%rax");  // Shift right double
+        println("  sar %%cl, %%rdx");          // Arithmetic shift of upper 64 bits
+        println("  jmp .Lshift_done_%d", c);
 
-      // Common shift logic for shifts within 64 bits
-      println("  shrd %%cl, %%rdx, %%rax");  // Shift right double
-      println("  sar %%cl, %%rdx");          // Arithmetic shift of upper 64 bits
-      println("  jmp .Lshift_done_%d", c);
-
-      // Handle shifts greater than 63 bits
-      println(".Lshift_gt64_signed_%d:", c);
-      println("  sub $64, %%rcx");           // Adjust shift amount
-      println("  mov %%rdx, %%rax");         // Move high bits to low
-      println("  sar %%cl, %%rax");          // Arithmetic shift remaining bits in %%rax
-      println("  sar $63, %%rdx");           // Sign extend %%rdx to fill with sign bit
-    }
+        // Handle shifts greater than 63 bits
+        println(".Lshift_gt64_signed_%d:", c);
+        println("  sub $64, %%rcx");           // Adjust shift amount
+        println("  mov %%rdx, %%rax");         // Move high bits to low
+        println("  sar %%cl, %%rax");          // Arithmetic shift remaining bits in %%rax
+        println("  sar $63, %%rdx");           // Sign extend %%rdx to fill with sign bit
+      }
 
     println(".Lshift_done_%d:", c);
 
-  } else {
-    // Handle scalar values
-    if (node->lhs->ty->is_unsigned) {
-      println("  shr %%cl, %s", ax);  // Logical shift for unsigned
     } else {
-      println("  sar %%cl, %s", ax);  // Arithmetic shift for signed
+      // Handle scalar values
+      if (node->lhs->ty->is_unsigned) {
+        println("  shr %%cl, %s", ax);  // Logical shift for unsigned
+      } else {
+        println("  sar %%cl, %s", ax);  // Arithmetic shift for signed
+      }
     }
-  }
 
     return;
-
-
+    }
   }
 
   error_tok(node->tok, "%s invalid expression", CODEGEN_C);
@@ -3105,14 +2930,17 @@ static void emit_data(Obj *prog)
       if (var->is_tls)
         println("  .section .tdata,\"awT\",@progbits");
       else
-        println("  .data");
+        println("  .section .data,\"aw\",@progbits");
+        //println("  .data");
 
       println("  .type %s, @object", var->name);
       println("  .size %s, %d", var->name, var->ty->size);
-      println("  .align %d", align);
+      //println("  .align %d", align);
+      if (align > 1) println("  .align %d", align);
       println("%s:", var->name);
 
       Relocation *rel = var->rel;
+      int unit_size = (var->ty->kind == TY_ARRAY) ? var->ty->base->size : var->ty->size;
       int pos = 0;
       while (pos < var->ty->size)
       {
@@ -3124,9 +2952,29 @@ static void emit_data(Obj *prog)
         }
         else
         {
-          println("  .byte %d", var->init_data[pos++]);
+          //from @enh (Elliott Hughes) Use .byte/.short/.long/.quad as appropriate.
+          //println("  .byte %d", var->init_data[pos++]);
+          if (unit_size == 8) {
+            long v = *(long*) &var->init_data[pos];
+            println("  .quad %ld  # %#lx", v, v);
+            pos += 8;
+          } else if (unit_size == 4) {
+            int v = *(int*) &var->init_data[pos];
+            println("  .long %d  # %#x", v, v);
+            pos += 4;
+          } else if (unit_size == 2) {
+            int v = *(short*) &var->init_data[pos] & 0xffff;
+            println("  .short %d  # %#x", v, v);
+            pos += 2;
+          } else {
+            int v = var->init_data[pos] & 0xff;
+            println("  .byte %d  # %#x", v, v);
+            pos += 1;
+          }
+
         }
       }
+      println("  .size %s, %d", var->name, var->ty->size);
       continue;
     }
 
@@ -3134,9 +2982,11 @@ static void emit_data(Obj *prog)
     if (var->is_tls)
       println("  .section .tbss,\"awT\",@nobits");
     else
-      println("  .bss");
+      println("  .section .bss,\"aw\",@nobits");
+      //println("  .bss");
 
-    println("  .align %d", align);
+    //println("  .align %d", align);
+    if (align > 1) println("  .align %d", align);
     println("%s:", var->name);
     println("  .zero %d", var->ty->size);
   }
@@ -3163,31 +3013,7 @@ static void store_fp(int r, int offset, int sz)
   unreachable();
 }
 
-// static void store_gp(int r, int offset, int sz)
-// {
-//   switch (sz)
-//   {
-//   case 1:
-//     println("  mov %s, %d(%%rbp)", argreg8[r], offset);
-//     return;
-//   case 2:
-//     println("  mov %s, %d(%%rbp)", argreg16[r], offset);
-//     return;
-//   case 4:
-//     println("  mov %s, %d(%%rbp)", argreg32[r], offset);
-//     return;
-//   case 8:
-//     println("  mov %s, %d(%%rbp)", argreg64[r], offset);
-//     return;
-//   default:
-//     for (int i = 0; i < sz; i++)
-//     {
-//       println("  mov %s, %d(%%rbp)", argreg8[r], offset + i);
-//       println("  shr $8, %s", argreg64[r]);
-//     }
-//     return;
-//   }
-// }
+
 
 static void store_gp(int r, int offset, int sz) {
   switch (sz) {
@@ -3238,13 +3064,15 @@ static void emit_text(Obj *prog)
     if (!fn->is_live)
       continue;
 
-    if (fn->is_static)
-      println("  .local %s", fn->name);
-    else 
-      println("  .globl %s", fn->name);
+    // if (fn->is_static)
+    //   println("  .local %s", fn->name);
+    // else 
+    //   println("  .globl %s", fn->name);
 
 
-    println("  .text");
+    // println("  .text");
+    println("\n  .section .text,\"ax\",@progbits");
+    println("  .%s %s", fn->is_static ? "local" : "global", fn->name);    
     println("  .type %s, @function", fn->name);
     println("%s:", fn->name);
 

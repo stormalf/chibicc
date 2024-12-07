@@ -2522,7 +2522,6 @@ static Node *asm_stmt(Token **rest, Token *tok)
 static Node *stmt(Token **rest, Token *tok)
 {
 
-
   if (equal(tok, "return"))
   {
     Type *ret_ty = current_fn->ty->return_ty;
@@ -2657,7 +2656,7 @@ static Node *stmt(Token **rest, Token *tok)
     VarAttr attr = {};
     tok = attribute_list(tok, &attr, thing_attributes);
     node->label = new_unique_name();
-    node->lhs = stmt(rest, tok);
+    node->lhs = stmt(rest, tok);    
     node->begin = begin;
     node->end = end;
     node->case_next = current_switch->case_next;
@@ -2876,7 +2875,7 @@ static Node *compound_stmt(Token **rest, Token *tok)
   Node *cur = &head;
   enter_scope();
 
-  while (!equal(tok, "}"))
+  while (!equal(tok, "}") )
   {
     VarAttr attr = {};
     tok = attribute_list(tok, &attr, thing_attributes);
@@ -2922,9 +2921,11 @@ static Node *compound_stmt(Token **rest, Token *tok)
     if (node->body != NULL)
       fprintf(dotf, "%s%d -> %s%d\n", nodekind2str(node->kind), node->unique_number, nodekind2str(node->body->kind), node->body->unique_number);
   }
+
   *rest = tok->next;
   return node;
 }
+
 
 // expr-stmt = expr? ";"
 static Node *expr_stmt(Token **rest, Token *tok)
@@ -6088,16 +6089,19 @@ static Token *parse_typedef(Token *tok, Type *basety)
 
 static void create_param_lvars(Type *param, char *funcname)
 {
-
-  if (param)
-  {
-    create_param_lvars(param->next, funcname);
-    if (!param->name)
-      return;
-    // error_tok(param->name_pos, "parameter name omitted");
+  if (!param) return;
+ // from @fuhsnn Adjust ABI with unnamed function parameter #2 
+  create_param_lvars(param->next, funcname);
+  //if (!param->name)
+  //  return;
+  // error_tok(param->name_pos, "parameter name omitted");
+  //new_lvar(get_ident(param->name), param, funcname);
+  if (!param->name)
+    new_lvar("", param, funcname);
+  else
     new_lvar(get_ident(param->name), param, funcname);
-    order++;
-  }
+  order++;
+
 }
 
 // This function matches gotos or labels-as-values with labels.

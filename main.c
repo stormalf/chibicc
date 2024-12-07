@@ -290,7 +290,8 @@ static void parse_args(int argc, char **argv)
     {
       printVersion();
       print_include_directories();
-      exit(0);
+      //exit(0);
+      continue;
 
     }
 
