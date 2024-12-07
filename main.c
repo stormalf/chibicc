@@ -768,6 +768,7 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-pedantic") ||
         !strcmp(argv[i], "-mno-red-zone") ||
         !strcmp(argv[i], "-fvisibility=default") ||
+        !strcmp(argv[i], "-fvisibility=hidden") ||
         !strcmp(argv[i], "-Werror=invalid-command-line-argument") ||
         !strcmp(argv[i], "-Werror=unknown-warning-option") ||
         !strcmp(argv[i], "-Wsign-compare") ||
@@ -798,7 +799,10 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-fno-lto") ||
         !strcmp(argv[i], "-c99") ||
         !strcmp(argv[i], "-fdiagnostics-color=always")  ||
-        !strcmp(argv[i], "-mfpmath=sse")        
+        !strcmp(argv[i], "-mfpmath=sse") ||
+        !strcmp(argv[i], "-ffunction-sections")  ||   
+        !strcmp(argv[i], "-fdata-sections")    ||  
+        !strcmp(argv[i], "-mindirect-branch-register")         
         )
       continue;
 

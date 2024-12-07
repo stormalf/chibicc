@@ -239,6 +239,7 @@ List of options ignored :
     "-pedantic"
     "-mno-red-zone"
     "-fvisibility=default"
+    "-fvisibility=hidden"
     "-Werror=invalid-command-line-argument"
     "-Werror=unknown-warning-option"
     "-Wsign-compare"
@@ -270,6 +271,9 @@ List of options ignored :
     "-c99"
     "-fdiagnostics-color=always"
     "-mfpmath=sse" 
+    "-fdata-sections"
+    "-ffunction-sections"
+    "-mindirect-branch-register"
 
 ## Dockerfile and devcontainer
 
@@ -461,6 +465,37 @@ cpython: https://github.com/python/cpython.git
         Total test files: run=470/472 skipped=22 resource_denied=2
         Result: SUCCESS
 
+
+haproxy:  https://github.com/haproxy/haproxy.git
+
+    CC=chibicc make TARGET=linux-glibc USE_OPENSSL=1 USE_ZLIB=1 USE_PCRE=1 USER_LUA=1    
+
+
+## projects compiled successfully with chibicc but failing at execution/testing
+
+libuv : https://github.com/libuv/libuv.git
+
+    ./autogen.sh
+    CC=chibicc ./configure
+    make
+    make check
+
+    FAIL: test/run-tests
+    ======================================================
+    1 of 1 test failed
+    Please report to https://github.com/libuv/libuv/issues
+    ======================================================
+    not ok 411 - udp_multicast_join
+    # exit code 134
+    # Output from process `udp_multicast_join`:
+    # Assertion failed in test/test-udp-multicast-join.c on line 137: `r == 0` (-38 == 0)
+    not ok 412 - udp_multicast_join6
+    # exit code 134
+    # Output from process `udp_multicast_join6`:
+    # Assertion failed in test/test-udp-multicast-join6.c on line 141: `r == 0` (-38 == 0)
+
+
+
 ## meson
 
 to be able to use meson with chibicc (meson doesn't know chibicc compiler), I changed the detect.py file in /usr/lib/python3/dist-packages/mesonbuild/compilers/detect.py to add support for chibicc. After that I can now using meson for some projects that are configured to use it.
@@ -540,7 +575,9 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.23.1     Fixing issue when compiling chibicc with chibicc and extended assembly without input and output. Fixing issue with -v that exit without compiling when files are passed to the compiler. From @fuhsnn Adjust ABI with unnamed function parameter. From @enh use explicit .section specifications rather than .data/.text and fixing long double size and use .byte/.short/.long/.quad as appropriate and only output .align for >1 byte alignment. Fixing issue with missing braces for compound statement (ISS-183).
+1.0.23.1     Fixing issue when compiling chibicc with chibicc and extended assembly without input and output. Fixing issue with -v that exit without compiling when files are passed to the compiler. From @fuhsnn Adjust ABI with unnamed function parameter. From @enh use explicit .section specifications rather than .data/.text and fixing long double size and use .byte/.short/.long/.quad as appropriate and only output .align for >1 byte alignment. Fixing issue with missing braces for compound statement (ISS-183). Adding -fvisibility=hidden, -ffunction-sections, -fdata-sections and -mindirect-branch-register to the list of ignored parameters (for cmake). Disabling __INTEL_COMPILER.
+
+
 
 ## old release notes
 
