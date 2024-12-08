@@ -23,6 +23,7 @@ bool opt_sse4;
 bool opt_g;
 
 
+
 static FileType opt_x;
 static StringArray opt_include;
 bool opt_E;
@@ -46,6 +47,7 @@ static char *opt_linker;
 static char *r_path;
 static bool opt_nostdinc;
 static bool opt_nostdlib;
+static bool opt_v;
 
 static StringArray ld_extra_args;
 static StringArray std_include_paths;
@@ -290,6 +292,7 @@ static void parse_args(int argc, char **argv)
     {
       printVersion();
       print_include_directories();
+      opt_v = true;
       //exit(0);
       continue;
 
@@ -821,8 +824,12 @@ static void parse_args(int argc, char **argv)
   for (int i = 0; i < idirafter.len; i++)
     strarray_push(&include_paths, idirafter.data[i]);
 
-  if (input_paths.len == 0)
-    error("%s : %s:%d: error: in parse_args no input files", MAIN_C, __FILE__, __LINE__);
+
+  if (input_paths.len == 0) {
+    if (!opt_v)
+      error("%s : %s:%d: error: in parse_args no input files", MAIN_C, __FILE__, __LINE__);
+    exit(0);
+  }
 
   // -E implies that the input is the C macro language.
   if (opt_E)

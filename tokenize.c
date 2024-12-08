@@ -313,6 +313,7 @@ static bool is_keyword(Token *tok)
         "__attribute__",
         "__label__",
         "__int128",
+        "inline",
     };
 
     for (int i = 0; i < sizeof(kw) / sizeof(*kw); i++)

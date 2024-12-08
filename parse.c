@@ -1652,7 +1652,8 @@ static Member *struct_designator(Token **rest, Token *tok, Type *ty)
   ctx->filename = PARSE_C;
   ctx->funcname = "struct_designator";    
   ctx->line_no = __LINE__ + 1;
-  tok = skip(tok, ".", ctx);
+  if (equal(tok, "."))
+    tok = skip(tok, ".", ctx);
   if (tok->kind != TK_IDENT)
     error_tok(tok, "%s %d: in struct_designator : expected a field designator", PARSE_C, __LINE__);
 
@@ -3208,6 +3209,7 @@ static int64_t eval_rval(Node *node, char ***label)
 
   error_tok(node->tok, "%s %d: in eval2 : invalid initializer3", PARSE_C, __LINE__);
 }
+
 
 bool is_const_expr(Node *node)
 {
@@ -5473,6 +5475,48 @@ static Node *primary(Token **rest, Token *tok)
     while (is_array(ty))
       ty = ty->base;
     return new_ulong(ty->align, start);
+  }
+
+
+  if (equal(tok, "__builtin_offsetof")) {
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";        
+    ctx->line_no = __LINE__ + 1;      
+    tok = skip(tok->next, "(", ctx);
+    Type *ty = typename(&tok, tok);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";       
+    ctx->line_no = __LINE__ + 1; 
+    tok = skip(tok, ",", ctx);
+
+    Node *node = NULL;
+    int offset = 0;
+    do {
+      Member *mem;
+      do {
+        mem = struct_designator(&tok, tok, ty);
+        offset += mem->offset;
+        ty = mem->ty;
+      } while (!mem->name);
+      ctx->filename = PARSE_C;
+      ctx->funcname = "primary"; 
+      ctx->line_no = __LINE__ + 1;   
+      for (; ty->base && consume(&tok, tok, "["); tok = skip(tok, "]", ctx)) {
+        ty = ty->base;
+        Node *expr = conditional(&tok, tok);
+        if (!node)
+          node = new_binary(ND_MUL, expr, new_long(ty->size, tok), tok);
+        else
+          node = new_binary(ND_ADD, node, new_binary(ND_MUL, expr, new_long(ty->size, tok), tok), tok);
+      }
+    } while (consume(&tok, tok, "."));
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary"; 
+    ctx->line_no = __LINE__ + 1;
+    *rest = skip(tok, ")", ctx);
+    if (!node)
+      return new_ulong(offset, tok);
+    return new_binary(ND_ADD, node, new_ulong(offset, tok), tok);
   }
 
 
