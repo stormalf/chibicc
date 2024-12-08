@@ -40,7 +40,6 @@ void push2(void);
 void pop2(char *a, char *b);
 
 
-
 __attribute__((format(printf, 1, 2))) void println(char *fmt, ...)
 {
   va_list ap;
@@ -2892,6 +2891,8 @@ static void emit_data(Obj *prog)
 {
   for (Obj *var = prog; var; var = var->next)
   {
+    //issue 35 about array not initialized completely.
+    println("  .zero %d", var->ty->size);
     if (var->alias_name)
       println("  .set \"%s\", %s", var->name, var->alias_name);
 
@@ -2923,7 +2924,6 @@ static void emit_data(Obj *prog)
       println("  .comm %s, %d, %d", var->name, var->ty->size, align);
       continue;
     }
-
     // .data or .tdata
     if (var->init_data)
     {
@@ -2950,8 +2950,9 @@ static void emit_data(Obj *prog)
           rel = rel->next;
           pos += 8;
         }
-        else
+        else 
         {
+          
           //from @enh (Elliott Hughes) Use .byte/.short/.long/.quad as appropriate.
           //println("  .byte %d", var->init_data[pos++]);
           if (unit_size == 8) {

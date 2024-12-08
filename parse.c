@@ -712,7 +712,8 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
         align = typename(&tok, tok)->align;
       else
         align = const_expr(&tok, tok);
-      attr->align = MAX(attr->align, align);      
+      attr->align = MAX(attr->align, align);   
+      printf("====%d %d %d\n", attr->align, align, MAX(attr->align, align));
       ctx->filename = PARSE_C;
       ctx->funcname = "declspec";          
       ctx->line_no = __LINE__ + 1;       
@@ -2206,7 +2207,7 @@ static Node *init_desg_expr(InitDesg *desg, Token *tok)
   return new_unary(ND_DEREF, new_add(lhs, rhs, tok), tok);
 }
 
-static Node *create_lvar_init(Initializer *init, Type *ty, InitDesg *desg, Token *tok)
+static Node *create_lvar_init(Initializer *init, Type *ty, InitDesg *desg, Token *tok) 
 {
 
   if (ty->kind == TY_ARRAY || ty->is_vector)
@@ -2254,6 +2255,7 @@ static Node *create_lvar_init(Initializer *init, Type *ty, InitDesg *desg, Token
   return new_binary(ND_ASSIGN, lhs, init->expr, tok);
 }
 
+
 // A variable definition with an initializer is a shorthand notation
 // for a variable definition followed by assignments. This function
 // generates assignment expressions for an initializer. For example,
@@ -2279,6 +2281,7 @@ static Node *lvar_initializer(Token **rest, Token *tok, Obj *var)
   Node *rhs = create_lvar_init(init, var->ty, &desg, tok);
   return new_binary(ND_COMMA, lhs, rhs, tok);
 }
+
 
 static uint64_t read_buf(char *buf, int sz)
 {
