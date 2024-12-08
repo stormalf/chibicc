@@ -321,7 +321,7 @@ static void gen_addr(Node *node)
       // Thread-local variable
       if (node->var->is_tls)
       {
-        println("  data16 lea %s@tlsgd(%%rip), %%rdi", node->var->name);
+        println("  data16 lea \"%s\"@tlsgd(%%rip), %%rdi", node->var->name);
         println("  .value 0x6666");
         println("  rex64");
         println("  call __tls_get_addr@PLT");
@@ -329,7 +329,7 @@ static void gen_addr(Node *node)
       }
 
       // Function or global variable
-      println("  mov %s@GOTPCREL(%%rip), %%rax", node->var->name);
+      println("  mov \"%s\"@GOTPCREL(%%rip), %%rax", node->var->name);
       return;
     }
 
@@ -337,7 +337,7 @@ static void gen_addr(Node *node)
     if (node->var->is_tls)
     {
       println("  mov %%fs:0, %%rax");
-      println("  add $%s@tpoff, %%rax", node->var->name);
+      println("  add $\"%s\"@tpoff, %%rax", node->var->name);
       return;
     }
 
@@ -368,15 +368,15 @@ static void gen_addr(Node *node)
     if (node->ty->kind == TY_FUNC)
     {
       if (node->var->is_definition)
-        println("  lea %s(%%rip), %%rax", node->var->name);
+        println("  lea \"%s\"(%%rip), %%rax", node->var->name);
       else
-        println("  mov %s@GOTPCREL(%%rip), %%rax", node->var->name);
+        println("  mov \"%s\"@GOTPCREL(%%rip), %%rax", node->var->name);
       return;
     }
 
 
     // Global variable
-    println("  lea %s(%%rip), %%rax", node->var->name);
+    println("  lea \"%s\"(%%rip), %%rax", node->var->name);
     return;
   case ND_DEREF:
     gen_expr(node->lhs);

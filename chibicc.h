@@ -509,6 +509,7 @@ char *ConsumeStringLiteral(Token **rest, Token *tok) ;
 int64_t eval(Node *node);
 int64_t eval2(Node *node, char ***label);
 bool is_const_expr(Node *node);
+bool is_const_expr2(Node *node, int64_t *val);
 
 extern bool opt_fbuiltin;
 //
