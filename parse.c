@@ -3944,6 +3944,10 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
         }
         mem->is_bitfield = true;
         mem->bit_width = const_expr(&tok, tok);
+        if (mem->bit_width < 0)
+        {
+          error_tok(tok, "%s %d: in struct_members : bitfield width must be positive", PARSE_C, __LINE__);
+        }
       }
 
       cur = cur->next = mem;
