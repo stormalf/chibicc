@@ -713,7 +713,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
       else
         align = const_expr(&tok, tok);
       attr->align = MAX(attr->align, align);   
-      printf("====%d %d %d\n", attr->align, align, MAX(attr->align, align));
+     
       ctx->filename = PARSE_C;
       ctx->funcname = "declspec";          
       ctx->line_no = __LINE__ + 1;       
@@ -1014,49 +1014,6 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
   *rest = tok->next;
   return ty;
 }
-
-// // array-dimensions = ("static" | "restrict")* const-expr? "]" type-suffix
-// static Type *array_dimensions(Token **rest, Token *tok, Type *ty)
-// {
-
-//   while (equal(tok, "static") || equal(tok, "restrict") || equal(tok, "__restrict") || equal(tok, "__restrict__") || equal(tok, "const") || equal(tok, "volatile"))
-//     tok = tok->next;
-
-//   // trying to fix issue with regex
-//   //=======if the params contains a variable int __nmatch and the next parameter used this variable it fails with undefined variable
-//   if (tok->kind == TK_IDENT && equal(tok->next, "]"))
-//   {
-
-//     VarScope *sc = find_var(tok);
-//     if (sc == NULL)
-//       tok = tok->next;
-//   }
-
-//   if (equal(tok, "]"))
-//   {
-//     ty = type_suffix(rest, tok->next, ty);
-
-//     if (!ty)
-//       error_tok(tok, "%s %d: in array_dimensions : ty is null", PARSE_C, __LINE__);
-//     return array_of(ty, -1);
-//   }
-
-//   //from @fuhsnn  array_dimensions(): Accept assign-expr for VLA size
-//   //Node *expr = conditional(&tok, tok);
-//   Node *expr = assign(&tok, tok);
-//   ctx->filename = PARSE_C;
-//   ctx->funcname = "array_dimensions";  
-//   ctx->line_no = __LINE__ + 1;
-//   tok = skip(tok, "]", ctx);
-//   if (!ty)
-//     error_tok(tok, "%s %d: in array_dimensions : ty is null", PARSE_C, __LINE__);
-//   ty = type_suffix(rest, tok, ty);
-//   tok = attribute_list(tok, ty, type_attributes);
-//   if (ty->kind == TY_VLA || !is_const_expr(expr))
-//     return vla_of(ty, expr);
-//   return array_of(ty, eval(expr));
-// }
-
 
 // array-dimensions = ("static" | "restrict")* const-expr? "]" type-suffix
 static Type *array_dimensions(Token **rest, Token *tok, Type *ty) {
