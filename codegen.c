@@ -2892,7 +2892,8 @@ static void emit_data(Obj *prog)
   for (Obj *var = prog; var; var = var->next)
   {
     //issue 35 about array not initialized completely.
-    println("  .zero %d", var->ty->size);
+    if (var->ty->size != 0)
+      println("  .zero %d", abs(var->ty->size));
     if (var->alias_name)
       println("  .set \"%s\", %s", var->name, var->alias_name);
 
@@ -2934,7 +2935,7 @@ static void emit_data(Obj *prog)
         //println("  .data");
 
       println("  .type %s, @object", var->name);
-      println("  .size %s, %d", var->name, var->ty->size);
+      println("  .size %s, %d", var->name, abs(var->ty->size));
       //println("  .align %d", align);
       if (align > 1) println("  .align %d", align);
       println("%s:", var->name);
@@ -2989,7 +2990,8 @@ static void emit_data(Obj *prog)
     //println("  .align %d", align);
     if (align > 1) println("  .align %d", align);
     println("%s:", var->name);
-    println("  .zero %d", var->ty->size);
+    if (var->ty->size != 0)
+      println("  .zero %d", abs(var->ty->size));
   }
 }
 
@@ -3188,7 +3190,7 @@ static void emit_text(Obj *prog)
     println("  mov %%rbp, %%rsp");
     println("  pop %%rbp");
     println("  ret");
-    println(".size %s, .-%s", fn->name, fn->name);
+    println("  .size %s, .-%s", fn->name, fn->name);
   }
 }
 
