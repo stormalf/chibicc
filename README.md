@@ -539,8 +539,8 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
 ## LIMITS and BUGS
 
     vector operations are not supported and causes crashes or wrong results.
-    Issue with flexible array during postgres compilation. What's strange is by adding a custom __builtin_offsetof function it seems to work and cause issue much later in postgres.
-    But I don't see for now the link between the issue in fmgr.c:1547 and the offsetof.
+    Issue with flexible array during postgres compilation. 
+    Issue with uninitialized array (stmtexpr.c assert failed).
 
 ## issues and pull requests fixed
 
@@ -575,7 +575,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.23.1     Fixing issue when compiling chibicc with chibicc and extended assembly without input and output. Fixing issue with -v that exit without compiling when files are passed to the compiler. From @fuhsnn Adjust ABI with unnamed function parameter. From @enh use explicit .section specifications rather than .data/.text and fixing long double size and use .byte/.short/.long/.quad as appropriate and only output .align for >1 byte alignment. Fixing issue with missing braces for compound statement (ISS-183). Adding -fvisibility=hidden, -ffunction-sections, -fdata-sections and -mindirect-branch-register to the list of ignored parameters (for cmake). Disabling __INTEL_COMPILER. Adding \__builtin_offsetof from @fuhsnn (slimcc). Adding inline in keyword list (from @fuhsnn). Fixing issue 35 with array not initialized completely. Check for negative bitfield width (from @fuhsnn). Fixing issue with array initializer post-designation offset from @fuhsnn.
+1.0.23.1     Fixing issue when compiling chibicc with chibicc and extended assembly without input and output. Fixing issue with -v that exit without compiling when files are passed to the compiler. From @fuhsnn Adjust ABI with unnamed function parameter. From @enh use explicit .section specifications rather than .data/.text and fixing long double size and use .byte/.short/.long/.quad as appropriate and only output .align for >1 byte alignment. Fixing issue with missing braces for compound statement (ISS-183). Adding -fvisibility=hidden, -ffunction-sections, -fdata-sections and -mindirect-branch-register to the list of ignored parameters (for cmake). Disabling __INTEL_COMPILER. Adding \__builtin_offsetof from @fuhsnn (slimcc). Adding inline in keyword list (from @fuhsnn). Fixing issue 35 with array not initialized completely. Check for negative bitfield width (from @fuhsnn). Fixing issue with array initializer post-designation offset from @fuhsnn. Fixing \__attribute\__((\__cold\__)). 
 
 
 

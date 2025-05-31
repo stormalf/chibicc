@@ -4194,6 +4194,9 @@ static Token *type_attributes(Token *tok, void *arg)
       return tok;
   }
  
+  if (consume(&tok, tok, "cold") || consume(&tok, tok, "__cold__")) {
+    return tok;
+  }
   
   if (consume(&tok, tok, "noinline") ||
       consume(&tok, tok, "__noinline__") ||
