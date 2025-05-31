@@ -1659,7 +1659,9 @@ static void designation(Token **rest, Token *tok, Initializer *init)
     Token *tok2;
     for (int i = begin; i <= end; i++)
       designation(&tok2, tok, init->children[i]);
-    array_initializer2(rest, tok2, init, begin + 1);
+    //fix from @fuhsnn Fix array initializer post-designation offset  
+    //array_initializer2(rest, tok2, init, begin + 1);
+    array_initializer2(rest, tok2, init, end + 1);
     return;
   }
 
@@ -6748,6 +6750,8 @@ char *ConsumeStringLiteral(Token **rest, Token *tok) {
   *rest = tok->next;
   return s;
 }
+
+
 
 
 //from COSMOPOLITAN adding function static_assertion
