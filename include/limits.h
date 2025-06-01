@@ -149,10 +149,10 @@
     We put this #include_next outside the double inclusion check because
     it should be possible to include this file more than once and still get
     the definitions from gcc's header.  */
-#if defined __GNUC__ && !defined _GCC_LIMITS_H_
-/* `_GCC_LIMITS_H_' is what GCC's file defines.  */
-# include_next <limits.h>
-#endif
+// #if defined __GNUC__ && !defined _GCC_LIMITS_H_
+// /* `_GCC_LIMITS_H_' is what GCC's file defines.  */
+// # include_next <limits.h>
+// #endif
 
 /* The <limits.h> files in some gcc versions don't define LLONG_MIN,
    LLONG_MAX, and ULLONG_MAX.  Instead only the values gcc defined for

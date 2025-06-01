@@ -2188,7 +2188,8 @@ static void emit_data(Obj *prog)
       if (var->is_tls)
         println("  .section .tdata,\"awT\",@progbits");
       else
-        println("  .data");
+        println("  .section .data,\"aw\",@progbits");
+        //println("  .data");
 
       println("  .type %s, @object", var->name);
       println("  .size %s, %d", var->name, var->ty->size);
@@ -2217,7 +2218,8 @@ static void emit_data(Obj *prog)
     if (var->is_tls)
       println("  .section .tbss,\"awT\",@nobits");
     else
-      println("  .bss");
+      println("  .section .bss,\"aw\",@nobits");
+      //println("  .bss");
 
     println("  .align %d", align);
     println("%s:", var->name);
@@ -2320,7 +2322,8 @@ static void emit_text(Obj *prog)
       println("  .globl %s", fn->name);
 
 
-    println("  .text");
+    //println("  .text");
+    println("\n  .section .text,\"ax\",@progbits");
     println("  .type %s, @function", fn->name);
     println("%s:", fn->name);
 
@@ -2438,6 +2441,7 @@ void codegen(Obj *prog, FILE *out)
   assign_lvar_offsets(prog);
   emit_data(prog);
   emit_text(prog);
+  println("  .section  .note.GNU-stack,\"\",@progbits");
   //print offset for each variable
   if (isDebug)
     print_offset(prog);

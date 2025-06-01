@@ -3766,7 +3766,10 @@ static Token *type_attributes(Token *tok, void *arg)
     return tok;
   }
   
-  
+  if (consume(&tok, tok, "cold") || consume(&tok, tok, "__cold__")) {  
+    return tok;
+  }
+
   if (consume(&tok, tok, "noinline") ||
       consume(&tok, tok, "__noinline__") ||
       consume(&tok, tok, "const") ||
@@ -4024,10 +4027,12 @@ static Token *thing_attributes(Token *tok, void *arg) {
     attr->section = ".text.likely";
     return tok;
   }
+
   if (consume(&tok, tok, "cold") || consume(&tok, tok, "__cold__")) {
     attr->section = ".text.unlikely";
     return tok;
   }
+
   if (consume(&tok, tok, "section") || consume(&tok, tok, "__section__")) {
     ctx->filename = PARSE_C;
     ctx->funcname = "thing_attributes";        
