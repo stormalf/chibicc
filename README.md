@@ -485,8 +485,7 @@ VLC : https://github.com/videolan/vlc.git
 
 postgres: https://github.com/postgres/postgres.git  (in case of bad network use git clone --filter=blob:none --depth=1 https://github.com/postgres/postgres.git --branch master)
 
-    CC=chibicc  CFLAGS="-g" ./configure --host x86_64-linux-gnu --disable-spinlocks
-    CC=chibicc  CFLAGS="-g- O0" ./configure --host x86_64-linux-gnu --without-icu --without-readline
+    CC=chibicc  CFLAGS="-g" ./configure --host x86_64-linux-gnu --disable-spinlocks ac_cv_type___int128=no
     make
     make check
     Program received signal SIGSEGV, Segmentation fault.
@@ -534,7 +533,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.23_vim        Improvement: diagnose overflow in integer constant expression #96  from @pmor13. Fixing issue with old C style (K&R) when parameters order don't correspond to parameter definition. Adding \__LINE__ in parse.c in all error_tok messages. Removing \__builtin_memcpy \__builtin_memset macro from preprocess.c that causes segmentation fault on zlib project. Adding other tests from @cosmopolitan. Adding \__GNUC__ macro and fixing all issues caused by this defined macro. Defining _Pragma macro that does nothing to keep compatibility with \__GNUC__. Fixing regression on struct members. Fixed on test case from curl. Renaming GNUC_compatibility to 1.0.23. Managing store_gp with size 16. Fixing issue with curl. Fixing last issue with curl due to sizeof_int and sizeof_long not taken in account (adding them in stddef.h). Fixing issue ISS-146 with semun. Fixing issue with \__builtin_clz that gives incorrect result. And adding \__builtin_ctzl and \__builtin_clzl. Adding \__builtin_isnan (ISS-175). Fixing issue with lock not correctly managed in extended assembly (ISS-174). Fxing other issues with extended assembly and adding several tests. Adding \__builtin_bswapxx (16, 32, 64). Fixing issue with assembly when no variables in template. 
+1.0.23_vim        Improvement: diagnose overflow in integer constant expression #96  from @pmor13. Fixing issue with old C style (K&R) when parameters order don't correspond to parameter definition. Adding \__LINE__ in parse.c in all error_tok messages. Removing \__builtin_memcpy \__builtin_memset macro from preprocess.c that causes segmentation fault on zlib project. Adding other tests from @cosmopolitan. Adding \__GNUC__ macro and fixing all issues caused by this defined macro. Defining _Pragma macro that does nothing to keep compatibility with \__GNUC__. Fixing regression on struct members. Fixed on test case from curl. Renaming GNUC_compatibility to 1.0.23. Managing store_gp with size 16. Fixing issue with curl. Fixing last issue with curl due to sizeof_int and sizeof_long not taken in account (adding them in stddef.h). Fixing issue ISS-146 with semun. Fixing issue with \__builtin_clz that gives incorrect result. And adding \__builtin_ctzl and \__builtin_clzl. Adding \__builtin_isnan (ISS-175). Fixing issue with lock not correctly managed in extended assembly (ISS-174). Fxing other issues with extended assembly and adding several tests. Adding \__builtin_bswapxx (16, 32, 64). Fixing issue with assembly when no variables in template. Fixing issue with VIM test failures by adding also all builtin nan/nanl/nanf/inf/inff/huge_val/huge_valf/huge_vall.
 
 ## old release notes
 

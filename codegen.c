@@ -1811,11 +1811,45 @@ static void gen_expr(Node *node)
     println("  sub %%rdi, %%rsp"); // Allocate space on the stack
     println("  mov %%rsp, %%rax"); // Store the new stack pointer (allocated memory address) in RAX
     return;
-  case ND_BUILTIN_INFF:
-    println("  movq $0x7ff0000000000000, %%rax"); // Move the double representation of infinity to RAX
-    println("  movq %%rax, %%xmm0");              // Move the value from RAX to XMM0
+  case ND_BUILTIN_NANF:  
+  case ND_BUILTIN_HUGE_VALF:
+  case ND_BUILTIN_INFF: {
+    union {
+      float f;
+      uint32_t i;
+    } u;
+    u.f = node->fval;
+    println("  mov $%u, %%eax", u.i);
+    println("  movd %%eax, %%xmm0");
     return;
-  
+  }
+  case ND_BUILTIN_NAN:
+  case ND_BUILTIN_HUGE_VAL:
+  case ND_BUILTIN_INF: {
+    union {
+      double d;
+      uint64_t i;
+    } u;
+    u.d = node->fval;
+    println("  movq $%lu, %%rax", u.i);
+    println("  movq %%rax, %%xmm0");
+    return;
+}
+  case ND_BUILTIN_NANL:
+  case ND_BUILTIN_HUGE_VALL: {
+    union {
+      long double ld;
+      uint8_t bytes[10];
+    } u;
+    u.ld = node->fval;
+
+  for (int i = 0; i < 10; i++)
+    println("  movb $%d, -%d(%%rsp)", u.bytes[i], 10 - i);
+
+  println("  fldt -10(%%rsp)");
+  return;
+  }
+
   }
 
   switch (node->lhs->ty->kind)

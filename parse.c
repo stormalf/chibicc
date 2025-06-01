@@ -5120,8 +5120,69 @@ static Node *primary(Token **rest, Token *tok)
       return parse_memset(tok, rest);
   }
 
+  if (equal(tok, "__builtin_huge_valf")) {
+    Node *node = new_node(ND_BUILTIN_HUGE_VALF, tok);  // you may define a separate ND_BUILTIN_HUGE_VALF if you prefer
+    node->ty = ty_float;
+    node->fval = INFINITY;
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";
+    ctx->line_no = __LINE__ + 1;      
+    tok = skip(tok->next, "(", ctx);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";
+    ctx->line_no = __LINE__ + 1;      
+    *rest = skip(tok, ")", ctx);
+    return node;
+  }
+
+  if (equal(tok, "__builtin_inf")) {
+    Node *node = new_node(ND_BUILTIN_INF, tok);  // or ND_BUILTIN_HUGE_VAL
+    node->ty = ty_double;
+    node->fval = INFINITY;
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";
+    ctx->line_no = __LINE__ + 1;    
+    tok = skip(tok->next, "(", ctx);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";
+    ctx->line_no = __LINE__ + 1;    
+    *rest = skip(tok, ")",  ctx);
+    return node;
+  }
+  if (equal(tok, "__builtin_huge_val")) {
+    Node *node = new_node(ND_BUILTIN_HUGE_VAL, tok);  // or ND_BUILTIN_HUGE_VAL
+    node->ty = ty_double;
+    node->fval = INFINITY;
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";
+    ctx->line_no = __LINE__ + 1;    
+    tok = skip(tok->next, "(", ctx);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";
+    ctx->line_no = __LINE__ + 1;    
+    *rest = skip(tok, ")",  ctx);
+    return node;
+  }
+
+  if (equal(tok, "__builtin_huge_vall")) {
+    Node *node = new_node(ND_BUILTIN_HUGE_VALL, tok);
+    node->ty = ty_ldouble;
+    node->fval = INFINITY;  // if you're using long double, make sure node supports this or adapt accordingly
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";
+    ctx->line_no = __LINE__ + 1;    
+    tok = skip(tok->next, "(", ctx);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";
+    ctx->line_no = __LINE__ + 1;    
+    *rest = skip(tok, ")", ctx);
+    return node;
+  }
+
   if (equal(tok, "__builtin_inff")) {
     Node *node = new_node(ND_BUILTIN_INFF, tok);
+    node->ty = ty_float;            // or ty_double if that's your convention
+    node->fval = INFINITY;     
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";
     ctx->line_no = __LINE__ + 1;    
@@ -5130,6 +5191,56 @@ static Node *primary(Token **rest, Token *tok)
     return node;
   }
 
+  if (equal(tok, "__builtin_nan")) {
+    Node *node = new_node(ND_BUILTIN_NAN, tok);
+    node->ty = ty_double;
+    node->fval = NAN;
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";
+    ctx->line_no = __LINE__ + 1; 
+    tok = skip(tok->next, "(", ctx);
+    if (tok->kind == TK_STR)
+      tok = tok->next; 
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";
+    ctx->line_no = __LINE__ + 1;   
+    *rest = skip(tok, ")", ctx);
+    return node;
+  }
+
+    if (equal(tok, "__builtin_nanf")) {
+    Node *node = new_node(ND_BUILTIN_NANF, tok);
+    node->ty = ty_float;
+    node->fval = NAN;
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";
+    ctx->line_no = __LINE__ + 1; 
+    tok = skip(tok->next, "(", ctx);
+    if (tok->kind == TK_STR)
+      tok = tok->next;
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";
+    ctx->line_no = __LINE__ + 1;       
+    *rest = skip(tok, ")", ctx);
+    return node;
+  }
+
+  if (equal(tok, "__builtin_nanl")) {
+  Node *node = new_node(ND_BUILTIN_NANL, tok);
+  node->ty = ty_ldouble;
+  node->fval = NAN;
+  ctx->filename = PARSE_C;
+  ctx->funcname = "primary";
+  ctx->line_no = __LINE__ + 1; 
+  tok = skip(tok->next, "(", ctx);
+  if (tok->kind == TK_STR)
+    tok = tok->next;
+  ctx->filename = PARSE_C;
+  ctx->funcname = "primary";
+  ctx->line_no = __LINE__ + 1;   
+  *rest = skip(tok, ")", ctx);
+  return node;
+}
   if (equal(tok, "__builtin_isnan"))
   {
     return ParseBuiltin(ND_BUILTIN_ISNAN, tok, rest);
@@ -6021,8 +6132,22 @@ char *nodekind2str(NodeKind kind)
     return "CTZLL";   //builtin ctzll
   case ND_BUILTIN_INFF:
     return "INFF";   //builtin inff
+  case ND_BUILTIN_INF:
+    return "INFF";   //builtin inf    
+  case ND_BUILTIN_NAN:
+    return "NAN";   //builtin nan    
+  case ND_BUILTIN_NANF:
+    return "NANF";   //builtin nanf   
+  case ND_BUILTIN_NANL:
+    return "NANL";   //builtin nanl       
   case ND_BUILTIN_ISNAN:
     return "ISNAN"; //builtin isnan
+  case ND_BUILTIN_HUGE_VAL:
+    return "ISNAN"; //builtin huge val
+  case ND_BUILTIN_HUGE_VALF:
+    return "ISNAN"; //builtin huge valf
+  case ND_BUILTIN_HUGE_VALL:
+    return "ISNAN"; //builtin huge vall
   case ND_POPCOUNT:
     return "POPCOUNT"; //builtin popcount
   case ND_RETURN_ADDR:

@@ -373,7 +373,14 @@ typedef enum
   ND_UNREACHABLE,   //builtin unreachable
   ND_ALLOC,   //builtin alloca
   ND_BUILTIN_INFF, //builtin inff
+  ND_BUILTIN_INF, //builtin inf
+  ND_BUILTIN_NAN, //builtin nan
+  ND_BUILTIN_NANF, //builtin nanf
+  ND_BUILTIN_NANL, //builtin nanl
   ND_BUILTIN_ISNAN, //builtin isnan
+  ND_BUILTIN_HUGE_VALL, //builtin huge vall
+  ND_BUILTIN_HUGE_VALF, //builtin huge valf
+  ND_BUILTIN_HUGE_VAL, //builtin huge val
   ND_BUILTIN_BSWAP16, //builtin bswap16
   ND_BUILTIN_BSWAP32, //builtin bswap32
   ND_BUILTIN_BSWAP64, //builtin bswap64
