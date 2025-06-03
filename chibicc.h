@@ -613,6 +613,7 @@ Type *vla_of(Type *base, Node *expr);
 Type *enum_type(void);
 Type *struct_type(void);
 void add_type(Node *node);
+bool is_array(Type *ty);
 
 
 char *nodekind2str(NodeKind kind);

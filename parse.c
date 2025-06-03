@@ -200,6 +200,10 @@ static Node *parse_huge_val(double fval, Token *tok, Token **rest);
 static Token * old_style_params(Token **rest, Token *tok, Type *ty);
 static Type *old_params(Type *ty, int nbparms);
 
+//from @fuhsnn
+static int64_t eval_sign_extend(Type *ty, uint64_t val);
+
+
 static int align_down(int n, int align)
 {
   return align_to(n - align + 1, align);
@@ -320,6 +324,13 @@ static Node *new_ulong(long val, Token *tok)
   Node *node = new_node(ND_NUM, tok);
   node->val = val;
   node->ty = ty_ulong;
+  return node;
+}
+
+static Node *new_boolean(bool val, Token *tok) {
+  Node *node = new_node(ND_NUM, tok);
+  node->val = val;
+  node->ty = ty_bool;
   return node;
 }
 
@@ -2776,20 +2787,37 @@ static int64_t eval2(Node *node, char ***label)
     return eval(node->lhs) || eval(node->rhs);
   case ND_CAST:
   {
-    int64_t val = eval2(node->lhs, label);
-    if (is_integer(node->ty))
-    {
-      switch (node->ty->size)
-      {
-      case 1:
-        return node->ty->is_unsigned ? (uint8_t)val : (int8_t)val;
-      case 2:
-        return node->ty->is_unsigned ? (uint16_t)val : (int16_t)val;
-      case 4:
-        return node->ty->is_unsigned ? (uint32_t)val : (int32_t)val;
+  //   int64_t val = eval2(node->lhs, label);
+  //   if (is_integer(node->ty))
+  //   {
+  //     switch (node->ty->size)
+  //     {
+  //     case 1:
+  //       return node->ty->is_unsigned ? (uint8_t)val : (int8_t)val;
+  //     case 2:
+  //       return node->ty->is_unsigned ? (uint16_t)val : (int16_t)val;
+  //     case 4:
+  //       return node->ty->is_unsigned ? (uint32_t)val : (int32_t)val;
+  //     }
+  //   }
+  //   return val;
+  // }
+     if (is_flonum(node->lhs->ty)) {
+        if (node->ty->kind == TY_BOOL)
+          return !!eval_double(node->lhs);
+        if (node->ty->size == 8 && node->ty->is_unsigned)
+          return (uint64_t)eval_double(node->lhs);
+        return eval_sign_extend(node->ty, eval_double(node->lhs));
       }
-    }
-    return val;
+      if (node->ty->kind == TY_BOOL) {
+        if (node->lhs->kind == ND_VAR && is_array(node->lhs->ty))
+          return 1;
+        return !!eval2(node->lhs, label);
+      }
+      int64_t val = eval2(node->lhs, label);
+      if (is_integer(node->ty))
+        return eval_sign_extend(node->ty, val);
+      return val;
   }
   case ND_ADDR:
     return eval_rval(node->lhs, label);
@@ -3633,7 +3661,7 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
 static Token *attribute_list(Token *tok, void *arg, Token *(*f)(Token *, void *)) 
 {
 
-  while (consume(&tok, tok, "__attribute__"))
+  while (consume(&tok, tok, "__attribute__") || consume(&tok, tok, "__attribute"))
   {
 
     ctx->filename = PARSE_C;
@@ -3680,7 +3708,7 @@ static Token *type_attributes(Token *tok, void *arg)
         return tok;
       }
 
-  if (equal(tok->next, ")") && consume(&tok, tok, "__aligned__"))
+  if ((equal(tok->next, ")") && consume(&tok, tok, "__aligned__")) || (equal(tok->next, ")") && consume(&tok, tok, "aligned")) )
   {
     ty->is_aligned = true;
     return tok;
@@ -3944,7 +3972,7 @@ static Token *type_attributes(Token *tok, void *arg)
         const_expr(&tok, tok);
         if (consume(&tok, tok, ")")) break;
         ctx->filename = PARSE_C;
-        ctx->funcname = "thing_attributes";        
+        ctx->funcname = "type_attributes";        
         ctx->line_no = __LINE__ + 1;          
         tok = skip(tok, ",", ctx);
       }
@@ -3996,7 +4024,7 @@ static Token *type_attributes(Token *tok, void *arg)
 
   if (consume(&tok, tok, "visibility") || consume(&tok, tok, "__visibility__")) {
     ctx->filename = PARSE_C;
-    ctx->funcname = "thing_attributes";        
+    ctx->funcname = "type_attributes";        
     ctx->line_no = __LINE__ + 1;  
     tok = skip(tok, "(", ctx);
     ty->visibility = ConsumeStringLiteral(&tok, tok);
@@ -4116,7 +4144,7 @@ static Token *thing_attributes(Token *tok, void *arg) {
     return tok;
   }
 
-  if (equal(tok->next, ")") && consume(&tok, tok, "__aligned__"))
+  if ((equal(tok->next, ")") && consume(&tok, tok, "__aligned__")) || (equal(tok->next, ")") && consume(&tok, tok, "aligned"))  )
   {
     attr->is_aligned = true;
     return tok;
@@ -4960,8 +4988,31 @@ static Node *primary(Token **rest, Token *tok)
     return new_num(is_compatible(t1, t2), start);
   }
 
+  if (equal(tok, "__builtin_constant_p")) {
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";        
+    ctx->line_no = __LINE__ + 1;  
+    tok = skip(tok->next, "(", ctx);
 
-     //fix from COSMOPOLITAN about builtin_offsetof
+    // Parse the expression inside __builtin_constant_p
+    Node *expr = assign(&tok, tok);
+
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";        
+    ctx->line_no = __LINE__ + 1;    
+    *rest = skip(tok, ")", ctx);
+
+    // Determine if the expression is constant
+    bool is_constant = false;
+
+    if (expr->tok->kind == TK_NUM || expr->tok->kind == TK_STR || is_const_expr(expr)) {
+        // Consider numeric and character literals as constants
+        is_constant = true;
+    }
+    return new_num(is_constant ? 1 : 0, start);
+  }
+
+
     if (equal(tok, "__builtin_offsetof")) {
       ctx->filename = PARSE_C;
       ctx->funcname = "primary";        
@@ -4972,6 +5023,9 @@ static Node *primary(Token **rest, Token *tok)
       if (tstruct->kind != TY_STRUCT && tstruct->kind != TY_UNION) {
         error_tok(stok, "%s %d: in primary : not a structure or union type", PARSE_C, __LINE__);
       }
+
+      ctx->filename = PARSE_C;
+      ctx->funcname = "primary";        
       ctx->line_no = __LINE__ + 1;  
       tok = skip(tok, ",", ctx);
       Token *member = tok;
@@ -5454,6 +5508,84 @@ static Node *primary(Token **rest, Token *tok)
     Node *node;
     node = new_sub(obj, val, tok);
     node->atomic_fetch = true;
+        *rest = tok->next;
+    return to_assign(node);
+  }
+  
+  if (equal(tok, "__sync_fetch_and_or"))
+  {
+      ctx->filename = PARSE_C;
+      ctx->funcname = "primary";
+      ctx->line_no = __LINE__ + 1;
+      tok = skip(tok->next, "(", ctx);
+      
+      // Parse the object
+      Node *obj = new_unary(ND_DEREF, assign(&tok, tok), tok);
+      
+      ctx->filename = PARSE_C;
+      ctx->funcname = "primary";
+      ctx->line_no = __LINE__ + 1;
+      tok = skip(tok, ",", ctx);
+      
+      // Parse the value to be ORed
+      Node *val = assign(&tok, tok);
+      
+      // Use ND_BITOR to represent the OR operation
+      Node *node = new_binary(ND_BITOR, obj, val, tok);
+      
+      node->atomic_fetch = true;  // Mark as atomic fetch operation
+      *rest = tok->next;
+      return to_assign(node);
+  }
+
+  if (equal(tok, "__sync_fetch_and_xor"))
+  {
+      ctx->filename = PARSE_C;
+      ctx->funcname = "primary";
+      ctx->line_no = __LINE__ + 1;
+      tok = skip(tok->next, "(", ctx);
+      
+      // Parse the object
+      Node *obj = new_unary(ND_DEREF, assign(&tok, tok), tok);
+      
+      ctx->filename = PARSE_C;
+      ctx->funcname = "primary";
+      ctx->line_no = __LINE__ + 1;
+      tok = skip(tok, ",", ctx);
+      
+      // Parse the value to be XORed
+      Node *val = assign(&tok, tok);
+      
+      // Use ND_BITXOR to represent the XOR operation
+      Node *node = new_binary(ND_BITXOR, obj, val, tok);
+      
+      node->atomic_fetch = true;  // Mark as atomic fetch operation
+      *rest = tok->next;
+      return to_assign(node);
+  }
+
+  if (equal(tok, "__sync_fetch_and_and"))
+  {
+      ctx->filename = PARSE_C;
+      ctx->funcname = "primary";
+      ctx->line_no = __LINE__ + 1;
+      tok = skip(tok->next, "(", ctx);
+      
+      // Parse the object
+      Node *obj = new_unary(ND_DEREF, assign(&tok, tok), tok);
+      
+      ctx->filename = PARSE_C;
+      ctx->funcname = "primary";
+      ctx->line_no = __LINE__ + 1;
+      tok = skip(tok, ",", ctx);
+      
+      // Parse the value to be ANDed
+      Node *val = assign(&tok, tok);
+      
+      // Use ND_BITAND to represent the AND operation
+      Node *node = new_binary(ND_BITAND, obj, val, tok);
+      
+      node->atomic_fetch = true;  // Mark as atomic fetch operation
     *rest = tok->next;
     return to_assign(node);
   }
@@ -5555,6 +5687,16 @@ static Node *primary(Token **rest, Token *tok)
     Obj *var = new_string_literal(tok->str, tok->ty);
     *rest = tok->next;
     return new_var_node(var, tok);
+  }
+
+  if (equal(tok, "false")) {
+    *rest = tok->next;
+    return new_boolean(0, tok);
+  }
+
+  if (equal(tok, "true")) {
+    *rest = tok->next;
+    return new_boolean(1, tok);
   }
 
   if (tok->kind == TK_NUM)
@@ -6471,4 +6613,14 @@ static Node *parse_huge_val(double fval, Token *tok, Token **rest) {
       tok = skip(tok, ")", ctx);
       *rest = tok;
       return node;
+}
+
+static int64_t eval_sign_extend(Type *ty, uint64_t val) {
+  switch (ty->size) {
+  case 1: return ty->is_unsigned ? (uint8_t)val : (int64_t)(int8_t)val;
+  case 2: return ty->is_unsigned ? (uint16_t)val : (int64_t)(int16_t)val;
+  case 4: return ty->is_unsigned ? (uint32_t)val : (int64_t)(int32_t)val;
+  case 8: return val;
+  }
+  unreachable();
 }

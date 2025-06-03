@@ -44,6 +44,12 @@ bool is_flonum(Type *ty)
          ty->kind == TY_LDOUBLE;
 }
 
+
+bool is_array(Type *ty) {
+  return ty->kind == TY_ARRAY || ty->kind == TY_VLA;
+}
+
+
 bool is_numeric(Type *ty)
 {
   return is_integer(ty) || is_flonum(ty);

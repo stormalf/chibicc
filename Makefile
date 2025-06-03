@@ -65,7 +65,7 @@ zlib:
 	cd ../zlib && make clean && make && make test
 
 nmap:
-	cd ../nmap && make clean && make
+	cd ../nmap && make clean && make && make check
 
 openssl:
 	cd ../openssl && make clean && make 
