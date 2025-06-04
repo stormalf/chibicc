@@ -53,7 +53,9 @@ test-stage2: $(TESTS:test/%=stage2/test/%)
 	for i in $^; do echo $$i; ./$$i || exit 1; echo; done
 	test/driver.sh ./stage2/$(OBJECT)
 
-projects-all: projects openssl nmap vim curl 
+projects-all: projects openssl vim curl nmap
+
+projects-oth: openssl vim curl nmap
 
 projects: zlib util-linux nginx
 
@@ -65,7 +67,7 @@ zlib:
 	cd ../zlib && make clean && make && make test
 
 nmap:
-	cd ../nmap && make clean && make
+	cd ../nmap && make clean && make && make check
 
 openssl:
 	cd ../openssl && make clean && make 
@@ -74,7 +76,7 @@ util-linux:
 	cd ../util-linux && make clean && make && make check-programs && cd tests && ./run.sh
 
 nginx:
-	cd ../nginx && make clean && CC=chibicc CFLAGS=-fPIC ./auto/configure --with-http_ssl_module && make && objs/nginx -V
+	cd ../nginx && make clean && CC=chibicc CFLAGS=-fPIC ./auto/configure --with-http_ssl_module && make && make check
 
 vim:
 	cd ../vim && make clean && CC=chibicc CFLAGS=-fPIC ./configure && make && make test
@@ -106,9 +108,10 @@ clean:
 	find * -type f '(' -name '*~' -o -name '*.o' ')' -exec rm {} ';'
 
 install:
+	sudo rm -rf	/usr/local/include/x86_64-linux-gnu/chibicc && sudo rm -rf /usr/local/bin/chibicc
 	test -d /usr/local/include/x86_64-linux-gnu/chibicc || \
 		sudo mkdir -p /usr/local/include/x86_64-linux-gnu/chibicc
-	sudo cp include/* /usr/local/include/x86_64-linux-gnu/chibicc/
+	sudo cp -r include/* /usr/local/include/x86_64-linux-gnu/chibicc/
 	sudo cp chibicc /usr/local/bin/chibicc
 
 uninstall:

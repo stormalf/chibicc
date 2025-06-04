@@ -44,6 +44,12 @@ bool is_flonum(Type *ty)
          ty->kind == TY_LDOUBLE;
 }
 
+
+bool is_array(Type *ty) {
+  return ty->kind == TY_ARRAY || ty->kind == TY_VLA;
+}
+
+
 bool is_numeric(Type *ty)
 {
   return is_integer(ty) || is_flonum(ty);
@@ -386,7 +392,6 @@ void add_type(Node *node)
     add_type(node->lhs);
     node->ty = ty_bool;
     return;
-  case ND_BUILTIN_FRAME_ADDRESS:    
   case ND_RETURN_ADDR:
     add_type(node->lhs);
     node->ty = ty_void_ptr;
@@ -402,14 +407,14 @@ void add_type(Node *node)
   case ND_BUILTIN_ISNAN:
     add_type(node->builtin_val);
     node->ty = ty_bool;
-    return;    
+    return;
   case ND_BUILTIN_CTZ:
   case ND_BUILTIN_CTZL:
   case ND_BUILTIN_CTZLL:
   case ND_BUILTIN_CLZ:
   case ND_BUILTIN_CLZL:
   case ND_BUILTIN_CLZLL:
-  case ND_BUILTIN_BSWAP32:
+  case ND_BUILTIN_BSWAP32:  
   case ND_POPCOUNT:
     add_type(node->builtin_val);
     node->ty = ty_int;
@@ -421,7 +426,7 @@ void add_type(Node *node)
   case ND_BUILTIN_BSWAP64:
     add_type(node->builtin_val);
     node->ty = ty_long;
-    return;        
+    return;       
   case ND_EXCH_N:
   case ND_FETCHADD:
   case ND_FETCHSUB:
@@ -442,13 +447,19 @@ void add_type(Node *node)
       error_tok(node->cas_addr->tok, "%s %d: pointer expected", TYPE_C, __LINE__);
     node->ty = node->lhs->ty->base;
     return;
-  case ND_BUILTIN_HUGE_VALF:
-      node->ty = ty_float;
-      return;
-  case ND_BUILTIN_HUGE_VAL:      
-  case ND_BUILTIN_HUGE_VALL:
+  case ND_BUILTIN_NANF:  
   case ND_BUILTIN_INFF:
-    node->ty = ty_ldouble;
+  case ND_BUILTIN_HUGE_VALF:
+    node->ty = ty_float;
+    return;
+  case ND_BUILTIN_NAN:    
+  case ND_BUILTIN_INF:
+  case ND_BUILTIN_HUGE_VAL:
+    node->ty = ty_double;
     return;    
+  case ND_BUILTIN_NANL:  
+  case ND_BUILTIN_HUGE_VALL:
+    node->ty = ty_ldouble;
+    return;      
   }
 }

@@ -92,12 +92,11 @@ static void print_string_array(StringArray *arr) {
 
 
 static void print_include_directories() {
-
+    strarray_push(&include_paths,  "./include");
     // Add standard include paths.
-    strarray_push(&include_paths, "./include");
     strarray_push(&include_paths, "/usr/local/include/x86_64-linux-gnu/chibicc");
-    strarray_push(&include_paths, "/usr/local/include");
     strarray_push(&include_paths, "/usr/include/x86_64-linux-gnu");
+    strarray_push(&include_paths, "/usr/local/include");
     strarray_push(&include_paths, "/usr/include");
     strarray_push(&include_paths, "/usr/lib/gcc/x86_64-linux-gnu/11/include");
     //strarray_push(&include_paths, "/usr/include/chibicc/include");
@@ -169,11 +168,10 @@ static void add_default_include_paths(char *argv0)
   strarray_push(&include_paths, format("%s/include", dirname(strdup(argv0))));
 
   // Add standard include paths.
-  strarray_push(&include_paths, "./include");
   strarray_push(&include_paths, "/usr/local/include/x86_64-linux-gnu/chibicc");
+  strarray_push(&include_paths, "/usr/include");
   strarray_push(&include_paths, "/usr/local/include");
   strarray_push(&include_paths, "/usr/include/x86_64-linux-gnu");
-  strarray_push(&include_paths, "/usr/include");
   strarray_push(&include_paths, "/usr/lib/gcc/x86_64-linux-gnu/11/include");
   //strarray_push(&include_paths, "/usr/include/chibicc/include");
   #if defined(__APPLE__) && defined(__MACH__)
@@ -684,7 +682,7 @@ static void parse_args(int argc, char **argv)
     }
 
 
-    if (!strcmp(argv[i], "Wl,-rpath,"))
+    if (!strcmp(argv[i], "Wl,-rpath,") || !strcmp(argv[i], "-rpath"))
     {
       char *tmp = argv[++i];
       check_parms_length(tmp);
@@ -1206,8 +1204,8 @@ static void run_linker(StringArray *inputs, char *output)
 
 
   //enabling verbose mode for linker in case of debug
-  // if (isDebug)
-  //   strarray_push(&arr, "--verbose=1");
+  if (isDebug)
+    strarray_push(&arr, "--verbose=1");
 
   char *libpath = find_libpath();
   char *gcc_libpath = find_gcc_libpath();
@@ -1244,7 +1242,7 @@ static void run_linker(StringArray *inputs, char *output)
   strarray_push(&arr, "-L/usr/lib");
   strarray_push(&arr, "-L/lib");   
   strarray_push(&arr, "-L.");
-  strarray_push(&arr, "-L/usr/lib/gcc/x86_64-linux-gnu/11/x86_64-linux-gnu");
+  //strarray_push(&arr, "-L/usr/lib/gcc/x86_64-linux-gnu/11/x86_64-linux-gnu");
 
 
   if (!opt_static)
@@ -1285,8 +1283,8 @@ static void run_linker(StringArray *inputs, char *output)
   strarray_push(&arr, format("%s/crtn.o", libpath));
   strarray_push(&arr, NULL);
 
-  // if (isDebug)
-  //     print_string_array(&arr);    
+  if (isDebug)
+      print_string_array(&arr);    
   run_subprocess(arr.data);
 }
 
@@ -1343,7 +1341,8 @@ int main(int argc, char **argv)
 
   // init_macros can call tokenize functions moving here to be able to print debug values
   init_macros();
-  
+
+
   if (opt_cc1 && !isCc1input)
   {
     error("%s : %s:%d: error: in main with -cc1 parameter -cc1-input is mandatory!", MAIN_C, __FILE__, __LINE__);

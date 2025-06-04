@@ -1469,59 +1469,6 @@ static void gen_expr(Node *node)
       return;
   }  
 
-  case ND_BUILTIN_INFF:
-  case ND_BUILTIN_HUGE_VALF: {
-      // Loading the bit pattern for positive infinity in 32-bit single precision (float)
-      println("  mov $0x7f800000, %%eax");  // Load the bit pattern 0x7f800000 into eax (single precision positive infinity)
-      println("  movd %%eax, %%xmm0"); 
-      return;
-  }
-
-  // For __builtin_huge_val
-  case ND_BUILTIN_HUGE_VAL: {
-      // Loading the bit pattern for positive infinity in 64-bit double precision
-      println("  mov $0x7ff0000000000000, %%rax");  
-      println("  movq %%rax, %%xmm0");      
-      return;
-  }
-
-  // For __builtin_huge_vall
-  case ND_BUILTIN_HUGE_VALL: {
-    println("  push $0x7f800000"); 
-    println("  flds (%%rsp)"); 
-    println("  pop %%rax"); 
-    return;
-  }
-
-  // For __builtin_frame_address
-  case ND_BUILTIN_FRAME_ADDRESS: {
-    int c = count();  // Unique label counter
-    // Get the level argument from the stack
-    println("  mov %%rdi, %%rax"); // Move the level argument into rax
-    
-    // Check if level is 0
-    println("  cmp $0, %%rax");
-    println("  je .Lframe_address_%d", c);
-    
-    // For level > 0, we need to follow the frame pointers
-    // We will need to move up the stack `level` times
-    // Note: The actual implementation depends on how you manage stack frames
-    println("  mov %%rbp, %%rcx"); // Move current frame pointer to rcx
-    println("  sub $1, %%rax");   // Decrement level (level - 1)
-    println(".Lframe_address_loop%d:", c);
-    println("  test %%rax, %%rax"); // Check if level == 0
-    println("  jz .Lframe_address_done%d", c);
-    println("  mov (%%rcx), %%rcx"); // Move up one frame
-    println("  sub $1, %%rax"); // Decrement level
-    println("  jmp .Lframe_address_loop%d", c);
-    println(".Lframe_address_done%d:", c);
-    println("  mov %%rcx, %%rax"); // Return the frame pointer
-
-    println(".Lframe_address_%d:", c);
-    println("  mov %%rbp, %%rax"); // Return the current frame pointer
-    return;
-  }
-
   case ND_POPCOUNT:
     gen_expr(node->builtin_val); // Generate code for the expression
     println("  popcnt %%rax, %%rax"); // Count the number of set bits
@@ -1864,7 +1811,45 @@ static void gen_expr(Node *node)
     println("  sub %%rdi, %%rsp"); // Allocate space on the stack
     println("  mov %%rsp, %%rax"); // Store the new stack pointer (allocated memory address) in RAX
     return;
-  
+  case ND_BUILTIN_NANF:  
+  case ND_BUILTIN_HUGE_VALF:
+  case ND_BUILTIN_INFF: {
+    union {
+      float f;
+      uint32_t i;
+    } u;
+    u.f = node->fval;
+    println("  mov $%u, %%eax", u.i);
+    println("  movd %%eax, %%xmm0");
+    return;
+  }
+  case ND_BUILTIN_NAN:
+  case ND_BUILTIN_HUGE_VAL:
+  case ND_BUILTIN_INF: {
+    union {
+      double d;
+      uint64_t i;
+    } u;
+    u.d = node->fval;
+    println("  movq $%lu, %%rax", u.i);
+    println("  movq %%rax, %%xmm0");
+    return;
+}
+  case ND_BUILTIN_NANL:
+  case ND_BUILTIN_HUGE_VALL: {
+    union {
+      long double ld;
+      uint8_t bytes[10];
+    } u;
+    u.ld = node->fval;
+
+  for (int i = 0; i < 10; i++)
+    println("  movb $%d, -%d(%%rsp)", u.bytes[i], 10 - i);
+
+  println("  fldt -10(%%rsp)");
+  return;
+  }
+
   }
 
   switch (node->lhs->ty->kind)
@@ -2237,7 +2222,8 @@ static void emit_data(Obj *prog)
       if (var->is_tls)
         println("  .section .tdata,\"awT\",@progbits");
       else
-        println("  .data");
+        println("  .section .data,\"aw\",@progbits");
+        //println("  .data");
 
       println("  .type %s, @object", var->name);
       println("  .size %s, %d", var->name, var->ty->size);
@@ -2266,7 +2252,8 @@ static void emit_data(Obj *prog)
     if (var->is_tls)
       println("  .section .tbss,\"awT\",@nobits");
     else
-      println("  .bss");
+      println("  .section .bss,\"aw\",@nobits");
+      //println("  .bss");
 
     println("  .align %d", align);
     println("%s:", var->name);
@@ -2369,7 +2356,8 @@ static void emit_text(Obj *prog)
       println("  .globl %s", fn->name);
 
 
-    println("  .text");
+    //println("  .text");
+    println("\n  .section .text,\"ax\",@progbits");
     println("  .type %s, @function", fn->name);
     println("%s:", fn->name);
 
@@ -2487,6 +2475,7 @@ void codegen(Obj *prog, FILE *out)
   assign_lvar_offsets(prog);
   emit_data(prog);
   emit_text(prog);
+  println("  .section  .note.GNU-stack,\"\",@progbits");
   //print offset for each variable
   if (isDebug)
     print_offset(prog);

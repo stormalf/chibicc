@@ -145,7 +145,7 @@ typedef enum
   TK_STR,     // String literals
   TK_NUM,     // Numeric literals
   TK_PP_NUM,  // Preprocessing numbers
-  TK_EOF,     // End-of-file markers
+  TK_EOF,     // End-of-file markers  
 } TokenKind;
 
 typedef struct
@@ -210,7 +210,7 @@ void define_macro(char *name, char *buf);
 void undef_macro(char *name);
 Token *preprocess(Token *tok, bool isReadLine);
 Token *preprocess3(Token *tok);
-
+void define_typedefs(void);
 
 //
 // parse.c
@@ -261,6 +261,7 @@ struct Obj
   bool is_no_instrument_function;
   bool is_force_align_arg_pointer;
   bool is_no_caller_saved_registers;
+  
 
   Obj *params;
   Node *body;
@@ -358,8 +359,8 @@ typedef enum
   ND_BUILTIN_MEMCPY, //builtin memcpy
   ND_BUILTIN_MEMSET, //builtin memset
   ND_BUILTIN_CLZ, //builtin clz
-  ND_BUILTIN_CLZL, //builtin clz
-  ND_BUILTIN_CLZLL, //builtin clzl
+  ND_BUILTIN_CLZL, //builtin clzl
+  ND_BUILTIN_CLZLL, //builtin clzll
   ND_BUILTIN_CTZ, //builtin ctz
   ND_BUILTIN_CTZL, //builtin ctzl
   ND_BUILTIN_CTZLL, //builtin ctzll
@@ -372,14 +373,17 @@ typedef enum
   ND_UNREACHABLE,   //builtin unreachable
   ND_ALLOC,   //builtin alloca
   ND_BUILTIN_INFF, //builtin inff
+  ND_BUILTIN_INF, //builtin inf
+  ND_BUILTIN_NAN, //builtin nan
+  ND_BUILTIN_NANF, //builtin nanf
+  ND_BUILTIN_NANL, //builtin nanl
   ND_BUILTIN_ISNAN, //builtin isnan
+  ND_BUILTIN_HUGE_VALL, //builtin huge vall
+  ND_BUILTIN_HUGE_VALF, //builtin huge valf
+  ND_BUILTIN_HUGE_VAL, //builtin huge val
   ND_BUILTIN_BSWAP16, //builtin bswap16
   ND_BUILTIN_BSWAP32, //builtin bswap32
   ND_BUILTIN_BSWAP64, //builtin bswap64
-  ND_BUILTIN_HUGE_VALF, //builtin huge_valf
-  ND_BUILTIN_HUGE_VAL, //builtin huge_val
-  ND_BUILTIN_HUGE_VALL, //builtin huge_vall
-  ND_BUILTIN_FRAME_ADDRESS, //builtin frame_address
 } NodeKind;
 
 // AST node type
@@ -552,6 +556,8 @@ struct Type
   
   //from COSMOPOLITAN adding is_aligned
   bool is_aligned;
+  bool is_weak;
+  char *visibility;
 
   // Function type
   Type *return_ty;
@@ -607,6 +613,7 @@ Type *vla_of(Type *base, Node *expr);
 Type *enum_type(void);
 Type *struct_type(void);
 void add_type(Node *node);
+bool is_array(Type *ty);
 
 
 char *nodekind2str(NodeKind kind);
@@ -737,5 +744,5 @@ char *retrieve_output_index_str(char letter);
 int retrieve_output_index_from_letter(char letter);
 char *retrieveVariableNumber(int index);
 char *generate_input_for_output(void);
-
+char *generate_return_rax(Token *retval);
 

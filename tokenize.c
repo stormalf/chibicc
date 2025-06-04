@@ -23,6 +23,8 @@ static bool at_bol;
 // True if the current position follows a space character
 static bool has_space;
 
+//static Token *read_pragma(Token *cur, char **rest, char *start);
+
 // Reports an error and exit.
 void error(char *fmt, ...)
 {
@@ -392,8 +394,9 @@ static char *string_literal_end(char *p)
   char *start = p;
   for (; *p != '"'; p++)
   {
+    
     if (*p == '\n' || *p == '\0')
-      error_at(start, "%s: in string_literal_end : unclosed string literal", TOKENIZE_C);
+      error_at(start, "%s %d: in string_literal_end : unclosed string literal", TOKENIZE_C, __LINE__);
     if (*p == '\\')
       p++;
   }
@@ -535,13 +538,7 @@ static bool convert_pp_int(Token *tok)
     base = 8;
   }
 
-   errno = 0; // Clear errno before calling strtoul
-  int64_t val = strtoull(p, &p, base);
-  // Check for overflow
-  // if (errno == ERANGE || val > ULLONG_MAX ) {
-  //     warn_tok(tok, "%s %d: in convert_pp_int : integer overflow", TOKENIZE_C, __LINE__);
-  //     return false;
-  // }
+  int64_t val = strtoul(p, &p, base);
 
   // Read U, L or LL suffixes.
   bool l = false;
@@ -1097,3 +1094,4 @@ Token *tokenize_file(char *path)
 
   return tokenize(file);
 }
+
