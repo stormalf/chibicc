@@ -45,6 +45,8 @@ extern int __finite(double __value);
 
 // Constants (you can define these manually or let the compiler handle them)
 #define HUGE_VAL (__builtin_huge_val())
+#define HUGE_VALF (__builtin_huge_valf())
+#define HUGE_VALL (__builtin_huge_vall())
 #define NAN (__builtin_nan(""))
 #define INFINITY (__builtin_inff())
 
