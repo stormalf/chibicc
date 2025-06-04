@@ -39,11 +39,11 @@
 #define LDBL_MIN_EXP -1021
 #define LDBL_TRUE_MIN 0x0.0000000000001p-1022
 
-// Define constants for built-in functions
-#define HUGE_VALF FLT_MAX
-#define HUGE_VALL LDBL_MAX
+// // Define constants for built-in functions
+// #define HUGE_VALF FLT_MAX
+// #define HUGE_VALL LDBL_MAX
 
-// You may also need to define them for double and other types if necessary
-#define HUGE_VAL DBL_MAX
+// // You may also need to define them for double and other types if necessary
+// #define HUGE_VAL DBL_MAX
 
 #endif

@@ -5013,33 +5013,33 @@ static Node *primary(Token **rest, Token *tok)
   }
 
 
-    if (equal(tok, "__builtin_offsetof")) {
-      ctx->filename = PARSE_C;
-      ctx->funcname = "primary";        
-      ctx->line_no = __LINE__ + 1;          
-      tok = skip(tok->next, "(", ctx);
-      Token *stok = tok;
-      Type *tstruct = typename(&tok, tok);
-      if (tstruct->kind != TY_STRUCT && tstruct->kind != TY_UNION) {
-        error_tok(stok, "%s %d: in primary : not a structure or union type", PARSE_C, __LINE__);
-      }
+    // if (equal(tok, "__builtin_offsetof")) {
+    //   ctx->filename = PARSE_C;
+    //   ctx->funcname = "primary";        
+    //   ctx->line_no = __LINE__ + 1;          
+    //   tok = skip(tok->next, "(", ctx);
+    //   Token *stok = tok;
+    //   Type *tstruct = typename(&tok, tok);
+    //   if (tstruct->kind != TY_STRUCT && tstruct->kind != TY_UNION) {
+    //     error_tok(stok, "%s %d: in primary : not a structure or union type", PARSE_C, __LINE__);
+    //   }
 
-      ctx->filename = PARSE_C;
-      ctx->funcname = "primary";        
-      ctx->line_no = __LINE__ + 1;  
-      tok = skip(tok, ",", ctx);
-      Token *member = tok;
-      tok = tok->next;
-      *rest = skip(tok, ")", ctx);
-      for (Member *m = tstruct->members; m; m = m->next) {
-        if (m->name->len == member->len &&
-            !memcmp(m->name->loc, member->loc, m->name->len)) {
-          return new_ulong(m->offset, start);
-        }
-      }
-      error_tok(member, "%s %d: in primary : no such member", PARSE_C, __LINE__);
+    //   ctx->filename = PARSE_C;
+    //   ctx->funcname = "primary";        
+    //   ctx->line_no = __LINE__ + 1;  
+    //   tok = skip(tok, ",", ctx);
+    //   Token *member = tok;
+    //   tok = tok->next;
+    //   *rest = skip(tok, ")", ctx);
+    //   for (Member *m = tstruct->members; m; m = m->next) {
+    //     if (m->name->len == member->len &&
+    //         !memcmp(m->name->loc, member->loc, m->name->len)) {
+    //       return new_ulong(m->offset, start);
+    //     }
+    //   }
+    //   error_tok(member, "%s %d: in primary : no such member", PARSE_C, __LINE__);
 
-    }
+    // }
 
 
   //trying to fix ===== some builtin functions linked to mmx/emms

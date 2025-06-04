@@ -43,7 +43,13 @@ extern int __isnan(double __value);
 extern int __isinf(double __value);
 extern int __finite(double __value);
 
-// Constants (you can define these manually or let the compiler handle them)
+// Add missing standard macros
+#define isnan(x) __isnan(x)
+#define isinf(x) __isinf(x)
+#define isfinite(x) __finite(x)
+#define fpclassify(x) __fpclassify(x)
+
+// Constants
 #define HUGE_VAL (__builtin_huge_val())
 #define HUGE_VALF (__builtin_huge_valf())
 #define HUGE_VALL (__builtin_huge_vall())

@@ -79,7 +79,7 @@ nginx:
 	cd ../nginx && make clean && CC=chibicc CFLAGS=-fPIC ./auto/configure --with-http_ssl_module && make && objs/nginx -V
 
 vim:
-	cd ../vim && make clean && CC=chibicc CFLAGS=-fPIC ./configure && make && make test
+	cd ../vim && make clean && CC=chibicc CFLAGS="-fPIC" ./configure && make && make test
 
 lxc:
 	cd ../lxc && rm -rf build && CC=chibicc \
@@ -108,7 +108,7 @@ clean:
 	find * -type f '(' -name '*~' -o -name '*.o' ')' -exec rm {} ';'
 
 install:
-	sudo rm -rf	/usr/local/include/x86_64-linux-gnu/chibicc && sudo rm /usr/local/bin/chibicc
+	sudo rm -rf	/usr/local/include/x86_64-linux-gnu/chibicc && sudo rm -rf /usr/local/bin/chibicc
 	test -d /usr/local/include/x86_64-linux-gnu/chibicc || \
 		sudo mkdir -p /usr/local/include/x86_64-linux-gnu/chibicc
 	sudo cp -r include/* /usr/local/include/x86_64-linux-gnu/chibicc/
