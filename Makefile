@@ -53,7 +53,9 @@ test-stage2: $(TESTS:test/%=stage2/test/%)
 	for i in $^; do echo $$i; ./$$i || exit 1; echo; done
 	test/driver.sh ./stage2/$(OBJECT)
 
-projects-all: projects openssl nmap vim curl 
+projects-all: projects openssl vim curl nmap
+
+projects-oth: openssl vim curl nmap
 
 projects: zlib util-linux nginx
 
@@ -106,6 +108,7 @@ clean:
 	find * -type f '(' -name '*~' -o -name '*.o' ')' -exec rm {} ';'
 
 install:
+	sudo rm -rf	/usr/local/include/x86_64-linux-gnu/chibicc && sudo rm /usr/local/bin/chibicc
 	test -d /usr/local/include/x86_64-linux-gnu/chibicc || \
 		sudo mkdir -p /usr/local/include/x86_64-linux-gnu/chibicc
 	sudo cp -r include/* /usr/local/include/x86_64-linux-gnu/chibicc/

@@ -450,6 +450,14 @@ cpython: git clone git@github.com:python/cpython.git
         Total test files: run=470/472 skipped=22 resource_denied=2
         Result: SUCCESS
 
+nmap : https://github.com/nmap/nmap
+
+    CC=chibicc ./configure --with-dbus
+    make
+    make check
+
+
+
 ## meson
 
 to be able to use meson with chibicc (meson doesn't know chibicc compiler), I changed the detect.py file in /usr/lib/python3/dist-packages/mesonbuild/compilers/detect.py to add support for chibicc. After that I can now using meson for some projects that are configured to use it.
