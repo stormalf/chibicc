@@ -345,6 +345,10 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
         strncat(asm_str, output_asm_str, strlen(output_asm_str));
     }
 
+    //case __asm__ __volatile__ ("rep; nop" ::: "memory");  
+    if (!hasOutput && !hasInput) {
+        strncat(asm_str, template, strlen(template));
+    }
     //replace special characters
     // replace %% by %
     // replace ‘%{’ by '{', ‘%|’ by '|' and ‘%}’ by '}'
