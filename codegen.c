@@ -2215,16 +2215,25 @@ static void emit_data(Obj *prog)
       println("  .comm %s, %d, %d", var->name, var->ty->size, align);
       continue;
     }
+    
 
     // .data or .tdata
     if (var->init_data)
     {
-      if (var->is_tls)
-        println("  .section .tdata,\"awT\",@progbits");
-      else
-        println("  .section .data,\"aw\",@progbits");
-        //println("  .data");
-
+      // if (var->is_tls)
+      //   println("  .section .tdata,\"awT\",@progbits");
+      // else
+      //   println("  .section .data,\"aw\",@progbits");
+      //   //println("  .data");
+      //from cosmopolitan
+      if (var->section) {
+        println("  .section %s,\"aw\",@%s", var->section, "progbits");
+      } else if (var->is_tls) {
+        println("  .section .t%s,\"awT\",@%s",  "data", "progbits");
+      } else {
+      println("  .%s", "data");
+      }
+      
       println("  .type %s, @object", var->name);
       println("  .size %s, %d", var->name, var->ty->size);
       println("  .align %d", align);
@@ -2248,12 +2257,21 @@ static void emit_data(Obj *prog)
       continue;
     }
 
-    // .bss or .tbss
-    if (var->is_tls)
-      println("  .section .tbss,\"awT\",@nobits");
-    else
-      println("  .section .bss,\"aw\",@nobits");
-      //println("  .bss");
+    // // .bss or .tbss
+    // if (var->is_tls)
+    //   println("  .section .tbss,\"awT\",@nobits");
+    // else
+    //   println("  .section .bss,\"aw\",@nobits");
+    //   //println("  .bss");
+
+    if (var->section) {
+      println("  .section %s,\"aw\",@%s", var->section, "nobits");
+      printf("section=%s\n", var->section);
+    } else if (var->is_tls) {
+      println("  .section .t%s,\"awT\",@%s",   "bss", "nobits");
+    }else {
+      println("  .%s",  "bss");
+    }
 
     println("  .align %d", align);
     println("%s:", var->name);
@@ -2345,6 +2363,20 @@ static void emit_text(Obj *prog)
     if (!fn->is_function || !fn->is_definition)
       continue;
 
+      
+    if (fn->is_function && fn->is_constructor) {
+      println("\n  .section .init_array,\"aw\"");
+      println("  .p2align 3");
+      println("  .quad %s", fn->name);
+    }      
+
+    if (fn->is_function && fn->is_destructor) {
+      println("  .section .fini_array,\"aw\",@fini_array");
+      println("  .p2align 3");
+      println("  .quad %s", fn->name);
+      println("  .text"); 
+    }
+
     // No code is emitted for "static inline" functions
     // if no one is referencing them.
     if (!fn->is_live)
@@ -2355,9 +2387,13 @@ static void emit_text(Obj *prog)
     else 
       println("  .globl %s", fn->name);
 
-
+    // Respect section attribute if set
+    if (fn->section)
+      println("  .section %s,\"ax\",@progbits", fn->section);
+    else
+      println("  .section .text,\"ax\",@progbits");
     //println("  .text");
-    println("\n  .section .text,\"ax\",@progbits");
+    //println("\n  .section .text,\"ax\",@progbits");
     println("  .type %s, @function", fn->name);
     println("%s:", fn->name);
 

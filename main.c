@@ -704,6 +704,11 @@ static void parse_args(int argc, char **argv)
     }
 
 
+    if (!strcmp(argv[i], "-fp-model")) {
+      i++; // Skip the argument following -fp-model
+      continue;
+    }
+
     // These options are ignored for now.
     if (!strncmp(argv[i], "-O", 2) ||
         !strncmp(argv[i], "-W", 2) ||
@@ -1110,8 +1115,14 @@ static void cc1(void)
 
 static void assemble(char *input, char *output)
 {
-  char *cmd[] = {"as", "-c", input, "-o", output, NULL};
-  run_subprocess(cmd);
+  
+  if (endswith(input, ".S")) {
+    char *cmd[] = {"gcc", "-c", "-masm=intel", input, "-o", output, NULL};
+    run_subprocess(cmd);
+  } else {
+    char *cmd[] = {"as", "-c", input, "-o", output, NULL};
+    run_subprocess(cmd);
+  }
 }
 
 // static void symbolic_link(char *input, char *output) {

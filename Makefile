@@ -57,7 +57,7 @@ projects-all: projects openssl vim curl nmap
 
 projects-oth: openssl vim curl nmap
 
-projects: zlib util-linux nginx
+projects: zlib util-linux nginx git
 
 
 curl:
@@ -93,6 +93,10 @@ lxc:
 	-Wl,--undefined,lxc_snapshot_main -Wl,--undefined,lxc_console_main -Wl,--undefined,lxc_ls_main -Wl,--undefined,lxc_create_main -Wl,--undefined,lxc_start_main \
 	-Wl,--undefined,lxc_start_main -Wl,--undefined,lxc_unshare_main -Wl,--undefined,lxc_wait_main -Wl,--undefined,lxc_top_main" \
 	meson build && cd build && meson compile	
+
+git:
+	cd ../git && CC=chibicc CFLAGS=-fPIC ./configure && make && make test
+
 
 # Misc.
 

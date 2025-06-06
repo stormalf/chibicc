@@ -95,7 +95,7 @@ static Token *preprocess2(Token *tok);
 static Macro *find_macro(Token *tok);
 static void join_adjacent_string_literals(Token *tok);
 static Token *paste(Token *lhs, Token *rhs);
-
+static bool file_exists_in_include_path(const char *filename);
 
 
 //begin
@@ -338,11 +338,50 @@ static Token *read_const_expr(Token **rest, Token *tok)
         ctx->funcname = "read_const_expr";        
         ctx->line_no = __LINE__ + 1;           
         tok = skip(tok, ")", ctx);
-      }
+      } 
 
       cur = cur->next = new_num_token(m ? 1 : 0, start);
       continue;
+    } else if (equal(tok, "__has_include")) {
+  Token *start = tok;
+  bool has_paren = consume(&tok, tok->next, "(");
+
+  if (tok->kind != TK_STR && !equal(tok, "<"))
+    error_tok(start, "%s: in read_const_expr : __has_include expects a filename", PREPROCESS_C);
+
+  char filename[PATH_MAX];
+
+  if (tok->kind == TK_STR) {
+    // __has_include("header.h")
+    snprintf(filename, sizeof(filename), "%s", tok->str);
+    filename[tok->len] = '\0';
+    tok = tok->next;
+  } else {
+    // __has_include(<header.h>)
+    tok = tok->next;
+    const char *start_str = tok->str;
+    int len = 0;
+    while (!equal(tok, ">") && tok->kind != TK_EOF) {
+      len += tok->len;
+      tok = tok->next;
     }
+    if (!equal(tok, ">"))
+      error_tok(start, "%s: in read_const_expr : expected closing > in __has_include", PREPROCESS_C);
+      
+
+    snprintf(filename, sizeof(filename), "%.*s", len, start_str);
+    tok = tok->next;  // consume '>'
+  }
+
+  if (has_paren)
+    tok = skip(tok, ")", ctx);
+
+  bool found = file_exists_in_include_path(filename);
+  cur = cur->next = new_num_token(found ? 1 : 0, start);
+  continue;
+}
+
+
     cur = cur->next = tok;
     tok = tok->next;
   }
@@ -1403,6 +1442,8 @@ static char *format_time(struct tm *tm)
 void init_macros(void)
 {
   // Define predefined macros
+  //define_macro("__VERSION__", "\"chibicc 1.0.23.1\""); 
+  define_macro("__VERSION__", "\"" VERSION "\"");
   define_macro("_LP64", "1");
   define_macro("__C99_MACRO_WITH_VA_ARGS", "1");
   define_macro("__ELF__", "1");
@@ -1455,22 +1496,49 @@ void init_macros(void)
   define_macro("HAVE_RECV", "1");
   define_macro("HAVE_SEND", "1");
   define_macro("__extension__", "");
-  //for postgres
-  define_macro("HAVE_GCC__SYNC_CHAR_TAS", "1");
-  define_macro("HAVE_GCC__SYNC_INT32_TAS", "1");
-  define_macro("HAVE_GCC__SYNC_INT32_CAS", "1");
-  define_macro("HAVE_GCC__SYNC_INT64_CAS", "1");
-  define_macro("HAVE_GCC__ATOMIC_INT32_CAS", "1"); 
-  define_macro("HAVE_GCC__ATOMIC_INT64_CAS", "1");
-  define_macro("HAVE_LONG_INT_64", "1");
-  define_macro("HAVE_LONG_LONG_INT_64", "1");
   define_macro("__ATOMIC_RELAXED", "0");
   define_macro("__ATOMIC_CONSUME", "1");
   define_macro("__ATOMIC_ACQUIRE", "2");
   define_macro("__ATOMIC_RELEASE", "3");
   define_macro("__ATOMIC_ACQ_REL", "4");
   define_macro("__ATOMIC_SEQ_CST", "5");
-
+  //for postgres
+  // define_macro("HAVE_GCC__SYNC_CHAR_TAS", "1");
+  // define_macro("HAVE_GCC__SYNC_INT32_TAS", "1");
+  // define_macro("HAVE_GCC__SYNC_INT32_CAS", "1");
+  // define_macro("HAVE_GCC__SYNC_INT64_CAS", "1");
+  // define_macro("HAVE_GCC__ATOMIC_INT32_CAS", "1"); 
+  // define_macro("HAVE_GCC__ATOMIC_INT64_CAS", "1");
+  // define_macro("HAVE_LONG_INT_64", "1");
+  // define_macro("HAVE_LONG_LONG_INT_64", "1");
+  // define_macro("__ATOMIC_RELAXED", "0");
+  // define_macro("__ATOMIC_CONSUME", "1");
+  // define_macro("__ATOMIC_ACQUIRE", "2");
+  // define_macro("__ATOMIC_RELEASE", "3");
+  // define_macro("__ATOMIC_ACQ_REL", "4");
+  // define_macro("__ATOMIC_SEQ_CST", "5");
+  define_macro("__SHRT_MAX__", "32767");
+  define_macro("__INT_MAX__", "2147483647");
+  define_macro("__LONG_MAX__", "9223372036854775807L");
+  define_macro("__LONG_LONG_MAX__", "9223372036854775807LL");
+  define_macro("__SCHAR_MAX__", "127");
+  define_macro("__WCHAR_MAX__", "2147483647"); 
+  define_macro("__CHAR_BIT__", "8");
+  define_macro("__SCHAR_MAX__", "127");
+  define_macro("__SHRT_MAX__", "32767");
+  define_macro("__INT_MAX__", "2147483647");
+  define_macro("__LONG_MAX__", "9223372036854775807L");
+  define_macro("__LONG_LONG_MAX__", "9223372036854775807LL");
+  define_macro("__SCHAR_WIDTH__", "8");
+  define_macro("__SHRT_WIDTH__", "16");
+  define_macro("__INT_WIDTH__", "32");
+  define_macro("__LONG_WIDTH__", "64");
+  define_macro("__LONG_LONG_WIDTH__", "64");
+  define_macro("__SCHAR_MIN__", "-128");
+  define_macro("__SHRT_MIN__", "-32768");
+  define_macro("__INT_MIN__", "-2147483648");
+  define_macro("__LONG_MIN__", "-9223372036854775808L");
+  define_macro("__LONG_LONG_MIN__", "-9223372036854775808LL");
   //define_macro("nonnull", "1");
   //====fixing ISS-147 defining the two macros for the linux platform
   define_macro("__ORDER_LITTLE_ENDIAN__", "1234");  
@@ -1669,3 +1737,12 @@ Token *preprocess3(Token *tok)
 }
 
 
+static bool file_exists_in_include_path(const char *filename) {
+  for (int i = 0; i < include_paths.len; i++) {
+    char path[PATH_MAX];
+    snprintf(path, sizeof(path), "%s/%s", include_paths.data[i], filename);
+    if (access(path, R_OK) == 0)
+      return true;
+  }
+  return false;
+}

@@ -43,6 +43,11 @@
 #define MAXLEN 501
 #define DEFAULT_TARGET_MACHINE "x86_64-linux-gnu"
 
+
+#define STR_HELPER(x) #x
+#define STR(x) STR_HELPER(x)
+
+
 #define HELP PRODUCT " is a C compiler based on " PRODUCT " created by Rui Ueyama.\n \
 See original project https://github.com/rui314/chibicc for more information\n \
 this " PRODUCT " contains only some differences for now like new parameters\n"
@@ -255,8 +260,8 @@ struct Obj
   //from COSMOPOLITAN adding is_aligned, is_noreturn, is_destructor, is_constructor, is_ms_abi, is_no_instrument_function, is_force_align_arg_pointer, is_no_caller_saved_registers
   bool is_aligned;
   bool is_noreturn;
-  bool is_destructor;
   bool is_constructor;
+  bool is_destructor;
   bool is_ms_abi; 
   bool is_no_instrument_function;
   bool is_force_align_arg_pointer;
@@ -564,6 +569,9 @@ struct Type
   Type *params;
   bool is_variadic;
   Type *next;
+  char *section;
+  bool is_constructor;
+  bool is_destructor;
 };
 
 // Struct member

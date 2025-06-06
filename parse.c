@@ -3737,6 +3737,17 @@ static Token *type_attributes(Token *tok, void *arg)
   }
 
 
+  if (consume(&tok, tok, "constructor") || consume(&tok, tok, "__constructor__")) {
+    ty->is_constructor = true;
+    return tok;
+  }
+
+  if (consume(&tok, tok, "destructor") || consume(&tok, tok, "__destructor__")) {
+    ty->is_destructor = true;
+    return tok;
+  }
+
+
   if (consume(&tok, tok, "vector_size") || consume(&tok, tok, "__vector_size__")) {
     ctx->filename = PARSE_C;
     ctx->funcname = "type_attributes";        
@@ -3784,6 +3795,24 @@ static Token *type_attributes(Token *tok, void *arg)
     return skip(tok, ")", ctx);
   }
 
+  
+  // Handle __attribute__((section("...")))
+  if (consume(&tok, tok, "section") || consume(&tok, tok, "__section__"))  {
+  ctx->filename = PARSE_C;
+  ctx->funcname = "type_attributes";        
+  ctx->line_no = __LINE__ + 1;
+  tok = skip(tok, "(", ctx);
+  if (tok->kind == TK_STR) {
+    ty->section = tok->loc;
+    printf("section=%s\n", ty->section);
+    tok = tok->next;
+  } else {
+    error_tok(tok, "%s %d: in type_attributes : expected string literal in section attribute", PARSE_C, __LINE__);
+  }
+
+  ctx->line_no = __LINE__ + 1;
+  return skip(tok, ")", ctx);
+}
 
 
   //from COSMOPOLITAN adding deprecated, may_alias, unused
@@ -3797,6 +3826,11 @@ static Token *type_attributes(Token *tok, void *arg)
   if (consume(&tok, tok, "cold") || consume(&tok, tok, "__cold__")) {  
     return tok;
   }
+
+  if (consume(&tok, tok, "hot") || consume(&tok, tok, "__hot__")) {  
+    return tok;
+  }
+
 
   if (consume(&tok, tok, "noinline") ||
       consume(&tok, tok, "__noinline__") ||
@@ -3859,6 +3893,7 @@ static Token *type_attributes(Token *tok, void *arg)
       consume(&tok, tok, "__no_stack_limit__") ||
       consume(&tok, tok, "no_sanitize_undefined") ||
       consume(&tok, tok, "__no_sanitize_undefined__") ||
+      consume(&tok, tok, "__nonstring__") ||
       consume(&tok, tok, "no_profile_instrument_function") ||
       consume(&tok, tok, "__no_profile_instrument_function__")) 
     {
@@ -4061,7 +4096,7 @@ static Token *thing_attributes(Token *tok, void *arg) {
     return tok;
   }
 
-  if (consume(&tok, tok, "section") || consume(&tok, tok, "__section__")) {
+  if (consume(&tok, tok, "section") || consume(&tok, tok, "__section__")) {    
     ctx->filename = PARSE_C;
     ctx->funcname = "thing_attributes";        
     ctx->line_no = __LINE__ + 1;  
@@ -4730,7 +4765,7 @@ static Node *funcall(Token **rest, Token *tok, Node *fn)
   
   if (fn->ty->kind != TY_FUNC &&
       (fn->ty->kind != TY_PTR || fn->ty->base->kind != TY_FUNC))
-    error_tok(fn->tok, "%s %d: in funcall : not a function", PARSE_C, __LINE__);
+    error_tok(fn->tok, "%s %d: in funcall : not a function %d %s", PARSE_C, __LINE__, fn->ty->kind, tok->loc);
 
   Type *ty = (fn->ty->kind == TY_FUNC) ? fn->ty : fn->ty->base;
   Type *param_ty = ty->params;
@@ -5844,7 +5879,7 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   
   //from COSMOPOLITAN adding other GNUC attributes
   fn->is_weak |= attr->is_weak;
-  fn->section = fn->section ?: attr->section;
+  fn->section = attr->section;
   fn->is_ms_abi |= attr->is_ms_abi;
   fn->visibility = fn->visibility ?: attr->visibility;
   fn->is_aligned |= attr->is_aligned;
@@ -5855,6 +5890,7 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   fn->is_no_instrument_function |= attr->is_no_instrument_function;
   fn->is_force_align_arg_pointer |= attr->is_force_align_arg_pointer;
   fn->is_no_caller_saved_registers |= attr->is_no_caller_saved_registers;
+  fn->is_destructor |= attr->is_destructor;
 
   fn->is_root = !(fn->is_static && fn->is_inline);
 
@@ -5972,7 +6008,6 @@ static Token *global_variable(Token *tok, Type *basety, VarAttr *attr)
     var->visibility = attr->visibility;
     var->is_aligned = var->is_aligned | attr->is_aligned;
     var->is_externally_visible = attr->is_externally_visible;
-    var->section = attr->section;
     var->is_definition = !attr->is_extern;
     var->is_static = attr->is_static;
     var->is_tls = attr->is_tls;
