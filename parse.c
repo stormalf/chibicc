@@ -103,6 +103,7 @@ static bool is_old_style = false;
 // All local variable instances created during parsing are
 // accumulated to this list.
 static Obj *locals;
+static char* current_section;
 
 // Likewise, global variables are accumulated to this list.
 static Obj *globals;
@@ -959,8 +960,9 @@ static Type *array_dimensions(Token **rest, Token *tok, Type *ty)
 //             | ε
 static Type *type_suffix(Token **rest, Token *tok, Type *ty)
 {
+
   tok->next = attribute_list(tok->next, ty, type_attributes);
-  
+
   if (equal(tok, "("))
   {
     //in case of old style K&R we omit the parameters inside parenthesis and we parse the parameters that 
@@ -1030,8 +1032,8 @@ static Type *declarator(Token **rest, Token *tok, Type *ty)
 {
   tok = attribute_list(tok, ty, type_attributes);
   ty = pointers(&tok, tok, ty);
-  tok->next = attribute_list(tok->next, ty, type_attributes);
 
+  tok->next = attribute_list(tok->next, ty, type_attributes);
 
   if (equal(tok, "(") && !is_typename(tok->next) && !equal(tok->next, ")"))
   {
@@ -1056,12 +1058,12 @@ static Type *declarator(Token **rest, Token *tok, Type *ty)
   if (tok->kind == TK_IDENT)
   {
     name = tok;
-    tok = tok->next;
+    tok = tok->next;      
   }
 
   ty = type_suffix(rest, tok, ty);
   if (!ty)
-    error_tok(tok, "%s %d: in declarator : ty is null", PARSE_C, __LINE__);     
+    error_tok(tok, "%s %d: in declarator : ty is null", PARSE_C, __LINE__);  
   ty->name = name;
   ty->name_pos = name_pos;
   tok = attribute_list(tok, ty, type_attributes);
@@ -3796,23 +3798,18 @@ static Token *type_attributes(Token *tok, void *arg)
   }
 
   
-  // Handle __attribute__((section("...")))
-  if (consume(&tok, tok, "section") || consume(&tok, tok, "__section__"))  {
-  ctx->filename = PARSE_C;
-  ctx->funcname = "type_attributes";        
-  ctx->line_no = __LINE__ + 1;
-  tok = skip(tok, "(", ctx);
-  if (tok->kind == TK_STR) {
-    ty->section = tok->loc;
-    printf("section=%s\n", ty->section);
-    tok = tok->next;
-  } else {
-    error_tok(tok, "%s %d: in type_attributes : expected string literal in section attribute", PARSE_C, __LINE__);
+  if (consume(&tok, tok, "section") || consume(&tok, tok, "__section__")) {        
+    ctx->filename = PARSE_C;
+    ctx->funcname = "type_attributes";        
+    ctx->line_no = __LINE__ + 1;  
+    tok = skip(tok, "(", ctx);
+    ty->section = ConsumeStringLiteral(&tok, tok);
+    current_section = ty->section;
+    ctx->filename = PARSE_C;
+    ctx->funcname = "type_attributes";        
+    ctx->line_no = __LINE__ + 1;      
+    return skip(tok, ")", ctx);
   }
-
-  ctx->line_no = __LINE__ + 1;
-  return skip(tok, ")", ctx);
-}
 
 
   //from COSMOPOLITAN adding deprecated, may_alias, unused
@@ -4102,6 +4099,7 @@ static Token *thing_attributes(Token *tok, void *arg) {
     ctx->line_no = __LINE__ + 1;  
     tok = skip(tok, "(", ctx);
     attr->section = ConsumeStringLiteral(&tok, tok);
+    current_section = attr->section;
     ctx->filename = PARSE_C;
     ctx->funcname = "thing_attributes";        
     ctx->line_no = __LINE__ + 1;      
@@ -5970,6 +5968,7 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
 static Token *global_variable(Token *tok, Type *basety, VarAttr *attr)
 {
   bool first = true;
+  
 
   while (!consume(&tok, tok, ";"))
   {
@@ -5980,7 +5979,6 @@ static Token *global_variable(Token *tok, Type *basety, VarAttr *attr)
       tok = skip(tok, ",", ctx);
     }
     first = false;
-
     Type *ty = declarator(&tok, tok, basety);
     if (!ty)
       error_tok(tok, "%s %d: in global_variable : ty is null", PARSE_C, __LINE__);    
@@ -5990,7 +5988,6 @@ static Token *global_variable(Token *tok, Type *basety, VarAttr *attr)
     Obj *var = new_gvar(get_ident(ty->name), ty);
       //from COSMOPOLITAN adding other GNUC attributes
     tok = attribute_list(tok, attr, thing_attributes);
-
     if (consume(&tok, tok, "asm") || consume(&tok, tok, "__asm__")) {
       ctx->filename = PARSE_C;
       ctx->funcname = "function";        
@@ -6004,7 +6001,10 @@ static Token *global_variable(Token *tok, Type *basety, VarAttr *attr)
     }
 
     var->is_weak = attr->is_weak;
-    var->section = attr->section;
+    var->section = attr->section; 
+    if (!attr->section && current_section) {
+      var->section = current_section;
+    } 
     var->visibility = attr->visibility;
     var->is_aligned = var->is_aligned | attr->is_aligned;
     var->is_externally_visible = attr->is_externally_visible;
@@ -6018,6 +6018,7 @@ static Token *global_variable(Token *tok, Type *basety, VarAttr *attr)
       gvar_initializer(&tok, tok->next, var);
     else if (!attr->is_extern && !attr->is_tls)
       var->is_tentative = true;
+    current_section=NULL;
   }
   return tok;
 }

@@ -2197,6 +2197,7 @@ static void emit_data(Obj *prog)
 {
   for (Obj *var = prog; var; var = var->next)
   {
+
     if (var->is_function || !var->is_definition)
       continue;
 
@@ -2227,13 +2228,15 @@ static void emit_data(Obj *prog)
       //   //println("  .data");
       //from cosmopolitan
       if (var->section) {
-        println("  .section %s,\"aw\",@%s", var->section, "progbits");
-      } else if (var->is_tls) {
-        println("  .section .t%s,\"awT\",@%s",  "data", "progbits");
-      } else {
-      println("  .%s", "data");
+        println("  .section %s,\"aw\",@progbits", var->section);
+        printf("====%s\n", var->section);
       }
-      
+      else if (var->is_tls)
+        println("  .section .tdata,\"awT\",@progbits");
+      else
+        println("  .section .data,\"aw\",@progbits");
+
+            
       println("  .type %s, @object", var->name);
       println("  .size %s, %d", var->name, var->ty->size);
       println("  .align %d", align);
@@ -2265,13 +2268,13 @@ static void emit_data(Obj *prog)
     //   //println("  .bss");
 
     if (var->section) {
-      println("  .section %s,\"aw\",@%s", var->section, "nobits");
-      printf("section=%s\n", var->section);
-    } else if (var->is_tls) {
-      println("  .section .t%s,\"awT\",@%s",   "bss", "nobits");
-    }else {
-      println("  .%s",  "bss");
+      println("  .section %s,\"aw\",@nobits", var->section);
+      printf("====%s\n", var->section);
     }
+    else if (var->is_tls)
+      println("  .section .tbss,\"awT\",@nobits");
+    else
+      println("  .section .bss,\"aw\",@nobits");
 
     println("  .align %d", align);
     println("%s:", var->name);
