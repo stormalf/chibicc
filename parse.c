@@ -103,6 +103,7 @@ static bool is_old_style = false;
 // All local variable instances created during parsing are
 // accumulated to this list.
 static Obj *locals;
+static char* current_section;
 
 // Likewise, global variables are accumulated to this list.
 static Obj *globals;
@@ -959,8 +960,9 @@ static Type *array_dimensions(Token **rest, Token *tok, Type *ty)
 //             | ε
 static Type *type_suffix(Token **rest, Token *tok, Type *ty)
 {
+
   tok->next = attribute_list(tok->next, ty, type_attributes);
-  
+
   if (equal(tok, "("))
   {
     //in case of old style K&R we omit the parameters inside parenthesis and we parse the parameters that 
@@ -1030,8 +1032,8 @@ static Type *declarator(Token **rest, Token *tok, Type *ty)
 {
   tok = attribute_list(tok, ty, type_attributes);
   ty = pointers(&tok, tok, ty);
-  tok->next = attribute_list(tok->next, ty, type_attributes);
 
+  tok->next = attribute_list(tok->next, ty, type_attributes);
 
   if (equal(tok, "(") && !is_typename(tok->next) && !equal(tok->next, ")"))
   {
@@ -1056,12 +1058,12 @@ static Type *declarator(Token **rest, Token *tok, Type *ty)
   if (tok->kind == TK_IDENT)
   {
     name = tok;
-    tok = tok->next;
+    tok = tok->next;      
   }
 
   ty = type_suffix(rest, tok, ty);
   if (!ty)
-    error_tok(tok, "%s %d: in declarator : ty is null", PARSE_C, __LINE__);     
+    error_tok(tok, "%s %d: in declarator : ty is null", PARSE_C, __LINE__);  
   ty->name = name;
   ty->name_pos = name_pos;
   tok = attribute_list(tok, ty, type_attributes);
@@ -1217,8 +1219,32 @@ static Node *compute_vla_size(Type *ty, Token *tok)
 
   }
 
-  if (ty->kind != TY_VLA)
+  if (ty->kind != TY_VLA && !ty->has_vla)
     return node;
+
+
+  if ((ty->kind == TY_STRUCT || ty->kind == TY_UNION) && ty->has_vla) {
+    // Allocate temporary variable to hold size
+    ty->vla_size = new_lvar("", ty_ulong, NULL);
+    Node *sz = new_num(0, tok);
+
+    for (Member *mem = ty->members; mem; mem = mem->next) {
+      Node *member_size;
+
+      if (mem->ty->kind == TY_VLA || mem->ty->has_vla) {
+        node = new_binary(ND_COMMA, node, compute_vla_size(mem->ty, tok), tok);
+        member_size = new_var_node(mem->ty->vla_size, tok);
+      } else {
+        member_size = new_num(mem->ty->size, tok);
+      }
+
+      // Simply add size, no alignment
+      sz = new_binary(ND_ADD, sz, member_size, tok);
+    }
+
+    Node *expr = new_binary(ND_ASSIGN, new_var_node(ty->vla_size, tok), sz, tok);
+    return new_binary(ND_COMMA, node, expr, tok);
+  }    
 
   Node *base_sz;
   if (ty->base->kind == TY_VLA)
@@ -2897,8 +2923,7 @@ static bool is_const_expr(Node *node)
   case ND_LE:
   case ND_LOGAND:
   case ND_LOGOR:
-      //trying to fix issue #166 about wrong VLA for complex constant expression in macro expanded
-      return is_const_expr(node->lhs) && (is_const_expr(node->rhs)|| eval(node));
+    return is_const_expr(node->lhs) && is_const_expr(node->rhs);
   case ND_COND:
     if (!is_const_expr(node->cond))
       return false;
@@ -3653,6 +3678,17 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
     cur->ty = array_of(cur->ty->base, 0);
     ty->is_flexible = true;
   }
+
+  
+  //Check for VLA-containing members
+  for (Member *mem = head.next; mem; mem = mem->next) {
+    if (mem->ty->has_vla) {
+      ty->has_vla = true;
+      break;
+    }
+  }
+
+
   *rest = tok->next;
   ty->members = head.next;
 }
@@ -3737,6 +3773,17 @@ static Token *type_attributes(Token *tok, void *arg)
   }
 
 
+  if (consume(&tok, tok, "constructor") || consume(&tok, tok, "__constructor__")) {
+    ty->is_constructor = true;
+    return tok;
+  }
+
+  if (consume(&tok, tok, "destructor") || consume(&tok, tok, "__destructor__")) {
+    ty->is_destructor = true;
+    return tok;
+  }
+
+
   if (consume(&tok, tok, "vector_size") || consume(&tok, tok, "__vector_size__")) {
     ctx->filename = PARSE_C;
     ctx->funcname = "type_attributes";        
@@ -3784,6 +3831,19 @@ static Token *type_attributes(Token *tok, void *arg)
     return skip(tok, ")", ctx);
   }
 
+  
+  if (consume(&tok, tok, "section") || consume(&tok, tok, "__section__")) {        
+    ctx->filename = PARSE_C;
+    ctx->funcname = "type_attributes";        
+    ctx->line_no = __LINE__ + 1;  
+    tok = skip(tok, "(", ctx);
+    ty->section = ConsumeStringLiteral(&tok, tok);
+    current_section = ty->section;
+    ctx->filename = PARSE_C;
+    ctx->funcname = "type_attributes";        
+    ctx->line_no = __LINE__ + 1;      
+    return skip(tok, ")", ctx);
+  }
 
 
   //from COSMOPOLITAN adding deprecated, may_alias, unused
@@ -3797,6 +3857,11 @@ static Token *type_attributes(Token *tok, void *arg)
   if (consume(&tok, tok, "cold") || consume(&tok, tok, "__cold__")) {  
     return tok;
   }
+
+  if (consume(&tok, tok, "hot") || consume(&tok, tok, "__hot__")) {  
+    return tok;
+  }
+
 
   if (consume(&tok, tok, "noinline") ||
       consume(&tok, tok, "__noinline__") ||
@@ -3859,6 +3924,7 @@ static Token *type_attributes(Token *tok, void *arg)
       consume(&tok, tok, "__no_stack_limit__") ||
       consume(&tok, tok, "no_sanitize_undefined") ||
       consume(&tok, tok, "__no_sanitize_undefined__") ||
+      consume(&tok, tok, "__nonstring__") ||
       consume(&tok, tok, "no_profile_instrument_function") ||
       consume(&tok, tok, "__no_profile_instrument_function__")) 
     {
@@ -4061,12 +4127,13 @@ static Token *thing_attributes(Token *tok, void *arg) {
     return tok;
   }
 
-  if (consume(&tok, tok, "section") || consume(&tok, tok, "__section__")) {
+  if (consume(&tok, tok, "section") || consume(&tok, tok, "__section__")) {    
     ctx->filename = PARSE_C;
     ctx->funcname = "thing_attributes";        
     ctx->line_no = __LINE__ + 1;  
     tok = skip(tok, "(", ctx);
     attr->section = ConsumeStringLiteral(&tok, tok);
+    current_section = attr->section;
     ctx->filename = PARSE_C;
     ctx->funcname = "thing_attributes";        
     ctx->line_no = __LINE__ + 1;      
@@ -4730,7 +4797,7 @@ static Node *funcall(Token **rest, Token *tok, Node *fn)
   
   if (fn->ty->kind != TY_FUNC &&
       (fn->ty->kind != TY_PTR || fn->ty->base->kind != TY_FUNC))
-    error_tok(fn->tok, "%s %d: in funcall : not a function", PARSE_C, __LINE__);
+    error_tok(fn->tok, "%s %d: in funcall : not a function %d %s", PARSE_C, __LINE__, fn->ty->kind, tok->loc);
 
   Type *ty = (fn->ty->kind == TY_FUNC) ? fn->ty : fn->ty->base;
   Type *param_ty = ty->params;
@@ -4906,6 +4973,7 @@ static Node *primary(Token **rest, Token *tok)
       error_tok(tok, "%s %d: in primary : incomplete type for sizeof", PARSE_C, __LINE__);
     }
 
+
     if (ty->kind == TY_VLA)
     {
       if (ty->vla_size)
@@ -4914,6 +4982,15 @@ static Node *primary(Token **rest, Token *tok)
       Node *lhs = compute_vla_size(ty, tok);
       Node *rhs = new_var_node(ty->vla_size, tok);
       return new_binary(ND_COMMA, lhs, rhs, tok);
+    }
+
+    if ((ty->kind == TY_STRUCT || ty->kind == TY_UNION) && ty->has_vla) {
+      if (!ty->vla_size) {
+        Node *lhs = compute_vla_size(ty, tok);  // defines ty->vla_size
+        Node *rhs = new_var_node(ty->vla_size, tok);
+        return new_binary(ND_COMMA, lhs, rhs, tok);
+      }
+      return new_var_node(ty->vla_size, tok);
     }
 
     return new_ulong(ty->size, start);
@@ -4938,6 +5015,15 @@ static Node *primary(Token **rest, Token *tok)
       Node *lhs = compute_vla_size(node->ty, tok);
       Node *rhs = new_var_node(node->ty->vla_size, tok);
       return new_binary(ND_COMMA, lhs, rhs, tok);
+    }
+
+    if ((node->ty->kind == TY_STRUCT || node->ty->kind == TY_UNION) && node->ty->has_vla) {
+      if (!node->ty->vla_size) {
+        Node *lhs = compute_vla_size(node->ty, tok);  // defines ty->vla_size
+        Node *rhs = new_var_node(node->ty->vla_size, tok);
+        return new_binary(ND_COMMA, lhs, rhs, tok);
+      }
+      return new_var_node(node->ty->vla_size, tok);
     }
 
     // if (node->ty->kind == TY_VLA)
@@ -5013,33 +5099,33 @@ static Node *primary(Token **rest, Token *tok)
   }
 
 
-    if (equal(tok, "__builtin_offsetof")) {
-      ctx->filename = PARSE_C;
-      ctx->funcname = "primary";        
-      ctx->line_no = __LINE__ + 1;          
-      tok = skip(tok->next, "(", ctx);
-      Token *stok = tok;
-      Type *tstruct = typename(&tok, tok);
-      if (tstruct->kind != TY_STRUCT && tstruct->kind != TY_UNION) {
-        error_tok(stok, "%s %d: in primary : not a structure or union type", PARSE_C, __LINE__);
-      }
+    // if (equal(tok, "__builtin_offsetof")) {
+    //   ctx->filename = PARSE_C;
+    //   ctx->funcname = "primary";        
+    //   ctx->line_no = __LINE__ + 1;          
+    //   tok = skip(tok->next, "(", ctx);
+    //   Token *stok = tok;
+    //   Type *tstruct = typename(&tok, tok);
+    //   if (tstruct->kind != TY_STRUCT && tstruct->kind != TY_UNION) {
+    //     error_tok(stok, "%s %d: in primary : not a structure or union type", PARSE_C, __LINE__);
+    //   }
 
-      ctx->filename = PARSE_C;
-      ctx->funcname = "primary";        
-      ctx->line_no = __LINE__ + 1;  
-      tok = skip(tok, ",", ctx);
-      Token *member = tok;
-      tok = tok->next;
-      *rest = skip(tok, ")", ctx);
-      for (Member *m = tstruct->members; m; m = m->next) {
-        if (m->name->len == member->len &&
-            !memcmp(m->name->loc, member->loc, m->name->len)) {
-          return new_ulong(m->offset, start);
-        }
-      }
-      error_tok(member, "%s %d: in primary : no such member", PARSE_C, __LINE__);
+    //   ctx->filename = PARSE_C;
+    //   ctx->funcname = "primary";        
+    //   ctx->line_no = __LINE__ + 1;  
+    //   tok = skip(tok, ",", ctx);
+    //   Token *member = tok;
+    //   tok = tok->next;
+    //   *rest = skip(tok, ")", ctx);
+    //   for (Member *m = tstruct->members; m; m = m->next) {
+    //     if (m->name->len == member->len &&
+    //         !memcmp(m->name->loc, member->loc, m->name->len)) {
+    //       return new_ulong(m->offset, start);
+    //     }
+    //   }
+    //   error_tok(member, "%s %d: in primary : no such member", PARSE_C, __LINE__);
 
-    }
+    // }
 
 
   //trying to fix ===== some builtin functions linked to mmx/emms
@@ -5844,7 +5930,7 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   
   //from COSMOPOLITAN adding other GNUC attributes
   fn->is_weak |= attr->is_weak;
-  fn->section = fn->section ?: attr->section;
+  fn->section = attr->section;
   fn->is_ms_abi |= attr->is_ms_abi;
   fn->visibility = fn->visibility ?: attr->visibility;
   fn->is_aligned |= attr->is_aligned;
@@ -5855,6 +5941,7 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   fn->is_no_instrument_function |= attr->is_no_instrument_function;
   fn->is_force_align_arg_pointer |= attr->is_force_align_arg_pointer;
   fn->is_no_caller_saved_registers |= attr->is_no_caller_saved_registers;
+  fn->is_destructor |= attr->is_destructor;
 
   fn->is_root = !(fn->is_static && fn->is_inline);
 
@@ -5934,6 +6021,7 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
 static Token *global_variable(Token *tok, Type *basety, VarAttr *attr)
 {
   bool first = true;
+  
 
   while (!consume(&tok, tok, ";"))
   {
@@ -5944,7 +6032,6 @@ static Token *global_variable(Token *tok, Type *basety, VarAttr *attr)
       tok = skip(tok, ",", ctx);
     }
     first = false;
-
     Type *ty = declarator(&tok, tok, basety);
     if (!ty)
       error_tok(tok, "%s %d: in global_variable : ty is null", PARSE_C, __LINE__);    
@@ -5954,7 +6041,6 @@ static Token *global_variable(Token *tok, Type *basety, VarAttr *attr)
     Obj *var = new_gvar(get_ident(ty->name), ty);
       //from COSMOPOLITAN adding other GNUC attributes
     tok = attribute_list(tok, attr, thing_attributes);
-
     if (consume(&tok, tok, "asm") || consume(&tok, tok, "__asm__")) {
       ctx->filename = PARSE_C;
       ctx->funcname = "function";        
@@ -5968,11 +6054,13 @@ static Token *global_variable(Token *tok, Type *basety, VarAttr *attr)
     }
 
     var->is_weak = attr->is_weak;
-    var->section = attr->section;
+    var->section = attr->section; 
+    if (!attr->section && current_section) {
+      var->section = current_section;
+    } 
     var->visibility = attr->visibility;
     var->is_aligned = var->is_aligned | attr->is_aligned;
     var->is_externally_visible = attr->is_externally_visible;
-    var->section = attr->section;
     var->is_definition = !attr->is_extern;
     var->is_static = attr->is_static;
     var->is_tls = attr->is_tls;
@@ -5983,6 +6071,7 @@ static Token *global_variable(Token *tok, Type *basety, VarAttr *attr)
       gvar_initializer(&tok, tok->next, var);
     else if (!attr->is_extern && !attr->is_tls)
       var->is_tentative = true;
+    current_section=NULL;
   }
   return tok;
 }

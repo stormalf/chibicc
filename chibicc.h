@@ -553,7 +553,7 @@ struct Type
   Member *members;
   bool is_flexible;
   bool is_packed;
-  
+  bool has_vla;  
   //from COSMOPOLITAN adding is_aligned
   bool is_aligned;
   bool is_weak;
@@ -564,6 +564,9 @@ struct Type
   Type *params;
   bool is_variadic;
   Type *next;
+  char *section;
+  bool is_constructor;
+  bool is_destructor;
 };
 
 // Struct member

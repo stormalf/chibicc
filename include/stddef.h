@@ -23,7 +23,7 @@ typedef long max_align_t;
 
 #define __builtin_choose_expr(cond, true_expr, false_expr) (cond ? true_expr : false_expr)
 
-//#define offsetof(type, member) ((size_t)&(((type *)0)->member))
+#define offsetof(type, member) ((size_t)&(((type *)0)->member))
 //#define static_assert(x, msg) extern char STATIC_MSG(msg, __LINE__) [(x)?1:-1]
 // #ifndef _Static_assert
 #define CONCAT_(prefix, suffix) prefix##suffix

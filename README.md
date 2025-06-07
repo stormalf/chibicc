@@ -514,6 +514,18 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
 <https://github.com/stormalf/chibicc/blob/main/ISSUES.md>
 
 
+## known issues
+    
+Seems to be some regressions to identify (except postgres always failed during test): 
+
+    git : 3 test failed
+    memcached : test failed after n°16
+    cpython: executing freeze_modules failed
+    postgres: segfault during bootstrap test
+    curl: 2 test failed
+    openssh-portable: regress tests failed
+
+
 ## debug
 
 To debug with gdb don't forget to use the set follow-fork-mode child because chibicc creates a child job.

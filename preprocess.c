@@ -94,6 +94,8 @@ static Token *preprocess2(Token *tok);
 static Macro *find_macro(Token *tok);
 static void join_adjacent_string_literals(Token *tok);
 static Token *paste(Token *lhs, Token *rhs);
+static bool file_exists_in_include_path(const char *filename);
+
 
 static bool is_hash(Token *tok)
   // [https://www.sigbus.info/n1570#6.10.3.4p3] tok->origin is checked here
@@ -308,6 +310,7 @@ static Token *new_num_token(int val, Token *tmpl)
   return tokenize(new_file(tmpl->file->name, tmpl->file->file_no, buf));
 }
 
+
 static Token *read_const_expr(Token **rest, Token *tok)
 {
   tok = copy_line(rest, tok);
@@ -334,11 +337,50 @@ static Token *read_const_expr(Token **rest, Token *tok)
         ctx->funcname = "read_const_expr";        
         ctx->line_no = __LINE__ + 1;           
         tok = skip(tok, ")", ctx);
-      }
+      } 
 
       cur = cur->next = new_num_token(m ? 1 : 0, start);
       continue;
+    } else if (equal(tok, "__has_include")) {
+  Token *start = tok;
+  bool has_paren = consume(&tok, tok->next, "(");
+
+  if (tok->kind != TK_STR && !equal(tok, "<"))
+    error_tok(start, "%s: in read_const_expr : __has_include expects a filename", PREPROCESS_C);
+
+  char filename[PATH_MAX];
+
+  if (tok->kind == TK_STR) {
+    // __has_include("header.h")
+    snprintf(filename, sizeof(filename), "%s", tok->str);
+    filename[tok->len] = '\0';
+    tok = tok->next;
+  } else {
+    // __has_include(<header.h>)
+    tok = tok->next;
+    const char *start_str = tok->str;
+    int len = 0;
+    while (!equal(tok, ">") && tok->kind != TK_EOF) {
+      len += tok->len;
+      tok = tok->next;
     }
+    if (!equal(tok, ">"))
+      error_tok(start, "%s: in read_const_expr : expected closing > in __has_include", PREPROCESS_C);
+      
+
+    snprintf(filename, sizeof(filename), "%.*s", len, start_str);
+    tok = tok->next;  // consume '>'
+  }
+
+  if (has_paren)
+    tok = skip(tok, ")", ctx);
+
+  bool found = file_exists_in_include_path(filename);
+  cur = cur->next = new_num_token(found ? 1 : 0, start);
+  continue;
+}
+
+
     cur = cur->next = tok;
     tok = tok->next;
   }
@@ -346,6 +388,7 @@ static Token *read_const_expr(Token **rest, Token *tok)
   cur->next = tok;
   return head.next;
 }
+
 
 // Read and evaluate a constant expression.
 static long eval_const_expr(Token **rest, Token *tok)
@@ -1657,3 +1700,13 @@ Token *preprocess3(Token *tok)
   return head.next;
 }
 
+
+static bool file_exists_in_include_path(const char *filename) {
+  for (int i = 0; i < include_paths.len; i++) {
+    char path[PATH_MAX];
+    snprintf(path, sizeof(path), "%s/%s", include_paths.data[i], filename);
+    if (access(path, R_OK) == 0)
+      return true;
+  }
+  return false;
+}

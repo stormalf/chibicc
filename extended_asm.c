@@ -168,7 +168,8 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
         asm_str = "\nnop;\n";
         return asm_str;
     }
-
+    if (isDebug)
+        printf("template==%s\n", template);
     // allocate memory for all structs needed
     asmExt = calloc(1, sizeof(AsmExtended));
     asmExt->template = calloc(1, sizeof(AsmTemplate));
@@ -273,6 +274,10 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
         tok = tok->next;
     }
 
+    //temp fix for bswap %q0 to indicate a 64 register (quad word)
+    //TODO set a variable isQuad to be sure to use 64 bits register when %q is found
+    template = subst_asm(template, " %", "%q");
+
    //case of no input need to generate input for output
     if (hasOutput && !hasInput){
         input_for_output = generate_input_for_output();
@@ -356,8 +361,12 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
     asm_str = subst_asm(asm_str, " {", "%{");
     asm_str = subst_asm(asm_str, " |", "%|");
     asm_str = subst_asm(asm_str, " }", "%}");
+    
     if (isDebug)
         printf("=====template=%s\n====asm_str=%s\n====input_final==%s\n====output_asm_str===%s\n", template, asm_str, input_final, output_asm_str);
+
+    tok = tok->next;
+    //printf("tok=%s\n", tok->loc);
     *rest = tok;
     // free memory
     for (int i = 0; i < 10; i++)
@@ -766,6 +775,69 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     ctx->line_no = __LINE__ + 1 ;
                     *rest = skip(tok, ")", ctx);
                     return;
+                } else if (equal(tok, "(") && equal(tok->next, "(")) {
+                            // Skip '(('
+                            tok = tok->next->next;
+                            if (!equal(tok, "void"))
+                                error_tok(tok, "%s %d: in output_asm function : expected cast to (void **)", EXTASM_C, __LINE__);
+
+                            tok = tok->next;
+
+                            int pointer_depth = 0;
+                            while (equal(tok, "*")) {
+                                pointer_depth++;
+                                tok = tok->next;
+                            }
+
+                            if (!equal(tok, ")"))
+                                error_tok(tok, "%s %d: in output_asm function : expected ')' after cast type", EXTASM_C, __LINE__);
+
+                            tok = tok->next; 
+
+                            if (tok->kind != TK_IDENT)
+                                error_tok(tok, "%s %d: in output_asm function : expected identifier after cast", EXTASM_C, __LINE__);
+
+                            // At this point: we are at the identifier (like 'ofs')
+                            asmExt->output[nbOutput]->isAddress = true;
+                            asmExt->output[nbOutput]->output = tok;
+
+                            VarScope *sc = find_var(tok);
+                            if (!sc)
+                                error_tok(tok, "%s %d: in output_asm function : variable undefined after cast", EXTASM_C, __LINE__);
+                            if (!sc->var->ty)
+                                error_tok(tok, "%s %d: in output_asm function : variable type unknown after cast", EXTASM_C, __LINE__);                                
+
+                            asmExt->output[nbOutput]->size = sc->var->ty->size;
+
+                            if (sc->var->funcname) {
+                                update_offset(sc->var->funcname, locals);
+                                asmExt->output[nbOutput]->offset = sc->var->offset;
+                            } else {
+                                asmExt->output[nbOutput]->offset = 0;
+                            }
+
+                            if (!asmExt->output[nbOutput]->reg)
+                                error_tok(tok, "%s %d: in output_asm function : reg is null", EXTASM_C, __LINE__);          
+
+                            asmExt->output[nbOutput]->reg = update_register_size(asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->size);
+                            asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
+                            tok = tok->next;
+
+                            if (!equal(tok, ")"))
+                                error_tok(tok, "%s %d: in output_asm function : expected ')' after cast type", EXTASM_C, __LINE__);
+
+                            tok = tok->next; //first parenthesis
+                            
+
+                            ctx->funcname = "output_asm";
+                            ctx->line_no = __LINE__ + 1;
+                            *rest = skip(tok, ")", ctx);
+                            return;
+                        }
+
+                                    
+                else {
+                    error_tok(tok, "%s %d: in output_asm function : extended assembly not managed yet", EXTASM_C, __LINE__);
                 }
             }
         }
@@ -944,7 +1016,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
         }        
 
 
-        else if (tok->kind == TK_STR && !strncmp(tok->str, "r", tok->len))
+        else if ((tok->kind == TK_STR && !strncmp(tok->str, "r", tok->len)) || (tok->kind == TK_STR && !strncmp(tok->str, "rn", tok->len)))
         {
             asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(nbOutput + nbInput);
             asmExt->input[nbInput]->index = nbOutput + nbInput;
@@ -1010,7 +1082,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->input[nbInput]->offset = sc->var->offset;
                 } 
                 if (!asmExt->input[nbInput]->reg)
-                    error("%s : %s:%d: error: in input_asm function input_asm :reg is null!", EXTASM_C, __FILE__, __LINE__);
+                    error("%s : %s:%d: error: in input_asm function input_asm :reg is null! %d", EXTASM_C, __FILE__, __LINE__, nbInput);
                 asmExt->input[nbInput]->reg = update_register_size(asmExt->input[nbInput]->reg, asmExt->input[nbInput]->size);
                 //managing specific case of arrays
                 if (sc->var->ty->kind == TY_ARRAY) {
@@ -1147,7 +1219,65 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     ctx->line_no = __LINE__ + 1;
                     *rest = skip(tok, ")", ctx);
                     return;
-                }
+                       // Handle casted input like *((void **)ptr)
+                } else  if (equal(tok, "(") && equal(tok->next, "(")) {
+                        // Skip '(('
+                        tok = tok->next->next;
+
+                        // Parse cast type — here just support 'void **' for now
+                        if (!equal(tok, "void"))
+                            error("%s : %s:%d: error: in input_asm function input_asm : expected cast to (void **)!", EXTASM_C, __FILE__, __LINE__);
+
+                        tok = tok->next;
+
+                        int pointer_depth = 0;
+                        while (equal(tok, "*")) {
+                            pointer_depth++;
+                            tok = tok->next;
+                        }
+
+                        if (!equal(tok, ")"))
+                            error_tok(tok, "expected ')' after cast type");
+
+                        tok = tok->next; // skip first ')'
+
+                        // Now expect TK_IDENT
+                        if (tok->kind != TK_IDENT)
+                            error_tok(tok, "expected identifier after cast");
+
+                        asmExt->input[nbInput]->input = tok;
+                        asmExt->input[nbInput]->isVariable = true;
+                        asmExt->input[nbInput]->isAddress = true;
+
+                        sc = find_var(tok);
+                        if (!sc)
+                            error_tok(tok, "%s %d: variable undefined in input_asm", EXTASM_C, __LINE__);
+                        if (!sc->var->ty)
+                            error_tok(tok, "%s %d: variable type undefined in input_asm", EXTASM_C, __LINE__);
+
+                        asmExt->input[nbInput]->size = sc->var->ty->size;
+
+                        if (sc->var->funcname) {
+                            update_offset(sc->var->funcname, locals);
+                            asmExt->input[nbInput]->offset = sc->var->offset;
+                        }
+
+                        if (!asmExt->input[nbInput]->reg)
+                            error("%s : %s:%d: input_asm: reg is null!", EXTASM_C, __FILE__, __LINE__);
+
+                        asmExt->input[nbInput]->reg = update_register_size(asmExt->input[nbInput]->reg,
+                                                                        asmExt->input[nbInput]->size);
+
+                        tok = tok->next;
+                        if (!equal(tok, ")"))
+                            error_tok(tok, "%s %d: input_asm: expected ')' after cast", EXTASM_C, __LINE__);
+                        tok = tok->next; 
+                        
+
+                        ctx->line_no = __LINE__ + 1;
+                        *rest = skip(tok, ")", ctx);
+                        return;
+                    }
             }
         }
         else if (equal(tok, ",")) {

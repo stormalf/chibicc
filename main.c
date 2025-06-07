@@ -695,6 +695,7 @@ static void parse_args(int argc, char **argv)
     //for printing AST
     if (!strcmp(argv[i], "-A")) {
       opt_A = true;
+      continue;
     } 
 
     //other options -Axxx ignored
@@ -703,6 +704,11 @@ static void parse_args(int argc, char **argv)
       continue;
     }
 
+
+    if (!strcmp(argv[i], "-fp-model")) {
+      i++; // Skip the argument following -fp-model
+      continue;
+    }
 
     // These options are ignored for now.
     if (!strncmp(argv[i], "-O", 2) ||
@@ -727,6 +733,7 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-nostdinc") ||
         !strcmp(argv[i], "-mno-red-zone") ||
         !strcmp(argv[i], "-fvisibility=default") ||
+        !strcmp(argv[i], "-fvisibility=hidden") ||
         !strcmp(argv[i], "-Werror=invalid-command-line-argument") ||
         !strcmp(argv[i], "-Werror=unknown-warning-option") ||
         !strcmp(argv[i], "-Wsign-compare") ||
@@ -749,6 +756,9 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-fasynchronous-unwind-tables") || 
         !strcmp(argv[i], "-fexceptions") || 
         !strcmp(argv[i], "--print-search-dirs") || 
+        !strcmp(argv[i], "-msse4.1") || 
+        !strcmp(argv[i], "-fprofile-arcs") ||
+        !strcmp(argv[i], "-ftest-coverage") ||        
         !strcmp(argv[i], "-fdiagnostics-show-option") || 
         !strcmp(argv[i], "-Xc") ||
         !strcmp(argv[i], "-Aa") ||
@@ -1110,8 +1120,14 @@ static void cc1(void)
 
 static void assemble(char *input, char *output)
 {
-  char *cmd[] = {"as", "-c", input, "-o", output, NULL};
-  run_subprocess(cmd);
+  
+  if (endswith(input, ".S")) {
+    char *cmd[] = {"gcc", "-c", "-masm=intel", input, "-o", output, NULL};
+    run_subprocess(cmd);
+  } else {
+    char *cmd[] = {"as", "-c", input, "-o", output, NULL};
+    run_subprocess(cmd);
+  }
 }
 
 // static void symbolic_link(char *input, char *output) {
@@ -1229,7 +1245,7 @@ static void run_linker(StringArray *inputs, char *output)
     strarray_push(&arr, format("%s/crti.o", libpath));
     strarray_push(&arr, format("%s/crtbegin.o", gcc_libpath));    
   }
-
+  strarray_push(&arr, "-L.");
   strarray_push(&arr, format("-L%s", gcc_libpath));
  // strarray_push(&arr, "-L../../../src/interfaces/libpq");
   strarray_push(&arr, "-L/usr/lib/x86_64-linux-gnu");
