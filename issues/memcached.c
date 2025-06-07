@@ -19,6 +19,7 @@ static inline void get_conn_text(const conn *c, const int af,
                 char* addr, struct sockaddr *sock_addr) {
     size_t extras_len = sizeof(":unix:") + sizeof("65535");
     char addr[MAXPATHLEN + extras_len];
+    char addr_text[1];
     addr_text[0] = '\0';
 
     const char *protoname = "?";

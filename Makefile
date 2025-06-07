@@ -53,9 +53,9 @@ test-stage2: $(TESTS:test/%=stage2/test/%)
 	for i in $^; do echo $$i; ./$$i || exit 1; echo; done
 	test/driver.sh ./stage2/$(OBJECT)
 
-projects-all: projects openssl vim curl nmap
+projects-all: projects openssl vim projects-oth
 
-projects-oth: openssl vim curl nmap
+projects-oth: memcached nmap curl
 
 projects: zlib util-linux nginx git
 
@@ -97,6 +97,8 @@ lxc:
 git:
 	cd ../git && CC=chibicc CFLAGS=-fPIC ./configure && make && make test
 
+memcached:
+	cd ../memcached && CC=chibicc CFLAGS=-fpic LDFLAGS=-fpic ./configure && make && make test
 
 # Misc.
 

@@ -558,7 +558,7 @@ struct Type
   Member *members;
   bool is_flexible;
   bool is_packed;
-  
+  bool has_vla;  
   //from COSMOPOLITAN adding is_aligned
   bool is_aligned;
   bool is_weak;

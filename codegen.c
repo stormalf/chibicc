@@ -2229,7 +2229,6 @@ static void emit_data(Obj *prog)
       //from cosmopolitan
       if (var->section) {
         println("  .section %s,\"aw\",@progbits", var->section);
-        printf("====%s\n", var->section);
       }
       else if (var->is_tls)
         println("  .section .tdata,\"awT\",@progbits");

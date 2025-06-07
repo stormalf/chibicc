@@ -213,8 +213,7 @@ List of options ignored :
     "-O"
     "-W"
     "-g"
-    "-std="
-    "-std"
+    "-P"
     "-ffreestanding"
     "-fno-omit-frame-pointer"
     "-fomit-frame-pointer"
@@ -229,12 +228,11 @@ List of options ignored :
     "-Bsymbolic"
     "-z"
     "defs"
-    "-flto"
-    "-flto=8"
     "-pedantic"
     "-nostdinc"
     "-mno-red-zone"
     "-fvisibility=default"
+    "-fvisibility=hidden"
     "-Werror=invalid-command-line-argument"
     "-Werror=unknown-warning-option"
     "-Wsign-compare"
@@ -257,12 +255,19 @@ List of options ignored :
     "-fasynchronous-unwind-tables"
     "-fexceptions"
     "--print-search-dirs"
+    "-msse4.1"
+    "-fprofile-arcs"
+    "-ftest-coverage"
     "-fdiagnostics-show-option"
     "-Xc"
     "-Aa"
     "-rdynamic"
     "-w"
     "--param=ssp-buffer-size=4"
+    "-fno-lto"
+    "-c99"
+    "-std"
+    "-fp-model"
 
 ## Dockerfile and devcontainer
 
@@ -342,6 +347,10 @@ git: https://github.com/git/git.git
     CC=chibicc CFLAGS=-fPIC ./configure
     make
     make test
+    3 tests failed 
+    not ok 83 - git commit-tree records the correct tree in a commit
+    not ok 84 - git commit-tree records the correct parent in a commit
+    not ok 85 - git commit-tree omits duplicated parent in a commit
 
 
 util-linux : https://github.com/util-linux/util-linux.git
@@ -418,37 +427,7 @@ cpython: git clone git@github.com:python/cpython.git
         
         CC=chibicc ./configure
         make && make test
-        == Tests result: SUCCESS ==
-        
-        10 slowest tests:
-        - test_imaplib: 52.3 sec
-        - test_signal: 49.1 sec
-        - test.test_concurrent_futures.test_wait: 48.4 sec
-        - test.test_multiprocessing_forkserver.test_processes: 41.1 sec
-        - test.test_multiprocessing_spawn.test_processes: 40.1 sec
-        - test.test_multiprocessing_spawn.test_misc: 36.5 sec
-        - test_io: 33.8 sec
-        - test.test_gdb.test_pretty_print: 33.4 sec
-        - test_socket: 33.4 sec
-        - test_xmlrpc: 29.1 sec
-        
-        22 tests skipped:
-            test.test_asyncio.test_windows_events
-            test.test_asyncio.test_windows_utils test_bz2 test_dbm_gnu
-            test_dbm_ndbm test_devpoll test_idle test_ioctl test_kqueue
-            test_launcher test_msvcrt test_startfile test_tcl test_tkinter
-            test_ttk test_ttk_textonly test_turtle test_winapi
-            test_winconsoleio test_winreg test_winsound test_wmi
-        
-        2 tests skipped (resource denied):
-            test_peg_generator test_zipfile64
-        
-        448 tests OK.
-        
-        Total duration: 2 min 41 sec
-        Total tests: run=42,576 skipped=1,689
-        Total test files: run=470/472 skipped=22 resource_denied=2
-        Result: SUCCESS
+        failure with  
 
 nmap : https://github.com/nmap/nmap
 
@@ -456,7 +435,18 @@ nmap : https://github.com/nmap/nmap
     make
     make check
 
-
+    Process terminating with default action of signal 11 (SIGSEGV): dumping core
+    ==82695==  Access not within mapped region at address 0x25
+    ==82695==    at 0xB7BC8B: ??? (pystate.c:1435)
+    ==82695==    by 0xB7BAFB: ??? (pystate.c:1534)
+    ==82695==    by 0xB89CEC: ??? (pystate.c:1576)
+    ==82695==    by 0xB6F3F6: ??? (pylifecycle.c:667)
+    ==82695==    by 0xB69FDA: ??? (pylifecycle.c:943)
+    ==82695==    by 0xB699A1: ??? (pylifecycle.c:1112)
+    ==82695==    by 0xB784E5: ??? (pylifecycle.c:1432)
+    ==82695==    by 0x4088D7: ??? (_freeze_module.c:65)
+    ==82695==    by 0x407294: ??? (_freeze_module.c:224)
+    ==82695==    by 0x497D1C9: (below main) (libc_start_call_main.h:58)
 
 ## meson
 
@@ -513,6 +503,15 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
 <https://github.com/stormalf/chibicc/blob/main/ISSUES.md>
 
 
+## known issues
+
+    postgres execution : ko
+    libwebp linkage error
+    git 3 tests failed
+    openssh-portable regress test failed
+    curl 2 tests ko
+
+
 ## debug
 
 To debug with gdb don't forget to use the set follow-fork-mode child because chibicc creates a child job.
@@ -541,7 +540,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.23_vim        Improvement: diagnose overflow in integer constant expression #96  from @pmor13. Fixing issue with old C style (K&R) when parameters order don't correspond to parameter definition. Adding \__LINE__ in parse.c in all error_tok messages. Removing \__builtin_memcpy \__builtin_memset macro from preprocess.c that causes segmentation fault on zlib project. Adding other tests from @cosmopolitan. Adding \__GNUC__ macro and fixing all issues caused by this defined macro. Defining _Pragma macro that does nothing to keep compatibility with \__GNUC__. Fixing regression on struct members. Fixed on test case from curl. Renaming GNUC_compatibility to 1.0.23. Managing store_gp with size 16. Fixing issue with curl. Fixing last issue with curl due to sizeof_int and sizeof_long not taken in account (adding them in stddef.h). Fixing issue ISS-146 with semun. Fixing issue with \__builtin_clz that gives incorrect result. And adding \__builtin_ctzl and \__builtin_clzl. Adding \__builtin_isnan (ISS-175). Fixing issue with lock not correctly managed in extended assembly (ISS-174). Fxing other issues with extended assembly and adding several tests. Adding \__builtin_bswapxx (16, 32, 64). Fixing issue with assembly when no variables in template. Fixing issue with VIM test failures by adding also all builtin nan/nanl/nanf/inf/inff/huge_val/huge_valf/huge_vall. Merging Commit 40d0144. Fixing issue with nmap (from commit baf20c1). Fixing issue with extended assembly when compiling cpython. Depending the assembly file INTEL or AT&T, assembly using gcc or as. Fixing issue with section attribute when set after the global variable name.
+1.0.23_vim        Improvement: diagnose overflow in integer constant expression #96  from @pmor13. Fixing issue with old C style (K&R) when parameters order don't correspond to parameter definition. Adding \__LINE__ in parse.c in all error_tok messages. Removing \__builtin_memcpy \__builtin_memset macro from preprocess.c that causes segmentation fault on zlib project. Adding other tests from @cosmopolitan. Adding \__GNUC__ macro and fixing all issues caused by this defined macro. Defining _Pragma macro that does nothing to keep compatibility with \__GNUC__. Fixing regression on struct members. Fixed on test case from curl. Renaming GNUC_compatibility to 1.0.23. Managing store_gp with size 16. Fixing issue with curl. Fixing last issue with curl due to sizeof_int and sizeof_long not taken in account (adding them in stddef.h). Fixing issue ISS-146 with semun. Fixing issue with \__builtin_clz that gives incorrect result. And adding \__builtin_ctzl and \__builtin_clzl. Adding \__builtin_isnan (ISS-175). Fixing issue with lock not correctly managed in extended assembly (ISS-174). Fxing other issues with extended assembly and adding several tests. Adding \__builtin_bswapxx (16, 32, 64). Fixing issue with assembly when no variables in template. Fixing issue with VIM test failures by adding also all builtin nan/nanl/nanf/inf/inff/huge_val/huge_valf/huge_vall. Merging Commit 40d0144. Fixing issue with nmap (from commit baf20c1). Fixing issue with extended assembly when compiling cpython. Depending the assembly file INTEL or AT&T, assembly using gcc or as. Fixing issue with section attribute when set after the global variable name. Removing fix for ISS-166 causing issue with memcached compile. Adding other ignored parameters. Adding has_vla for computing struct with vla.
 
 
 ## old release notes

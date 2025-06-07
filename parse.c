@@ -1219,8 +1219,32 @@ static Node *compute_vla_size(Type *ty, Token *tok)
 
   }
 
-  if (ty->kind != TY_VLA)
+  if (ty->kind != TY_VLA && !ty->has_vla)
     return node;
+
+
+  if ((ty->kind == TY_STRUCT || ty->kind == TY_UNION) && ty->has_vla) {
+    // Allocate temporary variable to hold size
+    ty->vla_size = new_lvar("", ty_ulong, NULL);
+    Node *sz = new_num(0, tok);
+
+    for (Member *mem = ty->members; mem; mem = mem->next) {
+      Node *member_size;
+
+      if (mem->ty->kind == TY_VLA || mem->ty->has_vla) {
+        node = new_binary(ND_COMMA, node, compute_vla_size(mem->ty, tok), tok);
+        member_size = new_var_node(mem->ty->vla_size, tok);
+      } else {
+        member_size = new_num(mem->ty->size, tok);
+      }
+
+      // Simply add size, no alignment
+      sz = new_binary(ND_ADD, sz, member_size, tok);
+    }
+
+    Node *expr = new_binary(ND_ASSIGN, new_var_node(ty->vla_size, tok), sz, tok);
+    return new_binary(ND_COMMA, node, expr, tok);
+  }    
 
   Node *base_sz;
   if (ty->base->kind == TY_VLA)
@@ -2899,8 +2923,7 @@ static bool is_const_expr(Node *node)
   case ND_LE:
   case ND_LOGAND:
   case ND_LOGOR:
-      //trying to fix issue #166 about wrong VLA for complex constant expression in macro expanded
-      return is_const_expr(node->lhs) && (is_const_expr(node->rhs)|| eval(node));
+    return is_const_expr(node->lhs) && is_const_expr(node->rhs);
   case ND_COND:
     if (!is_const_expr(node->cond))
       return false;
@@ -3655,6 +3678,17 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
     cur->ty = array_of(cur->ty->base, 0);
     ty->is_flexible = true;
   }
+
+  
+  //Check for VLA-containing members
+  for (Member *mem = head.next; mem; mem = mem->next) {
+    if (mem->ty->has_vla) {
+      ty->has_vla = true;
+      break;
+    }
+  }
+
+
   *rest = tok->next;
   ty->members = head.next;
 }
@@ -4939,6 +4973,7 @@ static Node *primary(Token **rest, Token *tok)
       error_tok(tok, "%s %d: in primary : incomplete type for sizeof", PARSE_C, __LINE__);
     }
 
+
     if (ty->kind == TY_VLA)
     {
       if (ty->vla_size)
@@ -4947,6 +4982,15 @@ static Node *primary(Token **rest, Token *tok)
       Node *lhs = compute_vla_size(ty, tok);
       Node *rhs = new_var_node(ty->vla_size, tok);
       return new_binary(ND_COMMA, lhs, rhs, tok);
+    }
+
+    if ((ty->kind == TY_STRUCT || ty->kind == TY_UNION) && ty->has_vla) {
+      if (!ty->vla_size) {
+        Node *lhs = compute_vla_size(ty, tok);  // defines ty->vla_size
+        Node *rhs = new_var_node(ty->vla_size, tok);
+        return new_binary(ND_COMMA, lhs, rhs, tok);
+      }
+      return new_var_node(ty->vla_size, tok);
     }
 
     return new_ulong(ty->size, start);
@@ -4971,6 +5015,15 @@ static Node *primary(Token **rest, Token *tok)
       Node *lhs = compute_vla_size(node->ty, tok);
       Node *rhs = new_var_node(node->ty->vla_size, tok);
       return new_binary(ND_COMMA, lhs, rhs, tok);
+    }
+
+    if ((node->ty->kind == TY_STRUCT || node->ty->kind == TY_UNION) && node->ty->has_vla) {
+      if (!node->ty->vla_size) {
+        Node *lhs = compute_vla_size(node->ty, tok);  // defines ty->vla_size
+        Node *rhs = new_var_node(node->ty->vla_size, tok);
+        return new_binary(ND_COMMA, lhs, rhs, tok);
+      }
+      return new_var_node(node->ty->vla_size, tok);
     }
 
     // if (node->ty->kind == TY_VLA)
