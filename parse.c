@@ -1214,7 +1214,7 @@ static Node *compute_vla_size(Type *ty, Token *tok)
 {
   Node *node = new_node(ND_NULL_EXPR, tok);
 
-  if (ty->base) {
+  if (ty->base) {    
     node = new_binary(ND_COMMA, node, compute_vla_size(ty->base, tok), tok);
 
   }
@@ -1237,7 +1237,7 @@ static Node *compute_vla_size(Type *ty, Token *tok)
       } else {
         member_size = new_num(mem->ty->size, tok);
       }
-
+      
       // Simply add size, no alignment
       sz = new_binary(ND_ADD, sz, member_size, tok);
     }
@@ -1253,6 +1253,8 @@ static Node *compute_vla_size(Type *ty, Token *tok)
     base_sz = new_num(ty->base->size, tok);
 
   ty->vla_size = new_lvar("", ty_ulong, NULL);
+  if (!ty->vla_len)
+    ty->vla_len = new_var_node(ty->vla_size, tok);
 
   Node *expr = new_binary(ND_ASSIGN, new_var_node(ty->vla_size, tok),
                           new_binary(ND_MUL, ty->vla_len, base_sz, tok),
@@ -6710,6 +6712,9 @@ static int64_t eval_sign_extend(Type *ty, uint64_t val) {
   case 2: return ty->is_unsigned ? (uint16_t)val : (int64_t)(int16_t)val;
   case 4: return ty->is_unsigned ? (uint32_t)val : (int64_t)(int32_t)val;
   case 8: return val;
+  case 16: return ty->is_unsigned ? (uint64_t)val : (int64_t)val;
+
   }
+  printf("====FATAL ERROR %d\n", ty->size );
   unreachable();
 }

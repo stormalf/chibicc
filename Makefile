@@ -67,7 +67,7 @@ zlib:
 	cd ../zlib && make clean && make && make test
 
 nmap:
-	cd ../nmap && make clean && make && make check
+	cd ../nmap && make clean && CC=chibicc ./configure --without-dbus && make && make check
 
 openssl:
 	cd ../openssl && make clean && make 

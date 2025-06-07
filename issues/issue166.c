@@ -114,7 +114,7 @@ int
 heap_page_prune()
 {
 	PruneState	prstate;
-	memset(prstate.marked, 0, sizeof(prstate.marked));
+	memset(prstate.marked, 0, sizeof(prstate.marked + 1));
 	printf("====%ld\n", sizeof(prstate.marked));
 	printf("====%d\n", MaxHeapTuplesPerPage + 1);
 	printf("====ok\n");
