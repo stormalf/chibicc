@@ -94,7 +94,10 @@ static Token *preprocess2(Token *tok);
 static Macro *find_macro(Token *tok);
 static void join_adjacent_string_literals(Token *tok);
 static Token *paste(Token *lhs, Token *rhs);
+static bool file_exists_in_include_path(const char *filename);
 
+
+//begin
 static bool is_hash(Token *tok)
   // [https://www.sigbus.info/n1570#6.10.3.4p3] tok->origin is checked here
   // because "#" can appear in object-like macro, and after expansion of that
@@ -308,6 +311,7 @@ static Token *new_num_token(int val, Token *tmpl)
   return tokenize(new_file(tmpl->file->name, tmpl->file->file_no, buf));
 }
 
+
 static Token *read_const_expr(Token **rest, Token *tok)
 {
   tok = copy_line(rest, tok);
@@ -334,11 +338,50 @@ static Token *read_const_expr(Token **rest, Token *tok)
         ctx->funcname = "read_const_expr";        
         ctx->line_no = __LINE__ + 1;           
         tok = skip(tok, ")", ctx);
-      }
+      } 
 
       cur = cur->next = new_num_token(m ? 1 : 0, start);
       continue;
+    } else if (equal(tok, "__has_include")) {
+  Token *start = tok;
+  bool has_paren = consume(&tok, tok->next, "(");
+
+  if (tok->kind != TK_STR && !equal(tok, "<"))
+    error_tok(start, "%s: in read_const_expr : __has_include expects a filename", PREPROCESS_C);
+
+  char filename[PATH_MAX];
+
+  if (tok->kind == TK_STR) {
+    // __has_include("header.h")
+    snprintf(filename, sizeof(filename), "%s", tok->str);
+    filename[tok->len] = '\0';
+    tok = tok->next;
+  } else {
+    // __has_include(<header.h>)
+    tok = tok->next;
+    const char *start_str = tok->str;
+    int len = 0;
+    while (!equal(tok, ">") && tok->kind != TK_EOF) {
+      len += tok->len;
+      tok = tok->next;
     }
+    if (!equal(tok, ">"))
+      error_tok(start, "%s: in read_const_expr : expected closing > in __has_include", PREPROCESS_C);
+      
+
+    snprintf(filename, sizeof(filename), "%.*s", len, start_str);
+    tok = tok->next;  // consume '>'
+  }
+
+  if (has_paren)
+    tok = skip(tok, ")", ctx);
+
+  bool found = file_exists_in_include_path(filename);
+  cur = cur->next = new_num_token(found ? 1 : 0, start);
+  continue;
+}
+
+
     cur = cur->next = tok;
     tok = tok->next;
   }
@@ -346,6 +389,7 @@ static Token *read_const_expr(Token **rest, Token *tok)
   cur->next = tok;
   return head.next;
 }
+
 
 // Read and evaluate a constant expression.
 static long eval_const_expr(Token **rest, Token *tok)
@@ -1126,6 +1170,8 @@ static Token *preprocess2(Token *tok)
     {
       bool is_dquote;
       char *filename = read_include_filename(&tok, tok->next, &is_dquote);
+      if (isDebug)
+        printf("=====includes===%s\n", filename);
 
       if (filename[0] != '/' && is_dquote)
       {
@@ -1396,6 +1442,7 @@ static char *format_time(struct tm *tm)
 void init_macros(void)
 {
   // Define predefined macros
+  define_macro("__VERSION__", "\"" VERSION "\"");
   define_macro("_LP64", "1");
   define_macro("__C99_MACRO_WITH_VA_ARGS", "1");
   define_macro("__ELF__", "1");
@@ -1427,6 +1474,7 @@ void init_macros(void)
   define_macro("__const__", "const");
   define_macro("__gnu_linux__", "1");
   define_macro("__inline__", "inline");
+  define_macro("__inline", "inline");
   define_macro("__linux", "1");
   define_macro("__linux__", "1");
   define_macro("__signed__", "signed");
@@ -1438,6 +1486,7 @@ void init_macros(void)
   define_macro("__x86_64__", "1");
   define_macro("__GNU__", "1");
   define_macro("__INTEL_COMPILER", "1");
+
   define_macro("HAVE_GCC__SYNC_CHAR_TAS", "1");
   define_macro("HAVE_GCC__SYNC_INT32_TAS", "1");
   define_macro("HAVE_GCC__SYNC_INT32_CAS", "1");
@@ -1455,6 +1504,28 @@ void init_macros(void)
   define_macro("offsetof", "__builtin_offsetof");
   define_macro("__builtin_choose_expr(cond, true_expr, false_expr)", "(cond ? true_expr : false_expr)");
   //define_macro("__GNUC__", "9");
+    define_macro("__SHRT_MAX__", "32767");
+  define_macro("__INT_MAX__", "2147483647");
+  define_macro("__LONG_MAX__", "9223372036854775807L");
+  define_macro("__LONG_LONG_MAX__", "9223372036854775807LL");
+  define_macro("__SCHAR_MAX__", "127");
+  define_macro("__WCHAR_MAX__", "2147483647"); 
+  define_macro("__CHAR_BIT__", "8");
+  define_macro("__SCHAR_MAX__", "127");
+  define_macro("__SHRT_MAX__", "32767");
+  define_macro("__INT_MAX__", "2147483647");
+  define_macro("__LONG_MAX__", "9223372036854775807L");
+  define_macro("__LONG_LONG_MAX__", "9223372036854775807LL");
+  define_macro("__SCHAR_WIDTH__", "8");
+  define_macro("__SHRT_WIDTH__", "16");
+  define_macro("__INT_WIDTH__", "32");
+  define_macro("__LONG_WIDTH__", "64");
+  define_macro("__LONG_LONG_WIDTH__", "64");
+  define_macro("__SCHAR_MIN__", "-128");
+  define_macro("__SHRT_MIN__", "-32768");
+  define_macro("__INT_MIN__", "-2147483648");
+  define_macro("__LONG_MIN__", "-9223372036854775808L");
+  define_macro("__LONG_LONG_MIN__", "-9223372036854775808LL");
   define_macro("HAVE_ATTRIBUTE_PACKED", "1");
   define_macro("linux", "1");
   define_macro("unix", "1");
@@ -1464,7 +1535,8 @@ void init_macros(void)
   define_macro("__ORDER_LITTLE_ENDIAN__", "1234");  
   define_macro("__ORDER_BIG_ENDIAN__", "4321");
   define_macro("__BYTE_ORDER__", "__ORDER_LITTLE_ENDIAN__");
-  //define_macro("USE_BUILTINS", "1");
+  define_macro("USE_BUILTINS", "1");
+  define_macro("_Pragma(message) ", "");
   // if (opt_fbuiltin) {
   //   define_macro("memcpy", "__builtin_memcpy");
   //   define_macro("memset", "__builtin_memset");
@@ -1529,6 +1601,10 @@ static void join_adjacent_string_literals(Token *tok)
     }
 
     StringKind kind = getStringKind(tok1);
+    if (!tok1->ty){
+      error("%s: %s:%d: error: in join_adjacent_string_literals :  tok1->ty is null", PREPROCESS_C, __FILE__, __LINE__);
+    }
+
     Type *basety = tok1->ty->base;
 
     for (Token *t = tok1->next; t->kind == TK_STR; t = t->next)
@@ -1563,6 +1639,11 @@ static void join_adjacent_string_literals(Token *tok)
     {
       tok1 = tok1->next;
       continue;
+    }
+
+    if (!tok1->ty){
+      error("%s: %s:%d: error: in join_adjacent_string_literals :  tok1->ty is null", PREPROCESS_C, __FILE__, __LINE__);
+      
     }
 
     Token *tok2 = tok1->next;
@@ -1644,3 +1725,13 @@ Token *preprocess3(Token *tok)
   return head.next;
 }
 
+
+static bool file_exists_in_include_path(const char *filename) {
+  for (int i = 0; i < include_paths.len; i++) {
+    char path[PATH_MAX];
+    snprintf(path, sizeof(path), "%s/%s", include_paths.data[i], filename);
+    if (access(path, R_OK) == 0)
+      return true;
+  }
+  return false;
+}

@@ -43,6 +43,11 @@
 #define MAXLEN 501
 #define DEFAULT_TARGET_MACHINE "x86_64-linux-gnu"
 
+
+#define STR_HELPER(x) #x
+#define STR(x) STR_HELPER(x)
+
+
 #define HELP PRODUCT " is a C compiler based on " PRODUCT " created by Rui Ueyama.\n \
 See original project https://github.com/rui314/chibicc for more information\n \
 this " PRODUCT " contains only some differences for now like new parameters\n"
@@ -100,6 +105,10 @@ this " PRODUCT " contains only some differences for now like new parameters\n"
 -dM Print macro definitions in -E mode instead of normal output\n \
 -print print all tokens in a log file in /tmp/chibicc.log \n \
 -A print Abstract Syntax Tree in a log file in /tmp/chibicc.log \n \
+-msse3 enabling sse3 support \n\
+-msse4 enabling sse4 support \n \
+-nostdlib  Do not use the standard system startup files or libraries when linking \n \
+-nostdinc Do not use the standard system header files when compiling \n \
 chibicc [ -o <path> ] <file>\n"
 
 typedef struct Type Type;
@@ -145,7 +154,7 @@ typedef enum
   TK_STR,     // String literals
   TK_NUM,     // Numeric literals
   TK_PP_NUM,  // Preprocessing numbers
-  TK_EOF,     // End-of-file markers
+  TK_EOF,     // End-of-file markers  
 } TokenKind;
 
 typedef struct
@@ -210,7 +219,7 @@ void define_macro(char *name, char *buf);
 void undef_macro(char *name);
 Token *preprocess(Token *tok, bool isReadLine);
 Token *preprocess3(Token *tok);
-
+void define_typedefs(void);
 
 //
 // parse.c
@@ -223,9 +232,11 @@ struct Obj
   Obj *next;
   char *name;     // Variable name
   char *funcname; // function name
+  char *alias_name; // alias name for function when weak attribute
   Type *ty;       // Type
   Token *tok;     // representative token
   bool is_local;  // local or global/function
+  bool is_compound_lit; //to handle compound literals
   int align;      // alignment
 
   // Local variable
@@ -255,12 +266,13 @@ struct Obj
   //from COSMOPOLITAN adding is_aligned, is_noreturn, is_destructor, is_constructor, is_ms_abi, is_no_instrument_function, is_force_align_arg_pointer, is_no_caller_saved_registers
   bool is_aligned;
   bool is_noreturn;
-  bool is_destructor;
   bool is_constructor;
+  bool is_destructor;
   bool is_ms_abi; 
   bool is_no_instrument_function;
   bool is_force_align_arg_pointer;
   bool is_no_caller_saved_registers;
+  
 
   Obj *params;
   Node *body;
@@ -273,6 +285,12 @@ struct Obj
   bool is_live;
   bool is_root;
   StringArray refs;
+
+  //for dwarf 
+  int file_no; // Index or number to identify the source file
+  int line_no; // Line number where the variable or function is defined
+  bool is_prototyped; // Whether the function is prototyped or not
+
 };
 
 // Global variable can be initialized either by a constant expression
@@ -358,13 +376,14 @@ typedef enum
   ND_BUILTIN_MEMCPY, //builtin memcpy
   ND_BUILTIN_MEMSET, //builtin memset
   ND_BUILTIN_CLZ, //builtin clz
-  ND_BUILTIN_CLZL, //builtin clz
-  ND_BUILTIN_CLZLL, //builtin clzl
+  ND_BUILTIN_CLZL, //builtin clzl
+  ND_BUILTIN_CLZLL, //builtin clzll
   ND_BUILTIN_CTZ, //builtin ctz
   ND_BUILTIN_CTZL, //builtin ctzl
   ND_BUILTIN_CTZLL, //builtin ctzll
   ND_POPCOUNT,    //builtin popcount
   ND_EXPECT,    //builtin expect
+  ND_ABORT,    //builtin abort
   ND_RETURN_ADDR,    //builtin return address
   ND_BUILTIN_ADD_OVERFLOW,  //builtin add overflow
   ND_BUILTIN_SUB_OVERFLOW,  //builtin sub overflow
@@ -372,14 +391,18 @@ typedef enum
   ND_UNREACHABLE,   //builtin unreachable
   ND_ALLOC,   //builtin alloca
   ND_BUILTIN_INFF, //builtin inff
+  ND_BUILTIN_INF, //builtin inf
+  ND_BUILTIN_NAN, //builtin nan
+  ND_BUILTIN_NANF, //builtin nanf
+  ND_BUILTIN_NANL, //builtin nanl
   ND_BUILTIN_ISNAN, //builtin isnan
+  ND_BUILTIN_HUGE_VALL, //builtin huge vall
+  ND_BUILTIN_HUGE_VALF, //builtin huge valf
+  ND_BUILTIN_HUGE_VAL, //builtin huge val
   ND_BUILTIN_BSWAP16, //builtin bswap16
   ND_BUILTIN_BSWAP32, //builtin bswap32
-  ND_BUILTIN_BSWAP64, //builtin bswap64
-  ND_BUILTIN_HUGE_VALF, //builtin huge_valf
-  ND_BUILTIN_HUGE_VAL, //builtin huge_val
-  ND_BUILTIN_HUGE_VALL, //builtin huge_vall
-  ND_BUILTIN_FRAME_ADDRESS, //builtin frame_address
+  ND_BUILTIN_BSWAP64, //builtin bswap64,
+  ND_BUILTIN_FRAME_ADDRESS, // builtin frame address
 } NodeKind;
 
 // AST node type
@@ -521,6 +544,7 @@ struct Type
   bool is_pointer;   // true if it's a pointer
   Type *pointertype; // store the pointer type int, char...
   Type *origin;      // for type compatibility check
+  Type *decl_next;    // forward declarations
 
   // Pointer-to or array-of type. We intentionally use the same member
   // to represent pointer/array duality in C.
@@ -549,15 +573,22 @@ struct Type
   Member *members;
   bool is_flexible;
   bool is_packed;
-  
+  bool has_vla;  
   //from COSMOPOLITAN adding is_aligned
   bool is_aligned;
+  bool is_weak;
+  char *visibility;
 
+  bool is_compound_lit; // Flag to indicate if this type is a compound literal
   // Function type
   Type *return_ty;
   Type *params;
   bool is_variadic;
   Type *next;
+  char *alias_name; // alias name for function when weak attribute
+  char *section;
+  bool is_constructor;
+  bool is_destructor;
 };
 
 // Struct member
@@ -607,6 +638,7 @@ Type *vla_of(Type *base, Node *expr);
 Type *enum_type(void);
 Type *struct_type(void);
 void add_type(Node *node);
+bool is_array(Type *ty);
 
 
 char *nodekind2str(NodeKind kind);
@@ -714,6 +746,9 @@ extern bool printTokens;
 extern bool isPrintMacro;
 extern char *extract_filename(char *tmpl);
 extern char *extract_path(char *tmpl);
+extern bool opt_sse3;
+extern bool opt_sse4;
+extern bool opt_g;
 
 //
 // extended_asm.c
@@ -737,5 +772,4 @@ char *retrieve_output_index_str(char letter);
 int retrieve_output_index_from_letter(char letter);
 char *retrieveVariableNumber(int index);
 char *generate_input_for_output(void);
-
-
+char *generate_return_rax(Token *retval);

@@ -25,6 +25,8 @@ static Obj *current_fn;
 static void gen_expr(Node *node);
 static void gen_stmt(Node *node);
 static void print_offset(Obj *prog);
+static int last_loc_line = 0;
+
 
 __attribute__((format(printf, 1, 2))) static void println(char *fmt, ...)
 {
@@ -972,7 +974,12 @@ static void HandleAtomicArithmetic(Node *node, const char *op) {
 // Generate code for a given node.
 static void gen_expr(Node *node)
 {
+  if (!node)
+    error("%s: %s:%d: error: in gen_expr : node is null!", CODEGEN_C, __FILE__, __LINE__);
+  if (node->tok && node->tok->line_no != last_loc_line) {
   println("  .loc %d %u", node->tok->file->file_no, node->tok->line_no);
+      last_loc_line = node->tok->line_no;
+  }
 
   switch (node->kind)
   {
@@ -1469,31 +1476,7 @@ static void gen_expr(Node *node)
       return;
   }  
 
-  case ND_BUILTIN_INFF:
-  case ND_BUILTIN_HUGE_VALF: {
-      // Loading the bit pattern for positive infinity in 32-bit single precision (float)
-      println("  mov $0x7f800000, %%eax");  // Load the bit pattern 0x7f800000 into eax (single precision positive infinity)
-      println("  movd %%eax, %%xmm0"); 
-      return;
-  }
-
-  // For __builtin_huge_val
-  case ND_BUILTIN_HUGE_VAL: {
-      // Loading the bit pattern for positive infinity in 64-bit double precision
-      println("  mov $0x7ff0000000000000, %%rax");  
-      println("  movq %%rax, %%xmm0");      
-      return;
-  }
-
-  // For __builtin_huge_vall
-  case ND_BUILTIN_HUGE_VALL: {
-    println("  push $0x7f800000"); 
-    println("  flds (%%rsp)"); 
-    println("  pop %%rax"); 
-    return;
-  }
-
-  // For __builtin_frame_address
+    // For __builtin_frame_address
   case ND_BUILTIN_FRAME_ADDRESS: {
     int c = count();  // Unique label counter
     // Get the level argument from the stack
@@ -1522,6 +1505,7 @@ static void gen_expr(Node *node)
     return;
   }
 
+
   case ND_POPCOUNT:
     gen_expr(node->builtin_val); // Generate code for the expression
     println("  popcnt %%rax, %%rax"); // Count the number of set bits
@@ -1539,6 +1523,10 @@ static void gen_expr(Node *node)
     println("  mov %%rdi, %%rax");
     return;
   }   
+  case ND_ABORT: {
+    println("  call abort"); 
+    return;
+  }
   case ND_RETURN_ADDR: {
     // Generate code to get the frame pointer of the current function
     println("  mov %%rbp, %%rax");
@@ -1864,7 +1852,45 @@ static void gen_expr(Node *node)
     println("  sub %%rdi, %%rsp"); // Allocate space on the stack
     println("  mov %%rsp, %%rax"); // Store the new stack pointer (allocated memory address) in RAX
     return;
-  
+  case ND_BUILTIN_NANF:  
+  case ND_BUILTIN_HUGE_VALF:
+  case ND_BUILTIN_INFF: {
+    union {
+      float f;
+      uint32_t i;
+    } u;
+    u.f = node->fval;
+    println("  mov $%u, %%eax", u.i);
+    println("  movd %%eax, %%xmm0");
+    return;
+  }
+  case ND_BUILTIN_NAN:
+  case ND_BUILTIN_HUGE_VAL:
+  case ND_BUILTIN_INF: {
+    union {
+      double d;
+      uint64_t i;
+    } u;
+    u.d = node->fval;
+    println("  movq $%lu, %%rax", u.i);
+    println("  movq %%rax, %%xmm0");
+    return;
+}
+  case ND_BUILTIN_NANL:
+  case ND_BUILTIN_HUGE_VALL: {
+    union {
+      long double ld;
+      uint8_t bytes[10];
+    } u;
+    u.ld = node->fval;
+
+  for (int i = 0; i < 10; i++)
+    println("  movb $%d, -%d(%%rsp)", u.bytes[i], 10 - i);
+
+  println("  fldt -10(%%rsp)");
+  return;
+  }
+
   }
 
   switch (node->lhs->ty->kind)
@@ -2078,7 +2104,12 @@ static void gen_expr(Node *node)
 
 static void gen_stmt(Node *node)
 {
+  if (!node)
+    error("%s: %s:%d: error: in gen_stmt : node is null!", CODEGEN_C, __FILE__, __LINE__);
+  if (node->tok && node->tok->line_no != last_loc_line) {
   println("  .loc %d %u", node->tok->file->file_no, node->tok->line_no);
+        last_loc_line = node->tok->line_no;
+  }
 
   switch (node->kind)
   {
@@ -2212,6 +2243,7 @@ static void emit_data(Obj *prog)
 {
   for (Obj *var = prog; var; var = var->next)
   {
+
     if (var->is_function || !var->is_definition)
       continue;
 
@@ -2230,15 +2262,26 @@ static void emit_data(Obj *prog)
       println("  .comm %s, %d, %d", var->name, var->ty->size, align);
       continue;
     }
+    
 
     // .data or .tdata
     if (var->init_data)
     {
-      if (var->is_tls)
+      // if (var->is_tls)
+      //   println("  .section .tdata,\"awT\",@progbits");
+      // else
+      //   println("  .section .data,\"aw\",@progbits");
+      //   //println("  .data");
+      //from cosmopolitan
+      if (var->section) {
+        println("  .section %s,\"aw\",@progbits", var->section);
+      }
+      else if (var->is_tls)
         println("  .section .tdata,\"awT\",@progbits");
       else
-        println("  .data");
+        println("  .section .data,\"aw\",@progbits");
 
+            
       println("  .type %s, @object", var->name);
       println("  .size %s, %d", var->name, var->ty->size);
       println("  .align %d", align);
@@ -2262,11 +2305,21 @@ static void emit_data(Obj *prog)
       continue;
     }
 
-    // .bss or .tbss
-    if (var->is_tls)
+    // // .bss or .tbss
+    // if (var->is_tls)
+    //   println("  .section .tbss,\"awT\",@nobits");
+    // else
+    //   println("  .section .bss,\"aw\",@nobits");
+    //   //println("  .bss");
+
+    if (var->section) {
+      println("  .section %s,\"aw\",@nobits", var->section);
+      printf("====%s\n", var->section);
+    }
+    else if (var->is_tls)
       println("  .section .tbss,\"awT\",@nobits");
     else
-      println("  .bss");
+      println("  .section .bss,\"aw\",@nobits");
 
     println("  .align %d", align);
     println("%s:", var->name);
@@ -2358,6 +2411,20 @@ static void emit_text(Obj *prog)
     if (!fn->is_function || !fn->is_definition)
       continue;
 
+      
+    if (fn->is_function && fn->is_constructor) {
+      println("\n  .section .init_array,\"aw\"");
+      println("  .p2align 3");
+      println("  .quad %s", fn->name);
+    }      
+
+    if (fn->is_function && fn->is_destructor) {
+      println("  .section .fini_array,\"aw\",@fini_array");
+      println("  .p2align 3");
+      println("  .quad %s", fn->name);
+      println("  .text"); 
+    }
+
     // No code is emitted for "static inline" functions
     // if no one is referencing them.
     if (!fn->is_live)
@@ -2368,8 +2435,13 @@ static void emit_text(Obj *prog)
     else 
       println("  .globl %s", fn->name);
 
-
-    println("  .text");
+    // Respect section attribute if set
+    if (fn->section)
+      println("  .section %s,\"ax\",@progbits", fn->section);
+    else
+      println("  .section .text,\"ax\",@progbits");
+    //println("  .text");
+    //println("\n  .section .text,\"ax\",@progbits");
     println("  .type %s, @function", fn->name);
     println("%s:", fn->name);
 
@@ -2487,6 +2559,7 @@ void codegen(Obj *prog, FILE *out)
   assign_lvar_offsets(prog);
   emit_data(prog);
   emit_text(prog);
+  println("  .section  .note.GNU-stack,\"\",@progbits");
   //print offset for each variable
   if (isDebug)
     print_offset(prog);

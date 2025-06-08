@@ -2,7 +2,7 @@
 #define TYPE_C "type.c"
 
 Type *ty_void = &(Type){TY_VOID, 1, 1};
-Type *ty_bool = &(Type){TY_BOOL, 1, 1};
+Type *ty_bool = &(Type){TY_BOOL, 1, 1, true};
 
 Type *ty_char = &(Type){TY_CHAR, 1, 1};
 Type *ty_short = &(Type){TY_SHORT, 2, 2};
@@ -44,6 +44,12 @@ bool is_flonum(Type *ty)
          ty->kind == TY_LDOUBLE;
 }
 
+
+bool is_array(Type *ty) {
+  return ty->kind == TY_ARRAY || ty->kind == TY_VLA;
+}
+
+
 bool is_numeric(Type *ty)
 {
   return is_integer(ty) || is_flonum(ty);
@@ -62,6 +68,12 @@ bool is_compatible(Type *t1, Type *t2)
 
   if (t1->kind != t2->kind)
     return false;
+
+  if ((t1->kind == TY_VLA && t2->kind == TY_VLA) ||
+    (t1->kind == TY_VLA && t2->kind == TY_ARRAY) ||
+    (t1->kind == TY_ARRAY && t2->kind == TY_VLA))
+    return is_compatible(t1->base, t2->base);
+
 
   switch (t1->kind)
   {
@@ -130,9 +142,12 @@ Type *func_type(Type *return_ty)
 
 Type *array_of(Type *base, int len)
 {
+  if (!base)
+  error("%s %d: in array_of : base is null", TYPE_C, __LINE__); 
   Type *ty = new_type(TY_ARRAY, base->size * len, base->align);
   ty->base = base;
   ty->array_len = len;
+  ty->has_vla = base->has_vla; 
   return ty;
 }
 
@@ -142,6 +157,7 @@ Type *vla_of(Type *base, Node *len)
   Type *ty = new_type(TY_VLA, 8, 8);
   ty->base = base;
   ty->vla_len = len;
+  ty->has_vla = true;
   return ty;
 
 }
@@ -164,6 +180,9 @@ static Type *get_common_type(Type *ty1, Type *ty2)
 
   //======ISS-158 trying to fix issue with "parse.c: in struct_ref : not a struct nor a union" when in a macro definition we have (size_t)-1 ? NULL : (n) - 1
   //assuming that if one is void it returns the second type that could be void also or different type.
+  if (!ty2)
+    return ty1;
+    
   if (ty1->base) {
     if (ty1->base->kind == TY_VOID)
       if (ty2->base)
@@ -386,7 +405,9 @@ void add_type(Node *node)
     add_type(node->lhs);
     node->ty = ty_bool;
     return;
-  case ND_BUILTIN_FRAME_ADDRESS:    
+  case ND_ABORT:
+    return;
+  case ND_BUILTIN_FRAME_ADDRESS:
   case ND_RETURN_ADDR:
     add_type(node->lhs);
     node->ty = ty_void_ptr;
@@ -402,14 +423,14 @@ void add_type(Node *node)
   case ND_BUILTIN_ISNAN:
     add_type(node->builtin_val);
     node->ty = ty_bool;
-    return;    
+    return;
   case ND_BUILTIN_CTZ:
   case ND_BUILTIN_CTZL:
   case ND_BUILTIN_CTZLL:
   case ND_BUILTIN_CLZ:
   case ND_BUILTIN_CLZL:
   case ND_BUILTIN_CLZLL:
-  case ND_BUILTIN_BSWAP32:
+  case ND_BUILTIN_BSWAP32:  
   case ND_POPCOUNT:
     add_type(node->builtin_val);
     node->ty = ty_int;
@@ -421,7 +442,7 @@ void add_type(Node *node)
   case ND_BUILTIN_BSWAP64:
     add_type(node->builtin_val);
     node->ty = ty_long;
-    return;        
+    return;       
   case ND_EXCH_N:
   case ND_FETCHADD:
   case ND_FETCHSUB:
@@ -442,13 +463,19 @@ void add_type(Node *node)
       error_tok(node->cas_addr->tok, "%s %d: pointer expected", TYPE_C, __LINE__);
     node->ty = node->lhs->ty->base;
     return;
-  case ND_BUILTIN_HUGE_VALF:
-      node->ty = ty_float;
-      return;
-  case ND_BUILTIN_HUGE_VAL:      
-  case ND_BUILTIN_HUGE_VALL:
+  case ND_BUILTIN_NANF:  
   case ND_BUILTIN_INFF:
-    node->ty = ty_ldouble;
+  case ND_BUILTIN_HUGE_VALF:
+    node->ty = ty_float;
+    return;
+  case ND_BUILTIN_NAN:    
+  case ND_BUILTIN_INF:
+  case ND_BUILTIN_HUGE_VAL:
+    node->ty = ty_double;
     return;    
+  case ND_BUILTIN_NANL:  
+  case ND_BUILTIN_HUGE_VALL:
+    node->ty = ty_ldouble;
+    return;      
   }
 }

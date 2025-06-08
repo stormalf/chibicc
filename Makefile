@@ -53,7 +53,9 @@ test-stage2: $(TESTS:test/%=stage2/test/%)
 	for i in $^; do echo $$i; ./$$i || exit 1; echo; done
 	test/driver.sh ./stage2/$(OBJECT)
 
-projects-all: projects openssl nmap vim curl 
+projects-all: projects openssl vim curl nmap
+
+projects-oth: openssl vim curl nmap
 
 projects: zlib util-linux nginx
 
@@ -65,7 +67,7 @@ zlib:
 	cd ../zlib && make clean && make && make test
 
 nmap:
-	cd ../nmap && make clean && make
+	cd ../nmap && make clean && make && make check
 
 openssl:
 	cd ../openssl && make clean && make 
@@ -74,23 +76,14 @@ util-linux:
 	cd ../util-linux && make clean && make && make check-programs && cd tests && ./run.sh
 
 nginx:
-	cd ../nginx && make clean && CC=chibicc CFLAGS=-fPIC ./auto/configure --with-http_ssl_module && make && objs/nginx -V
+	cd ../nginx && make clean && CC=chibicc CFLAGS=-fPIC ./auto/configure --with-http_ssl_module && make && make check
 
 vim:
 	cd ../vim && make clean && CC=chibicc CFLAGS=-fPIC ./configure && make && make test
 
 lxc:
 	cd ../lxc && rm -rf build && CC=chibicc \
-	CFLAGS="-fpic -Dlxc_attach_main=main -Dlxc_autostart_main=main -Dlxc_destroy_main=main -Dlxc_config_main=main -Dlxc_stop_main=main -Dlxc_info_main=main \
-	-Dlxc_checkpoint_main=main -Dlxc_cgroup_main=main -Dlxc_freeze_main=main -Dlxc_unfreeze_main=main -Dlxc_copy_main=main -Dlxc_device_main=main -Dlxc_execute_main=main \
-	-Dlxc_monitor_main=main -Dlxc_snapshot_main=main -Dlxc_console_main=main  -Dlxc_ls_main=main -Dlxc_create_main=main -Dlxc_start_main=main -Dlxc_unshare_main=main \
-	-Dlxc_wait_main=main -Dlxc_top_main=main" \
-	LDFLAGS="-fpic -Wl,--undefined,lxc_attach_main -Wl,--undefined,lxc_autostart_main -Wl,--undefined,lxc_destroy_main -Wl,--undefined,lxc_config_main \
-	-Wl,--undefined,lxc_stop_main -Wl,--undefined,lxc_info_main -Wl,--undefined,lxc_checkpoint_main -Wl,--undefined,lxc_cgroup_main -Wl,--undefined,lxc_freeze_main \
-	-Wl,--undefined,lxc_unfreeze_main -Wl,--undefined,lxc_copy_main -Wl,--undefined,lxc_device_main -Wl,--undefined,lxc_execute_main -Wl,--undefined,lxc_monitor_main \
-	-Wl,--undefined,lxc_snapshot_main -Wl,--undefined,lxc_console_main -Wl,--undefined,lxc_ls_main -Wl,--undefined,lxc_create_main -Wl,--undefined,lxc_start_main \
-	-Wl,--undefined,lxc_start_main -Wl,--undefined,lxc_unshare_main -Wl,--undefined,lxc_wait_main -Wl,--undefined,lxc_top_main" \
-	meson build && cd build && meson compile	
+	CFLAGS="-fpic" 	meson build && cd build && meson compile	
 
 # Misc.
 
@@ -106,9 +99,10 @@ clean:
 	find * -type f '(' -name '*~' -o -name '*.o' ')' -exec rm {} ';'
 
 install:
+	sudo rm -rf	/usr/local/include/x86_64-linux-gnu/chibicc && sudo rm -rf /usr/local/bin/chibicc
 	test -d /usr/local/include/x86_64-linux-gnu/chibicc || \
 		sudo mkdir -p /usr/local/include/x86_64-linux-gnu/chibicc
-	sudo cp include/* /usr/local/include/x86_64-linux-gnu/chibicc/
+	sudo cp -r include/* /usr/local/include/x86_64-linux-gnu/chibicc/
 	sudo cp chibicc /usr/local/bin/chibicc
 
 uninstall:
