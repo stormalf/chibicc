@@ -212,9 +212,7 @@ List of options ignored :
 
     "-O"
     "-W"
-    "-g"
-    "-std="
-    "-std"
+    "-P"
     "-ffreestanding"
     "-fno-omit-frame-pointer"
     "-fomit-frame-pointer"
@@ -229,12 +227,11 @@ List of options ignored :
     "-Bsymbolic"
     "-z"
     "defs"
-    "-flto"
-    "-flto=8"
     "-pedantic"
     "-nostdinc"
     "-mno-red-zone"
     "-fvisibility=default"
+    "-fvisibility=hidden"
     "-Werror=invalid-command-line-argument"
     "-Werror=unknown-warning-option"
     "-Wsign-compare"
@@ -257,12 +254,21 @@ List of options ignored :
     "-fasynchronous-unwind-tables"
     "-fexceptions"
     "--print-search-dirs"
+    "-msse4.1"
+    "-fprofile-arcs"
+    "-ftest-coverage"
     "-fdiagnostics-show-option"
     "-Xc"
     "-Aa"
     "-rdynamic"
     "-w"
     "--param=ssp-buffer-size=4"
+    "-fno-lto"
+    "-c99"
+    "-std"
+    "-fp-model"
+    "-fprofile-arcs"
+    "-ftest-coverage"
 
 ## Dockerfile and devcontainer
 
@@ -419,37 +425,31 @@ cpython: git clone git@github.com:python/cpython.git
         
         CC=chibicc ./configure
         make && make test
-        == Tests result: SUCCESS ==
-        
-        10 slowest tests:
-        - test_imaplib: 52.3 sec
-        - test_signal: 49.1 sec
-        - test.test_concurrent_futures.test_wait: 48.4 sec
-        - test.test_multiprocessing_forkserver.test_processes: 41.1 sec
-        - test.test_multiprocessing_spawn.test_processes: 40.1 sec
-        - test.test_multiprocessing_spawn.test_misc: 36.5 sec
-        - test_io: 33.8 sec
-        - test.test_gdb.test_pretty_print: 33.4 sec
-        - test_socket: 33.4 sec
-        - test_xmlrpc: 29.1 sec
-        
-        22 tests skipped:
-            test.test_asyncio.test_windows_events
-            test.test_asyncio.test_windows_utils test_bz2 test_dbm_gnu
-            test_dbm_ndbm test_devpoll test_idle test_ioctl test_kqueue
-            test_launcher test_msvcrt test_startfile test_tcl test_tkinter
-            test_ttk test_ttk_textonly test_turtle test_winapi
-            test_winconsoleio test_winreg test_winsound test_wmi
-        
-        2 tests skipped (resource denied):
-            test_peg_generator test_zipfile64
-        
-        448 tests OK.
-        
-        Total duration: 2 min 41 sec
-        Total tests: run=42,576 skipped=1,689
-        Total test files: run=470/472 skipped=22 resource_denied=2
-        Result: SUCCESS
+        failure with  
+
+    Process terminating with default action of signal 11 (SIGSEGV): dumping core
+    ==82695==  Access not within mapped region at address 0x25
+    ==82695==    at 0xB7BC8B: ??? (pystate.c:1435)
+    ==82695==    by 0xB7BAFB: ??? (pystate.c:1534)
+    ==82695==    by 0xB89CEC: ??? (pystate.c:1576)
+    ==82695==    by 0xB6F3F6: ??? (pylifecycle.c:667)
+    ==82695==    by 0xB69FDA: ??? (pylifecycle.c:943)
+    ==82695==    by 0xB699A1: ??? (pylifecycle.c:1112)
+    ==82695==    by 0xB784E5: ??? (pylifecycle.c:1432)
+    ==82695==    by 0x4088D7: ??? (_freeze_module.c:65)
+    ==82695==    by 0x407294: ??? (_freeze_module.c:224)
+    ==82695==    by 0x497D1C9: (below main) (libc_start_call_main.h:58)
+
+
+nmap : https://github.com/nmap/nmap
+
+    CC=chibicc ./configure --with-dbus
+    make
+    make check
+    Testing nmap_dns
+    Testing nmap_dns finished without errors
+    Ran 292 tests. 0 failures.
+
 
 ## meson
 
@@ -458,17 +458,7 @@ to be able to use meson with chibicc (meson doesn't know chibicc compiler), I ch
 lxc: https://github.com/lxc/lxc.git
 
     Due to use of __attribute__((weak(alias))) in lxc/src/lxc/lxc.c, the linker is not able to find the symbols in the lxc library.
-    CC=chibicc \
-    CFLAGS="-fpic -Dlxc_attach_main=main -Dlxc_autostart_main=main -Dlxc_destroy_main=main -Dlxc_config_main=main -Dlxc_stop_main=main -Dlxc_info_main=main \
-    -Dlxc_checkpoint_main=main -Dlxc_cgroup_main=main -Dlxc_freeze_main=main -Dlxc_unfreeze_main=main -Dlxc_copy_main=main -Dlxc_device_main=main -Dlxc_execute_main=main \
-    -Dlxc_monitor_main=main -Dlxc_snapshot_main=main -Dlxc_console_main=main  -Dlxc_ls_main=main -Dlxc_create_main=main -Dlxc_start_main=main -Dlxc_unshare_main=main \
-    -Dlxc_wait_main=main -Dlxc_top_main=main" \
-    LDFLAGS="-fpic -Wl,--undefined,lxc_attach_main -Wl,--undefined,lxc_autostart_main -Wl,--undefined,lxc_destroy_main -Wl,--undefined,lxc_config_main \
-    -Wl,--undefined,lxc_stop_main -Wl,--undefined,lxc_info_main -Wl,--undefined,lxc_checkpoint_main -Wl,--undefined,lxc_cgroup_main -Wl,--undefined,lxc_freeze_main \
-    -Wl,--undefined,lxc_unfreeze_main -Wl,--undefined,lxc_copy_main -Wl,--undefined,lxc_device_main -Wl,--undefined,lxc_execute_main -Wl,--undefined,lxc_monitor_main \
-    -Wl,--undefined,lxc_snapshot_main -Wl,--undefined,lxc_console_main -Wl,--undefined,lxc_ls_main -Wl,--undefined,lxc_create_main -Wl,--undefined,lxc_start_main \
-    -Wl,--undefined,lxc_start_main -Wl,--undefined,lxc_unshare_main -Wl,--undefined,lxc_wait_main -Wl,--undefined,lxc_top_main" \
-    meson build && cd build && meson compile
+    CC=chibicc CFLAGS="-fpic" meson build && cd build && meson compile
 
 
 ## Limits
@@ -477,8 +467,9 @@ Some C projects doesn't compile for now or crash after being compiled with chibi
 
 VLC : https://github.com/videolan/vlc.git 
 
+    autoreconf -fiv
     ./bootstrap
-    CC=chibicc CFLAGS="-fPIC" DEFS="-DHAVE_CONFIG_H -DHAVE_ATTRIBUTE_PACKED -DVLC_USED -DVLC_API -DVLC_DEPRECATED -DVLC_MALLOC" LDFLAGS="-fPIC" ./configure  --disable-xcb --disable-qt --disable-a52
+    CC=chibicc CFLAGS="-fPIC" CXXFLAGS="" DEFS="-DHAVE_CONFIG_H -DHAVE_ATTRIBUTE_PACKED -DVLC_USED -DVLC_API -DVLC_DEPRECATED -DVLC_MALLOC" LDFLAGS="-fPIC" ./configure  --disable-xcb --disable-qt --disable-a52 --disable-sse
     make all
 
     VLC doesn't compile with chibicc some issues to fix later.
@@ -486,22 +477,12 @@ VLC : https://github.com/videolan/vlc.git
 
 postgres: https://github.com/postgres/postgres.git  (in case of bad network use git clone --filter=blob:none --depth=1 https://github.com/postgres/postgres.git --branch master)
 
-    CC=chibicc  CFLAGS="-g -DHASH_DEBUG=1" ./configure --host x86_64-linux-gnu --disable-spinlocks
-    CC=chibicc  CFLAGS="-g -O0 -DHASH_DEBUG=1"  CXXFLAGS="-g -O0 -DHASH_DEBUG=1" ./configure --host x86_64-linux-gnu --without-icu --without-readline 
+    CC=chibicc  CFLAGS="-g" ./configure --host x86_64-linux-gnu --disable-spinlocks ac_cv_type___int128=no
     make
     make check
-	Program received signal SIGSEGV, Segmentation fault.
-    0x0000000001af1374 in hash_initial_lookup () at dynahash.c:1769
-    1769            segp = hashp->dir[segment_num];
-    (gdb) bt
-    #0  0x0000000001af1374 in hash_initial_lookup () at dynahash.c:1769
-    #1  0x0000000001af5d8a in hash_search_with_hash_value () at dynahash.c:1009
-    #2  0x0000000001af6d8d in hash_search () at dynahash.c:960
-    #3  0x0000000001bd8174 in pg_tzset () at pgtz.c:260
-    #4  0x0000000001bd8617 in pg_timezone_initialize () at pgtz.c:370
-    #5  0x0000000001b3a404 in InitializeGUCOptions () at guc.c:1538
-    #6  0x0000000001245ba6 in PostmasterMain () at postmaster.c:573
-    #7  0x0000000000ef5f48 in main () at main.c:197
+    failed with :
+    2025-06-08 23:05:39.492 CEST [206164] FATAL:  unrecognized SI message ID: -96
+    2025-06-08 23:05:39.492 CEST [206164] STATEMENT:  ALTER TABLE pg_proc ADD PRIMARY KEY USING INDEX pg_proc_oid_index;
 
 ## TODO
 
@@ -515,15 +496,12 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
 
 
 ## known issues
-    
-Seems to be some regressions to identify (except postgres always failed during test): 
 
-    git : 3 test failed
-    memcached : test failed after n°16
-    cpython: executing freeze_modules failed
-    postgres: segfault during bootstrap test
-    curl: 2 test failed
-    openssh-portable: regress tests failed
+    postgres execution : ko
+    git 3 tests failed
+    openssh-portable regress test failed
+    curl 2 tests ko
+    memcached test stuck after test n° 16
 
 
 ## debug

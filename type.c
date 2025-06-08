@@ -2,7 +2,7 @@
 #define TYPE_C "type.c"
 
 Type *ty_void = &(Type){TY_VOID, 1, 1};
-Type *ty_bool = &(Type){TY_BOOL, 1, 1};
+Type *ty_bool = &(Type){TY_BOOL, 1, 1, true};
 
 Type *ty_char = &(Type){TY_CHAR, 1, 1};
 Type *ty_short = &(Type){TY_SHORT, 2, 2};
@@ -68,6 +68,12 @@ bool is_compatible(Type *t1, Type *t2)
 
   if (t1->kind != t2->kind)
     return false;
+
+  if ((t1->kind == TY_VLA && t2->kind == TY_VLA) ||
+    (t1->kind == TY_VLA && t2->kind == TY_ARRAY) ||
+    (t1->kind == TY_ARRAY && t2->kind == TY_VLA))
+    return is_compatible(t1->base, t2->base);
+
 
   switch (t1->kind)
   {
@@ -136,6 +142,8 @@ Type *func_type(Type *return_ty)
 
 Type *array_of(Type *base, int len)
 {
+  if (!base)
+  error("%s %d: in array_of : base is null", TYPE_C, __LINE__); 
   Type *ty = new_type(TY_ARRAY, base->size * len, base->align);
   ty->base = base;
   ty->array_len = len;
@@ -172,6 +180,9 @@ static Type *get_common_type(Type *ty1, Type *ty2)
 
   //======ISS-158 trying to fix issue with "parse.c: in struct_ref : not a struct nor a union" when in a macro definition we have (size_t)-1 ? NULL : (n) - 1
   //assuming that if one is void it returns the second type that could be void also or different type.
+  if (!ty2)
+    return ty1;
+    
   if (ty1->base) {
     if (ty1->base->kind == TY_VOID)
       if (ty2->base)
@@ -394,6 +405,9 @@ void add_type(Node *node)
     add_type(node->lhs);
     node->ty = ty_bool;
     return;
+  case ND_ABORT:
+    return;
+  case ND_BUILTIN_FRAME_ADDRESS:
   case ND_RETURN_ADDR:
     add_type(node->lhs);
     node->ty = ty_void_ptr;

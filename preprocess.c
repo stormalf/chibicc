@@ -97,6 +97,7 @@ static Token *paste(Token *lhs, Token *rhs);
 static bool file_exists_in_include_path(const char *filename);
 
 
+//begin
 static bool is_hash(Token *tok)
   // [https://www.sigbus.info/n1570#6.10.3.4p3] tok->origin is checked here
   // because "#" can appear in object-like macro, and after expansion of that
@@ -1441,6 +1442,7 @@ static char *format_time(struct tm *tm)
 void init_macros(void)
 {
   // Define predefined macros
+  define_macro("__VERSION__", "\"" VERSION "\"");
   define_macro("_LP64", "1");
   define_macro("__C99_MACRO_WITH_VA_ARGS", "1");
   define_macro("__ELF__", "1");
@@ -1502,6 +1504,28 @@ void init_macros(void)
   define_macro("offsetof", "__builtin_offsetof");
   define_macro("__builtin_choose_expr(cond, true_expr, false_expr)", "(cond ? true_expr : false_expr)");
   //define_macro("__GNUC__", "9");
+    define_macro("__SHRT_MAX__", "32767");
+  define_macro("__INT_MAX__", "2147483647");
+  define_macro("__LONG_MAX__", "9223372036854775807L");
+  define_macro("__LONG_LONG_MAX__", "9223372036854775807LL");
+  define_macro("__SCHAR_MAX__", "127");
+  define_macro("__WCHAR_MAX__", "2147483647"); 
+  define_macro("__CHAR_BIT__", "8");
+  define_macro("__SCHAR_MAX__", "127");
+  define_macro("__SHRT_MAX__", "32767");
+  define_macro("__INT_MAX__", "2147483647");
+  define_macro("__LONG_MAX__", "9223372036854775807L");
+  define_macro("__LONG_LONG_MAX__", "9223372036854775807LL");
+  define_macro("__SCHAR_WIDTH__", "8");
+  define_macro("__SHRT_WIDTH__", "16");
+  define_macro("__INT_WIDTH__", "32");
+  define_macro("__LONG_WIDTH__", "64");
+  define_macro("__LONG_LONG_WIDTH__", "64");
+  define_macro("__SCHAR_MIN__", "-128");
+  define_macro("__SHRT_MIN__", "-32768");
+  define_macro("__INT_MIN__", "-2147483648");
+  define_macro("__LONG_MIN__", "-9223372036854775808L");
+  define_macro("__LONG_LONG_MIN__", "-9223372036854775808LL");
   define_macro("HAVE_ATTRIBUTE_PACKED", "1");
   define_macro("linux", "1");
   define_macro("unix", "1");

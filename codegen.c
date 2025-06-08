@@ -25,6 +25,8 @@ static Obj *current_fn;
 static void gen_expr(Node *node);
 static void gen_stmt(Node *node);
 static void print_offset(Obj *prog);
+static int last_loc_line = 0;
+
 
 __attribute__((format(printf, 1, 2))) static void println(char *fmt, ...)
 {
@@ -972,7 +974,12 @@ static void HandleAtomicArithmetic(Node *node, const char *op) {
 // Generate code for a given node.
 static void gen_expr(Node *node)
 {
+  if (!node)
+    error("%s: %s:%d: error: in gen_expr : node is null!", CODEGEN_C, __FILE__, __LINE__);
+  if (node->tok && node->tok->line_no != last_loc_line) {
   println("  .loc %d %u", node->tok->file->file_no, node->tok->line_no);
+      last_loc_line = node->tok->line_no;
+  }
 
   switch (node->kind)
   {
@@ -1469,6 +1476,36 @@ static void gen_expr(Node *node)
       return;
   }  
 
+    // For __builtin_frame_address
+  case ND_BUILTIN_FRAME_ADDRESS: {
+    int c = count();  // Unique label counter
+    // Get the level argument from the stack
+    println("  mov %%rdi, %%rax"); // Move the level argument into rax
+    
+    // Check if level is 0
+    println("  cmp $0, %%rax");
+    println("  je .Lframe_address_%d", c);
+    
+    // For level > 0, we need to follow the frame pointers
+    // We will need to move up the stack `level` times
+    // Note: The actual implementation depends on how you manage stack frames
+    println("  mov %%rbp, %%rcx"); // Move current frame pointer to rcx
+    println("  sub $1, %%rax");   // Decrement level (level - 1)
+    println(".Lframe_address_loop%d:", c);
+    println("  test %%rax, %%rax"); // Check if level == 0
+    println("  jz .Lframe_address_done%d", c);
+    println("  mov (%%rcx), %%rcx"); // Move up one frame
+    println("  sub $1, %%rax"); // Decrement level
+    println("  jmp .Lframe_address_loop%d", c);
+    println(".Lframe_address_done%d:", c);
+    println("  mov %%rcx, %%rax"); // Return the frame pointer
+
+    println(".Lframe_address_%d:", c);
+    println("  mov %%rbp, %%rax"); // Return the current frame pointer
+    return;
+  }
+
+
   case ND_POPCOUNT:
     gen_expr(node->builtin_val); // Generate code for the expression
     println("  popcnt %%rax, %%rax"); // Count the number of set bits
@@ -1486,6 +1523,10 @@ static void gen_expr(Node *node)
     println("  mov %%rdi, %%rax");
     return;
   }   
+  case ND_ABORT: {
+    println("  call abort"); 
+    return;
+  }
   case ND_RETURN_ADDR: {
     // Generate code to get the frame pointer of the current function
     println("  mov %%rbp, %%rax");
@@ -2063,7 +2104,12 @@ static void gen_expr(Node *node)
 
 static void gen_stmt(Node *node)
 {
+  if (!node)
+    error("%s: %s:%d: error: in gen_stmt : node is null!", CODEGEN_C, __FILE__, __LINE__);
+  if (node->tok && node->tok->line_no != last_loc_line) {
   println("  .loc %d %u", node->tok->file->file_no, node->tok->line_no);
+        last_loc_line = node->tok->line_no;
+  }
 
   switch (node->kind)
   {
