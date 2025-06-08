@@ -53,11 +53,11 @@ test-stage2: $(TESTS:test/%=stage2/test/%)
 	for i in $^; do echo $$i; ./$$i || exit 1; echo; done
 	test/driver.sh ./stage2/$(OBJECT)
 
-projects-all: projects openssl vim projects-oth
+projects-all: projects projects-oth
 
-projects-oth: memcached nmap curl
+projects-oth: nmap memcached curl
 
-projects: zlib util-linux nginx git
+projects: zlib util-linux nginx openssl vim git
 
 
 curl:
