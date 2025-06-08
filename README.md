@@ -268,6 +268,8 @@ List of options ignored :
     "-c99"
     "-std"
     "-fp-model"
+    "-fprofile-arcs"
+    "-ftest-coverage"
 
 ## Dockerfile and devcontainer
 
@@ -429,12 +431,6 @@ cpython: git clone git@github.com:python/cpython.git
         make && make test
         failure with  
 
-nmap : https://github.com/nmap/nmap
-
-    CC=chibicc ./configure --with-dbus
-    make
-    make check
-
     Process terminating with default action of signal 11 (SIGSEGV): dumping core
     ==82695==  Access not within mapped region at address 0x25
     ==82695==    at 0xB7BC8B: ??? (pystate.c:1435)
@@ -448,6 +444,17 @@ nmap : https://github.com/nmap/nmap
     ==82695==    by 0x407294: ??? (_freeze_module.c:224)
     ==82695==    by 0x497D1C9: (below main) (libc_start_call_main.h:58)
 
+
+nmap : https://github.com/nmap/nmap
+
+    CC=chibicc ./configure --with-dbus
+    make
+    make check
+    Testing nmap_dns
+    Testing nmap_dns finished without errors
+    Ran 292 tests. 0 failures.
+
+
 ## meson
 
 to be able to use meson with chibicc (meson doesn't know chibicc compiler), I changed the detect.py file in /usr/lib/python3/dist-packages/mesonbuild/compilers/detect.py to add support for chibicc. After that I can now using meson for some projects that are configured to use it.
@@ -455,17 +462,7 @@ to be able to use meson with chibicc (meson doesn't know chibicc compiler), I ch
 lxc: https://github.com/lxc/lxc.git
 
     Due to use of __attribute__((weak(alias))) in lxc/src/lxc/lxc.c, the linker is not able to find the symbols in the lxc library.
-    CC=chibicc \
-    CFLAGS="-fpic -Dlxc_attach_main=main -Dlxc_autostart_main=main -Dlxc_destroy_main=main -Dlxc_config_main=main -Dlxc_stop_main=main -Dlxc_info_main=main \
-    -Dlxc_checkpoint_main=main -Dlxc_cgroup_main=main -Dlxc_freeze_main=main -Dlxc_unfreeze_main=main -Dlxc_copy_main=main -Dlxc_device_main=main -Dlxc_execute_main=main \
-    -Dlxc_monitor_main=main -Dlxc_snapshot_main=main -Dlxc_console_main=main  -Dlxc_ls_main=main -Dlxc_create_main=main -Dlxc_start_main=main -Dlxc_unshare_main=main \
-    -Dlxc_wait_main=main -Dlxc_top_main=main" \
-    LDFLAGS="-fpic -Wl,--undefined,lxc_attach_main -Wl,--undefined,lxc_autostart_main -Wl,--undefined,lxc_destroy_main -Wl,--undefined,lxc_config_main \
-    -Wl,--undefined,lxc_stop_main -Wl,--undefined,lxc_info_main -Wl,--undefined,lxc_checkpoint_main -Wl,--undefined,lxc_cgroup_main -Wl,--undefined,lxc_freeze_main \
-    -Wl,--undefined,lxc_unfreeze_main -Wl,--undefined,lxc_copy_main -Wl,--undefined,lxc_device_main -Wl,--undefined,lxc_execute_main -Wl,--undefined,lxc_monitor_main \
-    -Wl,--undefined,lxc_snapshot_main -Wl,--undefined,lxc_console_main -Wl,--undefined,lxc_ls_main -Wl,--undefined,lxc_create_main -Wl,--undefined,lxc_start_main \
-    -Wl,--undefined,lxc_start_main -Wl,--undefined,lxc_unshare_main -Wl,--undefined,lxc_wait_main -Wl,--undefined,lxc_top_main" \
-    meson build && cd build && meson compile
+    CC=chibicc CFLAGS="-fpic" meson build && cd build && meson compile
 
 
 ## Limits
@@ -506,10 +503,10 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
 ## known issues
 
     postgres execution : ko
-    libwebp linkage error
     git 3 tests failed
     openssh-portable regress test failed
     curl 2 tests ko
+    memcached test stuck at t/binary-extstore.t ......... 5999/?
 
 
 ## debug
@@ -541,6 +538,7 @@ Example of diagram generated with -dotfile parameter :
 ## release notes
 
 1.0.23_vim        Improvement: diagnose overflow in integer constant expression #96  from @pmor13. Fixing issue with old C style (K&R) when parameters order don't correspond to parameter definition. Adding \__LINE__ in parse.c in all error_tok messages. Removing \__builtin_memcpy \__builtin_memset macro from preprocess.c that causes segmentation fault on zlib project. Adding other tests from @cosmopolitan. Adding \__GNUC__ macro and fixing all issues caused by this defined macro. Defining _Pragma macro that does nothing to keep compatibility with \__GNUC__. Fixing regression on struct members. Fixed on test case from curl. Renaming GNUC_compatibility to 1.0.23. Managing store_gp with size 16. Fixing issue with curl. Fixing last issue with curl due to sizeof_int and sizeof_long not taken in account (adding them in stddef.h). Fixing issue ISS-146 with semun. Fixing issue with \__builtin_clz that gives incorrect result. And adding \__builtin_ctzl and \__builtin_clzl. Adding \__builtin_isnan (ISS-175). Fixing issue with lock not correctly managed in extended assembly (ISS-174). Fxing other issues with extended assembly and adding several tests. Adding \__builtin_bswapxx (16, 32, 64). Fixing issue with assembly when no variables in template. Fixing issue with VIM test failures by adding also all builtin nan/nanl/nanf/inf/inff/huge_val/huge_valf/huge_vall. Merging Commit 40d0144. Fixing issue with nmap (from commit baf20c1). Fixing issue with extended assembly when compiling cpython. Depending the assembly file INTEL or AT&T, assembly using gcc or as. Fixing issue with section attribute when set after the global variable name. Another fix for ISS-166 because the previous one causing issue with memcached compile. Adding other ignored parameters. Adding has_vla for computing struct with vla. Moving some tests from issues to test folder.
+Reporting some enhancements from experimental_int128 branch.
 
 
 ## old release notes
