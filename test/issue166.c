@@ -4,7 +4,7 @@
 #include <string.h>
 #include <stddef.h>
 #include <stdio.h>
-
+#include "test.h"
 
 #define MAXIMUM_ALIGNOF 8
 #define BLCKSZ 8192
@@ -106,6 +106,7 @@ typedef struct
 	 * 1. Otherwise every access would need to subtract 1.
 	 */
 	bool	marked[MaxHeapTuplesPerPage + 1];
+	
 
 } PruneState;
 
@@ -114,9 +115,11 @@ int
 heap_page_prune()
 {
 	PruneState	prstate;
-	memset(prstate.marked, 0, sizeof(prstate.marked + 1));
+	memset(prstate.marked, 0, sizeof(prstate.marked ) );
 	printf("====%ld\n", sizeof(prstate.marked));
 	printf("====%d\n", MaxHeapTuplesPerPage + 1);
+	ASSERT(291, sizeof(prstate.marked ));
+	ASSERT(291, MaxHeapTuplesPerPage + 1);
 	printf("====ok\n");
 
     return 0;

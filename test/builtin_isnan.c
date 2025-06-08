@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <math.h>
+#include "test.h"
 
 int main() {
     // Test with NaN (Not a Number)
@@ -33,6 +34,7 @@ int main() {
     } else {
         printf("regular_value_f is NOT NaN (float)\n");
     }
-
+    ASSERT(nan_value, __builtin_nan());
+    ASSERT(nan_value_f, __builtin_nanf());
     return 0;
 }

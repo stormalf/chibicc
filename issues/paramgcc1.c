@@ -10,4 +10,6 @@ int foo2(char * p) __attribute__((nonnull(1)));
           return 0;
         };
 
-     
+int main() {
+  return 0;
+}

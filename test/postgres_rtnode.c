@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdint.h>
+#include "test.h"
 
 // Define the macros as described
 #define RT_MAKE_PREFIX(a) CppConcat(a,_)
@@ -87,7 +88,19 @@ void print_size_class_info(const RT_SIZE_CLASS_ELEM *info) {
 int main() {
     // Print size class information for demonstration
     for (int i = 0; i < 5; i++) {
-        print_size_class_info(&RT_SIZE_CLASS_INFO[i]);
+        print_size_class_info(&RT_SIZE_CLASS_INFO[i]);        
     }
+    ASSERT(16,RT_FANOUT_4 );
+    ASSERT(40, sizeof(RT_NODE_4) + RT_FANOUT_4 * sizeof(uint8_t) );
+    ASSERT(32, RT_FANOUT_16_LO );
+    ASSERT(72, sizeof(RT_NODE_16) + RT_FANOUT_16_LO * sizeof(uint8_t) );
+    ASSERT(48, RT_FANOUT_16_HI);
+    ASSERT(88, sizeof(RT_NODE_16) + RT_FANOUT_16_HI * sizeof(uint8_t) );
+    ASSERT(64, RT_FANOUT_48);
+    ASSERT(120, sizeof(RT_NODE_48) + RT_FANOUT_48 * sizeof(uint8_t) );
+    ASSERT(256, RT_FANOUT_256);
+    ASSERT(56, sizeof(RT_NODE_48)  );
+
     return 0;
+
 }

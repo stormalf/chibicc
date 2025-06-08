@@ -3,7 +3,8 @@
 #include <stddef.h>
 #include <sys/socket.h>
 #include <limits.h> 
-#include "memcached.h"
+#include "memcachedb.h"
+#include "test.h"
 
 
 // Dummy definition for `conn`, assuming you just need a placeholder
@@ -42,7 +43,9 @@ int main(void) {
     get_conn_text(&dummy_conn, AF_UNIX, addr, &dummy_sock);
 
     printf("extras_len = %d\n", extras_len);
+    ASSERT(13, extras_len);
     printf("addr buffer size = %lu\n", sizeof(addr));
+    ASSERT(4109, sizeof(addr));
 
     return 0;
 }

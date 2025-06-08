@@ -1,6 +1,7 @@
 
 #include <stdio.h>
 #include <math.h>
+#include "test.h"
 
 int main() {
     // Test with HUGE_VALF
@@ -26,5 +27,9 @@ int main() {
     } else {
         printf("HUGE_VAL test failed.\n");
     }
+    
+    ASSERT(huge_val, __builtin_huge_val());
+    ASSERT(huge_vall, __builtin_huge_vall());
+
     return 0;
 }

@@ -16,7 +16,7 @@
    debug ("Flag");
    debug ("X = %d\n", x);
    showlist (The first, second, and third items.);
-   report (x>y, "x is %d but y is %d", x, y);
+   report (x>y, "x is %d but y is %d\n", x, y);
  }
  
  // Check long long types.

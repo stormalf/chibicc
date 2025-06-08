@@ -1,5 +1,6 @@
 #include <stdint.h>
-
+#include <stdio.h>
+#include "test.h"
 typedef uintptr_t Datum;
 /* The size of `void *', as computed by sizeof. */
 #define SIZEOF_VOID_P 0
@@ -141,3 +142,10 @@ numeric_abbrev_convert_var(const NumericVar *var, NumericSortSupport *nss)
 }
 
 #endif							/* NUMERIC_ABBREV_BITS == 32 */
+
+int main() {
+
+	printf("numeric_abbrev_bits=%d\n", NUMERIC_ABBREV_BITS);
+	ASSERT(0, NUMERIC_ABBREV_BITS);
+	return 0;
+}

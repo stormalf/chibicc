@@ -11,7 +11,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <stdlib.h>
-#include <types.h>
+
 /* Send signal SIG to the process PID.  Associate data in VAL with the
    signal.  */
 extern int sigqueue (__pid_t __pid, int __sig, const union sigval __val)
@@ -20,5 +20,6 @@ extern int sigqueue (__pid_t __pid, int __sig, const union sigval __val)
 
 int main()
 {
+    printf("OK\n");
     return 0;
 }
