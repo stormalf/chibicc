@@ -57,7 +57,7 @@ projects-all: projects projects-oth
 
 projects-oth: nmap memcached curl
 
-projects: zlib util-linux nginx openssl vim git
+projects: zlib util-linux nginx openssl vim lxc git
 
 
 curl:
@@ -82,7 +82,7 @@ vim:
 	cd ../vim && make clean && CC=chibicc CFLAGS="-fPIC" ./configure && make && make test
 
 lxc:
-	cd ../lxc && rm -rf build && CC=chibicc CFLAGS="-fpic && meson build && cd build && meson compile	
+	cd ../lxc && rm -rf build && CC=chibicc CFLAGS="-fpic" && meson build && cd build && meson compile	
 
 git:
 	cd ../git && CC=chibicc CFLAGS=-fPIC ./configure && make && make test
