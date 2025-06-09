@@ -308,6 +308,8 @@ static Token *copy_line(Token **rest, Token *tok)
 static Token *new_num_token(int val, Token *tmpl)
 {
   char *buf = format("%d\n", val);
+  if (!buf)
+    error_tok(tmpl, "%s: in new_num_token : buf is null", PREPROCESS_C);
   return tokenize(new_file(tmpl->file->name, tmpl->file->file_no, buf));
 }
 
