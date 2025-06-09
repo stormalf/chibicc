@@ -750,8 +750,10 @@ Token *tokenize(File *file)
     }
 
     // to manage particular cases see issue 116, 117, 118
-    char *previous = p - 1;
+    char *previous = p;    
     char *current = p;
+    if (p != file->contents)
+      previous = p - 1; 
     // Numeric literal
     // to fix issue #117, checking that previous character is not an hashtag!
     if ((isdigit(*p) || (*p == '.' && isdigit(p[1]))) && *(previous) != '#')
