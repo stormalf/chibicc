@@ -1518,8 +1518,7 @@ int main(int argc, char **argv)
     run_linker(&ld_args, opt_o ? opt_o : "a.out");
   }
 
-  free(opt_MT);
-
+  
   return 0;
 }
 
