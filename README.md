@@ -469,10 +469,12 @@ VLC : https://github.com/videolan/vlc.git
 
     autoreconf -fiv
     ./bootstrap
-    CC=chibicc CFLAGS="-fPIC" CXXFLAGS="" DEFS="-DHAVE_CONFIG_H -DHAVE_ATTRIBUTE_PACKED -DVLC_USED -DVLC_API -DVLC_DEPRECATED -DVLC_MALLOC" LDFLAGS="-fPIC" ./configure  --disable-xcb --disable-qt --disable-a52 --disable-sse
+    CC=chibicc CFLAGS="-fPIC" CXXFLAGS="" DEFS="-DHAVE_CONFIG_H -DHAVE_ATTRIBUTE_PACKED -DVLC_USED -DVLC_API -DVLC_DEPRECATED -DVLC_MALLOC" LDFLAGS="-fPIC" ./configure  --disable-xcb --disable-qt --disable-a52 --disable-sse --disable-sid
     make all
 
-    VLC doesn't compile with chibicc some issues to fix later.
+    VLC doesn't compile with chibicc :
+    /usr/include/systemd/sd-id128.h:138: error:                 sd_id128_t b = va_arg(ap, sd_id128_t);
+                                                                         ^ tokenize.c parse.c declaration 1328: in skip : expected ','
 
 
 postgres: https://github.com/postgres/postgres.git  (in case of bad network use git clone --filter=blob:none --depth=1 https://github.com/postgres/postgres.git --branch master)
@@ -532,7 +534,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.22.5        Improvement: diagnose overflow in integer constant expression #96  from @pmor13. Fixing issue with old C style (K&R) when parameters order don't correspond to parameter definition. Adding \__LINE__ in parse.c in all error_tok messages. Removing \__builtin_memcpy \__builtin_memset macro from preprocess.c that causes segmentation fault on zlib project. Adding other tests from @cosmopolitan. Reporting some fixes from 1.0.23 to this version. Fixing last issue with curl due to sizeof_int and sizeof_long not taken in account (adding them in stddef.h). Fixing issue with semun (ISS-146). Fixing issue with \__builtin_clz that gives incorrect result. And adding \__builtin_ctzl and \__builtin_clzl. Adding __builtin_isnan (ISS-175) and __builtin_inff. Fixing issue with lock not correctly managed in extended assembly (ISS-174). Fxing other issues with extended assembly and adding several tests. Adding \__builtin_bswapxx (16, 32, 64). Experimenting the stddef.h from gcc and managing some issues with offsetof. Fixing issue with assembly (issue155.c). Fixing issue with vim (due to math.h) and merging some improvements from 1.0.23_vim tree.
+1.0.22.6    fixing cmake issue.
 
 
 ## old release notes
