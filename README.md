@@ -469,7 +469,7 @@ VLC : https://github.com/videolan/vlc.git
 
     autoreconf -fiv
     ./bootstrap
-    CC=chibicc CFLAGS="-fPIC" CXXFLAGS="" DEFS="-DHAVE_CONFIG_H -DHAVE_ATTRIBUTE_PACKED -DVLC_USED -DVLC_API -DVLC_DEPRECATED -DVLC_MALLOC" LDFLAGS="-fPIC" ./configure  --disable-xcb --disable-qt --disable-a52 --disable-sse --disable-sid
+    CC=chibicc CFLAGS="-fPIC" CXXFLAGS="" DEFS="-DHAVE_CONFIG_H -DHAVE_ATTRIBUTE_PACKED -DVLC_USED -DVLC_API -DVLC_DEPRECATED -DVLC_MALLOC" LDFLAGS="-fPIC" ./configure  --disable-xcb --disable-qt --disable-a52 --disable-sse 
     make all
 
     VLC doesn't compile with chibicc :
@@ -534,7 +534,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.22.6    fixing cmake issue.
+1.0.22.7    Fixing issue with named operand on assembly. Fixing issue with struct union found during vlc compile.
 
 
 ## old release notes

@@ -209,6 +209,7 @@ static int64_t eval_sign_extend(Type *ty, uint64_t val);
 static bool is_const_var(Obj *var);
 static int64_t eval_rval(Node *node, char ***label);
 static Obj *eval_var(Node *expr, bool allow_local);
+static bool is_str_tok(Token **rest, Token *tok, Token **str_tok) ;
 
 static int align_down(int n, int align)
 {
@@ -1815,7 +1816,17 @@ static void struct_initializer2(Token **rest, Token *tok, Initializer *init, Mem
       return;
     }
 
+
+    //fixing c-Testsuite 205.
+    //initializer2(&tok, tok, init->children[mem->idx]);
+    // Arrays and vectors inside structs need to handle their elements with braces
+      if (mem->ty->kind == TY_ARRAY) {
+            array_initializer2(&tok, tok, init->children[mem->idx], 0);
+      } else {
+          // For scalar members, just assign directly
     initializer2(&tok, tok, init->children[mem->idx]);
+      }
+
   }
   *rest = tok;
 }
@@ -1914,62 +1925,32 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
   if (!init)
     error("%s: %s:%d: error: in initializer2 :  init is null %s", PARSE_C, __FILE__, __LINE__, tok->loc);
 
-  if (init->ty->kind == TY_ARRAY && tok->kind == TK_STR)
-  {
-    string_initializer(rest, tok, init);
+  if (init->ty->kind == TY_ARRAY && is_integer(init->ty->base)) {
+    Token *start = tok;
+    Token *str_tok;
+    if (equal(tok, "{") && is_str_tok(&tok, tok->next, &str_tok)) {
+      if (consume(rest, tok, "}")) {
+        string_initializer(&tok, str_tok, init);
     return;
   }
-
-  // issue #107 with array string initialized by function-like e.g : static const char vlc_usage[] = N_(str)
-  if (init->ty->kind == TY_ARRAY && equal(tok, "("))
-  {
-    if (equal(tok, "("))
-    {
-      if (init->ty->base->kind == TY_CHAR && tok->next->kind == TK_STR)
-      {
-        ctx->filename = PARSE_C;
-        ctx->funcname = "initializer2";        
-        ctx->line_no = __LINE__ + 1;           
-        tok = skip(tok, "(", ctx);
-        initializer2(&tok, tok, init);
-        ctx->filename = PARSE_C;
-        ctx->funcname = "initializer2";        
-        ctx->line_no = __LINE__ + 1;           
-        *rest = skip(tok, ")", ctx);
-        return;
-      }
+      tok = start;
+    }
+    if (is_str_tok(rest, tok, &str_tok)) {
+      string_initializer(&tok, str_tok, init);
       return;
     }
   }
 
-  if (init->ty->kind == TY_ARRAY)
-  {
+  if (init->ty->kind == TY_ARRAY) {
     if (equal(tok, "{"))
-    {
-      if (init->ty->base->kind == TY_CHAR && tok->next->kind == TK_STR)
-      {
-        ctx->filename = PARSE_C;
-        ctx->funcname = "initializer2";        
-        ctx->line_no = __LINE__ + 1;           
-        tok = skip(tok, "{", ctx);
-        initializer2(&tok, tok, init);
-        ctx->filename = PARSE_C;
-        ctx->funcname = "initializer2";        
-        ctx->line_no = __LINE__ + 1;           
-        *rest = skip(tok, "}", ctx);
-        return;
-      }
       array_initializer1(rest, tok, init);
-      return;
-    }
+    else
     array_initializer2(rest, tok, init, 0);
     return;
   }
 
-  if (init->ty->kind == TY_STRUCT)
-  {
-    if (equal(tok, "{"))
-    {
+  if (init->ty->kind == TY_STRUCT) {
+    if (equal(tok, "{")) {
       struct_initializer1(rest, tok, init);
       return;
     }
@@ -1979,24 +1960,36 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
     // Handle that case first.
     Node *expr = assign(rest, tok);
     add_type(expr);
-    if (expr->ty->kind == TY_STRUCT)
-    {
+    if (expr->ty->kind == TY_STRUCT) {
       init->expr = expr;
       return;
     }
 
+    if (!init->ty->members)
+      error_tok(tok, "%s: %s:%d: error: in initializer2 :  initializer for empty aggregate requires explicit braces", PARSE_C, __FILE__, __LINE__);
 
     struct_initializer2(rest, tok, init, init->ty->members);
     return;
   }
 
-
-  if (init->ty->kind == TY_UNION )
-  {
-
+  if (init->ty->kind == TY_UNION) {
+    if (equal(tok, "{")) {
     union_initializer(rest, tok, init);
     return;
+    }
 
+    Node *expr = assign(rest, tok);
+    add_type(expr);
+    if (expr->ty->kind == TY_UNION) {
+      init->expr = expr;
+      return;
+    }
+    if (!init->ty->members)
+      error_tok(tok, "%s: %s:%d: error: in initializer2 :  initializer for empty aggregate requires explicit braces", PARSE_C, __FILE__, __LINE__);
+
+    init->mem = init->ty->members;
+    initializer2(rest, tok, init->children[0]);
+    return;
   }
 
   if (equal(tok, "{"))
@@ -2089,7 +2082,10 @@ static Node *create_lvar_init(Initializer *init, Type *ty, InitDesg *desg, Token
     }
     return node;
   }
-
+  if (init->expr) {
+    Node *lhs = init_desg_expr(desg, tok);
+    return new_binary(ND_ASSIGN, lhs, init->expr, tok);
+  }
   if (ty->kind == TY_STRUCT && !init->expr)
   {
     Node *node = new_node(ND_NULL_EXPR, tok);
@@ -4019,10 +4015,7 @@ static Token *type_attributes(Token *tok, void *arg)
   if (consume(&tok, tok, "cold") || consume(&tok, tok, "__cold__")) {
     return tok;
   }
-  if (consume(&tok, tok, "cold") || consume(&tok, tok, "__cold__")) {  
-    return tok;
-  }
-
+  
   if (consume(&tok, tok, "hot") || consume(&tok, tok, "__hot__")) {  
     return tok;
   }
@@ -7010,3 +7003,19 @@ static Obj *eval_var(Node *expr, bool allow_local) {
 
   return NULL;
 }
+
+
+static bool is_str_tok(Token **rest, Token *tok, Token **str_tok) {
+  if (equal(tok, "(") && is_str_tok(&tok, tok->next, str_tok) &&
+    consume(rest, tok, ")"))
+    return true;
+
+  if (tok->kind == TK_STR) {
+    *str_tok = tok;
+    *rest = tok->next;
+    return true;
+  }
+  return false;
+}
+
+

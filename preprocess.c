@@ -896,7 +896,6 @@ static bool expand_macro(Token **rest, Token *tok)
 
   if (hideset_contains(tok->hideset, tok->loc, tok->len))
     return false;
-
   Macro *m = find_macro(tok);
   if (!m)
     return false;
@@ -1027,11 +1026,12 @@ static char *read_include_filename(Token **rest, Token *tok, bool *is_dquote)
     // Reconstruct a filename from a sequence of tokens between
     // "<" and ">".
     Token *start = tok;
-
+    
     // Find closing ">".
     for (; !equal(tok, ">"); tok = tok->next)
-      if (tok->at_bol || tok->kind == TK_EOF)
-        error_tok(tok, "%s: in read_include_filename : expected '>'", PREPROCESS_C);
+      if (tok->at_bol || tok->kind == TK_EOF) {
+        error_tok(tok, "%s: in read_include_filename : expected '>' %s", PREPROCESS_C, start->loc );
+      }
 
     *is_dquote = false;
     *rest = skip_line(tok->next);
