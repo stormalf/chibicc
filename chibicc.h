@@ -639,6 +639,7 @@ Type *enum_type(void);
 Type *struct_type(void);
 void add_type(Node *node);
 bool is_array(Type *ty);
+Type *new_qualified_type(Type *ty);
 
 
 char *nodekind2str(NodeKind kind);

@@ -31,6 +31,21 @@ static Type *new_type(TypeKind kind, int size, int align)
   return ty;
 }
 
+Type *new_qualified_type(Type *ty) {
+  if (ty->origin)
+    ty = ty->origin;
+
+  Type *ret = calloc(1, sizeof(Type));
+  *ret = *ty;
+  ret->origin = ty;
+
+  if (ty->size < 0) {
+    ret->decl_next = ty->decl_next;
+    ty->decl_next = ret;
+  }
+  return ret;
+}
+
 bool is_integer(Type *ty)
 {
   TypeKind k = ty->kind;

@@ -1130,8 +1130,9 @@ static void read_line_marker(Token **rest, Token *tok)
     error_tok(tok, "%s: in read_line_marker : invalid line marker", PREPROCESS_C);
 
   // fix issue with negative number that cause Assembler less number than one
-  start->file->line_delta = tok->val - start->line_no;
-
+  //start->file->line_delta = tok->val - start->line_no;
+  // fix from @fuhsnn Line control off by one 
+  start->file->line_delta = tok->val - start->line_no - 1;
   tok = tok->next;
   if (tok->kind == TK_EOF)
     return;
@@ -1326,11 +1327,13 @@ static Token *preprocess2(Token *tok)
     if (tok->at_bol)
       continue;
 
+    //from @fuhsnn warning management
     if (equal(tok, "warning"))
     {
-      if (tok->next->str != NULL)
-        printf("warning: %s\n", tok->next->str);
-      tok = skip_line(tok->next->next);
+      warn_tok(tok, "warning");
+        do {
+          tok = tok->next;
+        }while (!tok->at_bol);     
       continue;
     }
     error_tok(tok, "%s: in preprocess2 : invalid preprocessor directive", PREPROCESS_C);

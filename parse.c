@@ -372,6 +372,17 @@ Node *new_cast(Node *expr, Type *ty)
   return node;
 }
 
+static void apply_cv_qualifier(Node *node, Type *ty2) {
+  add_type(node);
+  Type *ty = node->ty;
+  if (ty->is_const < ty2->is_const || ty->is_volatile < ty2->is_volatile) {
+    node->ty = new_qualified_type(ty);
+    node->ty->is_const = ty->is_const | ty2->is_const;
+    node->ty->is_volatile = ty->is_volatile | ty2->is_volatile;
+  }
+}
+
+
 static VarScope *push_scope(char *name)
 {
   VarScope *sc = calloc(1, sizeof(VarScope));
@@ -942,7 +953,7 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
 static Type *array_dimensions(Token **rest, Token *tok, Type *ty)
 {
 
-  while (equal(tok, "static") || equal(tok, "restrict") || equal(tok, "__restrict") || equal(tok, "__restrict__"))
+  while (equal(tok, "static") || equal(tok, "restrict") || equal(tok, "__restrict") || equal(tok, "__restrict__") || equal(tok, "const") || equal(tok, "volatile"))
     tok = tok->next;
 
   // trying to fix issue with regex
@@ -955,27 +966,29 @@ static Type *array_dimensions(Token **rest, Token *tok, Type *ty)
       tok = tok->next;
   }
 
-  if (equal(tok, "]"))
-  {
-    ty = type_suffix(rest, tok->next, ty);
-
-    if (!ty)
-      error_tok(tok, "%s %d: in array_dimensions : ty is null", PARSE_C, __LINE__);
+  if (consume(&tok, tok, "]") ||
+      (equal(tok, "*") && consume(&tok, tok->next, "]"))) {
+    if (equal(tok, "["))
+      ty = array_dimensions(&tok, tok->next, ty);
+    *rest = tok;
     return array_of(ty, -1);
   }
 
-  Node *expr = conditional(&tok, tok);
+  Node *expr = assign(&tok, tok);
+  add_type(expr);
   ctx->filename = PARSE_C;
   ctx->funcname = "array_dimensions";  
   ctx->line_no = __LINE__ + 1;
   tok = skip(tok, "]", ctx);
-  if (!ty)
-    error_tok(tok, "%s %d: in array_dimensions : ty is null", PARSE_C, __LINE__);
-  ty = type_suffix(rest, tok, ty);
-  tok = attribute_list(tok, ty, type_attributes);
-  if (ty->kind == TY_VLA || !is_const_expr(expr))
-    return vla_of(ty, expr);
-  return array_of(ty, eval(expr));
+
+  if (equal(tok, "["))
+    ty = array_dimensions(&tok, tok->next, ty);
+  *rest = tok;
+
+  if (ty->kind != TY_VLA && is_const_expr(expr))
+    return array_of(ty, eval(expr));
+
+  return vla_of(ty, expr);
 }
 
 // type-suffix = "(" func-params
@@ -3668,7 +3681,13 @@ static Node *unary(Token **rest, Token *tok)
     add_type(node);
     if (node->ty->kind == TY_FUNC)
       return node;
-    return new_unary(ND_DEREF, node, tok);
+
+    Type *ty = node->ty;
+    node = new_unary(ND_DEREF, node, tok);
+    if (is_array(ty))
+      apply_cv_qualifier(node, ty);
+    return node;
+    //return new_unary(ND_DEREF, node, tok);
   }
 
   if (equal(tok, "!"))
@@ -4967,7 +4986,12 @@ static Node *postfix(Token **rest, Token *tok)
       ctx->funcname = "postfix";        
       ctx->line_no = __LINE__ + 1;           
       tok = skip(tok, "]", ctx);
+      
+      add_type(node);
+      Type *ty = node->ty;
       node = new_unary(ND_DEREF, new_add(node, idx, start), start);
+      if (is_array(ty))
+        apply_cv_qualifier(node, ty);
       continue;
     }
 
@@ -4981,8 +5005,14 @@ static Node *postfix(Token **rest, Token *tok)
     if (equal(tok, "->"))
     {
       // x->y is short for (*x).y
+      add_type(node);
+      Type *ty = node->ty;
       node = new_unary(ND_DEREF, node, tok);
       node = struct_ref(node, tok->next);
+
+      if (is_array(ty))
+        apply_cv_qualifier(node, ty);
+
       tok = tok->next->next;
       continue;
     }
