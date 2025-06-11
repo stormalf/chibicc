@@ -211,6 +211,8 @@ static FileType parse_opt_x(char *s)
     return FILE_C;
   if (!strcmp(s, "assembler"))
     return FILE_ASM;
+  if (!strcmp(s, "assembler-with-cpp"))
+    return FILE_ASM;        
   if (!strcmp(s, "none"))
     return FILE_NONE;
   error("%s : %s:%d: error: in parse_opt_x <command line>: unknown argument for -x: %s", MAIN_C, __FILE__, __LINE__, s);
@@ -798,6 +800,7 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-Xc") ||
         !strcmp(argv[i], "-Aa") ||  
         !strcmp(argv[i], "-w") ||
+        !strcmp(argv[i], "-w2") ||
         !strcmp(argv[i], "--param=ssp-buffer-size=4") ||
         !strcmp(argv[i], "-fno-lto") ||
         !strcmp(argv[i], "-c99") ||

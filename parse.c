@@ -3196,7 +3196,7 @@ bool is_const_expr(Node *node)
   case ND_LOGAND:
   case ND_LOGOR:
       //trying to fix issue #166 about wrong VLA for complex constant expression in macro expanded
-      return is_const_expr(node->lhs) && (is_const_expr(node->rhs)|| eval(node));
+      return is_const_expr(node->lhs) && is_const_expr(node->rhs);
   case ND_COND:
     if (!is_const_expr(node->cond))
       return false;
@@ -3207,7 +3207,7 @@ bool is_const_expr(Node *node)
   case ND_NOT:
   case ND_BITNOT:
   case ND_CAST:
-    return is_const_expr(node->lhs);
+    return is_const_expr(node->lhs) || node->lhs->kind == ND_NUM || node->lhs->kind == ND_CAST;
   case ND_NUM:
     return true;
   }
