@@ -469,7 +469,7 @@ VLC : https://github.com/videolan/vlc.git
 
     autoreconf -fiv
     ./bootstrap
-    CC=chibicc CFLAGS="-fPIC" CXXFLAGS="" DEFS="-DHAVE_CONFIG_H -DHAVE_ATTRIBUTE_PACKED -DVLC_USED -DVLC_API -DVLC_DEPRECATED -DVLC_MALLOC" LDFLAGS="-fPIC" ./configure  --disable-xcb --disable-qt --disable-a52 --disable-sse 
+    CC=chibicc CFLAGS="-fPIC" CXXFLAGS="" DEFS="-DHAVE_CONFIG_H -DHAVE_ATTRIBUTE_PACKED -DVLC_USED -DVLC_API -DVLC_DEPRECATED -DVLC_MALLOC" LDFLAGS="-fPIC" ./configure  --disable-xcb --disable-qt --disable-a52 --disable-sse --disable-dbus
     make all
 
     VLC doesn't compile with chibicc :

@@ -1505,7 +1505,7 @@ char *generate_input_asm(char *input_str)
         return tmp;
     }
     //case immediate value
-    else
+    else if (asmExt->input[nbInput]->input_value)
     {
         strncat(tmp, "\n", 3);
         strncat(tmp, opcode(asmExt->input[nbInput]->size), strlen(opcode(asmExt->input[nbInput]->size)));
@@ -1517,7 +1517,7 @@ char *generate_input_asm(char *input_str)
         return tmp;
     }
 
-    error("%s : %s:%d: error: in extended_asm function generate_input_asm : unexpected error!", EXTASM_C, __FILE__, __LINE__);
+    error("%s : %s:%d: error: in extended_asm function generate_input_asm : unexpected error! %s", EXTASM_C, __FILE__, __LINE__, asmExt->template->templatestr);
     //return NULL;
 }
 
@@ -1556,7 +1556,7 @@ char *generate_output_asm(char *output_str)
         return tmp;
     }
     //case it's an array with address we need to generate the correct output for the specified index
-    if (asmExt->output[nbOutput]->isAddress && asmExt->output[nbOutput]->isArray) {
+    else if (asmExt->output[nbOutput]->isAddress && asmExt->output[nbOutput]->isArray) {
         strncat(tmp, "\n", 3);
         strncat(tmp, "  movq ", 8);
         strncat(tmp, load_variable(asmExt->output[nbOutput]->offsetArray), strlen(load_variable(asmExt->output[nbOutput]->offsetArray)));
@@ -1578,7 +1578,7 @@ char *generate_output_asm(char *output_str)
     }
 
     //Trying to fix ======ISS-164 case it's a struct with address we need to generate the correct output for the specified struct member
-    if (asmExt->output[nbOutput]->isAddress && asmExt->output[nbOutput]->isStruct && strncmp(asmExt->output[nbOutput]->prefix, "=", 2)) {
+    else if (asmExt->output[nbOutput]->isAddress && asmExt->output[nbOutput]->isStruct && strncmp(asmExt->output[nbOutput]->prefix, "=", 2)) {
         strncat(tmp, "\n", 3);
         strncat(tmp, "  movq ", 8);
         strncat(tmp, load_variable(asmExt->output[nbOutput]->offset), strlen(load_variable(asmExt->output[nbOutput]->offset)));
@@ -1600,7 +1600,7 @@ char *generate_output_asm(char *output_str)
     }
 
     //case it's an address 
-    else
+    else if (asmExt->output[nbOutput]->isAddress)
     {
         if (asmExt->output[nbOutput]->letter == 'm'|| asmExt->output[nbOutput]->letter == 'r' || asmExt->output[nbOutput]->letter == 'q') {
         strncat(tmp, "\n", 3);
@@ -1624,7 +1624,7 @@ char *generate_output_asm(char *output_str)
         }
     }
 
-    error("%s : %s:%d: error: in extended_asm function generate_output_asm : unexpected error!", EXTASM_C, __FILE__, __LINE__);
+    error("%s : %s:%d: error: in extended_asm function generate_output_asm : unexpected error! %s", EXTASM_C, __FILE__, __LINE__, asmExt->template->templatestr);
 
     //return NULL;
 }

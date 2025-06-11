@@ -210,6 +210,7 @@ static bool is_const_var(Obj *var);
 static int64_t eval_rval(Node *node, char ***label);
 static Obj *eval_var(Node *expr, bool allow_local);
 static bool is_str_tok(Token **rest, Token *tok, Token **str_tok) ;
+static Node *compound_stmt2(Token **rest, Token *tok);
 
 static int align_down(int n, int align)
 {
@@ -2524,8 +2525,14 @@ static Node *stmt(Token **rest, Token *tok)
     ctx->funcname = "stmt";        
     ctx->line_no = __LINE__ + 1;    
     tok = skip(tok, ":", ctx);
+    VarAttr attr = {};
+    tok = attribute_list(tok, &attr, thing_attributes);
     node->label = new_unique_name();
+    if (is_typename(tok)) {
+      node->lhs = compound_stmt2(rest, tok);
+    } else {
     node->lhs = stmt(rest, tok);
+    }
     node->begin = begin;
     node->end = end;
     node->case_next = current_switch->case_next;
@@ -2544,7 +2551,11 @@ static Node *stmt(Token **rest, Token *tok)
     ctx->line_no = __LINE__ + 1;        
     tok = skip(tok->next, ":", ctx);
     node->label = new_unique_name();
+    if (is_typename(tok)) {
+      node->lhs = compound_stmt2(rest, tok);
+    } else {
     node->lhs = stmt(rest, tok);
+    }
     current_switch->default_case = node;
     return node;
   }
@@ -2745,9 +2756,11 @@ static Node *compound_stmt(Token **rest, Token *tok)
 
   while (!equal(tok, "}"))
   {
+    VarAttr attr = {};
+    tok = attribute_list(tok, &attr, thing_attributes);
     if (is_typename(tok) && !equal(tok->next, ":"))
     {
-      VarAttr attr = {};
+      //VarAttr attr = {};
       Type *basety = declspec(&tok, tok, &attr);
       if (attr.is_typedef)
       {
@@ -2771,7 +2784,7 @@ static Node *compound_stmt(Token **rest, Token *tok)
     else
     {
       //case specific of fallthrough
-      VarAttr attr= {};
+      //VarAttr attr= {};
       tok = attribute_list(tok, &attr, thing_attributes);
       cur = cur->next = stmt(&tok, tok);
     }
@@ -2790,6 +2803,65 @@ static Node *compound_stmt(Token **rest, Token *tok)
   *rest = tok->next;
   return node;
 }
+
+// compound-stmt = (typedef | declaration | stmt)* 
+//case of missing braces for compound statement
+static Node *compound_stmt2(Token **rest, Token *tok)
+{
+  Node *node = new_node(ND_BLOCK, tok);
+  Node head = {};
+  Node *cur = &head;
+  enter_scope();
+  while (!equal(tok, "}") && !equal(tok, "case") && !equal(tok, "default"))
+  {
+    VarAttr attr = {};
+    tok = attribute_list(tok, &attr, thing_attributes);
+    if (is_typename(tok) && !equal(tok->next, ":"))
+    {
+      //VarAttr attr = {};
+      Type *basety = declspec(&tok, tok, &attr);
+      if (attr.is_typedef)
+      {
+        tok = parse_typedef(tok, basety);
+        continue;
+      }
+
+      if (is_function(tok))
+      {
+        tok = function(tok, basety, &attr);
+        continue;
+      }
+
+      if (attr.is_extern)
+      {
+        tok = global_variable(tok, basety, &attr);
+        continue;
+      }
+      cur = cur->next = declaration(&tok, tok, basety, &attr);
+    }
+    else
+    {
+      //case specific of fallthrough
+      //VarAttr attr= {};
+      tok = attribute_list(tok, &attr, thing_attributes);
+      cur = cur->next = stmt(&tok, tok);
+    }
+    add_type(cur);
+  }
+
+  leave_scope();
+
+  node->body = head.next;
+
+  if (isDotfile && dotf != NULL)
+  {
+    if (node->body != NULL)
+      fprintf(dotf, "%s%d -> %s%d\n", nodekind2str(node->kind), node->unique_number, nodekind2str(node->body->kind), node->body->unique_number);
+  }
+  *rest = tok;
+  return node;
+}
+
 
 // expr-stmt = expr? ";"
 static Node *expr_stmt(Token **rest, Token *tok)
@@ -3666,7 +3738,8 @@ static Node *unary(Token **rest, Token *tok)
   {
     Node *lhs = cast(rest, tok->next);
     add_type(lhs);
-    if (lhs->kind == ND_MEMBER && lhs->member->is_bitfield)
+    //if (lhs->kind == ND_MEMBER && lhs->member->is_bitfield)
+    if (is_bitfield(lhs))
       error_tok(tok, "%s %d: in unary : cannot take address of bitfield", PARSE_C, __LINE__);
     return new_unary(ND_ADDR, lhs, tok);
   }
@@ -3763,7 +3836,7 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
 
       Member *mem = calloc(1, sizeof(Member));
       if (mem == NULL)
-        error("%s: %s:%d: error: in struct_members : mem is null (bis)", PARSE_C, __FILE__, __LINE__);
+        error("%s: %s:%d: error: in struct_members : mem is null", PARSE_C, __FILE__, __LINE__);
       if (tok->kind == TK_KEYWORD)
         basety = declspec(&tok, tok, &attr);
       mem->ty = declarator(&tok, tok, basety);
@@ -3807,6 +3880,7 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
   {
     cur->ty = array_of(cur->ty->base, 0);
     ty->is_flexible = true;
+    cur->ty->is_flexible = true;
   }
 
   
@@ -5242,6 +5316,14 @@ static Node *primary(Token **rest, Token *tok)
       }
       return new_var_node(ty->vla_size, tok);
     }
+    
+    if (ty->kind == TY_STRUCT && ty->is_flexible) {
+        Member *mem = ty->members;
+        while (mem->next)
+          mem = mem->next;
+        if (mem->ty->kind == TY_ARRAY)
+          return new_ulong((ty->size - mem->ty->size), tok);
+      }
 
     return new_ulong(ty->size, start);
   }
@@ -5267,11 +5349,23 @@ static Node *primary(Token **rest, Token *tok)
       return new_binary(ND_COMMA, lhs, rhs, tok);
     }
 
+    if (node->ty->size < 0)
+      error_tok(tok, "%s %d: in primary : incomplete type for sizeof", PARSE_C, __LINE__);
+
+
     if ((node->ty->kind == TY_STRUCT || node->ty->kind == TY_UNION) && node->ty->has_vla) {
       if (!node->ty->vla_size) {
         Node *lhs = compute_vla_size(node->ty, tok);  // defines ty->vla_size
         Node *rhs = new_var_node(node->ty->vla_size, tok);
         return new_binary(ND_COMMA, lhs, rhs, tok);
+      }
+      
+      if (node->ty->kind == TY_STRUCT && node->ty->is_flexible) {
+        Member *mem = node->ty->members;
+        while (mem->next)
+          mem = mem->next;
+        if (mem->ty->kind == TY_ARRAY)
+          return new_ulong((node->ty->size - mem->ty->size), tok);
       }
       return new_var_node(node->ty->vla_size, tok);
     }
@@ -5282,21 +5376,30 @@ static Node *primary(Token **rest, Token *tok)
   }
 
 
-  if (equal(tok, "_Alignof") && equal(tok->next, "(") && is_typename(tok->next->next))
-  {
-    Type *ty = typename(&tok, tok->next->next);
+  //from @fuhsnn merging alignof
+  if (equal(tok, "_Alignof") || equal(tok, "alignof") ||  equal(tok, "__alignof__")) {
+    Token *start = tok;
+    Type *ty;
+    if (equal(tok->next, "(") && is_typename(tok->next->next)) {
+      ty = typename(&tok, tok->next->next);
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";        
     ctx->line_no = __LINE__ + 1;      
     *rest = skip(tok, ")", ctx);
-    return new_ulong(ty->align, tok);
-  }
-
-  if (equal(tok, "_Alignof"))
-  {
+    } else {
     Node *node = unary(rest, tok->next);
+      switch (node->kind) {
+      case ND_MEMBER:
+        return new_ulong(MAX(node->member->ty->align, node->member->align), start);
+      case ND_VAR:
+        return new_ulong(node->var->align, start);
+      }
     add_type(node);
-    return new_ulong(node->ty->align, tok);
+      ty = node->ty;
+    }
+    while (is_array(ty))
+      ty = ty->base;
+    return new_ulong(ty->align, start);
   }
 
   if (equal(tok, "_Generic"))
@@ -6324,6 +6427,7 @@ static Token *global_variable(Token *tok, Type *basety, VarAttr *attr)
     Obj *var = new_gvar(get_ident(ty->name), ty);
       //from COSMOPOLITAN adding other GNUC attributes
     tok = attribute_list(tok, attr, thing_attributes);
+    //tok = attribute_list(tok, ty, type_attributes);
     if (consume(&tok, tok, "asm") || consume(&tok, tok, "__asm__")) {
       ctx->filename = PARSE_C;
       ctx->funcname = "function";        
