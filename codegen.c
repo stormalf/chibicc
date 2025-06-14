@@ -25,6 +25,7 @@ static Obj *current_fn;
 static void gen_expr(Node *node);
 static void gen_stmt(Node *node);
 static void print_offset(Obj *prog);
+
 static int last_loc_line = 0;
 
 
@@ -288,7 +289,7 @@ static void gen_addr(Node *node)
       // Thread-local variable
       if (node->var->is_tls)
       {
-        println("  data16 lea %s@tlsgd(%%rip), %%rdi", node->var->name);
+        println("  data16 lea \"%s\"@tlsgd(%%rip), %%rdi", node->var->name);
         println("  .value 0x6666");
         println("  rex64");
         println("  call __tls_get_addr@PLT");
@@ -296,7 +297,7 @@ static void gen_addr(Node *node)
       }
 
       // Function or global variable
-      println("  mov %s@GOTPCREL(%%rip), %%rax", node->var->name);
+      println("  mov \"%s\"@GOTPCREL(%%rip), %%rax", node->var->name);
       return;
     }
 
@@ -304,7 +305,7 @@ static void gen_addr(Node *node)
     if (node->var->is_tls)
     {
       println("  mov %%fs:0, %%rax");
-      println("  add $%s@tpoff, %%rax", node->var->name);
+      println("  add $\"%s\"@tpoff, %%rax", node->var->name);
       return;
     }
 
@@ -335,14 +336,14 @@ static void gen_addr(Node *node)
     if (node->ty->kind == TY_FUNC)
     {
       if (node->var->is_definition)
-        println("  lea %s(%%rip), %%rax", node->var->name);
+        println("  lea \"%s\"(%%rip), %%rax", node->var->name);
       else
-        println("  mov %s@GOTPCREL(%%rip), %%rax", node->var->name);
+        println("  mov \"%s\"@GOTPCREL(%%rip), %%rax", node->var->name);
       return;
     }
 
     // Global variable
-    println("  lea %s(%%rip), %%rax", node->var->name);
+    println("  lea \"%s\"(%%rip), %%rax", node->var->name);
     return;
   case ND_DEREF:
     gen_expr(node->lhs);
@@ -818,19 +819,29 @@ static void copy_ret_buffer(Obj *var)
   Type *ty = var->ty;
   int gp = 0, fp = 0;
 
-  if (has_flonum1(ty))
-  {
-    assert(ty->size == 4 || 8 <= ty->size);
-    if (ty->size == 4)
-      println("  movss %%xmm0, %d(%%rbp)", var->offset);
-    else
-      println("  movsd %%xmm0, %d(%%rbp)", var->offset);
+    if (has_flonum1(ty)) {
+
+        // Allow sizes 4, 8, 12, and 16 for floating-point types
+        assert(ty->size == 4 || ty->size == 8 || ty->size == 12 || ty->size == 16);
+
+        if (ty->size == 4) {
+            println("  movss %%xmm0, %d(%%rbp)", var->offset);  // Handle float (4 bytes)
+        } else if (ty->size == 8) {
+            println("  movsd %%xmm0, %d(%%rbp)", var->offset);  // Handle double (8 bytes)
+        } else if (ty->size == 12 || ty->size == 16) {
+            // Split the 12 or 16 bytes into two parts, handle the first 8 bytes
+            println("  movsd %%xmm0, %d(%%rbp)", var->offset);  // Handle first 8 bytes
+            // Handle the remaining bytes (4 or 8 bytes)
+            if (ty->size == 12) {
+                println("  movss %%xmm1, %d(%%rbp)", var->offset + 8);  // Handle the remaining 4 bytes
+            } else if (ty->size == 16) {
+                println("  movsd %%xmm1, %d(%%rbp)", var->offset + 8);  // Handle the remaining 8 bytes
+            }
+        }
     fp++;
-  }
-  else
-  {
-    for (int i = 0; i < MIN(8, ty->size); i++)
-    {
+    } else {
+        // **Change 1: Handle the first 8 bytes for integer types (up to 64 bits)**
+        for (int i = 0; i < MIN(8, ty->size); i++) {
       println("  mov %%al, %d(%%rbp)", var->offset + i);
       println("  shr $8, %%rax");
     }
@@ -923,6 +934,8 @@ static void copy_struct_mem(void)
     println("  mov %d(%%rax), %%dl", i);
     println("  mov %%dl, %d(%%rdi)", i);
   }
+  //from @fuhsnn Copy returned-by-stack aggregate's pointer to rax
+  println("  mov %%rdi, %%rax");
 }
 
 static void builtin_alloca(void)
@@ -1068,6 +1081,12 @@ static void gen_expr(Node *node)
     Member *mem = node->member;
     if (mem->is_bitfield)
     {
+      //from @fuhsnn bitfield boolean returned -1 instead of 1
+      if (mem->ty->kind == TY_BOOL) {
+        println("  shr $%d, %%rax", mem->bit_offset);
+        println("  and $1, %%eax");
+        return;
+      }
       println("  shl $%d, %%rax", 64 - mem->bit_width - mem->bit_offset);
       if (mem->ty->is_unsigned)
         println("  shr $%d, %%rax", 64 - mem->bit_width);
@@ -1532,10 +1551,10 @@ static void gen_expr(Node *node)
     println("  mov %%rbp, %%rax");
     
     // Get the depth of the return address
-    int depth = eval(node->lhs);
+    int tmpdepth = eval(node->lhs);
     
     // Walk up the stack frames to the correct depth
-    for (int i = 0; i < depth; i++) {
+    for (int i = 0; i < tmpdepth; i++) {
       println("  mov (%%rax), %%rax");
     }
     
@@ -2243,12 +2262,19 @@ static void emit_data(Obj *prog)
 {
   for (Obj *var = prog; var; var = var->next)
   {
+    //issue 35 about array not initialized completely.
+    if (var->ty->size != 0)
+      println("  .zero %d", abs(var->ty->size));
+    if (var->alias_name)
+      println("  .set \"%s\", %s", var->name, var->alias_name);
 
     if (var->is_function || !var->is_definition)
       continue;
 
     if (var->is_static)
       println("  .local %s", var->name);
+    else if (var->ty->is_weak)
+      println("  .weak \"%s\"", var->name);
     else
       println("  .globl %s", var->name);
 
@@ -2259,6 +2285,9 @@ static void emit_data(Obj *prog)
     // Common symbol
     if (opt_fcommon && var->is_tentative)
     {
+      //from @fuhsnn incomplete array assuming to have one element
+      if (var->ty->kind == TY_ARRAY && var->ty->size < 0)
+        var->ty->size = var->ty->base->size;
       println("  .comm %s, %d, %d", var->name, var->ty->size, align);
       continue;
     }
@@ -2288,6 +2317,7 @@ static void emit_data(Obj *prog)
       println("%s:", var->name);
 
       Relocation *rel = var->rel;
+      int unit_size = (var->ty->kind == TY_ARRAY) ? var->ty->base->size : var->ty->size;
       int pos = 0;
       while (pos < var->ty->size)
       {
@@ -2299,9 +2329,30 @@ static void emit_data(Obj *prog)
         }
         else
         {
-          println("  .byte %d", var->init_data[pos++]);
+          
+          //from @enh (Elliott Hughes) Use .byte/.short/.long/.quad as appropriate.
+          //println("  .byte %d", var->init_data[pos++]);
+          if (unit_size == 8) {
+            long v = *(long*) &var->init_data[pos];
+            println("  .quad %ld  # %#lx", v, v);
+            pos += 8;
+          } else if (unit_size == 4) {
+            int v = *(int*) &var->init_data[pos];
+            println("  .long %d  # %#x", v, v);
+            pos += 4;
+          } else if (unit_size == 2) {
+            int v = *(short*) &var->init_data[pos] & 0xffff;
+            println("  .short %d  # %#x", v, v);
+            pos += 2;
+          } else {
+            int v = var->init_data[pos] & 0xff;
+            println("  .byte %d  # %#x", v, v);
+            pos += 1;
+          }
+
         }
       }
+      println("  .size %s, %d", var->name, var->ty->size);
       continue;
     }
 
@@ -2321,9 +2372,11 @@ static void emit_data(Obj *prog)
     else
       println("  .section .bss,\"aw\",@nobits");
 
-    println("  .align %d", align);
+    //println("  .align %d", align);
+    if (align > 1) println("  .align %d", align);
     println("%s:", var->name);
-    println("  .zero %d", var->ty->size);
+    if (var->ty->size != 0)
+      println("  .zero %d", abs(var->ty->size));
   }
 }
 
@@ -2408,6 +2461,13 @@ static void emit_text(Obj *prog)
 
   for (Obj *fn = prog; fn; fn = fn->next)
   {
+    // Emit alias if fn->alias_name is set
+    if (fn->alias_name) {
+      // Handle weak alias
+      println("  .weak %s", fn->name);                 // Mark the function as weak
+      println("  .set %s, %s", fn->name, fn->alias_name);  // Define alias
+    }
+
     if (!fn->is_function || !fn->is_definition)
       continue;
 
@@ -2545,6 +2605,7 @@ static void emit_text(Obj *prog)
     println("  mov %%rbp, %%rsp");
     println("  pop %%rbp");
     println("  ret");
+    println("  .size %s, .-%s", fn->name, fn->name);
   }
 }
 

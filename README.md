@@ -457,7 +457,6 @@ to be able to use meson with chibicc (meson doesn't know chibicc compiler), I ch
 
 lxc: https://github.com/lxc/lxc.git
 
-    Due to use of __attribute__((weak(alias))) in lxc/src/lxc/lxc.c, the linker is not able to find the symbols in the lxc library.
     CC=chibicc CFLAGS="-fpic" meson build && cd build && meson compile
 
 
