@@ -61,6 +61,7 @@ struct VarAttr
   char *alias_name; //to store alias name for function when weak attribute
   int destructor_priority;
   int constructor_priority;
+  bool is_packed;
 };
 
 // This struct represents a variable initializer. Since initializers
@@ -4257,6 +4258,8 @@ static Token *type_attributes(Token *tok, void *arg)
       consume(&tok, tok, "transaction_pure") || 
       consume(&tok, tok, "transaction_may_cancel_outer") || 
       consume(&tok, tok, "transaction_callable") || 
+      consume(&tok, tok, "tainted_args") ||     
+      consume(&tok, tok, "__designated_init__") ||                   
       consume(&tok, tok, "__no_profile_instrument_function__")) 
     {
         return tok;
@@ -4355,15 +4358,43 @@ static Token *type_attributes(Token *tok, void *arg)
     return tok;
   }
 
+  if (consume(&tok, tok, "nonnull") || consume(&tok, tok, "__nonnull__")) {
+      if (equal(tok, "(")) {
+          ctx->filename = PARSE_C;
+          ctx->funcname = "type_attributes";        
+          ctx->line_no = __LINE__ + 1; 
+          tok = skip(tok, "(",ctx);
 
-    if (consume(&tok, tok, "sentinel") || consume(&tok, tok, "__sentinel__") ||
-      consume(&tok, tok, "nonnull") || consume(&tok, tok, "__nonnull__") ||
-      consume(&tok, tok, "optimize") || consume(&tok, tok, "__optimize__") ||
-      consume(&tok, tok, "target") || consume(&tok, tok, "__target__") ||
-      consume(&tok, tok, "assume_aligned") || consume(&tok, tok, "__assume_aligned__") ||
-      consume(&tok, tok, "alloc_size") || consume(&tok, tok, "__alloc_size__") ||
-      consume(&tok, tok, "attribute_alloc_size") || consume(&tok, tok, "__attribute_alloc_size__") ||
-      consume(&tok, tok, "alloc_align") || consume(&tok, tok, "__alloc_align__")) {
+          // Optional parameter list
+          while (!equal(tok, ")")) {
+              if (tok->kind != TK_NUM) {
+                  error_tok(tok, "%s %d: expected parameter index in __nonnull__", PARSE_C, __LINE__);
+              }
+              // You can store the info if you want (e.g., attr->nonnull_params = ...)
+
+              tok = tok->next;
+              if (equal(tok, ","))
+                  tok = tok->next;
+              else
+                  break;
+          }
+          ctx->filename = PARSE_C;
+          ctx->funcname = "type_attributes";        
+          ctx->line_no = __LINE__ + 1; 
+          tok = skip(tok, ")",ctx);
+      }
+
+     return tok;
+  }
+
+
+  if (consume(&tok, tok, "sentinel") || consume(&tok, tok, "__sentinel__") ||
+    consume(&tok, tok, "optimize") || consume(&tok, tok, "__optimize__") ||
+    consume(&tok, tok, "target") || consume(&tok, tok, "__target__") ||
+    consume(&tok, tok, "assume_aligned") || consume(&tok, tok, "__assume_aligned__") ||
+    consume(&tok, tok, "alloc_size") || consume(&tok, tok, "__alloc_size__") ||
+    consume(&tok, tok, "attribute_alloc_size") || consume(&tok, tok, "__attribute_alloc_size__") ||
+    consume(&tok, tok, "alloc_align") || consume(&tok, tok, "__alloc_align__")) {
     if (consume(&tok, tok, "(")) {
       for (;;) {
         const_expr(&tok, tok);
@@ -4446,6 +4477,12 @@ static Token *thing_attributes(Token *tok, void *arg) {
     warn_tok(tok, "in thing_attributes: %s %d: attr is null", PARSE_C, __LINE__);
     return tok;
   }
+
+  if (consume(&tok, tok, "packed") || consume(&tok, tok, "__packed__"))
+    {
+      attr->is_packed = true;
+      return tok;
+    }
 
   if (consume(&tok, tok, "weak") || consume(&tok, tok, "__weak__")) {
     //int __attribute__((weak, alias("lxc_attach_main"))) main(int argc, char *argv[]);
@@ -4802,7 +4839,8 @@ static Token *thing_attributes(Token *tok, void *arg) {
       consume(&tok, tok, "transaction_pure") || 
       consume(&tok, tok, "transaction_may_cancel_outer") || 
       consume(&tok, tok, "transaction_callable") ||     
-      consume(&tok, tok, "tainted_args") ||             
+      consume(&tok, tok, "tainted_args") ||     
+      consume(&tok, tok, "__designated_init__") ||                   
       consume(&tok, tok, "__no_profile_instrument_function__")) 
     {
         return tok;
@@ -4815,9 +4853,37 @@ static Token *thing_attributes(Token *tok, void *arg) {
       return tok;
     }
 
+    if (consume(&tok, tok, "nonnull") || consume(&tok, tok, "__nonnull__")) {
+      if (equal(tok, "(")) {
+          ctx->filename = PARSE_C;
+          ctx->funcname = "type_attributes";        
+          ctx->line_no = __LINE__ + 1; 
+          tok = skip(tok, "(",ctx);
+
+          // Optional parameter list
+          while (!equal(tok, ")")) {
+              if (tok->kind != TK_NUM) {
+                  error_tok(tok, "%s %d: expected parameter index in __nonnull__", PARSE_C, __LINE__);
+              }
+              // You can store the info if you want (e.g., attr->nonnull_params = ...)
+
+              tok = tok->next;
+              if (equal(tok, ","))
+                  tok = tok->next;
+              else
+                  break;
+          }
+          ctx->filename = PARSE_C;
+          ctx->funcname = "type_attributes";        
+          ctx->line_no = __LINE__ + 1; 
+          tok = skip(tok, ")",ctx);
+      }
+
+     return tok;
+    }
+
 
     if (consume(&tok, tok, "sentinel") || consume(&tok, tok, "__sentinel__") ||
-      consume(&tok, tok, "nonnull") || consume(&tok, tok, "__nonnull__") ||
       consume(&tok, tok, "optimize") || consume(&tok, tok, "__optimize__") ||
       consume(&tok, tok, "target") || consume(&tok, tok, "__target__") ||
       consume(&tok, tok, "assume_aligned") || consume(&tok, tok, "__assume_aligned__") ||
@@ -6642,6 +6708,8 @@ static void declare_builtin_functions(void)
   ty->params = copy_type(ty_int);
   builtin_alloca = new_gvar("alloca", ty);
   builtin_alloca->is_definition = false;
+  Obj *builtin = new_gvar("__builtin_alloca", ty);
+  builtin->is_definition = false;
 }
 
 // program = (typedef | function-definition | global-variable)*
