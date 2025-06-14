@@ -25,8 +25,22 @@ static Obj *current_fn;
 static void gen_expr(Node *node);
 static void gen_stmt(Node *node);
 static void print_offset(Obj *prog);
-
+static int cmp_ctor(const void *a, const void *b);
+static void emit_constructors(void);
+static void emit_destructors(void); 
 static int last_loc_line = 0;
+
+typedef struct CtorFunc {
+  char *name;
+  int priority;
+} CtorFunc;
+
+static CtorFunc *constructors[256];
+static int constructor_cnt = 0;
+
+static CtorFunc *destructors[256];
+static int destructor_cnt = 0;
+
 
 
 __attribute__((format(printf, 1, 2))) static void println(char *fmt, ...)
@@ -353,9 +367,27 @@ static void gen_addr(Node *node)
     gen_addr(node->rhs);
     return;
   case ND_MEMBER:
+    // gen_addr(node->lhs);
+    // println("  add $%d, %%rax", node->member->offset);
+    // return;
+    //fix from @fuhsnn on some issues with members
+    switch(node->lhs->kind) {
+      case ND_FUNCALL:
+        if (!node->lhs->ret_buffer)
+          break;
+      case ND_ASSIGN:
+      case ND_COND:
+      case ND_STMT_EXPR:
+        if (node->lhs->ty->kind != TY_STRUCT && node->lhs->ty->kind != TY_UNION)
+          break;
+        gen_expr(node->lhs);
+        println("  add $%d, %%rax", node->member->offset);
+        return;
+      default:
     gen_addr(node->lhs);
     println("  add $%d, %%rax", node->member->offset);
     return;
+      }    
   case ND_FUNCALL:
     if (node->ret_buffer)
     {
@@ -377,6 +409,60 @@ static void gen_addr(Node *node)
   }
 
   error_tok(node->tok, "%s not an lvalue", CODEGEN_C);
+}
+
+// Copy n bytes from the source address in %rax to the destination in dst_reg.
+static void gen_mem_copy(const char *dst_reg, int n) {
+  int i = 0;
+  while (n >= 8) {
+    println("  movq %d(%%rax), %%r8", i);
+    println("  movq %%r8, %d(%s)", i, dst_reg);
+    n -= 8;
+    i += 8;
+  }
+  while (n >= 4) {
+    println("  movl %d(%%rax), %%r8d", i);
+    println("  movl %%r8d, %d(%s)", i, dst_reg);
+    n -= 4;
+    i += 4;
+  }
+  while (n >= 2) {
+    println("  movw %d(%%rax), %%r8w", i);
+    println("  movw %%r8w, %d(%s)", i, dst_reg);
+    n -= 2;
+    i += 2;
+  }
+  while (n >= 1) {
+    println("  movb %d(%%rax), %%r8b", i);
+    println("  movb %%r8b, %d(%s)", i, dst_reg);
+    --n;
+    ++i;
+  }
+}
+
+// Zero n bytes starting from offset bytes off %rbp.
+static void gen_mem_zero(int offset, int n) {
+  int i = offset;
+  while (n >= 8) {
+    println("  movq $0, %d(%%rbp)", i);
+    n -= 8;
+    i += 8;
+  }
+  while (n >= 4) {
+    println("  movl $0, %d(%%rbp)", i);
+    n -= 4;
+    i += 4;
+  }
+  while (n >= 2) {
+    println("  movw $0, %d(%%rbp)", i);
+    n -= 2;
+    i += 2;
+  }
+  while (n >= 1) {
+    println("  movb $0, %d(%%rbp)", i);
+    --n;
+    ++i;
+  }
 }
 
 // Load a value from where %rax is pointing to.
@@ -433,11 +519,7 @@ static void store(Type *ty)
   {
   case TY_STRUCT:
   case TY_UNION:
-    for (int i = 0; i < ty->size; i++)
-    {
-      println("  mov %d(%%rax), %%r8b", i);
-      println("  mov %%r8b, %d(%%rdi)", i);
-    }
+    gen_mem_copy("%rdi", ty->size);
     return;
   case TY_FLOAT:
     println("  movss %%xmm0, (%%rdi)");
@@ -674,11 +756,7 @@ static void push_struct(Type *ty)
   println("  sub $%d, %%rsp", sz);
   depth += sz / 8;
 
-  for (int i = 0; i < ty->size; i++)
-  {
-    println("  mov %d(%%rax), %%r10b", i);
-    println("  mov %%r10b, %d(%%rsp)", i);
-  }
+  gen_mem_copy("%rsp", ty->size);
 }
 
 static void push_args2(Node *args, bool first_pass)
@@ -711,6 +789,17 @@ static void push_args2(Node *args, bool first_pass)
   default:
     push();
   }
+  if (args->realign_stack) {
+    pushreg("rbx");
+  }
+
+    //   if (args->realign_stack) {
+    //     // Save the current stack pointer and align it
+    //     //pushreg("rbx");                  // Save current stack pointer
+    //     println("  mov %%rsp, %%rbx");   // Save the current stack pointer in RBX
+    //     println("  and $-16, %%rsp");     // Align the stack pointer to a 16-byte boundary
+    //     println("  sub $16, %%rsp");      // Allocate space for local variables
+    // }
 }
 
 // Load function call arguments. Arguments are already evaluated and
@@ -928,14 +1017,7 @@ static void copy_struct_mem(void)
   Obj *var = current_fn->params;
 
   println("  mov %d(%%rbp), %%rdi", var->offset);
-
-  for (int i = 0; i < ty->size; i++)
-  {
-    println("  mov %d(%%rax), %%dl", i);
-    println("  mov %%dl, %d(%%rdi)", i);
-  }
-  //from @fuhsnn Copy returned-by-stack aggregate's pointer to rax
-  println("  mov %%rdi, %%rax");
+  gen_mem_copy("%rdi", ty->size);
 }
 
 static void builtin_alloca(void)
@@ -1154,11 +1236,7 @@ static void gen_expr(Node *node)
     cast(node->lhs->ty, node->ty);
     return;
   case ND_MEMZERO:
-    // `rep stosb` is equivalent to `memset(%rdi, %al, %rcx)`.
-    println("  mov $%d, %%rcx", node->var->ty->size);
-    println("  lea %d(%%rbp), %%rdi", node->var->offset);
-    println("  mov $0, %%al");
-    println("  rep stosb");
+    gen_mem_zero(node->var->offset, node->var->ty->size);
     return;
   case ND_COND:
   {
@@ -2312,8 +2390,9 @@ static void emit_data(Obj *prog)
 
             
       println("  .type %s, @object", var->name);
-      println("  .size %s, %d", var->name, var->ty->size);
-      println("  .align %d", align);
+      println("  .size %s, %d", var->name, abs(var->ty->size));
+      //println("  .align %d", align);
+      if (align > 1) println("  .balign %d", align);
       println("%s:", var->name);
 
       Relocation *rel = var->rel;
@@ -2365,7 +2444,6 @@ static void emit_data(Obj *prog)
 
     if (var->section) {
       println("  .section %s,\"aw\",@nobits", var->section);
-      printf("====%s\n", var->section);
     }
     else if (var->is_tls)
       println("  .section .tbss,\"awT\",@nobits");
@@ -2458,6 +2536,40 @@ static void store_gp(int r, int offset, int sz) {
 static void emit_text(Obj *prog)
 {
   
+  // First pass: collect constructor/destructor attributes
+  for (Obj *fn = prog; fn; fn = fn->next) {
+
+    if (!fn->is_function || !fn->is_definition)
+      continue;
+
+    if (fn->is_constructor || fn->ty->is_constructor) {
+      int priority = fn->constructor_priority > fn->ty->constructor_priority
+                    ? fn->constructor_priority
+                    : fn->ty->constructor_priority;
+      if (priority < 0 || priority > 65535)
+        priority = 65535;
+
+      CtorFunc *f = calloc(1, sizeof(CtorFunc));
+      f->name = fn->name;
+      f->priority = priority;
+      constructors[constructor_cnt++] = f;
+    }
+
+    // Combine destructor flags and pick max priority
+    if (fn->is_destructor || fn->ty->is_destructor) {
+      int priority = fn->destructor_priority > fn->ty->destructor_priority
+                    ? fn->destructor_priority
+                    : fn->ty->destructor_priority;
+      if (priority < 0 || priority > 65535)
+        priority = 65535;
+
+      CtorFunc *f = calloc(1, sizeof(CtorFunc));
+      f->name = fn->name;
+      f->priority = priority;
+      destructors[destructor_cnt++] = f;
+    }
+
+  }
 
   for (Obj *fn = prog; fn; fn = fn->next)
   {
@@ -2471,19 +2583,7 @@ static void emit_text(Obj *prog)
     if (!fn->is_function || !fn->is_definition)
       continue;
 
-      
-    if (fn->is_function && fn->is_constructor) {
-      println("\n  .section .init_array,\"aw\"");
-      println("  .p2align 3");
-      println("  .quad %s", fn->name);
-    }      
 
-    if (fn->is_function && fn->is_destructor) {
-      println("  .section .fini_array,\"aw\",@fini_array");
-      println("  .p2align 3");
-      println("  .quad %s", fn->name);
-      println("  .text"); 
-    }
 
     // No code is emitted for "static inline" functions
     // if no one is referencing them.
@@ -2597,8 +2697,9 @@ static void emit_text(Obj *prog)
     // a special rule for the main function. Reaching the end of the
     // main function is equivalent to returning 0, even though the
     // behavior is undefined for the other functions.
-    if (strcmp(fn->name, "main") == 0)
+    if (strcmp(fn->name, "main") == 0) {
       println("  mov $0, %%rax");
+    } 
 
     // Epilogue
     println(".L.return.%s:", fn->name);
@@ -2607,6 +2708,8 @@ static void emit_text(Obj *prog)
     println("  ret");
     println("  .size %s, .-%s", fn->name, fn->name);
   }
+  emit_constructors(); 
+  emit_destructors(); 
 }
 
 void codegen(Obj *prog, FILE *out)
@@ -2620,6 +2723,7 @@ void codegen(Obj *prog, FILE *out)
   assign_lvar_offsets(prog);
   emit_data(prog);
   emit_text(prog);
+
   println("  .section  .note.GNU-stack,\"\",@progbits");
   //print offset for each variable
   if (isDebug)
@@ -3018,4 +3122,39 @@ int len = sizeof(newargreg64)/sizeof(newargreg64[0]);
 
 }
 
+void pushreg(const char *arg) {
+  println("  push %%%s", arg);
+  depth++;
+}
+
+static int cmp_ctor(const void *a, const void *b) {
+  return (*(CtorFunc **)a)->priority - (*(CtorFunc **)b)->priority;
+}
+
+
+
+static void emit_constructors(void) {
+  if (constructor_cnt == 0)
+    return;
+  qsort(constructors, constructor_cnt, sizeof(CtorFunc *), cmp_ctor);
+  println("  .section .init_array,\"aw\",@init_array");
+  println("  .p2align 3");
+  for (int i = 0; i < constructor_cnt; i++) {
+    println("  .quad %s", constructors[i]->name);
+  }
+  println("  .text");
+}
+
+
+static void emit_destructors(void) {
+  if (destructor_cnt == 0)
+    return;
+  qsort(destructors, destructor_cnt, sizeof(CtorFunc *), cmp_ctor);
+  println("  .section .fini_array,\"aw\",@fini_array");
+  println("  .p2align 3");
+  for (int i = 0; i < destructor_cnt; i++) {
+    println("  .quad %s", destructors[i]->name);
+  }
+  println("  .text");
+}
 

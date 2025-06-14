@@ -533,7 +533,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.22.7    Fixing issue with named operand on assembly. Fixing issue with struct union found during vlc compile. Reporting fix for c-testsuite 152, 162 and 205.
+1.0.22.7    Fixing issue with named operand on assembly. Fixing issue with struct union found during vlc compile. Reporting fix for c-testsuite 152, 162 and 205. Fixing constructor and destructor. Fixing bug on preprocess that skipped some attributes.
 
 
 ## old release notes

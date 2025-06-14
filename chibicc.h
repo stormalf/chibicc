@@ -268,6 +268,8 @@ struct Obj
   bool is_noreturn;
   bool is_constructor;
   bool is_destructor;
+  int  destructor_priority;
+  int  constructor_priority;
   bool is_ms_abi; 
   bool is_no_instrument_function;
   bool is_force_align_arg_pointer;
@@ -589,6 +591,8 @@ struct Type
   char *section;
   bool is_constructor;
   bool is_destructor;
+  int destructor_priority;
+  int constructor_priority;
 };
 
 // Struct member
@@ -684,6 +688,7 @@ char *register_available();
 char *specific_register_available(char *regist); 
 bool check_register_used(char *regist);
 void check_register_in_template(char *template); 
+void pushreg(const char *arg);
 
 //
 // unicode.c

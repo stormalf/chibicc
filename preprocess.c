@@ -1152,9 +1152,10 @@ static Token *preprocess2(Token *tok)
   while (tok->kind != TK_EOF)
   {
 
+
     // // // If it is a macro, expand it.
     //if (expand_macro(&tok, tok)) 
-    if (tok->kind == TK_IDENT && expand_macro(&tok, tok))
+    if (tok->kind == TK_IDENT && !equal(tok, "__attribute__") && expand_macro(&tok, tok))  
       continue;
 
     // Pass through if it is not a "#".
@@ -1336,6 +1337,7 @@ static Token *preprocess2(Token *tok)
         }while (!tok->at_bol);     
       continue;
     }
+
     error_tok(tok, "%s: in preprocess2 : invalid preprocessor directive", PREPROCESS_C);
   }
   cur->next = tok;
@@ -1454,6 +1456,7 @@ void init_macros(void)
   define_macro("__LP64__", "1");
   define_macro("__SIZEOF_DOUBLE__", "8");
   define_macro("__SIZEOF_FLOAT__", "4");
+  define_macro("__UINTPTR_TYPE__", "unsigned long");
   define_macro("__SIZEOF_INT__", "4");
   //define_macro("SIZEOF_INT", "4");
   define_macro("__SIZEOF_LONG_DOUBLE__", "8");
@@ -1683,7 +1686,6 @@ static void join_adjacent_string_literals(Token *tok)
 Token *preprocess(Token *tok, bool isReadLine)
 {
   tok = preprocess2(tok);
-
   // to manage issue with macro used before its definition. gcc allows it
   tok = preprocess3(tok);
 
@@ -1718,7 +1720,7 @@ Token *preprocess3(Token *tok)
     if (m != NULL && m->body->len == 0)
     {
       //if (expand_macro(&tok, tok))
-      if (tok->kind == TK_IDENT && expand_macro(&tok, tok))
+      if (tok->kind == TK_IDENT && !equal(tok, "__attribute__") && expand_macro(&tok, tok))  
         continue;
     }
 

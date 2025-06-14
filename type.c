@@ -68,27 +68,27 @@ bool is_bitfield(Node *node) {
   return node->kind == ND_MEMBER && node->member->is_bitfield;
 }
 
-static bool is_bitfield2(Node *node, int *width) {
-  switch (node->kind) {
-  case ND_ASSIGN:
-    return is_bitfield2(node->lhs, width);
-  case ND_COMMA:
-    return is_bitfield2(node->rhs, width);
-  case ND_STMT_EXPR: {
-    Node *stmt = node->body;
-    while (stmt->next)
-      stmt = stmt->next;
-    if (stmt->kind == ND_EXPR_STMT)
-      return is_bitfield2(stmt->lhs, width);
-  }
-  case ND_MEMBER:
-    if (!node->member->is_bitfield)
-      return false;
-    *width = node->member->bit_width;
-    return true;
-  }
-  return false;
-}
+// static bool is_bitfield2(Node *node, int *width) {
+//   switch (node->kind) {
+//   case ND_ASSIGN:
+//     return is_bitfield2(node->lhs, width);
+//   case ND_COMMA:
+//     return is_bitfield2(node->rhs, width);
+//   case ND_STMT_EXPR: {
+//     Node *stmt = node->body;
+//     while (stmt->next)
+//       stmt = stmt->next;
+//     if (stmt->kind == ND_EXPR_STMT)
+//       return is_bitfield2(stmt->lhs, width);
+//   }
+//   case ND_MEMBER:
+//     if (!node->member->is_bitfield)
+//       return false;
+//     *width = node->member->bit_width;
+//     return true;
+//   }
+//   return false;
+// }
 
 
 bool is_numeric(Type *ty)
@@ -178,6 +178,10 @@ Type *func_type(Type *return_ty)
   // GCC allows that and the expression is evaluated to 1.
   Type *ty = new_type(TY_FUNC, 1, 1);
   ty->return_ty = return_ty;
+  ty->is_constructor = false;
+  ty->is_destructor = false;
+  ty->destructor_priority = 0;
+  ty->constructor_priority = 0;  
   return ty;
 }
 
