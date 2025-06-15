@@ -39,7 +39,7 @@
 #endif
 
 #define PRODUCT "chibicc"
-#define VERSION "1.0.23_vim"
+#define VERSION "1.0.23.2"
 #define MAXLEN 501
 #define DEFAULT_TARGET_MACHINE "x86_64-linux-gnu"
 
@@ -268,6 +268,8 @@ struct Obj
   bool is_noreturn;
   bool is_constructor;
   bool is_destructor;
+  int  destructor_priority;
+  int  constructor_priority;
   bool is_ms_abi; 
   bool is_no_instrument_function;
   bool is_force_align_arg_pointer;
@@ -589,6 +591,8 @@ struct Type
   char *section;
   bool is_constructor;
   bool is_destructor;
+  int destructor_priority;
+  int constructor_priority;
 };
 
 // Struct member

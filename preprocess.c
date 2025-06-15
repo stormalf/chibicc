@@ -309,6 +309,8 @@ static Token *copy_line(Token **rest, Token *tok)
 static Token *new_num_token(int val, Token *tmpl)
 {
   char *buf = format("%d\n", val);
+  if (!buf)
+    error_tok(tmpl, "%s: in new_num_token : buf is null", PREPROCESS_C);
   return tokenize(new_file(tmpl->file->name, tmpl->file->file_no, buf));
 }
 
@@ -1027,8 +1029,9 @@ static char *read_include_filename(Token **rest, Token *tok, bool *is_dquote)
 
     // Find closing ">".
     for (; !equal(tok, ">"); tok = tok->next)
-      if (tok->at_bol || tok->kind == TK_EOF)
-        error_tok(tok, "%s: in read_include_filename : expected '>'", PREPROCESS_C);
+      if (tok->at_bol || tok->kind == TK_EOF) {
+        error_tok(tok, "%s: in read_include_filename : expected '>' %s", PREPROCESS_C, start->loc );
+      }
 
     *is_dquote = false;
     *rest = skip_line(tok->next);
@@ -1127,8 +1130,9 @@ static void read_line_marker(Token **rest, Token *tok)
     error_tok(tok, "%s: in read_line_marker : invalid line marker", PREPROCESS_C);
 
   // fix issue with negative number that cause Assembler less number than one
-  start->file->line_delta = tok->val - start->line_no;
-
+  //start->file->line_delta = tok->val - start->line_no;
+  // fix from @fuhsnn Line control off by one 
+  start->file->line_delta = tok->val - start->line_no - 1;
   tok = tok->next;
   if (tok->kind == TK_EOF)
     return;
@@ -1150,7 +1154,7 @@ static Token *preprocess2(Token *tok)
 
     // // // If it is a macro, expand it.
     //if (expand_macro(&tok, tok)) 
-    if (tok->kind == TK_IDENT && expand_macro(&tok, tok))
+    if (tok->kind == TK_IDENT && !equal(tok, "__attribute__") && expand_macro(&tok, tok))  
       continue;
 
 
@@ -1324,13 +1328,16 @@ static Token *preprocess2(Token *tok)
     if (tok->at_bol)
       continue;
 
+    //from @fuhsnn warning management
     if (equal(tok, "warning"))
     {
-      if (tok->next->str != NULL)
-        printf("warning: %s\n", tok->next->str);
-      tok = skip_line(tok->next->next);
+      warn_tok(tok, "warning");
+        do {
+          tok = tok->next;
+        }while (!tok->at_bol);     
       continue;
     }
+
     error_tok(tok, "%s: in preprocess2 : invalid preprocessor directive", PREPROCESS_C);
   }
   cur->next = tok;
@@ -1444,12 +1451,15 @@ void init_macros(void)
   // Define predefined macros
   //define_macro("__VERSION__", "\"chibicc 1.0.23.1\""); 
   define_macro("__VERSION__", "\"" VERSION "\"");
+  define_macro("__builtin_offsetof", "offsetof");
   define_macro("_LP64", "1");
   define_macro("__C99_MACRO_WITH_VA_ARGS", "1");
   define_macro("__ELF__", "1");
   define_macro("__LP64__", "1");
   define_macro("__SIZEOF_DOUBLE__", "8");
   define_macro("__SIZEOF_FLOAT__", "4");
+  define_macro("__UINTPTR_TYPE__", "unsigned long");
+  define_macro("__INT32_TYPE__", "int");
   define_macro("__SIZEOF_INT__", "4");
   define_macro("SIZEOF_INT", "4");
   define_macro("__SIZEOF_LONG_DOUBLE__", "8");
@@ -1539,6 +1549,10 @@ void init_macros(void)
   define_macro("__INT_MIN__", "-2147483648");
   define_macro("__LONG_MIN__", "-9223372036854775808L");
   define_macro("__LONG_LONG_MIN__", "-9223372036854775808LL");
+  define_macro("HAVE_ATTRIBUTE_PACKED", "1");
+  define_macro("linux", "1");
+  define_macro("unix", "1");
+  define_macro("__extension__", "");
   //define_macro("nonnull", "1");
   //====fixing ISS-147 defining the two macros for the linux platform
   define_macro("__ORDER_LITTLE_ENDIAN__", "1234");  
@@ -1723,7 +1737,7 @@ Token *preprocess3(Token *tok)
     if (m != NULL && m->body->len == 0)
     {
       //if (expand_macro(&tok, tok))
-      if (tok->kind == TK_IDENT && expand_macro(&tok, tok))
+      if (tok->kind == TK_IDENT && !equal(tok, "__attribute__") && expand_macro(&tok, tok))  
         continue;
     }
 

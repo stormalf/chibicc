@@ -25,7 +25,22 @@ static Obj *current_fn;
 static void gen_expr(Node *node);
 static void gen_stmt(Node *node);
 static void print_offset(Obj *prog);
+static int cmp_ctor(const void *a, const void *b);
+static void emit_constructors(void);
+static void emit_destructors(void); 
 static int last_loc_line = 0;
+
+typedef struct CtorFunc {
+  char *name;
+  int priority;
+} CtorFunc;
+
+static CtorFunc *constructors[256];
+static int constructor_cnt = 0;
+
+static CtorFunc *destructors[256];
+static int destructor_cnt = 0;
+
 
 
 __attribute__((format(printf, 1, 2))) static void println(char *fmt, ...)
@@ -288,7 +303,7 @@ static void gen_addr(Node *node)
       // Thread-local variable
       if (node->var->is_tls)
       {
-        println("  data16 lea %s@tlsgd(%%rip), %%rdi", node->var->name);
+        println("  data16 lea \"%s\"@tlsgd(%%rip), %%rdi", node->var->name);
         println("  .value 0x6666");
         println("  rex64");
         println("  call __tls_get_addr@PLT");
@@ -296,7 +311,7 @@ static void gen_addr(Node *node)
       }
 
       // Function or global variable
-      println("  mov %s@GOTPCREL(%%rip), %%rax", node->var->name);
+      println("  mov \"%s\"@GOTPCREL(%%rip), %%rax", node->var->name);
       return;
     }
 
@@ -304,7 +319,7 @@ static void gen_addr(Node *node)
     if (node->var->is_tls)
     {
       println("  mov %%fs:0, %%rax");
-      println("  add $%s@tpoff, %%rax", node->var->name);
+      println("  add $\"%s\"@tpoff, %%rax", node->var->name);
       return;
     }
 
@@ -335,14 +350,14 @@ static void gen_addr(Node *node)
     if (node->ty->kind == TY_FUNC)
     {
       if (node->var->is_definition)
-        println("  lea %s(%%rip), %%rax", node->var->name);
+        println("  lea \"%s\"(%%rip), %%rax", node->var->name);
       else
-        println("  mov %s@GOTPCREL(%%rip), %%rax", node->var->name);
+        println("  mov \"%s\"@GOTPCREL(%%rip), %%rax", node->var->name);
       return;
     }
 
     // Global variable
-    println("  lea %s(%%rip), %%rax", node->var->name);
+    println("  lea \"%s\"(%%rip), %%rax", node->var->name);
     return;
   case ND_DEREF:
     gen_expr(node->lhs);
@@ -352,9 +367,27 @@ static void gen_addr(Node *node)
     gen_addr(node->rhs);
     return;
   case ND_MEMBER:
+    // gen_addr(node->lhs);
+    // println("  add $%d, %%rax", node->member->offset);
+    // return;
+    //fix from @fuhsnn on some issues with members
+    switch(node->lhs->kind) {
+      case ND_FUNCALL:
+        if (!node->lhs->ret_buffer)
+          break;
+      case ND_ASSIGN:
+      case ND_COND:
+      case ND_STMT_EXPR:
+        if (node->lhs->ty->kind != TY_STRUCT && node->lhs->ty->kind != TY_UNION)
+          break;
+        gen_expr(node->lhs);
+        println("  add $%d, %%rax", node->member->offset);
+        return;
+      default:
     gen_addr(node->lhs);
     println("  add $%d, %%rax", node->member->offset);
     return;
+      }    
   case ND_FUNCALL:
     if (node->ret_buffer)
     {
@@ -376,6 +409,60 @@ static void gen_addr(Node *node)
   }
 
   error_tok(node->tok, "%s not an lvalue", CODEGEN_C);
+}
+
+// Copy n bytes from the source address in %rax to the destination in dst_reg.
+static void gen_mem_copy(const char *dst_reg, int n) {
+  int i = 0;
+  while (n >= 8) {
+    println("  movq %d(%%rax), %%r8", i);
+    println("  movq %%r8, %d(%s)", i, dst_reg);
+    n -= 8;
+    i += 8;
+  }
+  while (n >= 4) {
+    println("  movl %d(%%rax), %%r8d", i);
+    println("  movl %%r8d, %d(%s)", i, dst_reg);
+    n -= 4;
+    i += 4;
+  }
+  while (n >= 2) {
+    println("  movw %d(%%rax), %%r8w", i);
+    println("  movw %%r8w, %d(%s)", i, dst_reg);
+    n -= 2;
+    i += 2;
+  }
+  while (n >= 1) {
+    println("  movb %d(%%rax), %%r8b", i);
+    println("  movb %%r8b, %d(%s)", i, dst_reg);
+    --n;
+    ++i;
+  }
+}
+
+// Zero n bytes starting from offset bytes off %rbp.
+static void gen_mem_zero(int offset, int n) {
+  int i = offset;
+  while (n >= 8) {
+    println("  movq $0, %d(%%rbp)", i);
+    n -= 8;
+    i += 8;
+  }
+  while (n >= 4) {
+    println("  movl $0, %d(%%rbp)", i);
+    n -= 4;
+    i += 4;
+  }
+  while (n >= 2) {
+    println("  movw $0, %d(%%rbp)", i);
+    n -= 2;
+    i += 2;
+  }
+  while (n >= 1) {
+    println("  movb $0, %d(%%rbp)", i);
+    --n;
+    ++i;
+  }
 }
 
 // Load a value from where %rax is pointing to.
@@ -432,11 +519,7 @@ static void store(Type *ty)
   {
   case TY_STRUCT:
   case TY_UNION:
-    for (int i = 0; i < ty->size; i++)
-    {
-      println("  mov %d(%%rax), %%r8b", i);
-      println("  mov %%r8b, %d(%%rdi)", i);
-    }
+    gen_mem_copy("%rdi", ty->size);
     return;
   case TY_FLOAT:
     println("  movss %%xmm0, (%%rdi)");
@@ -673,11 +756,7 @@ static void push_struct(Type *ty)
   println("  sub $%d, %%rsp", sz);
   depth += sz / 8;
 
-  for (int i = 0; i < ty->size; i++)
-  {
-    println("  mov %d(%%rax), %%r10b", i);
-    println("  mov %%r10b, %d(%%rsp)", i);
-  }
+  gen_mem_copy("%rsp", ty->size);
 }
 
 static void push_args2(Node *args, bool first_pass)
@@ -917,12 +996,7 @@ static void copy_struct_mem(void)
   Obj *var = current_fn->params;
 
   println("  mov %d(%%rbp), %%rdi", var->offset);
-
-  for (int i = 0; i < ty->size; i++)
-  {
-    println("  mov %d(%%rax), %%dl", i);
-    println("  mov %%dl, %d(%%rdi)", i);
-  }
+  gen_mem_copy("%rdi", ty->size);
 }
 
 static void builtin_alloca(void)
@@ -1068,6 +1142,12 @@ static void gen_expr(Node *node)
     Member *mem = node->member;
     if (mem->is_bitfield)
     {
+      //from @fuhsnn bitfield boolean returned -1 instead of 1
+      if (mem->ty->kind == TY_BOOL) {
+        println("  shr $%d, %%rax", mem->bit_offset);
+        println("  and $1, %%eax");
+        return;
+      }
       println("  shl $%d, %%rax", 64 - mem->bit_width - mem->bit_offset);
       if (mem->ty->is_unsigned)
         println("  shr $%d, %%rax", 64 - mem->bit_width);
@@ -1135,11 +1215,7 @@ static void gen_expr(Node *node)
     cast(node->lhs->ty, node->ty);
     return;
   case ND_MEMZERO:
-    // `rep stosb` is equivalent to `memset(%rdi, %al, %rcx)`.
-    println("  mov $%d, %%rcx", node->var->ty->size);
-    println("  lea %d(%%rbp), %%rdi", node->var->offset);
-    println("  mov $0, %%al");
-    println("  rep stosb");
+    gen_mem_zero(node->var->offset, node->var->ty->size);
     return;
   case ND_COND:
   {
@@ -1532,10 +1608,10 @@ static void gen_expr(Node *node)
     println("  mov %%rbp, %%rax");
     
     // Get the depth of the return address
-    int depth = eval(node->lhs);
+    int tmpdepth = eval(node->lhs);
     
     // Walk up the stack frames to the correct depth
-    for (int i = 0; i < depth; i++) {
+    for (int i = 0; i < tmpdepth; i++) {
       println("  mov (%%rax), %%rax");
     }
     
@@ -2243,12 +2319,19 @@ static void emit_data(Obj *prog)
 {
   for (Obj *var = prog; var; var = var->next)
   {
+    //issue 35 about array not initialized completely.
+    if (var->ty->size != 0)
+      println("  .zero %d", abs(var->ty->size));
+    if (var->alias_name)
+      println("  .set \"%s\", %s", var->name, var->alias_name);
 
     if (var->is_function || !var->is_definition)
       continue;
 
     if (var->is_static)
       println("  .local %s", var->name);
+    else if (var->ty->is_weak)
+      println("  .weak \"%s\"", var->name);
     else
       println("  .globl %s", var->name);
 
@@ -2259,6 +2342,9 @@ static void emit_data(Obj *prog)
     // Common symbol
     if (opt_fcommon && var->is_tentative)
     {
+      //from @fuhsnn incomplete array assuming to have one element
+      if (var->ty->kind == TY_ARRAY && var->ty->size < 0)
+        var->ty->size = var->ty->base->size;
       println("  .comm %s, %d, %d", var->name, var->ty->size, align);
       continue;
     }
@@ -2283,11 +2369,13 @@ static void emit_data(Obj *prog)
 
             
       println("  .type %s, @object", var->name);
-      println("  .size %s, %d", var->name, var->ty->size);
-      println("  .align %d", align);
+      println("  .size %s, %d", var->name, abs(var->ty->size));
+      //println("  .align %d", align);
+      if (align > 1) println("  .balign %d", align);
       println("%s:", var->name);
 
       Relocation *rel = var->rel;
+      int unit_size = (var->ty->kind == TY_ARRAY) ? var->ty->base->size : var->ty->size;
       int pos = 0;
       while (pos < var->ty->size)
       {
@@ -2299,9 +2387,30 @@ static void emit_data(Obj *prog)
         }
         else
         {
-          println("  .byte %d", var->init_data[pos++]);
+          
+          //from @enh (Elliott Hughes) Use .byte/.short/.long/.quad as appropriate.
+          //println("  .byte %d", var->init_data[pos++]);
+          if (unit_size == 8) {
+            long v = *(long*) &var->init_data[pos];
+            println("  .quad %ld  # %#lx", v, v);
+            pos += 8;
+          } else if (unit_size == 4) {
+            int v = *(int*) &var->init_data[pos];
+            println("  .long %d  # %#x", v, v);
+            pos += 4;
+          } else if (unit_size == 2) {
+            int v = *(short*) &var->init_data[pos] & 0xffff;
+            println("  .short %d  # %#x", v, v);
+            pos += 2;
+          } else {
+            int v = var->init_data[pos] & 0xff;
+            println("  .byte %d  # %#x", v, v);
+            pos += 1;
+          }
+
         }
       }
+      println("  .size %s, %d", var->name, var->ty->size);
       continue;
     }
 
@@ -2321,9 +2430,11 @@ static void emit_data(Obj *prog)
     else
       println("  .section .bss,\"aw\",@nobits");
 
-    println("  .align %d", align);
+    //println("  .align %d", align);
+    if (align > 1) println("  .align %d", align);
     println("%s:", var->name);
-    println("  .zero %d", var->ty->size);
+    if (var->ty->size != 0)
+      println("  .zero %d", abs(var->ty->size));
   }
 }
 
@@ -2405,25 +2516,54 @@ static void store_gp(int r, int offset, int sz) {
 static void emit_text(Obj *prog)
 {
   
+  // First pass: collect constructor/destructor attributes
+  for (Obj *fn = prog; fn; fn = fn->next) {
 
-  for (Obj *fn = prog; fn; fn = fn->next)
-  {
     if (!fn->is_function || !fn->is_definition)
       continue;
 
-      
-    if (fn->is_function && fn->is_constructor) {
-      println("\n  .section .init_array,\"aw\"");
-      println("  .p2align 3");
-      println("  .quad %s", fn->name);
+    if (fn->is_constructor || fn->ty->is_constructor) {
+      int priority = fn->constructor_priority > fn->ty->constructor_priority
+                    ? fn->constructor_priority
+                    : fn->ty->constructor_priority;
+      if (priority < 0 || priority > 65535)
+        priority = 65535;
+
+      CtorFunc *f = calloc(1, sizeof(CtorFunc));
+      f->name = fn->name;
+      f->priority = priority;
+      constructors[constructor_cnt++] = f;
     }      
 
-    if (fn->is_function && fn->is_destructor) {
-      println("  .section .fini_array,\"aw\",@fini_array");
-      println("  .p2align 3");
-      println("  .quad %s", fn->name);
-      println("  .text"); 
+    // Combine destructor flags and pick max priority
+    if (fn->is_destructor || fn->ty->is_destructor) {
+      int priority = fn->destructor_priority > fn->ty->destructor_priority
+                    ? fn->destructor_priority
+                    : fn->ty->destructor_priority;
+      if (priority < 0 || priority > 65535)
+        priority = 65535;
+
+      CtorFunc *f = calloc(1, sizeof(CtorFunc));
+      f->name = fn->name;
+      f->priority = priority;
+      destructors[destructor_cnt++] = f;
     }
+
+  }
+
+  for (Obj *fn = prog; fn; fn = fn->next)
+  {
+    // Emit alias if fn->alias_name is set
+    if (fn->alias_name) {
+      // Handle weak alias
+      println("  .weak %s", fn->name);                 // Mark the function as weak
+      println("  .set %s, %s", fn->name, fn->alias_name);  // Define alias
+    }
+
+    if (!fn->is_function || !fn->is_definition)
+      continue;
+
+
 
     // No code is emitted for "static inline" functions
     // if no one is referencing them.
@@ -2545,7 +2685,10 @@ static void emit_text(Obj *prog)
     println("  mov %%rbp, %%rsp");
     println("  pop %%rbp");
     println("  ret");
+    println("  .size %s, .-%s", fn->name, fn->name);
   }
+  emit_constructors(); 
+  emit_destructors(); 
 }
 
 void codegen(Obj *prog, FILE *out)
@@ -2956,5 +3099,38 @@ int len = sizeof(newargreg64)/sizeof(newargreg64[0]);
   }
 
 }
+
+static int cmp_ctor(const void *a, const void *b) {
+  return (*(CtorFunc **)a)->priority - (*(CtorFunc **)b)->priority;
+}
+
+
+
+static void emit_constructors(void) {
+  if (constructor_cnt == 0)
+    return;
+  qsort(constructors, constructor_cnt, sizeof(CtorFunc *), cmp_ctor);
+  println("  .section .init_array,\"aw\",@init_array");
+  println("  .p2align 3");
+  for (int i = 0; i < constructor_cnt; i++) {
+    println("  .quad %s", constructors[i]->name);
+  }
+  println("  .text");
+}
+
+
+static void emit_destructors(void) {
+  if (destructor_cnt == 0)
+    return;
+  qsort(destructors, destructor_cnt, sizeof(CtorFunc *), cmp_ctor);
+  println("  .section .fini_array,\"aw\",@fini_array");
+  println("  .p2align 3");
+  for (int i = 0; i < destructor_cnt; i++) {
+    println("  .quad %s", destructors[i]->name);
+  }
+  println("  .text");
+}
+
+
 
 

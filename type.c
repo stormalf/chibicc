@@ -137,6 +137,10 @@ Type *func_type(Type *return_ty)
   // GCC allows that and the expression is evaluated to 1.
   Type *ty = new_type(TY_FUNC, 1, 1);
   ty->return_ty = return_ty;
+  ty->is_constructor = false;
+  ty->is_destructor = false;
+  ty->destructor_priority = 0;
+  ty->constructor_priority = 0;  
   return ty;
 }
 
