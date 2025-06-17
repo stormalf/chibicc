@@ -1406,12 +1406,15 @@ static char *format_time(struct tm *tm)
 void init_macros(void)
 {
   // Define predefined macros
+  define_macro("__VERSION__", "\"" VERSION "\"");
   define_macro("_LP64", "1");
   define_macro("__C99_MACRO_WITH_VA_ARGS", "1");
   define_macro("__ELF__", "1");
   define_macro("__LP64__", "1");
   define_macro("__SIZEOF_DOUBLE__", "8");
   define_macro("__SIZEOF_FLOAT__", "4");
+  define_macro("__UINTPTR_TYPE__", "unsigned long");
+  define_macro("__INT32_TYPE__", "int");  
   define_macro("__SIZEOF_INT__", "4");
   define_macro("__INT_MIN__", "-2147483648");
   define_macro("__INT_MAX__", "2147483647");

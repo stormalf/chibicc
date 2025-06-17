@@ -3652,5 +3652,3 @@ static void emit_destructors(void) {
   }
   println("  .text");
 }
-
-
