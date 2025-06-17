@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include "test.h"
 
 typedef struct pg_atomic_uint64 {
     volatile uint64_t value;
@@ -39,6 +40,8 @@ void test_pg_atomic_compare_exchange_u64() {
     printf("Test 1 - Successful exchange: Result = %d, New Value = %llu, Expected = %llu\n",
            result, atomic_value.value, expected);
 
+    ASSERT(100, atomic_value.value);  // Check if the value was updated
+    ASSERT(42, expected);              // Check if expected was updated
     // Reset expected for the next test
     expected = 100;
 
@@ -47,6 +50,8 @@ void test_pg_atomic_compare_exchange_u64() {
     result = pg_atomic_compare_exchange_u64_impl(&atomic_value, &expected, new_value);
     printf("Test 2 - Unsuccessful exchange: Result = %d, New Value = %llu, Expected = %llu\n",
            result, atomic_value.value, expected);
+    ASSERT(100, atomic_value.value);  // Value should remain unchanged
+    ASSERT(100, expected);             // Expected should still be 100
 }
 
 int main() {

@@ -25,7 +25,6 @@ static char *newargreg32[] =  {"%ecx",  "%ebx", "%edx", "%eax", "%edi", "%r8d", 
 static char *newargreg64[] =  {"%rcx",  "%rbx", "%rdx", "%rax", "%rdi", "%r8",  "%r9",  "r10",  "r11" };
 static char *registerUsed[] = {"free",  "free", "free", "free", "free", "free", "free", "free", "free"};
 
-static int last_loc_line = 0;
 
 extern int64_t eval(Node *node);
 
@@ -38,6 +37,22 @@ static void pushx(void);
 static void popx(int reg);
 void push2(void);
 void pop2(char *a, char *b);
+static int cmp_ctor(const void *a, const void *b);
+static void emit_constructors(void);
+static void emit_destructors(void); 
+static int last_loc_line = 0;
+
+typedef struct CtorFunc {
+  char *name;
+  int priority;
+} CtorFunc;
+
+static CtorFunc *constructors[256];
+static int constructor_cnt = 0;
+
+static CtorFunc *destructors[256];
+static int destructor_cnt = 0;
+
 
 
 __attribute__((format(printf, 1, 2))) void println(char *fmt, ...)
@@ -372,7 +387,6 @@ static void gen_addr(Node *node)
         println("  mov \"%s\"@GOTPCREL(%%rip), %%rax", node->var->name);
       return;
     }
-
 
     // Global variable
     println("  lea \"%s\"(%%rip), %%rax", node->var->name);
@@ -752,7 +766,6 @@ static void cast(Type *from, Type *to)
 
   int t1 = getTypeId(from);
   int t2 = getTypeId(to);
-
   if (cast_table[t1][t2])
     println("  %s", cast_table[t1][t2]);
 }
@@ -771,8 +784,6 @@ static void cast(Type *from, Type *to)
 // members in its byte range [lo, hi).
 static bool has_flonum(Type *ty, int lo, int hi, int offset)
 {
-
-
   if (ty->kind == TY_STRUCT || ty->kind == TY_UNION)
   {
     for (Member *mem = ty->members; mem; mem = mem->next)
@@ -869,6 +880,8 @@ static void push_args2(Node *args, bool first_pass)
 
   case TY_STRUCT:
   case TY_UNION:
+    if (args->ty->size == 0)
+      return;
     push_struct(args->ty);
     break;
   case TY_FLOAT:
@@ -942,6 +955,8 @@ static int push_args(Node *node)
     {
     case TY_STRUCT:
     case TY_UNION:
+      if (ty->size == 0)
+        continue;
       if (pass_by_reg(ty, gp, fp)) {
           fp += has_flonum1(ty) + (ty->size > 8 && has_flonum2(ty));
           gp += !has_flonum1(ty) + (ty->size > 8 && !has_flonum2(ty));
@@ -1625,7 +1640,9 @@ static void gen_expr(Node *node)
       {
       case TY_STRUCT:
       case TY_UNION:
-          if (!pass_by_reg(ty, gp, fp))
+        if (ty->size == 0)
+          continue;      
+        if (!pass_by_reg(ty, gp, fp))
           continue;
 
         if (has_flonum1(ty))
@@ -1896,30 +1913,6 @@ static void gen_expr(Node *node)
   case ND_BUILTIN_BSWAP64: {
       gen_expr(node->builtin_val);  // Generate code for the expression
       println("  bswap %%rax");     // Reverse the byte order of the 64-bit value in rax
-      return;
-  }  
-
-  case ND_BUILTIN_INFF:
-  case ND_BUILTIN_HUGE_VALF: {
-      // Loading the bit pattern for positive infinity in 32-bit single precision (float)
-      println("  mov $0x7f800000, %%eax");  // Load the bit pattern 0x7f800000 into eax (single precision positive infinity)
-      println("  movd %%eax, %%xmm0"); 
-      return;
-  }
-
-  // For __builtin_huge_val
-  case ND_BUILTIN_HUGE_VAL: {
-      // Loading the bit pattern for positive infinity in 64-bit double precision
-      println("  mov $0x7ff0000000000000, %%rax");  
-      println("  movq %%rax, %%xmm0");      
-      return;
-  }
-
-  // For __builtin_huge_vall
-  case ND_BUILTIN_HUGE_VALL: {
-    println("  push $0x7f800000"); 
-    println("  flds (%%rsp)"); 
-    println("  pop %%rax"); 
     return;
   }
 
@@ -1951,6 +1944,7 @@ static void gen_expr(Node *node)
     println("  mov %%rbp, %%rax"); // Return the current frame pointer
     return;
   }
+
 
   case ND_POPCOUNT:
     gen_expr(node->builtin_val); // Generate code for the expression
@@ -2298,7 +2292,45 @@ static void gen_expr(Node *node)
     println("  sub %%rdi, %%rsp"); // Allocate space on the stack
     println("  mov %%rsp, %%rax"); // Store the new stack pointer (allocated memory address) in RAX
     return;
-  
+case ND_BUILTIN_NANF:  
+  case ND_BUILTIN_HUGE_VALF:
+  case ND_BUILTIN_INFF: {
+    union {
+      float f;
+      uint32_t i;
+    } u;
+    u.f = node->fval;
+    println("  mov $%u, %%eax", u.i);
+    println("  movd %%eax, %%xmm0");
+    return;
+  }
+  case ND_BUILTIN_NAN:
+  case ND_BUILTIN_HUGE_VAL:
+  case ND_BUILTIN_INF: {
+    union {
+      double d;
+      uint64_t i;
+    } u;
+    u.d = node->fval;
+    println("  movq $%lu, %%rax", u.i);
+    println("  movq %%rax, %%xmm0");
+    return;
+}
+  case ND_BUILTIN_NANL:
+  case ND_BUILTIN_HUGE_VALL: {
+    union {
+      long double ld;
+      uint8_t bytes[10];
+    } u;
+    u.ld = node->fval;
+
+  for (int i = 0; i < 10; i++)
+    println("  movb $%d, -%d(%%rsp)", u.bytes[i], 10 - i);
+
+  println("  fldt -10(%%rsp)");
+  return;
+  }
+
   }
 
   // switch (node->lhs->ty->kind)
@@ -2998,6 +3030,8 @@ static void emit_data(Obj *prog)
 static void store_fp(int r, int offset, int sz)
 {
   switch (sz) {
+  case 0:
+    return;
   case 2:
     // movw is used for 2-byte (16-bit) words
     println("  movw %%xmm%d, %d(%%rbp)", r, offset);
@@ -3049,6 +3083,40 @@ static void store_gp(int r, int offset, int sz) {
 static void emit_text(Obj *prog)
 {
   
+  // First pass: collect constructor/destructor attributes
+  for (Obj *fn = prog; fn; fn = fn->next) {
+
+    if (!fn->is_function || !fn->is_definition)
+      continue;
+
+    if (fn->is_constructor || fn->ty->is_constructor) {
+      int priority = fn->constructor_priority > fn->ty->constructor_priority
+                    ? fn->constructor_priority
+                    : fn->ty->constructor_priority;
+      if (priority < 0 || priority > 65535)
+        priority = 65535;
+
+      CtorFunc *f = calloc(1, sizeof(CtorFunc));
+      f->name = fn->name;
+      f->priority = priority;
+      constructors[constructor_cnt++] = f;
+    }
+
+    // Combine destructor flags and pick max priority
+    if (fn->is_destructor || fn->ty->is_destructor) {
+      int priority = fn->destructor_priority > fn->ty->destructor_priority
+                    ? fn->destructor_priority
+                    : fn->ty->destructor_priority;
+      if (priority < 0 || priority > 65535)
+        priority = 65535;
+
+      CtorFunc *f = calloc(1, sizeof(CtorFunc));
+      f->name = fn->name;
+      f->priority = priority;
+      destructors[destructor_cnt++] = f;
+    }
+
+  }
 
   for (Obj *fn = prog; fn; fn = fn->next)
   {
@@ -3062,20 +3130,25 @@ static void emit_text(Obj *prog)
     if (!fn->is_function || !fn->is_definition)
       continue;
 
+
+
     // No code is emitted for "static inline" functions
     // if no one is referencing them.
     if (!fn->is_live)
       continue;
 
-    // if (fn->is_static)
-    //   println("  .local %s", fn->name);
-    // else 
-    //   println("  .globl %s", fn->name);
+    if (fn->is_static)
+      println("  .local %s", fn->name);
+    else 
+      println("  .globl %s", fn->name);
 
-
-    // println("  .text");
-    println("\n  .section .text,\"ax\",@progbits");
-    println("  .%s %s", fn->is_static ? "local" : "global", fn->name);    
+    // Respect section attribute if set
+    if (fn->section)
+      println("  .section %s,\"ax\",@progbits", fn->section);
+    else
+      println("  .section .text,\"ax\",@progbits");
+    //println("  .text");
+    //println("\n  .section .text,\"ax\",@progbits");
     println("  .type %s, @function", fn->name);
     println("%s:", fn->name);
 
@@ -3192,6 +3265,8 @@ static void emit_text(Obj *prog)
     println("  ret");
     println("  .size %s, .-%s", fn->name, fn->name);
   }
+  emit_constructors(); 
+  emit_destructors(); 
 }
 
 void codegen(Obj *prog, FILE *out)
@@ -3545,4 +3620,37 @@ void pushreg(const char *arg) {
   println("  push %%%s", arg);
   depth++;
 }
+
+
+static int cmp_ctor(const void *a, const void *b) {
+  return (*(CtorFunc **)a)->priority - (*(CtorFunc **)b)->priority;
+}
+
+
+
+static void emit_constructors(void) {
+  if (constructor_cnt == 0)
+    return;
+  qsort(constructors, constructor_cnt, sizeof(CtorFunc *), cmp_ctor);
+  println("  .section .init_array,\"aw\",@init_array");
+  println("  .p2align 3");
+  for (int i = 0; i < constructor_cnt; i++) {
+    println("  .quad %s", constructors[i]->name);
+  }
+  println("  .text");
+}
+
+
+static void emit_destructors(void) {
+  if (destructor_cnt == 0)
+    return;
+  qsort(destructors, destructor_cnt, sizeof(CtorFunc *), cmp_ctor);
+  println("  .section .fini_array,\"aw\",@fini_array");
+  println("  .p2align 3");
+  for (int i = 0; i < destructor_cnt; i++) {
+    println("  .quad %s", destructors[i]->name);
+  }
+  println("  .text");
+}
+
 

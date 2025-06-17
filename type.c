@@ -186,6 +186,10 @@ Type *func_type(Type *return_ty)
   // GCC allows that and the expression is evaluated to 1.
   Type *ty = new_type(TY_FUNC, 1, 1);
   ty->return_ty = return_ty;
+  ty->is_constructor = false;
+  ty->is_destructor = false;
+  ty->destructor_priority = 0;
+  ty->constructor_priority = 0;  
   return ty;
 }
 
@@ -196,6 +200,7 @@ Type *array_of(Type *base, int len)
   Type *ty = new_type(TY_ARRAY, base->size * len, base->align);
   ty->base = base;
   ty->array_len = len;
+  ty->has_vla = base->has_vla; 
   if (base->is_vector) {
     ty->is_vector = true;
     ty->vector_size = base->vector_size;
@@ -210,6 +215,7 @@ Type *vla_of(Type *base, Node *len)
   Type *ty = new_type(TY_VLA, 8, 8);
   ty->base = base;
   ty->vla_len = len;
+  ty->has_vla = true;
   return ty;
 
 }
@@ -543,12 +549,18 @@ void add_type(Node *node)
       error_tok(node->cas_addr->tok, "%s %d: pointer expected", TYPE_C, __LINE__);
     node->ty = node->lhs->ty->base;
     return;
+  case ND_BUILTIN_NANF:  
+  case ND_BUILTIN_INFF:
   case ND_BUILTIN_HUGE_VALF:
       node->ty = ty_float;
       return;
+  case ND_BUILTIN_NAN:    
+  case ND_BUILTIN_INF:
   case ND_BUILTIN_HUGE_VAL:      
+    node->ty = ty_double;
+    return;    
+  case ND_BUILTIN_NANL:  
   case ND_BUILTIN_HUGE_VALL:
-  case ND_BUILTIN_INFF:
     node->ty = ty_ldouble;
     return;
   }

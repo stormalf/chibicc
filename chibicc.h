@@ -42,6 +42,11 @@
 #define MAXLEN 501
 #define DEFAULT_TARGET_MACHINE "x86_64-linux-gnu"
 
+
+#define STR_HELPER(x) #x
+#define STR(x) STR_HELPER(x)
+
+
 #define HELP PRODUCT " is a C compiler based on " PRODUCT " created by Rui Ueyama.\n \
 See original project https://github.com/rui314/chibicc for more information\n \
 this " PRODUCT " contains only some differences for now like new parameters\n"
@@ -260,8 +265,10 @@ struct Obj
   //from COSMOPOLITAN adding is_aligned, is_noreturn, is_destructor, is_constructor, is_ms_abi, is_no_instrument_function, is_force_align_arg_pointer, is_no_caller_saved_registers
   bool is_aligned;
   bool is_noreturn;
-  bool is_destructor;
   bool is_constructor;
+  bool is_destructor;
+  int  destructor_priority;
+  int  constructor_priority;
   bool is_ms_abi; 
   bool is_no_instrument_function;
   bool is_force_align_arg_pointer;
@@ -385,14 +392,18 @@ typedef enum
   ND_UNREACHABLE,   //builtin unreachable
   ND_ALLOC,   //builtin alloca
   ND_BUILTIN_INFF, //builtin inff
+  ND_BUILTIN_INF, //builtin inf
+  ND_BUILTIN_NAN, //builtin nan
+  ND_BUILTIN_NANF, //builtin nanf
+  ND_BUILTIN_NANL, //builtin nanl
   ND_BUILTIN_ISNAN, //builtin isnan
+  ND_BUILTIN_HUGE_VALL, //builtin huge vall
+  ND_BUILTIN_HUGE_VALF, //builtin huge valf
+  ND_BUILTIN_HUGE_VAL, //builtin huge val
   ND_BUILTIN_BSWAP16, //builtin bswap16
   ND_BUILTIN_BSWAP32, //builtin bswap32
   ND_BUILTIN_BSWAP64, //builtin bswap64
-  ND_BUILTIN_HUGE_VALF, //builtin huge_valf
-  ND_BUILTIN_HUGE_VAL, //builtin huge_val
-  ND_BUILTIN_HUGE_VALL, //builtin huge_vall
-  ND_BUILTIN_FRAME_ADDRESS, //builtin frame address
+  ND_BUILTIN_FRAME_ADDRESS, // builtin frame address
 } NodeKind;
 
 // AST node type
@@ -585,7 +596,7 @@ struct Type
   Member *members;
   bool is_flexible;
   bool is_packed;
-  
+  bool has_vla;  
   //from COSMOPOLITAN adding is_aligned
   bool is_aligned;
   bool is_weak;
@@ -598,6 +609,11 @@ struct Type
   bool is_variadic;
   Type *next;
   char *alias_name; // alias name for function when weak attribute
+  char *section;
+  bool is_constructor;
+  bool is_destructor;
+  int destructor_priority;
+  int constructor_priority;
 };
 
 // Struct member
