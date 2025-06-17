@@ -584,6 +584,8 @@ enum
 
 static int getTypeId(Type *ty)
 {
+  if (!ty)
+    return I32;
   switch (ty->kind)
   {
   case TY_CHAR:
@@ -700,7 +702,7 @@ static void cast(Type *from, Type *to)
     println("  movzx %%al, %%eax");
     return;
   }
-
+  
   int t1 = getTypeId(from);
   int t2 = getTypeId(to);
   if (cast_table[t1][t2])
@@ -775,6 +777,8 @@ static void push_args2(Node *args, bool first_pass)
   {
   case TY_STRUCT:
   case TY_UNION:
+    if (args->ty->size == 0)
+      return;
     push_struct(args->ty);
     break;
   case TY_FLOAT:
@@ -839,6 +843,8 @@ static int push_args(Node *node)
     {
     case TY_STRUCT:
     case TY_UNION:
+      if (ty->size == 0)
+        continue;
       if (ty->size > 16)
       {
         arg->pass_by_stack = true;
@@ -1232,7 +1238,7 @@ static void gen_expr(Node *node)
     gen_expr(node->rhs);
     return;
   case ND_CAST:
-    gen_expr(node->lhs);
+    gen_expr(node->lhs);    
     cast(node->lhs->ty, node->ty);
     return;
   case ND_MEMZERO:
@@ -1321,6 +1327,8 @@ static void gen_expr(Node *node)
       {
       case TY_STRUCT:
       case TY_UNION:
+        if (ty->size == 0)
+          continue;
         if (ty->size > 16)
           continue;
 
@@ -2461,6 +2469,9 @@ static void emit_data(Obj *prog)
 static void store_fp(int r, int offset, int sz)
 {
   switch (sz) {
+  case 0:
+    // No operation for size 0
+    return;  
   case 2:
     // movw is used for 2-byte (16-bit) words
     println("  movw %%xmm%d, %d(%%rbp)", r, offset);

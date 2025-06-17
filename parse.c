@@ -840,8 +840,7 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
   tok = attribute_list(tok, ty, type_attributes);
   if (equal(tok, "void") && equal(tok->next, ")"))
   {
-    tok = tok->next->next;
-    *rest = tok;
+    *rest = tok->next->next;
     return func_type(ty);
   }
 
@@ -1072,7 +1071,6 @@ static Type *declarator(Token **rest, Token *tok, Type *ty)
 {
   tok = attribute_list(tok, ty, type_attributes);
   ty = pointers(&tok, tok, ty);
-
   tok->next = attribute_list(tok->next, ty, type_attributes);
 
   if (equal(tok, "(") && !is_typename(tok->next) && !equal(tok->next, ")"))
@@ -1552,7 +1550,8 @@ static Member *struct_designator(Token **rest, Token *tok, Type *ty)
   ctx->filename = PARSE_C;
   ctx->funcname = "struct_designator";    
   ctx->line_no = __LINE__ + 1;
-  tok = skip(tok, ".", ctx);
+  if (equal(tok, "."))
+    tok = skip(tok, ".", ctx);
   if (tok->kind != TK_IDENT)
     error_tok(tok, "%s %d: in struct_designator : expected a field designator", PARSE_C, __LINE__);
 
@@ -1600,7 +1599,9 @@ static void designation(Token **rest, Token *tok, Initializer *init)
     Token *tok2;
     for (int i = begin; i <= end; i++)
       designation(&tok2, tok, init->children[i]);
-    array_initializer2(rest, tok2, init, begin + 1);
+    //fix from @fuhsnn Fix array initializer post-designation offset  
+    //array_initializer2(rest, tok2, init, begin + 1);
+    array_initializer2(rest, tok2, init, end + 1);
     return;
   }
 
@@ -1692,11 +1693,11 @@ static void array_initializer1(Token **rest, Token *tok, Initializer *init)
   ctx->line_no = __LINE__ + 1;  
   tok = skip(tok, "{", ctx);
 
-  if (init->is_flexible)
-  {
-    int len = count_array_init_elements(tok, init->ty);
-    *init = *new_initializer(array_of(init->ty->base, len), false);
-  }
+  // if (init->is_flexible)
+  // {
+  //   int len = count_array_init_elements(tok, init->ty);
+  //   *init = *new_initializer(array_of(init->ty->base, len), false);
+  // }
 
   bool first = true;
 
@@ -3798,7 +3799,7 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
 {
   Member head = {};
   Member *cur = &head;
-  int idx = 0;
+  //int idx = 0;
 
   while (!equal(tok, "}"))
   {
@@ -3814,7 +3815,7 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
       if (mem == NULL)
         error("%s: %s:%d: error: in struct_members : mem is null", PARSE_C, __FILE__, __LINE__);
       mem->ty = basety;
-      mem->idx = idx++;
+      //mem->idx = idx++;
       mem->align = attr.align ? attr.align : mem->ty->align;
       cur = cur->next = mem;
       continue;
@@ -3844,7 +3845,7 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
         basety = declspec(&tok, tok, &attr);
       mem->ty = declarator(&tok, tok, basety);
       mem->name = mem->ty->name;
-      mem->idx = idx++;
+      //mem->idx = idx++;
       mem->align = attr.align ? attr.align : mem->ty->align;
 
       if (consume(&tok, tok, ":"))
@@ -3865,16 +3866,16 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
     }
   }
 
-  if (idx == 0)
-  {
-    Member *mem = calloc(1, sizeof(Member));
-    if (mem == NULL)
-      error("%s: %s:%d: error: in struct_members : mem is null", PARSE_C, __FILE__, __LINE__);
-    mem->ty = ty_char;
-    mem->idx = 0;
-    mem->align = mem->ty->align;
-    cur = cur->next = mem;
-  }
+  // if (idx == 0)
+  // {
+  //   Member *mem = calloc(1, sizeof(Member));
+  //   if (mem == NULL)
+  //     error("%s: %s:%d: error: in struct_members : mem is null", PARSE_C, __FILE__, __LINE__);
+  //   mem->ty = ty_char;
+  //   mem->idx = 0;
+  //   mem->align = mem->ty->align;
+  //   cur = cur->next = mem;
+  // }
 
   // If the last element is an array of incomplete type, it's
   // called a "flexible array member". It should behave as if
@@ -5479,82 +5480,163 @@ static Node *primary(Token **rest, Token *tok)
   }
 
 
-  if (equal(tok, "sizeof") && equal(tok->next, "(") && is_typename(tok->next->next))
-  {
-    Type *ty = typename(&tok, tok->next->next);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";        
-    ctx->line_no = __LINE__ + 1;      
-    *rest = skip(tok, ")", ctx);
-   
-   // Check if the type is incomplete
-    if (ty->kind == TY_UNION && ty->size < 0) {
-      error_tok(tok, "%s %d: in primary : incomplete type for sizeof", PARSE_C, __LINE__);
-    }
+  // if (equal(tok, "sizeof") && equal(tok->next, "(") && is_typename(tok->next->next))
+  // {
+  //   Type *ty = typename(&tok, tok->next->next);
+  //   ctx->filename = PARSE_C;
+  //   ctx->funcname = "primary";        
+  //   ctx->line_no = __LINE__ + 1;      
+  //   *rest = skip(tok, ")", ctx);
+
+  //  // Check if the type is incomplete
+  //   if (ty->kind == TY_UNION && ty->size < 0) {
+  //     error_tok(tok, "%s %d: in primary : incomplete type for sizeof", PARSE_C, __LINE__);
+  //   }
 
 
-    if (ty->kind == TY_VLA)
-    {
-      if (ty->vla_size)
-        return new_var_node(ty->vla_size, tok);
+  //   if (ty->kind == TY_VLA)
+  //   {
+  //     if (ty->vla_size)
+  //       return new_var_node(ty->vla_size, tok);
 
-      Node *lhs = compute_vla_size(ty, tok);
-      Node *rhs = new_var_node(ty->vla_size, tok);
-      return new_binary(ND_COMMA, lhs, rhs, tok);
-    }
+  //     Node *lhs = compute_vla_size(ty, tok);
+  //     Node *rhs = new_var_node(ty->vla_size, tok);
+  //     return new_binary(ND_COMMA, lhs, rhs, tok);
+  //   }
 
-    if ((ty->kind == TY_STRUCT || ty->kind == TY_UNION) && ty->has_vla) {
-      if (!ty->vla_size) {
-        Node *lhs = compute_vla_size(ty, tok);  // defines ty->vla_size
-        Node *rhs = new_var_node(ty->vla_size, tok);
-        return new_binary(ND_COMMA, lhs, rhs, tok);
-      }
-      return new_var_node(ty->vla_size, tok);
-    }
+  //   if ((ty->kind == TY_STRUCT || ty->kind == TY_UNION) && ty->has_vla) {
+  //     if (!ty->vla_size) {
+  //       Node *lhs = compute_vla_size(ty, tok);  // defines ty->vla_size
+  //       Node *rhs = new_var_node(ty->vla_size, tok);
+  //       return new_binary(ND_COMMA, lhs, rhs, tok);
+  //     }
+  //     return new_var_node(ty->vla_size, tok);
+  //   }
+
+
+  //   if (ty->kind == TY_STRUCT && ty->is_flexible) {
+  //       Member *mem = ty->members;
+  //       while (mem->next)
+  //         mem = mem->next;
+  //       // Only subtract if this is truly a flexible array (no array length)
+  //       if (mem->ty->kind == TY_ARRAY && mem->ty->array_len < 0)
+  //         return new_ulong(ty->size - mem->ty->size, tok);
+  //     }
+
+  //   return new_ulong(ty->size, start);
+  // }
+
+  // if (equal(tok, "sizeof"))
+  // {
+
+  //   Node *node = unary(rest, tok->next);
+  //   add_type(node);
+
+  //   // Check if the type is incomplete
+  //   if (node->ty->kind == TY_UNION && node->ty->size < 0)
+  //     error_tok(tok, "%s %d: in primary : incomplete type for sizeof", PARSE_C, __LINE__);
+          
+  //   //trying to fix =====ISS-166 segmentation fault 
+  //   if (node->ty->kind == TY_VLA)
+  //   {
+  //     if (node->ty->vla_size)
+  //       return new_var_node(node->ty->vla_size, tok);
+
+  //     Node *lhs = compute_vla_size(node->ty, tok);
+  //     Node *rhs = new_var_node(node->ty->vla_size, tok);
+  //     return new_binary(ND_COMMA, lhs, rhs, tok);
+  //   }
+
+  //   if (node->ty->size < 0)
+  //     error_tok(tok, "%s %d: in primary : incomplete type for sizeof", PARSE_C, __LINE__);
     
-    if (ty->kind == TY_STRUCT && ty->is_flexible) {
-        Member *mem = ty->members;
-        while (mem->next)
-          mem = mem->next;
-        if (mem->ty->kind == TY_ARRAY)
-          return new_ulong((ty->size - mem->ty->size), tok);
-      }
 
-    return new_ulong(ty->size, start);
-  }
 
+  //   if ((node->ty->kind == TY_STRUCT || node->ty->kind == TY_UNION) && node->ty->has_vla) {
+  //     if (!node->ty->vla_size) {
+  //       Node *lhs = compute_vla_size(node->ty, tok);  // defines ty->vla_size
+  //       Node *rhs = new_var_node(node->ty->vla_size, tok);
+  //       return new_binary(ND_COMMA, lhs, rhs, tok);
+  //     }
+  //      return new_var_node(node->ty->vla_size, tok);
+  //   }
+    
+  //   if (node->ty->kind == TY_STRUCT && node->ty->is_flexible) {
+  //     Member *mem = node->ty->members;
+  //     while (mem->next) 
+  //       mem = mem->next;    
+  //     printf("======%d %d %d\n", mem->ty->kind, mem->ty->array_len, mem->ty->is_flexible);
+  //     // Only subtract if this is truly a flexible array (no array length)
+  //     if (mem->ty->kind == TY_ARRAY && mem->ty->is_flexible)
+  //       return new_ulong(node->ty->size - mem->ty->size, tok);      
+  //   }
+        
+    
+  //   // if (node->ty->kind == TY_VLA)
+  //   //   return new_var_node(node->ty->vla_size, tok);
+  //   return new_ulong(node->ty->size, tok);
+  // }
   if (equal(tok, "sizeof"))
   {
+    Type *ty;
 
-    Node *node = unary(rest, tok->next);
-    add_type(node);
+    if (equal(tok->next, "(") && is_typename(tok->next->next)) {      
+      ty = typename(&tok, tok->next->next);
+      ctx->filename = PARSE_C;
+      ctx->funcname = "primary";        
+      ctx->line_no = __LINE__ + 1;      
+      *rest = skip(tok, ")", ctx);
+     
+      // if (ty->kind == TY_VLA)
+      //   {
+      //     if (ty->vla_size)
+      //       return new_var_node(ty->vla_size, tok);
 
-    // Check if the type is incomplete
-    if (node->ty->kind == TY_UNION && node->ty->size < 0)
-      error_tok(tok, "%s %d: in primary : incomplete type for sizeof", PARSE_C, __LINE__);
-          
-    //trying to fix =====ISS-166 segmentation fault 
-    if (node->ty->kind == TY_VLA)
-    {
-      if (node->ty->vla_size)
-        return new_var_node(node->ty->vla_size, tok);
+      //     Node *lhs = compute_vla_size(ty, tok);
+      //     Node *rhs = new_var_node(ty->vla_size, tok);
+      //     return new_binary(ND_COMMA, lhs, rhs, tok);
+      //   }
 
-      Node *lhs = compute_vla_size(node->ty, tok);
-      Node *rhs = new_var_node(node->ty->vla_size, tok);
-      return new_binary(ND_COMMA, lhs, rhs, tok);
-    }
-
-    if (node->ty->size < 0)
-      error_tok(tok, "%s %d: in primary : incomplete type for sizeof", PARSE_C, __LINE__);
-
-
-    if ((node->ty->kind == TY_STRUCT || node->ty->kind == TY_UNION) && node->ty->has_vla) {
-      if (!node->ty->vla_size) {
-        Node *lhs = compute_vla_size(node->ty, tok);  // defines ty->vla_size
-        Node *rhs = new_var_node(node->ty->vla_size, tok);
-        return new_binary(ND_COMMA, lhs, rhs, tok);
+      if (ty->kind == TY_VLA) {
+        if (ty->vla_size)
+          return new_var_node(ty->vla_size, tok);
+        return compute_vla_size(ty, tok);
       }
       
+        return new_ulong(ty->size, start);
+      } else {
+      Node *node = unary(rest, tok->next);
+      add_type(node);
+
+
+      // Check if the type is incomplete
+      if (node->ty->kind == TY_UNION && node->ty->size < 0)
+        error_tok(tok, "%s %d: in primary : incomplete type for sizeof", PARSE_C, __LINE__);
+            
+      //trying to fix =====ISS-166 segmentation fault 
+      if (node->ty->kind == TY_VLA)
+      {
+        if (node->ty->vla_size)
+          return new_var_node(node->ty->vla_size, tok);
+        return compute_vla_size(node->ty, tok);
+
+        // Node *lhs = compute_vla_size(node->ty, tok);
+        // Node *rhs = new_var_node(node->ty->vla_size, tok);
+        // return new_binary(ND_COMMA, lhs, rhs, tok);
+      }
+      if (node->ty->size < 0)
+        error_tok(tok, "%s %d: in primary : incomplete type for sizeof", PARSE_C, __LINE__);
+
+        
+      if ((node->ty->kind == TY_STRUCT || node->ty->kind == TY_UNION) && node->ty->has_vla) {
+        if (!node->ty->vla_size) {
+          Node *lhs = compute_vla_size(node->ty, tok);  // defines ty->vla_size
+          Node *rhs = new_var_node(node->ty->vla_size, tok);
+          return new_binary(ND_COMMA, lhs, rhs, tok);
+        }
+        return new_var_node(node->ty->vla_size, tok);
+      }
+
       if (node->ty->kind == TY_STRUCT && node->ty->is_flexible) {
         Member *mem = node->ty->members;
         while (mem->next)
@@ -5562,13 +5644,15 @@ static Node *primary(Token **rest, Token *tok)
         if (mem->ty->kind == TY_ARRAY)
           return new_ulong((node->ty->size - mem->ty->size), tok);
       }
-      return new_var_node(node->ty->vla_size, tok);
-    }
 
-    // if (node->ty->kind == TY_VLA)
-    //   return new_var_node(node->ty->vla_size, tok);
-    return new_ulong(node->ty->size, tok);
+      
+      // if (node->ty->kind == TY_VLA)
+      //   return new_var_node(node->ty->vla_size, tok);
+      return new_ulong(node->ty->size, tok);   
+
+    }
   }
+
 
 
   //from @fuhsnn merging alignof

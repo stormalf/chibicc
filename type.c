@@ -191,7 +191,7 @@ Type *array_of(Type *base, int len)
   error("%s %d: in array_of : base is null", TYPE_C, __LINE__); 
   Type *ty = new_type(TY_ARRAY, base->size * len, base->align);
   ty->base = base;
-  ty->array_len = len;
+  ty->array_len = len;  
   ty->has_vla = base->has_vla; 
   return ty;
 }
@@ -374,9 +374,13 @@ void add_type(Node *node)
   case ND_ADDR:
   {
     Type *ty = node->lhs->ty;
-    if (ty->kind == TY_ARRAY)
-      node->ty = pointer_to(ty->base);
-    else
+  //   if (ty->kind == TY_ARRAY )
+  //     node->ty = pointer_to(ty->base);
+  //   else
+  //     node->ty = pointer_to(ty);
+  //   return;
+  // }
+  //from @fuhsnn add_type():Remove overaggressive array decaying
       node->ty = pointer_to(ty);
     return;
   }
