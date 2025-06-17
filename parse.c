@@ -2290,6 +2290,13 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
     return cur;
   }
 
+    if (ty->kind == TY_LDOUBLE)
+  {
+    *(long double *)(buf + offset) = eval_double(init->expr);
+    return cur;
+  }
+
+
   char **label = NULL;
   uint64_t val = eval2(init->expr, &label);
 
