@@ -813,33 +813,27 @@ static bool has_flonum2(Type *ty)
   return has_flonum(ty, 8, 16, 0);
 }
 
+static bool has_longdouble(Type *ty) {
+  if (!ty)
+    return false;
+  if (ty->kind == TY_LDOUBLE)
+    return true;
+  if (ty->kind != TY_STRUCT && ty->kind != TY_UNION)
+    return false;
 
-// static void push_struct(Type *ty) {
-//     // Align the size of the structure to the maximum of 8 or its alignment
-//     int sz = align_to(ty->size, MAX(8, ty->align));
-//     println("  sub $%d, %%rsp", sz);
-//     depth += sz / 8;
-//     // Copy the structure data from the source address (in rax) to the stack
-//     // Copy 8 bytes at a time, if possible
-//     for (int i = 0; i < ty->size; i += 8) {
-//         if (ty->size - i >= 8) {
-//             // Copy 8 bytes
-//             println("  mov %d(%%rax), %%r10", i);
-//             println("  mov %%r10, %d(%%rsp)", i);
-//         } else {
-//             // If the remaining bytes are less than 8, copy them byte by byte
-//             for (int j = 0; j < ty->size - i; j++) {
-//                 println("  mov %d(%%rax), %%r10b", i + j);
-//                 println("  mov %%r10b, %d(%%rsp)", i + j);
-//             }
-//         }
-//   }
-// }
+  for (Member *mem = ty->members; mem; mem = mem->next) {
+    if (has_longdouble(mem->ty))
+      return true;
+  }
+  return false;
+}
+
 
 static bool pass_by_reg(Type *ty, int gp, int fp) {
   if (ty->size > 16)
     return false;
-
+  if (has_longdouble(ty))
+    return false;
   int fp_inc = has_flonum1(ty) + (ty->size > 8 && has_flonum2(ty));
   int gp_inc = !has_flonum1(ty) + (ty->size > 8 && !has_flonum2(ty));
 
@@ -852,7 +846,11 @@ static bool pass_by_reg(Type *ty, int gp, int fp) {
 }
 
 static void push_struct(Type *ty) {
-  int sz = align_to(ty->size, 8);
+  int sz = 0;
+  if (has_longdouble(ty))
+    sz = align_to(ty->size, 16);
+  else
+    sz = align_to(ty->size, 8);
   println("  sub $%d, %%rsp", sz);
   depth += sz / 8;
 
@@ -945,7 +943,7 @@ static int push_args(Node *node)
   if (node->ret_buffer && node->ty->size > 16 )
     gp++;
 
-  
+  bool is_variadic = node->func_ty->is_variadic;
   // Load as many arguments to the registers as possible.
   for (Node *arg = node->args; arg; arg = arg->next)
   {
@@ -957,11 +955,15 @@ static int push_args(Node *node)
     case TY_UNION:
       if (ty->size == 0)
         continue;
-      if (pass_by_reg(ty, gp, fp)) {
+
+      if (pass_by_reg(ty, gp, fp) && !is_variadic) {
           fp += has_flonum1(ty) + (ty->size > 8 && has_flonum2(ty));
           gp += !has_flonum1(ty) + (ty->size > 8 && !has_flonum2(ty));
         } else {
           arg->pass_by_stack = true;
+          if (has_longdouble(ty))
+            stack += align_to(ty->size, 16) / 8; 
+          else
           stack += align_to(ty->size, 8) / 8;
         }
         break;    
@@ -1043,57 +1045,6 @@ static int push_args(Node *node)
   return stack;
 }
 
-
-// static void copy_ret_buffer(Obj *var)
-// {
-//   Type *ty = var->ty;
-//   int gp = 0, fp = 0;
-
-//   if (has_flonum1(ty))
-//   {
-//     assert(ty->size == 4 || ty->size == 8);
-//     if (ty->size == 4)
-//             println("  movss %%xmm0, %d(%%rbp)", var->offset);  // Handle float (4 bytes)
-//     else
-//             println("  movsd %%xmm0, %d(%%rbp)", var->offset);  // Handle double (8 bytes)
-//     fp++;
-//   }
-//   else
-//   {
-//         // **Change 1: Handle the first 8 bytes for integer types (up to 64 bits)**
-//     for (int i = 0; i < MIN(8, ty->size); i++)
-//     {
-//       println("  mov %%al, %d(%%rbp)", var->offset + i);
-//       println("  shr $8, %%rax");
-//     }
-//     gp++;
-//   }
-
-//     // **Change 2: Handle the remaining bytes (for __int128, this covers bytes 9-16)**
-//   if (ty->size > 8)
-//   {
-//     if (has_flonum2(ty))
-//     {
-//       assert(ty->size == 12 || ty->size == 16);
-//       if (ty->size == 12)
-//                 println("  movss %%xmm%d, %d(%%rbp)", fp, var->offset + 8);  // Handle 12 bytes floating-point case
-//       else
-//                 println("  movsd %%xmm%d, %d(%%rbp)", fp, var->offset + 8);  // Handle 16 bytes floating-point case
-//     }
-//     else
-//     {
-//             // **Change 3: Use %dl and %rdx for the second 8 bytes (bytes 9-16)**
-//       char *reg1 = (gp == 0) ? "%al" : "%dl";
-//       char *reg2 = (gp == 0) ? "%rax" : "%rdx";
-
-//       for (int i = 8; i < MIN(16, ty->size); i++)
-//       {
-//         println("  mov %s, %d(%%rbp)", reg1, var->offset + i);
-//         println("  shr $8, %s", reg2);
-//       }
-//     }
-//   }
-// }
 
 static void copy_ret_buffer(Obj *var)
 {
@@ -1269,12 +1220,12 @@ static void HandleAtomicArithmetic(Node *node, const char *op) {
 // Generate code for a given node.
 static void gen_expr(Node *node)
 {
-  if (node->tok->line_no != last_loc_line) {
+  if (!node)
+    error("%s: %s:%d: error: in gen_expr : node is null!", CODEGEN_C, __FILE__, __LINE__);
+  if (node->tok && node->tok->line_no != last_loc_line) {
         println("  .loc %d %u", node->tok->file->file_no, node->tok->line_no);
         last_loc_line = node->tok->line_no;
     }
-
-  //println("  .loc %d %u", node->tok->file->file_no, node->tok->line_no);
 
   switch (node->kind)
   {
@@ -1631,7 +1582,7 @@ static void gen_expr(Node *node)
     // a pointer to a buffer as if it were the first argument.
     if (node->ret_buffer && node->ty->size > 16)
       pop(argreg64[gp++]);
-
+    bool is_variadic = node->func_ty->is_variadic;
     for (Node *arg = node->args; arg; arg = arg->next)
     {
       Type *ty = arg->ty;
@@ -1641,6 +1592,8 @@ static void gen_expr(Node *node)
       case TY_STRUCT:
       case TY_UNION:
         if (ty->size == 0)
+          continue;
+        if (is_variadic)
           continue;      
         if (!pass_by_reg(ty, gp, fp))
           continue;
@@ -1703,7 +1656,10 @@ static void gen_expr(Node *node)
 
     // Function call
     println("  mov %%rax, %%r10");
-    println("  mov $%d, %%rax", fp);
+    //println("  mov $%d, %%rax", fp);
+    println("  mov $%d, %%al", fp);
+     
+
     println("  call *%%r10");
     println("  add $%d, %%rsp", stack_args * 8);
 
@@ -2785,11 +2741,12 @@ if (node->rhs->ty->kind == TY_INT128) {
 
 static void gen_stmt(Node *node)
 {
-  if (node->tok->line_no != last_loc_line) {
+  if (!node)
+    error("%s: %s:%d: error: in gen_stmt : node is null!", CODEGEN_C, __FILE__, __LINE__);
+  if (node->tok && node->tok->line_no != last_loc_line) {
         println("  .loc %d %u", node->tok->file->file_no, node->tok->line_no);
         last_loc_line = node->tok->line_no;
   }
-  //println("  .loc %d %u", node->tok->file->file_no, node->tok->line_no);
 
   switch (node->kind)
   {
@@ -2960,7 +2917,16 @@ static void emit_data(Obj *prog)
     // .data or .tdata
     if (var->init_data)
     {
-      if (var->is_tls)
+      // if (var->is_tls)
+      //   println("  .section .tdata,\"awT\",@progbits");
+      // else
+      //   println("  .section .data,\"aw\",@progbits");
+      //   //println("  .data");
+      //from cosmopolitan
+      if (var->section) {
+        println("  .section %s,\"aw\",@progbits", var->section);
+      }
+      else if (var->is_tls)
         println("  .section .tdata,\"awT\",@progbits");
       else
         println("  .section .data,\"aw\",@progbits");
@@ -3012,8 +2978,17 @@ static void emit_data(Obj *prog)
       continue;
     }
 
-    // .bss or .tbss
-    if (var->is_tls)
+    // // .bss or .tbss
+    // if (var->is_tls)
+    //   println("  .section .tbss,\"awT\",@nobits");
+    // else
+    //   println("  .section .bss,\"aw\",@nobits");
+    //   //println("  .bss");
+
+    if (var->section) {
+      println("  .section %s,\"aw\",@nobits", var->section);
+    }
+    else if (var->is_tls)
       println("  .section .tbss,\"awT\",@nobits");
     else
       println("  .section .bss,\"aw\",@nobits");
@@ -3054,6 +3029,9 @@ static void store_fp(int r, int offset, int sz)
 
 static void store_gp(int r, int offset, int sz) {
   switch (sz) {
+  case 0:
+    // No operation for size 0
+    return;      
   case 1:
     println("  mov %s, %d(%%rbp)", argreg8[r], offset);
     return;

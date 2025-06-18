@@ -5650,15 +5650,23 @@ static Node *primary(Token **rest, Token *tok)
       ctx->line_no = __LINE__ + 1;      
       *rest = skip(tok, ")", ctx);
      
-      // if (ty->kind == TY_VLA)
-      //   {
-      //     if (ty->vla_size)
-      //       return new_var_node(ty->vla_size, tok);
+      if ((ty->kind == TY_STRUCT || ty->kind == TY_UNION) && ty->has_vla) {
+        if (!ty->vla_size) {
+          Node *lhs = compute_vla_size(ty, tok); 
+          Node *rhs = new_var_node(ty->vla_size, tok);
+          return new_binary(ND_COMMA, lhs, rhs, tok);
+          }
+          return new_var_node(ty->vla_size, tok);
+        }
+        
+      if (ty->kind == TY_STRUCT && ty->is_flexible) {
+          Member *mem = ty->members;
+          while (mem->next)
+            mem = mem->next;
+          if (mem->ty->kind == TY_ARRAY)
+            return new_ulong((ty->size - mem->ty->size), tok);
+      }
 
-      //     Node *lhs = compute_vla_size(ty, tok);
-      //     Node *rhs = new_var_node(ty->vla_size, tok);
-      //     return new_binary(ND_COMMA, lhs, rhs, tok);
-      //   }
 
       if (ty->kind == TY_VLA) {
         if (ty->vla_size)
@@ -5682,10 +5690,6 @@ static Node *primary(Token **rest, Token *tok)
         if (node->ty->vla_size)
           return new_var_node(node->ty->vla_size, tok);
         return compute_vla_size(node->ty, tok);
-
-        // Node *lhs = compute_vla_size(node->ty, tok);
-        // Node *rhs = new_var_node(node->ty->vla_size, tok);
-        // return new_binary(ND_COMMA, lhs, rhs, tok);
       }
       if (node->ty->size < 0)
         error_tok(tok, "%s %d: in primary : incomplete type for sizeof", PARSE_C, __LINE__);
@@ -6777,8 +6781,6 @@ static Token *global_variable(Token *tok, Type *basety, VarAttr *attr)
       ctx->filename = PARSE_C;
       ctx->funcname = "global_variable";        
       ctx->line_no = __LINE__ + 1;         
-      if (!equal(tok, ","))
-        printf("=======tok=%s\n", tok->loc);
       tok = skip(tok, ",", ctx);
     }
     first = false;
