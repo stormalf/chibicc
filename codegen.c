@@ -28,6 +28,8 @@ static void print_offset(Obj *prog);
 static int cmp_ctor(const void *a, const void *b);
 static void emit_constructors(void);
 static void emit_destructors(void); 
+
+
 static int last_loc_line = 0;
 
 typedef struct CtorFunc {
@@ -584,6 +586,8 @@ enum
 
 static int getTypeId(Type *ty)
 {
+  if (!ty)
+    return I32;
   switch (ty->kind)
   {
   case TY_CHAR:
@@ -750,9 +754,46 @@ static bool has_flonum2(Type *ty)
   return has_flonum(ty, 8, 16, 0);
 }
 
+static bool has_longdouble(Type *ty) {
+  if (!ty)
+    return false;
+  if (ty->kind == TY_LDOUBLE)
+    return true;
+  if (ty->kind != TY_STRUCT && ty->kind != TY_UNION)
+    return false;
+
+  for (Member *mem = ty->members; mem; mem = mem->next) {
+    if (has_longdouble(mem->ty))
+      return true;
+  }
+  return false;
+}
+
+
+
+static bool pass_by_reg(Type *ty, int gp, int fp) {
+  if (ty->size > 16)
+    return false;
+  if (has_longdouble(ty))
+    return false;
+  int fp_inc = has_flonum1(ty) + (ty->size > 8 && has_flonum2(ty));
+  int gp_inc = !has_flonum1(ty) + (ty->size > 8 && !has_flonum2(ty));
+
+  if (fp_inc && (fp + fp_inc > FP_MAX))
+    return false;
+  if (gp_inc && (gp + gp_inc > GP_MAX))
+    return false;
+
+  return true;
+}
+
 static void push_struct(Type *ty)
 {
-  int sz = align_to(ty->size, 8);
+  int sz = 0;
+  if (has_longdouble(ty))
+    sz = align_to(ty->size, 16);
+  else
+    sz = align_to(ty->size, 8);
   println("  sub $%d, %%rsp", sz);
   depth += sz / 8;
 
@@ -775,10 +816,13 @@ static void push_args2(Node *args, bool first_pass)
   {
   case TY_STRUCT:
   case TY_UNION:
+    if (args->ty->size == 0)
+      return;    
     push_struct(args->ty);
     break;
   case TY_FLOAT:
   case TY_DOUBLE:
+
     pushf();
     break;
   case TY_LDOUBLE:
@@ -789,6 +833,17 @@ static void push_args2(Node *args, bool first_pass)
   default:
     push();
   }
+  if (args->realign_stack) {
+    pushreg("rbx");
+  }
+
+    //   if (args->realign_stack) {
+    //     // Save the current stack pointer and align it
+    //     //pushreg("rbx");                  // Save current stack pointer
+    //     println("  mov %%rsp, %%rbx");   // Save the current stack pointer in RBX
+    //     println("  and $-16, %%rsp");     // Align the stack pointer to a 16-byte boundary
+    //     println("  sub $16, %%rsp");      // Allocate space for local variables
+    // }
 }
 
 // Load function call arguments. Arguments are already evaluated and
@@ -819,37 +874,53 @@ static int push_args(Node *node)
   if (node->ret_buffer && node->ty->size > 16)
     gp++;
 
+  bool is_variadic = node->func_ty->is_variadic;
   // Load as many arguments to the registers as possible.
   for (Node *arg = node->args; arg; arg = arg->next)
   {
     Type *ty = arg->ty;
 
+
     switch (ty->kind)
     {
     case TY_STRUCT:
     case TY_UNION:
-      if (ty->size > 16)
-      {
-        arg->pass_by_stack = true;
-        stack += align_to(ty->size, 8) / 8;
-      }
-      else
-      {
-        bool fp1 = has_flonum1(ty);
-        bool fp2 = has_flonum2(ty);
+      if (ty->size == 0)
+        continue;
 
-        if (fp + fp1 + fp2 < FP_MAX && gp + !fp1 + !fp2 < GP_MAX)
-        {
-          fp = fp + fp1 + fp2;
-          gp = gp + !fp1 + !fp2;
-        }
-        else
-        {
-          arg->pass_by_stack = true;
+      if (pass_by_reg(ty, gp, fp) && !is_variadic) {
+          fp += has_flonum1(ty) + (ty->size > 8 && has_flonum2(ty));
+          gp += !has_flonum1(ty) + (ty->size > 8 && !has_flonum2(ty));
+        } else {
+        arg->pass_by_stack = true;
+          if (has_longdouble(ty))
+            stack += align_to(ty->size, 16) / 8; 
+          else
           stack += align_to(ty->size, 8) / 8;
-        }
       }
       break;
+      // if (ty->size > 16)
+      // {
+      //   arg->pass_by_stack = true;
+      //   stack += align_to(ty->size, 8) / 8;
+      // }
+      // else
+      // {
+      //   bool fp1 = has_flonum1(ty);
+      //   bool fp2 = has_flonum2(ty);
+
+      //   if (fp + fp1 + fp2 < FP_MAX && gp + !fp1 + !fp2 < GP_MAX)
+      //   {
+      //     fp = fp + fp1 + fp2;
+      //     gp = gp + !fp1 + !fp2;
+      //   }
+      //   else
+      //   {
+      //     arg->pass_by_stack = true;
+      //     stack += align_to(ty->size, 8) / 8;
+      //   }
+      // }
+      // break;
     case TY_FLOAT:
     case TY_DOUBLE:
       if (fp++ >= FP_MAX)
@@ -897,19 +968,29 @@ static void copy_ret_buffer(Obj *var)
   Type *ty = var->ty;
   int gp = 0, fp = 0;
 
-  if (has_flonum1(ty))
-  {
-    assert(ty->size == 4 || 8 <= ty->size);
-    if (ty->size == 4)
-      println("  movss %%xmm0, %d(%%rbp)", var->offset);
-    else
-      println("  movsd %%xmm0, %d(%%rbp)", var->offset);
+    if (has_flonum1(ty)) {
+
+        // Allow sizes 4, 8, 12, and 16 for floating-point types
+        assert(ty->size == 4 || ty->size == 8 || ty->size == 12 || ty->size == 16);
+
+        if (ty->size == 4) {
+            println("  movss %%xmm0, %d(%%rbp)", var->offset);  // Handle float (4 bytes)
+        } else if (ty->size == 8) {
+            println("  movsd %%xmm0, %d(%%rbp)", var->offset);  // Handle double (8 bytes)
+        } else if (ty->size == 12 || ty->size == 16) {
+            // Split the 12 or 16 bytes into two parts, handle the first 8 bytes
+            println("  movsd %%xmm0, %d(%%rbp)", var->offset);  // Handle first 8 bytes
+            // Handle the remaining bytes (4 or 8 bytes)
+            if (ty->size == 12) {
+                println("  movss %%xmm1, %d(%%rbp)", var->offset + 8);  // Handle the remaining 4 bytes
+            } else if (ty->size == 16) {
+                println("  movsd %%xmm1, %d(%%rbp)", var->offset + 8);  // Handle the remaining 8 bytes
+            }
+        }
     fp++;
-  }
-  else
-  {
-    for (int i = 0; i < MIN(8, ty->size); i++)
-    {
+    } else {
+        // **Change 1: Handle the first 8 bytes for integer types (up to 64 bits)**
+        for (int i = 0; i < MIN(8, ty->size); i++) {
       println("  mov %%al, %d(%%rbp)", var->offset + i);
       println("  shr $8, %%rax");
     }
@@ -997,6 +1078,8 @@ static void copy_struct_mem(void)
 
   println("  mov %d(%%rbp), %%rdi", var->offset);
   gen_mem_copy("%rdi", ty->size);
+  //from @fuhsnn Copy returned-by-stack aggregate's pointer to rax
+  println("  mov %%rdi, %%rax");
 }
 
 static void builtin_alloca(void)
@@ -1291,7 +1374,7 @@ static void gen_expr(Node *node)
     // a pointer to a buffer as if it were the first argument.
     if (node->ret_buffer && node->ty->size > 16)
       pop(argreg64[gp++]);
-
+    bool is_variadic = node->func_ty->is_variadic;
     for (Node *arg = node->args; arg; arg = arg->next)
     {
       Type *ty = arg->ty;
@@ -1300,28 +1383,47 @@ static void gen_expr(Node *node)
       {
       case TY_STRUCT:
       case TY_UNION:
-        if (ty->size > 16)
+        if (ty->size == 0)
+          continue;
+        if (is_variadic)
+          continue;
+        if (!pass_by_reg(ty, gp, fp))
           continue;
 
-        bool fp1 = has_flonum1(ty);
-        bool fp2 = has_flonum2(ty);
-
-        if (fp + fp1 + fp2 < FP_MAX && gp + !fp1 + !fp2 < GP_MAX)
-        {
-          if (fp1)
+        if (has_flonum1(ty))
             popf(fp++);
           else
             pop(argreg64[gp++]);
 
-          if (ty->size > 8)
-          {
-            if (fp2)
+        if (ty->size > 8) {
+          if (has_flonum2(ty))
               popf(fp++);
             else
               pop(argreg64[gp++]);
-          }
         }
         break;
+        // if (ty->size > 16)
+        //   continue;
+
+        // bool fp1 = has_flonum1(ty);
+        // bool fp2 = has_flonum2(ty);
+
+        // if (fp + fp1 + fp2 < FP_MAX && gp + !fp1 + !fp2 < GP_MAX)
+        // {
+        //   if (fp1)
+        //     popf(fp++);
+        //   else
+        //     pop(argreg64[gp++]);
+
+        //   if (ty->size > 8)
+        //   {
+        //     if (fp2)
+        //       popf(fp++);
+        //     else
+        //       pop(argreg64[gp++]);
+        //   }
+        // }
+        // break;
       case TY_FLOAT:
       case TY_DOUBLE:
         if (fp < FP_MAX)
@@ -1337,8 +1439,12 @@ static void gen_expr(Node *node)
 
 
 
+    // Function call
     println("  mov %%rax, %%r10");
-    println("  mov $%d, %%rax", fp);
+    //println("  mov $%d, %%rax", fp);
+    println("  mov $%d, %%al", fp);
+     
+
     println("  call *%%r10");
     println("  add $%d, %%rsp", stack_args * 8);
 
@@ -2423,7 +2529,6 @@ static void emit_data(Obj *prog)
 
     if (var->section) {
       println("  .section %s,\"aw\",@nobits", var->section);
-      printf("====%s\n", var->section);
     }
     else if (var->is_tls)
       println("  .section .tbss,\"awT\",@nobits");
@@ -2441,6 +2546,9 @@ static void emit_data(Obj *prog)
 static void store_fp(int r, int offset, int sz)
 {
   switch (sz) {
+  case 0:
+    // No operation for size 0
+    return;  
   case 2:
     // movw is used for 2-byte (16-bit) words
     println("  movw %%xmm%d, %d(%%rbp)", r, offset);
@@ -2487,6 +2595,9 @@ static void store_fp(int r, int offset, int sz)
 
 static void store_gp(int r, int offset, int sz) {
   switch (sz) {
+  case 0:
+    // No operation for size 0
+    return;      
   case 1:
     println("  mov %s, %d(%%rbp)", argreg8[r], offset);
     return;
@@ -2702,6 +2813,7 @@ void codegen(Obj *prog, FILE *out)
   assign_lvar_offsets(prog);
   emit_data(prog);
   emit_text(prog);
+
   println("  .section  .note.GNU-stack,\"\",@progbits");
   //print offset for each variable
   if (isDebug)
@@ -2838,6 +2950,7 @@ void assign_lvar_offsets(Obj *prog)
       bottom =  abs(fn->alloca_bottom->offset);
 
     int gp = 0, fp = 0;
+    bool is_variadic = fn->ty->is_variadic;
 
     // Assign offsets to pass-by-stack parameters.
     for (Obj *var = fn->params; var; var = var->next)
@@ -2852,26 +2965,32 @@ void assign_lvar_offsets(Obj *prog)
       {
       case TY_STRUCT:
       case TY_UNION:
-          if (ty->size <= 8) {
-            bool fp1 = has_flonum(ty, 0, 8, 0);
-            if (fp + fp1 < FP_MAX && gp + !fp1 < GP_MAX) {
-              fp = fp + fp1;
-              gp = gp + !fp1;
+        if (pass_by_reg(ty, gp, fp) && !is_variadic) {
+          fp += has_flonum1(ty) + (ty->size > 8 && has_flonum2(ty));
+          gp += !has_flonum1(ty) + (ty->size > 8 && !has_flonum2(ty));
               continue;
-            }
-          } else if (ty->size <= 16) {
-        //if (ty->size <= 16)
-        //{
-          bool fp1 = has_flonum(ty, 0, 8, 0);
-          bool fp2 = has_flonum(ty, 8, 16, 8);
-          if (fp + fp1 + fp2 < FP_MAX && gp + !fp1 + !fp2 < GP_MAX)
-          {
-            fp = fp + fp1 + fp2;
-            gp = gp + !fp1 + !fp2;
-            continue;
-          }
         }
         break;
+        //   if (ty->size <= 8) {
+        //     bool fp1 = has_flonum(ty, 0, 8, 0);
+        //     if (fp + fp1 < FP_MAX && gp + !fp1 < GP_MAX) {
+        //       fp = fp + fp1;
+        //       gp = gp + !fp1;
+        //       continue;
+        //     }
+        //   } else if (ty->size <= 16) {
+        // //if (ty->size <= 16)
+        // //{
+        //   bool fp1 = has_flonum(ty, 0, 8, 0);
+        //   bool fp2 = has_flonum(ty, 8, 16, 8);
+        //   if (fp + fp1 + fp2 < FP_MAX && gp + !fp1 + !fp2 < GP_MAX)
+        //   {
+        //     fp = fp + fp1 + fp2;
+        //     gp = gp + !fp1 + !fp2;
+        //     continue;
+        //   }
+        // }
+        // break;
       case TY_FLOAT:
       case TY_DOUBLE:
         if (fp++ < FP_MAX)
@@ -3098,6 +3217,11 @@ int len = sizeof(newargreg64)/sizeof(newargreg64[0]);
       add_register_used(register8_to_64(newargreg8[i]));
   }
 
+}
+
+void pushreg(const char *arg) {
+  println("  push %%%s", arg);
+  depth++;
 }
 
 static int cmp_ctor(const void *a, const void *b) {
