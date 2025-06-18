@@ -457,7 +457,6 @@ to be able to use meson with chibicc (meson doesn't know chibicc compiler), I ch
 
 lxc: https://github.com/lxc/lxc.git
 
-    Due to use of __attribute__((weak(alias))) in lxc/src/lxc/lxc.c, the linker is not able to find the symbols in the lxc library.
     CC=chibicc CFLAGS="-fpic" meson build && cd build && meson compile
 
 
@@ -469,7 +468,7 @@ VLC : https://github.com/videolan/vlc.git
 
     autoreconf -fiv
     ./bootstrap
-    CC=chibicc CFLAGS="-fPIC" CXXFLAGS="" DEFS="-DHAVE_CONFIG_H -DHAVE_ATTRIBUTE_PACKED -DVLC_USED -DVLC_API -DVLC_DEPRECATED -DVLC_MALLOC" LDFLAGS="-fPIC" ./configure  --disable-xcb --disable-qt --disable-a52 --disable-sse --disable-sid
+    CC=chibicc CFLAGS="-fPIC" CXXFLAGS="" DEFS="-DHAVE_CONFIG_H -DHAVE_ATTRIBUTE_PACKED -DVLC_USED -DVLC_API -DVLC_DEPRECATED -DVLC_MALLOC" LDFLAGS="-fPIC" ./configure  --disable-xcb --disable-qt --disable-a52 --disable-sse --disable-dbus
     make all
 
     VLC doesn't compile with chibicc :
@@ -534,7 +533,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.22.6    fixing cmake issue.
+1.0.22.7    Fixing issue with named operand on assembly. Fixing issue with struct union found during vlc compile. Reporting fix for c-testsuite 152, 162 and 205. Fixing constructor and destructor. Fixing bug on preprocess that skipped some attributes. Ignoring some other gcc attributes like nonnull. Fixing c-testsuite 213. Fixing issue 36 with empty struct. Fixing c-testsuite 204. Fixing issue 166 struct with VLA.
 
 
 ## old release notes

@@ -39,7 +39,7 @@
 #endif
 
 #define PRODUCT "chibicc"
-#define VERSION "1.0.22.6"
+#define VERSION "1.0.22.7"
 #define MAXLEN 501
 #define DEFAULT_TARGET_MACHINE "x86_64-linux-gnu"
 
@@ -268,6 +268,8 @@ struct Obj
   bool is_noreturn;
   bool is_constructor;
   bool is_destructor;
+  int  destructor_priority;
+  int  constructor_priority;
   bool is_ms_abi; 
   bool is_no_instrument_function;
   bool is_force_align_arg_pointer;
@@ -589,6 +591,8 @@ struct Type
   char *section;
   bool is_constructor;
   bool is_destructor;
+  int destructor_priority;
+  int constructor_priority;
 };
 
 // Struct member
@@ -638,7 +642,9 @@ Type *vla_of(Type *base, Node *expr);
 Type *enum_type(void);
 Type *struct_type(void);
 void add_type(Node *node);
+bool is_bitfield(Node *node);
 bool is_array(Type *ty);
+Type *new_qualified_type(Type *ty);
 
 
 char *nodekind2str(NodeKind kind);
@@ -682,6 +688,7 @@ char *register_available();
 char *specific_register_available(char *regist); 
 bool check_register_used(char *regist);
 void check_register_in_template(char *template); 
+void pushreg(const char *arg);
 
 //
 // unicode.c

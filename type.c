@@ -31,6 +31,21 @@ static Type *new_type(TypeKind kind, int size, int align)
   return ty;
 }
 
+Type *new_qualified_type(Type *ty) {
+  if (ty->origin)
+    ty = ty->origin;
+
+  Type *ret = calloc(1, sizeof(Type));
+  *ret = *ty;
+  ret->origin = ty;
+
+  if (ty->size < 0) {
+    ret->decl_next = ty->decl_next;
+    ty->decl_next = ret;
+  }
+  return ret;
+}
+
 bool is_integer(Type *ty)
 {
   TypeKind k = ty->kind;
@@ -48,6 +63,32 @@ bool is_flonum(Type *ty)
 bool is_array(Type *ty) {
   return ty->kind == TY_ARRAY || ty->kind == TY_VLA;
 }
+
+bool is_bitfield(Node *node) {
+  return node->kind == ND_MEMBER && node->member->is_bitfield;
+}
+
+// static bool is_bitfield2(Node *node, int *width) {
+//   switch (node->kind) {
+//   case ND_ASSIGN:
+//     return is_bitfield2(node->lhs, width);
+//   case ND_COMMA:
+//     return is_bitfield2(node->rhs, width);
+//   case ND_STMT_EXPR: {
+//     Node *stmt = node->body;
+//     while (stmt->next)
+//       stmt = stmt->next;
+//     if (stmt->kind == ND_EXPR_STMT)
+//       return is_bitfield2(stmt->lhs, width);
+//   }
+//   case ND_MEMBER:
+//     if (!node->member->is_bitfield)
+//       return false;
+//     *width = node->member->bit_width;
+//     return true;
+//   }
+//   return false;
+// }
 
 
 bool is_numeric(Type *ty)
@@ -137,6 +178,10 @@ Type *func_type(Type *return_ty)
   // GCC allows that and the expression is evaluated to 1.
   Type *ty = new_type(TY_FUNC, 1, 1);
   ty->return_ty = return_ty;
+  ty->is_constructor = false;
+  ty->is_destructor = false;
+  ty->destructor_priority = 0;
+  ty->constructor_priority = 0;  
   return ty;
 }
 
@@ -146,7 +191,7 @@ Type *array_of(Type *base, int len)
   error("%s %d: in array_of : base is null", TYPE_C, __LINE__); 
   Type *ty = new_type(TY_ARRAY, base->size * len, base->align);
   ty->base = base;
-  ty->array_len = len;
+  ty->array_len = len;  
   ty->has_vla = base->has_vla; 
   return ty;
 }
@@ -329,9 +374,13 @@ void add_type(Node *node)
   case ND_ADDR:
   {
     Type *ty = node->lhs->ty;
-    if (ty->kind == TY_ARRAY)
-      node->ty = pointer_to(ty->base);
-    else
+  //   if (ty->kind == TY_ARRAY )
+  //     node->ty = pointer_to(ty->base);
+  //   else
+  //     node->ty = pointer_to(ty);
+  //   return;
+  // }
+  //from @fuhsnn add_type():Remove overaggressive array decaying
       node->ty = pointer_to(ty);
     return;
   }

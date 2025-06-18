@@ -25,7 +25,24 @@ static Obj *current_fn;
 static void gen_expr(Node *node);
 static void gen_stmt(Node *node);
 static void print_offset(Obj *prog);
+static int cmp_ctor(const void *a, const void *b);
+static void emit_constructors(void);
+static void emit_destructors(void); 
+
+
 static int last_loc_line = 0;
+
+typedef struct CtorFunc {
+  char *name;
+  int priority;
+} CtorFunc;
+
+static CtorFunc *constructors[256];
+static int constructor_cnt = 0;
+
+static CtorFunc *destructors[256];
+static int destructor_cnt = 0;
+
 
 
 __attribute__((format(printf, 1, 2))) static void println(char *fmt, ...)
@@ -288,7 +305,7 @@ static void gen_addr(Node *node)
       // Thread-local variable
       if (node->var->is_tls)
       {
-        println("  data16 lea %s@tlsgd(%%rip), %%rdi", node->var->name);
+        println("  data16 lea \"%s\"@tlsgd(%%rip), %%rdi", node->var->name);
         println("  .value 0x6666");
         println("  rex64");
         println("  call __tls_get_addr@PLT");
@@ -296,7 +313,7 @@ static void gen_addr(Node *node)
       }
 
       // Function or global variable
-      println("  mov %s@GOTPCREL(%%rip), %%rax", node->var->name);
+      println("  mov \"%s\"@GOTPCREL(%%rip), %%rax", node->var->name);
       return;
     }
 
@@ -304,7 +321,7 @@ static void gen_addr(Node *node)
     if (node->var->is_tls)
     {
       println("  mov %%fs:0, %%rax");
-      println("  add $%s@tpoff, %%rax", node->var->name);
+      println("  add $\"%s\"@tpoff, %%rax", node->var->name);
       return;
     }
 
@@ -335,14 +352,14 @@ static void gen_addr(Node *node)
     if (node->ty->kind == TY_FUNC)
     {
       if (node->var->is_definition)
-        println("  lea %s(%%rip), %%rax", node->var->name);
+        println("  lea \"%s\"(%%rip), %%rax", node->var->name);
       else
-        println("  mov %s@GOTPCREL(%%rip), %%rax", node->var->name);
+        println("  mov \"%s\"@GOTPCREL(%%rip), %%rax", node->var->name);
       return;
     }
 
     // Global variable
-    println("  lea %s(%%rip), %%rax", node->var->name);
+    println("  lea \"%s\"(%%rip), %%rax", node->var->name);
     return;
   case ND_DEREF:
     gen_expr(node->lhs);
@@ -352,9 +369,27 @@ static void gen_addr(Node *node)
     gen_addr(node->rhs);
     return;
   case ND_MEMBER:
+    // gen_addr(node->lhs);
+    // println("  add $%d, %%rax", node->member->offset);
+    // return;
+    //fix from @fuhsnn on some issues with members
+    switch(node->lhs->kind) {
+      case ND_FUNCALL:
+        if (!node->lhs->ret_buffer)
+          break;
+      case ND_ASSIGN:
+      case ND_COND:
+      case ND_STMT_EXPR:
+        if (node->lhs->ty->kind != TY_STRUCT && node->lhs->ty->kind != TY_UNION)
+          break;
+        gen_expr(node->lhs);
+        println("  add $%d, %%rax", node->member->offset);
+        return;
+      default:
     gen_addr(node->lhs);
     println("  add $%d, %%rax", node->member->offset);
     return;
+      }    
   case ND_FUNCALL:
     if (node->ret_buffer)
     {
@@ -376,6 +411,60 @@ static void gen_addr(Node *node)
   }
 
   error_tok(node->tok, "%s not an lvalue", CODEGEN_C);
+}
+
+// Copy n bytes from the source address in %rax to the destination in dst_reg.
+static void gen_mem_copy(const char *dst_reg, int n) {
+  int i = 0;
+  while (n >= 8) {
+    println("  movq %d(%%rax), %%r8", i);
+    println("  movq %%r8, %d(%s)", i, dst_reg);
+    n -= 8;
+    i += 8;
+  }
+  while (n >= 4) {
+    println("  movl %d(%%rax), %%r8d", i);
+    println("  movl %%r8d, %d(%s)", i, dst_reg);
+    n -= 4;
+    i += 4;
+  }
+  while (n >= 2) {
+    println("  movw %d(%%rax), %%r8w", i);
+    println("  movw %%r8w, %d(%s)", i, dst_reg);
+    n -= 2;
+    i += 2;
+  }
+  while (n >= 1) {
+    println("  movb %d(%%rax), %%r8b", i);
+    println("  movb %%r8b, %d(%s)", i, dst_reg);
+    --n;
+    ++i;
+  }
+}
+
+// Zero n bytes starting from offset bytes off %rbp.
+static void gen_mem_zero(int offset, int n) {
+  int i = offset;
+  while (n >= 8) {
+    println("  movq $0, %d(%%rbp)", i);
+    n -= 8;
+    i += 8;
+  }
+  while (n >= 4) {
+    println("  movl $0, %d(%%rbp)", i);
+    n -= 4;
+    i += 4;
+  }
+  while (n >= 2) {
+    println("  movw $0, %d(%%rbp)", i);
+    n -= 2;
+    i += 2;
+  }
+  while (n >= 1) {
+    println("  movb $0, %d(%%rbp)", i);
+    --n;
+    ++i;
+  }
 }
 
 // Load a value from where %rax is pointing to.
@@ -432,11 +521,7 @@ static void store(Type *ty)
   {
   case TY_STRUCT:
   case TY_UNION:
-    for (int i = 0; i < ty->size; i++)
-    {
-      println("  mov %d(%%rax), %%r8b", i);
-      println("  mov %%r8b, %d(%%rdi)", i);
-    }
+    gen_mem_copy("%rdi", ty->size);
     return;
   case TY_FLOAT:
     println("  movss %%xmm0, (%%rdi)");
@@ -501,6 +586,8 @@ enum
 
 static int getTypeId(Type *ty)
 {
+  if (!ty)
+    return I32;
   switch (ty->kind)
   {
   case TY_CHAR:
@@ -617,7 +704,7 @@ static void cast(Type *from, Type *to)
     println("  movzx %%al, %%eax");
     return;
   }
-
+  
   int t1 = getTypeId(from);
   int t2 = getTypeId(to);
   if (cast_table[t1][t2])
@@ -654,7 +741,7 @@ static bool has_flonum(Type *ty, int lo, int hi, int offset)
     return true;
   }
 
-  return offset < lo || hi <= offset || ty->kind == TY_FLOAT || ty->kind == TY_DOUBLE;
+  return offset < lo || hi <= offset || ty->kind == TY_FLOAT || ty->kind == TY_DOUBLE ;
 }
 
 static bool has_flonum1(Type *ty)
@@ -667,17 +754,50 @@ static bool has_flonum2(Type *ty)
   return has_flonum(ty, 8, 16, 0);
 }
 
+static bool has_longdouble(Type *ty) {
+  if (!ty)
+    return false;
+  if (ty->kind == TY_LDOUBLE)
+    return true;
+  if (ty->kind != TY_STRUCT && ty->kind != TY_UNION)
+    return false;
+
+  for (Member *mem = ty->members; mem; mem = mem->next) {
+    if (has_longdouble(mem->ty))
+      return true;
+  }
+  return false;
+}
+
+
+
+static bool pass_by_reg(Type *ty, int gp, int fp) {
+  if (ty->size > 16)
+    return false;
+  if (has_longdouble(ty))
+    return false;
+  int fp_inc = has_flonum1(ty) + (ty->size > 8 && has_flonum2(ty));
+  int gp_inc = !has_flonum1(ty) + (ty->size > 8 && !has_flonum2(ty));
+
+  if (fp_inc && (fp + fp_inc > FP_MAX))
+    return false;
+  if (gp_inc && (gp + gp_inc > GP_MAX))
+    return false;
+
+  return true;
+}
+
 static void push_struct(Type *ty)
 {
-  int sz = align_to(ty->size, 8);
+  int sz = 0;
+  if (has_longdouble(ty))
+    sz = align_to(ty->size, 16);
+  else
+    sz = align_to(ty->size, 8);
   println("  sub $%d, %%rsp", sz);
   depth += sz / 8;
 
-  for (int i = 0; i < ty->size; i++)
-  {
-    println("  mov %d(%%rax), %%r10b", i);
-    println("  mov %%r10b, %d(%%rsp)", i);
-  }
+  gen_mem_copy("%rsp", ty->size);
 }
 
 static void push_args2(Node *args, bool first_pass)
@@ -696,10 +816,13 @@ static void push_args2(Node *args, bool first_pass)
   {
   case TY_STRUCT:
   case TY_UNION:
+    if (args->ty->size == 0)
+      return;    
     push_struct(args->ty);
     break;
   case TY_FLOAT:
   case TY_DOUBLE:
+
     pushf();
     break;
   case TY_LDOUBLE:
@@ -710,6 +833,17 @@ static void push_args2(Node *args, bool first_pass)
   default:
     push();
   }
+  if (args->realign_stack) {
+    pushreg("rbx");
+  }
+
+    //   if (args->realign_stack) {
+    //     // Save the current stack pointer and align it
+    //     //pushreg("rbx");                  // Save current stack pointer
+    //     println("  mov %%rsp, %%rbx");   // Save the current stack pointer in RBX
+    //     println("  and $-16, %%rsp");     // Align the stack pointer to a 16-byte boundary
+    //     println("  sub $16, %%rsp");      // Allocate space for local variables
+    // }
 }
 
 // Load function call arguments. Arguments are already evaluated and
@@ -740,37 +874,53 @@ static int push_args(Node *node)
   if (node->ret_buffer && node->ty->size > 16)
     gp++;
 
+  bool is_variadic = node->func_ty->is_variadic;
   // Load as many arguments to the registers as possible.
   for (Node *arg = node->args; arg; arg = arg->next)
   {
     Type *ty = arg->ty;
 
+
     switch (ty->kind)
     {
     case TY_STRUCT:
     case TY_UNION:
-      if (ty->size > 16)
-      {
-        arg->pass_by_stack = true;
-        stack += align_to(ty->size, 8) / 8;
-      }
-      else
-      {
-        bool fp1 = has_flonum1(ty);
-        bool fp2 = has_flonum2(ty);
+      if (ty->size == 0)
+        continue;
 
-        if (fp + fp1 + fp2 < FP_MAX && gp + !fp1 + !fp2 < GP_MAX)
-        {
-          fp = fp + fp1 + fp2;
-          gp = gp + !fp1 + !fp2;
-        }
-        else
-        {
+      if (pass_by_reg(ty, gp, fp) && !is_variadic) {
+          fp += has_flonum1(ty) + (ty->size > 8 && has_flonum2(ty));
+          gp += !has_flonum1(ty) + (ty->size > 8 && !has_flonum2(ty));
+        } else {
           arg->pass_by_stack = true;
-          stack += align_to(ty->size, 8) / 8;
+          if (has_longdouble(ty))
+            stack += align_to(ty->size, 16) / 8; 
+          else
+            stack += align_to(ty->size, 8) / 8;
         }
-      }
-      break;
+        break;  
+      // if (ty->size > 16)
+      // {
+      //   arg->pass_by_stack = true;
+      //   stack += align_to(ty->size, 8) / 8;
+      // }
+      // else
+      // {
+      //   bool fp1 = has_flonum1(ty);
+      //   bool fp2 = has_flonum2(ty);
+
+      //   if (fp + fp1 + fp2 < FP_MAX && gp + !fp1 + !fp2 < GP_MAX)
+      //   {
+      //     fp = fp + fp1 + fp2;
+      //     gp = gp + !fp1 + !fp2;
+      //   }
+      //   else
+      //   {
+      //     arg->pass_by_stack = true;
+      //     stack += align_to(ty->size, 8) / 8;
+      //   }
+      // }
+      // break;
     case TY_FLOAT:
     case TY_DOUBLE:
       if (fp++ >= FP_MAX)
@@ -818,19 +968,29 @@ static void copy_ret_buffer(Obj *var)
   Type *ty = var->ty;
   int gp = 0, fp = 0;
 
-  if (has_flonum1(ty))
-  {
-    assert(ty->size == 4 || 8 <= ty->size);
-    if (ty->size == 4)
-      println("  movss %%xmm0, %d(%%rbp)", var->offset);
-    else
-      println("  movsd %%xmm0, %d(%%rbp)", var->offset);
+    if (has_flonum1(ty)) {
+
+        // Allow sizes 4, 8, 12, and 16 for floating-point types
+        assert(ty->size == 4 || ty->size == 8 || ty->size == 12 || ty->size == 16);
+
+        if (ty->size == 4) {
+            println("  movss %%xmm0, %d(%%rbp)", var->offset);  // Handle float (4 bytes)
+        } else if (ty->size == 8) {
+            println("  movsd %%xmm0, %d(%%rbp)", var->offset);  // Handle double (8 bytes)
+        } else if (ty->size == 12 || ty->size == 16) {
+            // Split the 12 or 16 bytes into two parts, handle the first 8 bytes
+            println("  movsd %%xmm0, %d(%%rbp)", var->offset);  // Handle first 8 bytes
+            // Handle the remaining bytes (4 or 8 bytes)
+            if (ty->size == 12) {
+                println("  movss %%xmm1, %d(%%rbp)", var->offset + 8);  // Handle the remaining 4 bytes
+            } else if (ty->size == 16) {
+                println("  movsd %%xmm1, %d(%%rbp)", var->offset + 8);  // Handle the remaining 8 bytes
+            }
+        }
     fp++;
-  }
-  else
-  {
-    for (int i = 0; i < MIN(8, ty->size); i++)
-    {
+    } else {
+        // **Change 1: Handle the first 8 bytes for integer types (up to 64 bits)**
+        for (int i = 0; i < MIN(8, ty->size); i++) {
       println("  mov %%al, %d(%%rbp)", var->offset + i);
       println("  shr $8, %%rax");
     }
@@ -917,12 +1077,9 @@ static void copy_struct_mem(void)
   Obj *var = current_fn->params;
 
   println("  mov %d(%%rbp), %%rdi", var->offset);
-
-  for (int i = 0; i < ty->size; i++)
-  {
-    println("  mov %d(%%rax), %%dl", i);
-    println("  mov %%dl, %d(%%rdi)", i);
-  }
+  gen_mem_copy("%rdi", ty->size);
+  //from @fuhsnn Copy returned-by-stack aggregate's pointer to rax
+  println("  mov %%rdi, %%rax");
 }
 
 static void builtin_alloca(void)
@@ -1068,6 +1225,12 @@ static void gen_expr(Node *node)
     Member *mem = node->member;
     if (mem->is_bitfield)
     {
+      //from @fuhsnn bitfield boolean returned -1 instead of 1
+      if (mem->ty->kind == TY_BOOL) {
+        println("  shr $%d, %%rax", mem->bit_offset);
+        println("  and $1, %%eax");
+        return;
+      }
       println("  shl $%d, %%rax", 64 - mem->bit_width - mem->bit_offset);
       if (mem->ty->is_unsigned)
         println("  shr $%d, %%rax", 64 - mem->bit_width);
@@ -1131,15 +1294,11 @@ static void gen_expr(Node *node)
     gen_expr(node->rhs);
     return;
   case ND_CAST:
-    gen_expr(node->lhs);
+    gen_expr(node->lhs);    
     cast(node->lhs->ty, node->ty);
     return;
   case ND_MEMZERO:
-    // `rep stosb` is equivalent to `memset(%rdi, %al, %rcx)`.
-    println("  mov $%d, %%rcx", node->var->ty->size);
-    println("  lea %d(%%rbp), %%rdi", node->var->offset);
-    println("  mov $0, %%al");
-    println("  rep stosb");
+    gen_mem_zero(node->var->offset, node->var->ty->size);
     return;
   case ND_COND:
   {
@@ -1215,7 +1374,7 @@ static void gen_expr(Node *node)
     // a pointer to a buffer as if it were the first argument.
     if (node->ret_buffer && node->ty->size > 16)
       pop(argreg64[gp++]);
-
+    bool is_variadic = node->func_ty->is_variadic;
     for (Node *arg = node->args; arg; arg = arg->next)
     {
       Type *ty = arg->ty;
@@ -1224,28 +1383,47 @@ static void gen_expr(Node *node)
       {
       case TY_STRUCT:
       case TY_UNION:
-        if (ty->size > 16)
+        if (ty->size == 0)
+          continue;
+        if (is_variadic)
+          continue;
+        if (!pass_by_reg(ty, gp, fp))
           continue;
 
-        bool fp1 = has_flonum1(ty);
-        bool fp2 = has_flonum2(ty);
+        if (has_flonum1(ty))
+          popf(fp++);
+        else
+          pop(argreg64[gp++]);
 
-        if (fp + fp1 + fp2 < FP_MAX && gp + !fp1 + !fp2 < GP_MAX)
-        {
-          if (fp1)
+        if (ty->size > 8) {
+          if (has_flonum2(ty))
             popf(fp++);
           else
             pop(argreg64[gp++]);
-
-          if (ty->size > 8)
-          {
-            if (fp2)
-              popf(fp++);
-            else
-              pop(argreg64[gp++]);
-          }
         }
         break;
+        // if (ty->size > 16)
+        //   continue;
+
+        // bool fp1 = has_flonum1(ty);
+        // bool fp2 = has_flonum2(ty);
+
+        // if (fp + fp1 + fp2 < FP_MAX && gp + !fp1 + !fp2 < GP_MAX)
+        // {
+        //   if (fp1)
+        //     popf(fp++);
+        //   else
+        //     pop(argreg64[gp++]);
+
+        //   if (ty->size > 8)
+        //   {
+        //     if (fp2)
+        //       popf(fp++);
+        //     else
+        //       pop(argreg64[gp++]);
+        //   }
+        // }
+        // break;
       case TY_FLOAT:
       case TY_DOUBLE:
         if (fp < FP_MAX)
@@ -1261,8 +1439,12 @@ static void gen_expr(Node *node)
 
 
 
+    // Function call
     println("  mov %%rax, %%r10");
-    println("  mov $%d, %%rax", fp);
+    //println("  mov $%d, %%rax", fp);
+    println("  mov $%d, %%al", fp);
+     
+
     println("  call *%%r10");
     println("  add $%d, %%rsp", stack_args * 8);
 
@@ -1532,10 +1714,10 @@ static void gen_expr(Node *node)
     println("  mov %%rbp, %%rax");
     
     // Get the depth of the return address
-    int depth = eval(node->lhs);
+    int tmpdepth = eval(node->lhs);
     
     // Walk up the stack frames to the correct depth
-    for (int i = 0; i < depth; i++) {
+    for (int i = 0; i < tmpdepth; i++) {
       println("  mov (%%rax), %%rax");
     }
     
@@ -2243,12 +2425,19 @@ static void emit_data(Obj *prog)
 {
   for (Obj *var = prog; var; var = var->next)
   {
+    //issue 35 about array not initialized completely.
+    if (var->ty->size != 0)
+      println("  .zero %d", abs(var->ty->size));
+    if (var->alias_name)
+      println("  .set \"%s\", %s", var->name, var->alias_name);
 
     if (var->is_function || !var->is_definition)
       continue;
 
     if (var->is_static)
       println("  .local %s", var->name);
+    else if (var->ty->is_weak)
+      println("  .weak \"%s\"", var->name);
     else
       println("  .globl %s", var->name);
 
@@ -2259,6 +2448,9 @@ static void emit_data(Obj *prog)
     // Common symbol
     if (opt_fcommon && var->is_tentative)
     {
+      //from @fuhsnn incomplete array assuming to have one element
+      if (var->ty->kind == TY_ARRAY && var->ty->size < 0)
+        var->ty->size = var->ty->base->size;
       println("  .comm %s, %d, %d", var->name, var->ty->size, align);
       continue;
     }
@@ -2283,11 +2475,13 @@ static void emit_data(Obj *prog)
 
             
       println("  .type %s, @object", var->name);
-      println("  .size %s, %d", var->name, var->ty->size);
-      println("  .align %d", align);
+      println("  .size %s, %d", var->name, abs(var->ty->size));
+      //println("  .align %d", align);
+      if (align > 1) println("  .balign %d", align);
       println("%s:", var->name);
 
       Relocation *rel = var->rel;
+      int unit_size = (var->ty->kind == TY_ARRAY) ? var->ty->base->size : var->ty->size;
       int pos = 0;
       while (pos < var->ty->size)
       {
@@ -2299,9 +2493,30 @@ static void emit_data(Obj *prog)
         }
         else
         {
-          println("  .byte %d", var->init_data[pos++]);
+          
+          //from @enh (Elliott Hughes) Use .byte/.short/.long/.quad as appropriate.
+          //println("  .byte %d", var->init_data[pos++]);
+          if (unit_size == 8) {
+            long v = *(long*) &var->init_data[pos];
+            println("  .quad %ld  # %#lx", v, v);
+            pos += 8;
+          } else if (unit_size == 4) {
+            int v = *(int*) &var->init_data[pos];
+            println("  .long %d  # %#x", v, v);
+            pos += 4;
+          } else if (unit_size == 2) {
+            int v = *(short*) &var->init_data[pos] & 0xffff;
+            println("  .short %d  # %#x", v, v);
+            pos += 2;
+          } else {
+            int v = var->init_data[pos] & 0xff;
+            println("  .byte %d  # %#x", v, v);
+            pos += 1;
+          }
+
         }
       }
+      println("  .size %s, %d", var->name, var->ty->size);
       continue;
     }
 
@@ -2314,22 +2529,26 @@ static void emit_data(Obj *prog)
 
     if (var->section) {
       println("  .section %s,\"aw\",@nobits", var->section);
-      printf("====%s\n", var->section);
     }
     else if (var->is_tls)
       println("  .section .tbss,\"awT\",@nobits");
     else
       println("  .section .bss,\"aw\",@nobits");
 
-    println("  .align %d", align);
+    //println("  .align %d", align);
+    if (align > 1) println("  .align %d", align);
     println("%s:", var->name);
-    println("  .zero %d", var->ty->size);
+    if (var->ty->size != 0)
+      println("  .zero %d", abs(var->ty->size));
   }
 }
 
 static void store_fp(int r, int offset, int sz)
 {
   switch (sz) {
+  case 0:
+    // No operation for size 0
+    return;  
   case 2:
     // movw is used for 2-byte (16-bit) words
     println("  movw %%xmm%d, %d(%%rbp)", r, offset);
@@ -2376,6 +2595,9 @@ static void store_fp(int r, int offset, int sz)
 
 static void store_gp(int r, int offset, int sz) {
   switch (sz) {
+  case 0:
+    // No operation for size 0
+    return;      
   case 1:
     println("  mov %s, %d(%%rbp)", argreg8[r], offset);
     return;
@@ -2405,25 +2627,54 @@ static void store_gp(int r, int offset, int sz) {
 static void emit_text(Obj *prog)
 {
   
+  // First pass: collect constructor/destructor attributes
+  for (Obj *fn = prog; fn; fn = fn->next) {
 
-  for (Obj *fn = prog; fn; fn = fn->next)
-  {
     if (!fn->is_function || !fn->is_definition)
       continue;
 
-      
-    if (fn->is_function && fn->is_constructor) {
-      println("\n  .section .init_array,\"aw\"");
-      println("  .p2align 3");
-      println("  .quad %s", fn->name);
-    }      
+    if (fn->is_constructor || fn->ty->is_constructor) {
+      int priority = fn->constructor_priority > fn->ty->constructor_priority
+                    ? fn->constructor_priority
+                    : fn->ty->constructor_priority;
+      if (priority < 0 || priority > 65535)
+        priority = 65535;
 
-    if (fn->is_function && fn->is_destructor) {
-      println("  .section .fini_array,\"aw\",@fini_array");
-      println("  .p2align 3");
-      println("  .quad %s", fn->name);
-      println("  .text"); 
+      CtorFunc *f = calloc(1, sizeof(CtorFunc));
+      f->name = fn->name;
+      f->priority = priority;
+      constructors[constructor_cnt++] = f;
     }
+
+    // Combine destructor flags and pick max priority
+    if (fn->is_destructor || fn->ty->is_destructor) {
+      int priority = fn->destructor_priority > fn->ty->destructor_priority
+                    ? fn->destructor_priority
+                    : fn->ty->destructor_priority;
+      if (priority < 0 || priority > 65535)
+        priority = 65535;
+
+      CtorFunc *f = calloc(1, sizeof(CtorFunc));
+      f->name = fn->name;
+      f->priority = priority;
+      destructors[destructor_cnt++] = f;
+    }
+
+  }
+
+  for (Obj *fn = prog; fn; fn = fn->next)
+  {
+    // Emit alias if fn->alias_name is set
+    if (fn->alias_name) {
+      // Handle weak alias
+      println("  .weak %s", fn->name);                 // Mark the function as weak
+      println("  .set %s, %s", fn->name, fn->alias_name);  // Define alias
+    }
+
+    if (!fn->is_function || !fn->is_definition)
+      continue;
+
+
 
     // No code is emitted for "static inline" functions
     // if no one is referencing them.
@@ -2537,15 +2788,19 @@ static void emit_text(Obj *prog)
     // a special rule for the main function. Reaching the end of the
     // main function is equivalent to returning 0, even though the
     // behavior is undefined for the other functions.
-    if (strcmp(fn->name, "main") == 0)
+    if (strcmp(fn->name, "main") == 0) {
       println("  mov $0, %%rax");
+    } 
 
     // Epilogue
     println(".L.return.%s:", fn->name);
     println("  mov %%rbp, %%rsp");
     println("  pop %%rbp");
     println("  ret");
+    println("  .size %s, .-%s", fn->name, fn->name);
   }
+  emit_constructors(); 
+  emit_destructors(); 
 }
 
 void codegen(Obj *prog, FILE *out)
@@ -2559,6 +2814,7 @@ void codegen(Obj *prog, FILE *out)
   assign_lvar_offsets(prog);
   emit_data(prog);
   emit_text(prog);
+
   println("  .section  .note.GNU-stack,\"\",@progbits");
   //print offset for each variable
   if (isDebug)
@@ -2695,6 +2951,7 @@ void assign_lvar_offsets(Obj *prog)
       bottom =  abs(fn->alloca_bottom->offset);
 
     int gp = 0, fp = 0;
+    bool is_variadic = fn->ty->is_variadic;
 
     // Assign offsets to pass-by-stack parameters.
     for (Obj *var = fn->params; var; var = var->next)
@@ -2709,26 +2966,32 @@ void assign_lvar_offsets(Obj *prog)
       {
       case TY_STRUCT:
       case TY_UNION:
-          if (ty->size <= 8) {
-            bool fp1 = has_flonum(ty, 0, 8, 0);
-            if (fp + fp1 < FP_MAX && gp + !fp1 < GP_MAX) {
-              fp = fp + fp1;
-              gp = gp + !fp1;
-              continue;
-            }
-          } else if (ty->size <= 16) {
-        //if (ty->size <= 16)
-        //{
-          bool fp1 = has_flonum(ty, 0, 8, 0);
-          bool fp2 = has_flonum(ty, 8, 16, 8);
-          if (fp + fp1 + fp2 < FP_MAX && gp + !fp1 + !fp2 < GP_MAX)
-          {
-            fp = fp + fp1 + fp2;
-            gp = gp + !fp1 + !fp2;
-            continue;
-          }
+        if (pass_by_reg(ty, gp, fp) && !is_variadic) {
+          fp += has_flonum1(ty) + (ty->size > 8 && has_flonum2(ty));
+          gp += !has_flonum1(ty) + (ty->size > 8 && !has_flonum2(ty));
+          continue;
         }
         break;
+        //   if (ty->size <= 8) {
+        //     bool fp1 = has_flonum(ty, 0, 8, 0);
+        //     if (fp + fp1 < FP_MAX && gp + !fp1 < GP_MAX) {
+        //       fp = fp + fp1;
+        //       gp = gp + !fp1;
+        //       continue;
+        //     }
+        //   } else if (ty->size <= 16) {
+        // //if (ty->size <= 16)
+        // //{
+        //   bool fp1 = has_flonum(ty, 0, 8, 0);
+        //   bool fp2 = has_flonum(ty, 8, 16, 8);
+        //   if (fp + fp1 + fp2 < FP_MAX && gp + !fp1 + !fp2 < GP_MAX)
+        //   {
+        //     fp = fp + fp1 + fp2;
+        //     gp = gp + !fp1 + !fp2;
+        //     continue;
+        //   }
+        // }
+        // break;
       case TY_FLOAT:
       case TY_DOUBLE:
         if (fp++ < FP_MAX)
@@ -2957,4 +3220,39 @@ int len = sizeof(newargreg64)/sizeof(newargreg64[0]);
 
 }
 
+void pushreg(const char *arg) {
+  println("  push %%%s", arg);
+  depth++;
+}
+
+static int cmp_ctor(const void *a, const void *b) {
+  return (*(CtorFunc **)a)->priority - (*(CtorFunc **)b)->priority;
+}
+
+
+
+static void emit_constructors(void) {
+  if (constructor_cnt == 0)
+    return;
+  qsort(constructors, constructor_cnt, sizeof(CtorFunc *), cmp_ctor);
+  println("  .section .init_array,\"aw\",@init_array");
+  println("  .p2align 3");
+  for (int i = 0; i < constructor_cnt; i++) {
+    println("  .quad %s", constructors[i]->name);
+  }
+  println("  .text");
+}
+
+
+static void emit_destructors(void) {
+  if (destructor_cnt == 0)
+    return;
+  qsort(destructors, destructor_cnt, sizeof(CtorFunc *), cmp_ctor);
+  println("  .section .fini_array,\"aw\",@fini_array");
+  println("  .p2align 3");
+  for (int i = 0; i < destructor_cnt; i++) {
+    println("  .quad %s", destructors[i]->name);
+  }
+  println("  .text");
+}
 

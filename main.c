@@ -211,6 +211,8 @@ static FileType parse_opt_x(char *s)
     return FILE_C;
   if (!strcmp(s, "assembler"))
     return FILE_ASM;
+  if (!strcmp(s, "assembler-with-cpp"))
+    return FILE_ASM;     
   if (!strcmp(s, "none"))
     return FILE_NONE;
   error("%s : %s:%d: error: in parse_opt_x <command line>: unknown argument for -x: %s", MAIN_C, __FILE__, __LINE__, s);
@@ -468,7 +470,7 @@ static void parse_args(int argc, char **argv)
     {
       char *tmp = argv[++i];
       check_parms_length(tmp);
-      opt_x = parse_opt_x(tmp);
+      opt_x = parse_opt_x(tmp);      
       continue;
     }
 
@@ -803,6 +805,7 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-Xc") ||
         !strcmp(argv[i], "-Aa") ||
         !strcmp(argv[i], "-w") ||
+        !strcmp(argv[i], "-w2") ||        
         !strcmp(argv[i], "--param=ssp-buffer-size=4") ||
         !strcmp(argv[i], "-fno-lto") ||
         !strcmp(argv[i], "-c99") ||
@@ -811,7 +814,8 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-ffunction-sections")  ||   
         !strcmp(argv[i], "-fdata-sections")    ||  
         !strcmp(argv[i], "-fprofile-arcs")    ||          
-        !strcmp(argv[i], "-ftest-coverage")    ||                  
+        !strcmp(argv[i], "-ftest-coverage")    ||       
+        !strcmp(argv[i], "-ansi_alias")       ||
         !strcmp(argv[i], "-mindirect-branch-register")         
         )
       continue;
@@ -1119,6 +1123,7 @@ static void cc1(void)
     tok = append_tokens(tok, tok2);
   }
 
+ 
   // Tokenize and parse.
   Token *tok2 = must_tokenize_file(base_file);
   bool isReadLine = false;
@@ -1363,6 +1368,9 @@ static void run_linker(StringArray *inputs, char *output)
   run_subprocess(arr.data);
 }
 
+
+
+
 static FileType get_file_type(char *filename)
 {
 
@@ -1374,11 +1382,12 @@ static FileType get_file_type(char *filename)
     return FILE_DSO;
   if (endswith(filename, ".o"))
     return FILE_OBJ;
-  if (endswith(filename, ".c"))
+  if (endswith(filename, ".c") )
     return FILE_C;
-  if (endswith(filename, ".s") || endswith(filename, ".S") ||
+  if (endswith(filename, ".s") || 
+      (endswith(filename, ".S")) ||
       endswith(filename, ".asm"))
-    return FILE_ASM;
+    return FILE_ASM;  
   if (endswith(filename, ".so.4"))
     return FILE_DSO;
   if (endswith(filename, ".rsp"))
@@ -1425,12 +1434,7 @@ int main(int argc, char **argv)
     usage(-1);
   }
 
-  if (opt_cc1)
-  {
-    add_default_include_paths(argv[0]);
-    cc1();
-    return 0;
-  }
+
 
   //from @fuhsnn fix
   if (input_paths.len > 1 && opt_o && (opt_c || opt_S || opt_E))
@@ -1487,10 +1491,18 @@ int main(int argc, char **argv)
       continue;
     }
 
+
     if (type == FILE_RSP)
     {
       continue;
     }
+
+    if (opt_cc1)
+    {
+      add_default_include_paths(argv[0]);
+      cc1();
+      return 0;
+  }
 
     assert(type == FILE_C);
 

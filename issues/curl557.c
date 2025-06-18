@@ -18,6 +18,8 @@ int main() {
         printf("Test UL Failed\n");
     }
 
+    printf("unsigned int %ld\n", sizeof(unsigned int));
+    printf("unsigned long %ld\n", sizeof(unsigned long));
     // For unsigned int, ensure correct size handling
     if (sizeof(unsigned int) == 8) {
         unsigned int test_ui = 0xFFFFFFFFFFFFFFFFU;
