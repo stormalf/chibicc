@@ -6648,7 +6648,6 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
     new_lvar("", pointer_to(rty), name_str);
 
   fn->params = locals;
-
   if (ty->is_variadic)
     fn->va_area = new_lvar("__va_area__", array_of(ty_char, 136), name_str);
   fn->alloca_bottom = new_lvar("__alloca_size__", pointer_to(ty_char), name_str);

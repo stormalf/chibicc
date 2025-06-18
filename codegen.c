@@ -28,6 +28,8 @@ static void print_offset(Obj *prog);
 static int cmp_ctor(const void *a, const void *b);
 static void emit_constructors(void);
 static void emit_destructors(void); 
+
+
 static int last_loc_line = 0;
 
 typedef struct CtorFunc {
@@ -739,7 +741,7 @@ static bool has_flonum(Type *ty, int lo, int hi, int offset)
     return true;
   }
 
-  return offset < lo || hi <= offset || ty->kind == TY_FLOAT || ty->kind == TY_DOUBLE;
+  return offset < lo || hi <= offset || ty->kind == TY_FLOAT || ty->kind == TY_DOUBLE ;
 }
 
 static bool has_flonum1(Type *ty)
@@ -752,11 +754,28 @@ static bool has_flonum2(Type *ty)
   return has_flonum(ty, 8, 16, 0);
 }
 
+static bool has_longdouble(Type *ty) {
+  if (!ty)
+    return false;
+  if (ty->kind == TY_LDOUBLE)
+    return true;
+  if (ty->kind != TY_STRUCT && ty->kind != TY_UNION)
+    return false;
+
+  for (Member *mem = ty->members; mem; mem = mem->next) {
+    if (has_longdouble(mem->ty))
+      return true;
+  }
+  return false;
+}
+
+
 
 static bool pass_by_reg(Type *ty, int gp, int fp) {
   if (ty->size > 16)
     return false;
-
+  if (has_longdouble(ty))
+    return false;
   int fp_inc = has_flonum1(ty) + (ty->size > 8 && has_flonum2(ty));
   int gp_inc = !has_flonum1(ty) + (ty->size > 8 && !has_flonum2(ty));
 
@@ -767,9 +786,14 @@ static bool pass_by_reg(Type *ty, int gp, int fp) {
 
   return true;
 }
+
 static void push_struct(Type *ty)
 {
-  int sz = align_to(ty->size, 8);
+  int sz = 0;
+  if (has_longdouble(ty))
+    sz = align_to(ty->size, 16);
+  else
+    sz = align_to(ty->size, 8);
   println("  sub $%d, %%rsp", sz);
   depth += sz / 8;
 
@@ -793,7 +817,7 @@ static void push_args2(Node *args, bool first_pass)
   case TY_STRUCT:
   case TY_UNION:
     if (args->ty->size == 0)
-      return;
+      return;    
     push_struct(args->ty);
     break;
   case TY_FLOAT:
@@ -850,10 +874,12 @@ static int push_args(Node *node)
   if (node->ret_buffer && node->ty->size > 16)
     gp++;
 
+  bool is_variadic = node->func_ty->is_variadic;
   // Load as many arguments to the registers as possible.
   for (Node *arg = node->args; arg; arg = arg->next)
   {
     Type *ty = arg->ty;
+
 
     switch (ty->kind)
     {
@@ -861,13 +887,16 @@ static int push_args(Node *node)
     case TY_UNION:
       if (ty->size == 0)
         continue;
-      
-      if (pass_by_reg(ty, gp, fp)) {
+
+      if (pass_by_reg(ty, gp, fp) && !is_variadic) {
           fp += has_flonum1(ty) + (ty->size > 8 && has_flonum2(ty));
           gp += !has_flonum1(ty) + (ty->size > 8 && !has_flonum2(ty));
         } else {
           arg->pass_by_stack = true;
-          stack += align_to(ty->size, 8) / 8;
+          if (has_longdouble(ty))
+            stack += align_to(ty->size, 16) / 8; 
+          else
+            stack += align_to(ty->size, 8) / 8;
         }
         break;  
       // if (ty->size > 16)
@@ -1345,7 +1374,7 @@ static void gen_expr(Node *node)
     // a pointer to a buffer as if it were the first argument.
     if (node->ret_buffer && node->ty->size > 16)
       pop(argreg64[gp++]);
-
+    bool is_variadic = node->func_ty->is_variadic;
     for (Node *arg = node->args; arg; arg = arg->next)
     {
       Type *ty = arg->ty;
@@ -1356,7 +1385,9 @@ static void gen_expr(Node *node)
       case TY_UNION:
         if (ty->size == 0)
           continue;
-                  if (!pass_by_reg(ty, gp, fp))
+        if (is_variadic)
+          continue;
+        if (!pass_by_reg(ty, gp, fp))
           continue;
 
         if (has_flonum1(ty))
@@ -1410,7 +1441,10 @@ static void gen_expr(Node *node)
 
     // Function call
     println("  mov %%rax, %%r10");
-    println("  mov $%d, %%rax", fp);
+    //println("  mov $%d, %%rax", fp);
+    println("  mov $%d, %%al", fp);
+     
+
     println("  call *%%r10");
     println("  add $%d, %%rsp", stack_args * 8);
 
@@ -2561,6 +2595,9 @@ static void store_fp(int r, int offset, int sz)
 
 static void store_gp(int r, int offset, int sz) {
   switch (sz) {
+  case 0:
+    // No operation for size 0
+    return;      
   case 1:
     println("  mov %s, %d(%%rbp)", argreg8[r], offset);
     return;
@@ -2914,6 +2951,7 @@ void assign_lvar_offsets(Obj *prog)
       bottom =  abs(fn->alloca_bottom->offset);
 
     int gp = 0, fp = 0;
+    bool is_variadic = fn->ty->is_variadic;
 
     // Assign offsets to pass-by-stack parameters.
     for (Obj *var = fn->params; var; var = var->next)
@@ -2928,7 +2966,7 @@ void assign_lvar_offsets(Obj *prog)
       {
       case TY_STRUCT:
       case TY_UNION:
-        if (pass_by_reg(ty, gp, fp)) {
+        if (pass_by_reg(ty, gp, fp) && !is_variadic) {
           fp += has_flonum1(ty) + (ty->size > 8 && has_flonum2(ty));
           gp += !has_flonum1(ty) + (ty->size > 8 && !has_flonum2(ty));
           continue;
@@ -3217,3 +3255,4 @@ static void emit_destructors(void) {
   }
   println("  .text");
 }
+
