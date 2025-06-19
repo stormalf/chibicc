@@ -90,7 +90,8 @@ static void popf(int reg)
 // align_to(5, 8) returns 8 and align_to(11, 8) returns 16.
 int align_to(int n, int align)
 {
-  return (n + align - 1) / align * align;
+  //return (n + align - 1) / align * align;
+  return ((n + align - 1) / align) * align;
 }
 
 char *reg_dx(int sz)
@@ -410,7 +411,7 @@ static void gen_addr(Node *node)
     return;
   }
 
-  error_tok(node->tok, "%s not an lvalue", CODEGEN_C);
+  error_tok(node->tok, "%s:%d not an lvalue %d", CODEGEN_C, __LINE__, node->kind);
 }
 
 // Copy n bytes from the source address in %rax to the destination in dst_reg.
@@ -2477,7 +2478,7 @@ static void emit_data(Obj *prog)
       println("  .type %s, @object", var->name);
       println("  .size %s, %d", var->name, abs(var->ty->size));
       //println("  .align %d", align);
-      if (align > 1) println("  .balign %d", align);
+      if (align > 1) println("  .align %d", align);
       println("%s:", var->name);
 
       Relocation *rel = var->rel;

@@ -316,7 +316,7 @@ curl : https://github.com/curl/curl.git
 
 openssl : https://github.com/openssl/openssl.git
 
-    CC=chibicc ./Configure
+    CC=chibicc ./configure
     
     You need to remove from the file from openssl/crypto/perlasm/x86_64-xlate.pl
 
@@ -533,8 +533,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.22.7    Fixing issue with named operand on assembly. Fixing issue with struct union found during vlc compile. Reporting fix for c-testsuite 152, 162 and 205. Fixing constructor and destructor. Fixing bug on preprocess that skipped some attributes. Ignoring some other gcc attributes like nonnull. Fixing c-testsuite 213. Fixing issue 36 with empty struct. Fixing c-testsuite 204. Fixing issue 166 struct with VLA.
-
+1.0.23    Activating GNUC macros.
 
 ## old release notes
 

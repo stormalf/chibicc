@@ -61,19 +61,19 @@ projects: zlib util-linux nginx
 
 
 curl:
-	cd ../curl && make clean && make && make test
+	cd ../curl && make clean && CC=chibicc ./configure && make && make test
 
 zlib:
-	cd ../zlib && make clean && make && make test
+	cd ../zlib && make clean && CC=chibicc CFLAGS="-fPIC" ./configure && make && make test
 
 nmap:
-	cd ../nmap && make clean && make && make check
+	cd ../nmap && make clean && CC=chibicc ./configure --with-dbus && make && make check
 
 openssl:
-	cd ../openssl && make clean && make 
+	cd ../openssl && make clean && CC=chibicc ./configure && make 
 
 util-linux:
-	cd ../util-linux && make clean && make && make check-programs && cd tests && ./run.sh
+	cd ../util-linux && make clean && CC=chibicc CFLAGS=-fPIC ./configure && make && make check-programs && cd tests && ./run.sh
 
 nginx:
 	cd ../nginx && make clean && CC=chibicc CFLAGS=-fPIC ./auto/configure --with-http_ssl_module && make && make check

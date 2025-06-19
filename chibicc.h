@@ -39,7 +39,7 @@
 #endif
 
 #define PRODUCT "chibicc"
-#define VERSION "1.0.22.7"
+#define VERSION "1.0.23"
 #define MAXLEN 501
 #define DEFAULT_TARGET_MACHINE "x86_64-linux-gnu"
 
@@ -403,7 +403,7 @@ typedef enum
   ND_BUILTIN_HUGE_VAL, //builtin huge val
   ND_BUILTIN_BSWAP16, //builtin bswap16
   ND_BUILTIN_BSWAP32, //builtin bswap32
-  ND_BUILTIN_BSWAP64, //builtin bswap64,
+  ND_BUILTIN_BSWAP64, //builtin bswap64
   ND_BUILTIN_FRAME_ADDRESS, // builtin frame address
 } NodeKind;
 

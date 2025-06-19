@@ -212,13 +212,24 @@ static int64_t eval_sign_extend(Type *ty, uint64_t val);
 static bool is_const_var(Obj *var);
 static int64_t eval_rval(Node *node, char ***label);
 static Obj *eval_var(Node *expr, bool allow_local);
-static bool is_str_tok(Token **rest, Token *tok, Token **str_tok) ;
+static bool is_const_var(Obj *var) ;
+static bool is_str_tok(Token **rest, Token *tok, Token **str_tok);
+
 static Node *compound_stmt2(Token **rest, Token *tok);
 
+
+
+// static int align_down(int n, int align)
+// {
+//   return align_to(n - align + 1, align);
+// }
+// Round down `n` to the nearest multiple of `align`.
+// For instance, align_down(10, 8) returns 8 and align_down(15, 8) returns 8.
 static int align_down(int n, int align)
 {
-  return align_to(n - align + 1, align);
+    return (n / align) * align;
 }
+
 
 static void enter_scope(void)
 {
@@ -1255,6 +1266,8 @@ static Node *compute_vla_size(Type *ty, Token *tok)
 {
   Node *node = new_node(ND_NULL_EXPR, tok);
 
+  if (ty == ty->base)
+    return node;
   if (ty->base) {
     node = new_binary(ND_COMMA, node, compute_vla_size(ty->base, tok), tok);
 
@@ -5595,6 +5608,49 @@ static Node *primary(Token **rest, Token *tok)
     return new_ulong(ty->align, start);
   }
 
+
+  // if (equal(tok, "__builtin_offsetof")) {
+  //   ctx->filename = PARSE_C;
+  //   ctx->funcname = "primary";        
+  //   ctx->line_no = __LINE__ + 1;      
+  //   tok = skip(tok->next, "(", ctx);
+  //   Type *ty = typename(&tok, tok);
+  //   ctx->filename = PARSE_C;
+  //   ctx->funcname = "primary";       
+  //   ctx->line_no = __LINE__ + 1; 
+  //   tok = skip(tok, ",", ctx);
+
+  //   Node *node = NULL;
+  //   int offset = 0;
+  //   do {
+  //     Member *mem;
+  //     do {
+  //       mem = struct_designator(&tok, tok, ty);
+  //       offset += mem->offset;
+  //       ty = mem->ty;
+  //     } while (!mem->name);
+  //     ctx->filename = PARSE_C;
+  //     ctx->funcname = "primary"; 
+  //     ctx->line_no = __LINE__ + 1;   
+  //     for (; ty->base && consume(&tok, tok, "["); tok = skip(tok, "]", ctx)) {
+  //       ty = ty->base;
+  //       Node *expr = conditional(&tok, tok);
+  //       if (!node)
+  //         node = new_binary(ND_MUL, expr, new_long(ty->size, tok), tok);
+  //       else
+  //         node = new_binary(ND_ADD, node, new_binary(ND_MUL, expr, new_long(ty->size, tok), tok), tok);
+  //     }
+  //   } while (consume(&tok, tok, "."));
+  //   ctx->filename = PARSE_C;
+  //   ctx->funcname = "primary"; 
+  //   ctx->line_no = __LINE__ + 1;
+  //   *rest = skip(tok, ")", ctx);
+  //   if (!node)
+  //     return new_ulong(offset, tok);
+  //   return new_binary(ND_ADD, node, new_ulong(offset, tok), tok);
+  // }
+
+
   if (equal(tok, "_Generic"))
     return generic_selection(rest, tok->next);
 
@@ -5643,36 +5699,6 @@ static Node *primary(Token **rest, Token *tok)
     }
     return new_num(is_constant ? 1 : 0, start);
   }
-
-
-    // if (equal(tok, "__builtin_offsetof")) {
-    //   ctx->filename = PARSE_C;
-    //   ctx->funcname = "primary";        
-    //   ctx->line_no = __LINE__ + 1;          
-    //   tok = skip(tok->next, "(", ctx);
-    //   Token *stok = tok;
-    //   Type *tstruct = typename(&tok, tok);
-    //   if (tstruct->kind != TY_STRUCT && tstruct->kind != TY_UNION) {
-    //     error_tok(stok, "%s %d: in primary : not a structure or union type", PARSE_C, __LINE__);
-    //   }
-
-    //   ctx->filename = PARSE_C;
-    //   ctx->funcname = "primary";        
-    //   ctx->line_no = __LINE__ + 1;  
-    //   tok = skip(tok, ",", ctx);
-    //   Token *member = tok;
-    //   tok = tok->next;
-    //   *rest = skip(tok, ")", ctx);
-    //   for (Member *m = tstruct->members; m; m = m->next) {
-    //     if (m->name->len == member->len &&
-    //         !memcmp(m->name->loc, member->loc, m->name->len)) {
-    //       return new_ulong(m->offset, start);
-    //     }
-    //   }
-    //   error_tok(member, "%s %d: in primary : no such member", PARSE_C, __LINE__);
-
-    // }
-
 
   //trying to fix ===== some builtin functions linked to mmx/emms
   if (equal(tok, "__builtin_ia32_emms") || equal(tok, "__builtin_ia32_stmxcsr") || 
