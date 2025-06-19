@@ -5231,7 +5231,7 @@ static Node *postfix(Token **rest, Token *tok)
       error_tok(tok, "%s %d: in postfix : compound literals cannot be VLA", PARSE_C, __LINE__);
     ctx->filename = PARSE_C;
     ctx->funcname = "postfix";        
-    ctx->line_no = __LINE__ + 1;         
+    ctx->line_no = __LINE__ + 1;   
     tok = skip(tok, ")", ctx);
 
     if (scope->next == NULL)
@@ -5618,6 +5618,7 @@ static Node *primary(Token **rest, Token *tok)
   //   ctx->filename = PARSE_C;
   //   ctx->funcname = "primary";       
   //   ctx->line_no = __LINE__ + 1; 
+  //   printf("=====%s\n", tok->loc);
   //   tok = skip(tok, ",", ctx);
 
   //   Node *node = NULL;

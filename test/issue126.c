@@ -1,4 +1,5 @@
 #include <stddef.h>
+#include <stdio.h>
 size_t
 strlcpy(dst, src, siz)
 char *dst;
@@ -33,5 +34,6 @@ size_t siz;
 
 int main(void)
 {
+    printf("OK\n");
     return 0;
 }

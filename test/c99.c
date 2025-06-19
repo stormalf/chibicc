@@ -17,6 +17,7 @@
    debug ("X = %d\n", x);
    showlist (The first, second, and third items.);
    report (x>y, "x is %d but y is %d", x, y);
+   printf("\n");
  }
  
  // Check long long types.
