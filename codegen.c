@@ -881,7 +881,6 @@ static int push_args(Node *node)
   {
     Type *ty = arg->ty;
 
-
     switch (ty->kind)
     {
     case TY_STRUCT:

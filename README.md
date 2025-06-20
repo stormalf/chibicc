@@ -533,7 +533,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.23    Activating GNUC macros.
+1.0.23    Activating GNUC macros. Fixing issue with curl test due to duplicate "case" value not detected.
 
 ## old release notes
 

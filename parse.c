@@ -2545,6 +2545,9 @@ static Node *stmt(Token **rest, Token *tok)
     {
       end = begin;
     }
+
+
+
     ctx->filename = PARSE_C;
     ctx->funcname = "stmt";        
     ctx->line_no = __LINE__ + 1;    
@@ -2556,6 +2559,12 @@ static Node *stmt(Token **rest, Token *tok)
       node->lhs = compound_stmt2(rest, tok);
     } else {
     node->lhs = stmt(rest, tok);
+    }
+    //duplicate case value detection
+    for (Node *c = current_switch->case_next; c; c = c->case_next)
+    {
+      if (!(end < c->begin || begin > c->end))
+        error_tok(tok, "%s %d: in stmt : duplicated case value or overlapping range", PARSE_C, __LINE__);
     }
     node->begin = begin;
     node->end = end;
@@ -5536,42 +5545,42 @@ static Node *primary(Token **rest, Token *tok)
       
         return new_ulong(ty->size, start);
       } else {
-      Node *node = unary(rest, tok->next);
-      add_type(node);
+        Node *node = unary(rest, tok->next);
+        add_type(node);
 
 
-      // Check if the type is incomplete
-      if (node->ty->kind == TY_UNION && node->ty->size < 0)
-        error_tok(tok, "%s %d: in primary : incomplete type for sizeof", PARSE_C, __LINE__);
-            
-      //trying to fix =====ISS-166 segmentation fault 
-      if (node->ty->kind == TY_VLA)
-      {
-        if (node->ty->vla_size)
-          return new_var_node(node->ty->vla_size, tok);
-        return compute_vla_size(node->ty, tok);
-      }
-      if (node->ty->size < 0)
-        error_tok(tok, "%s %d: in primary : incomplete type for sizeof", PARSE_C, __LINE__);
-
-        
-      if ((node->ty->kind == TY_STRUCT || node->ty->kind == TY_UNION) && node->ty->has_vla) {
-        if (!node->ty->vla_size) {
-          Node *lhs = compute_vla_size(node->ty, tok);  // defines ty->vla_size
-          Node *rhs = new_var_node(node->ty->vla_size, tok);
-          return new_binary(ND_COMMA, lhs, rhs, tok);
+        // Check if the type is incomplete
+        if (node->ty->kind == TY_UNION && node->ty->size < 0)
+          error_tok(tok, "%s %d: in primary : incomplete type for sizeof", PARSE_C, __LINE__);
+              
+        //trying to fix =====ISS-166 segmentation fault 
+        if (node->ty->kind == TY_VLA)
+        {
+          if (node->ty->vla_size)
+            return new_var_node(node->ty->vla_size, tok);
+          return compute_vla_size(node->ty, tok);
         }
-        return new_var_node(node->ty->vla_size, tok);
-      }
+        if (node->ty->size < 0)
+          error_tok(tok, "%s %d: in primary : incomplete type for sizeof", PARSE_C, __LINE__);
 
-      if (node->ty->kind == TY_STRUCT && node->ty->is_flexible) {
-        Member *mem = node->ty->members;
-        while (mem->next)
-          mem = mem->next;
-        if (mem->ty->kind == TY_ARRAY)
-          return new_ulong((node->ty->size - mem->ty->size), tok);
-      }
+          
+        if ((node->ty->kind == TY_STRUCT || node->ty->kind == TY_UNION) && node->ty->has_vla) {
+          if (!node->ty->vla_size) {
+            Node *lhs = compute_vla_size(node->ty, tok);  // defines ty->vla_size
+            Node *rhs = new_var_node(node->ty->vla_size, tok);
+            return new_binary(ND_COMMA, lhs, rhs, tok);
+          }
+          return new_var_node(node->ty->vla_size, tok);
+        }
 
+        if (node->ty->kind == TY_STRUCT && node->ty->is_flexible) {
+          Member *mem = node->ty->members;
+          while (mem->next)
+            mem = mem->next;
+          if (mem->ty->kind == TY_ARRAY)
+            return new_ulong((node->ty->size - mem->ty->size), tok);
+        }
+        
       
       // if (node->ty->kind == TY_VLA)
       //   return new_var_node(node->ty->vla_size, tok);
