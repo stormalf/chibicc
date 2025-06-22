@@ -1442,8 +1442,10 @@ static void gen_expr(Node *node)
     // Function call
     println("  mov %%rax, %%r10");
     //println("  mov $%d, %%rax", fp);
-    println("  mov $%d, %%al", fp);
-     
+    if (is_variadic) 
+      println("  movb $%d, %%al", fp);
+    else
+      println("  xor %%al, %%al");
 
     println("  call *%%r10");
     println("  add $%d, %%rsp", stack_args * 8);
