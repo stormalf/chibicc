@@ -5743,7 +5743,9 @@ static Node *primary(Token **rest, Token *tok)
 
     if (is_integer(ty) || ty->kind == TY_PTR)
       return new_num(0, start);
-    if (is_flonum(ty))
+    // if (is_flonum(ty))
+    //   return new_num(1, start);
+    if (ty->kind == TY_FLOAT || ty->kind == TY_DOUBLE)    
       return new_num(1, start);
     return new_num(2, start);
   }
@@ -6592,7 +6594,7 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
 
   fn->params = locals;
   if (ty->is_variadic)
-    fn->va_area = new_lvar("__va_area__", array_of(ty_char, 136), name_str);
+    fn->va_area = new_lvar("__va_area__", array_of(ty_char, 200), name_str);
   fn->alloca_bottom = new_lvar("__alloca_size__", pointer_to(ty_char), name_str);
 
   //from COSMOPOLITAN adding other GNUC attributes

@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <limits.h>
 #include <float.h>
+#include "test.h"
 
 // Declare the variadic function (simulating curl_msprintf or dprintf_format)
 // Simulated curl-style dprintf_format
@@ -43,5 +44,19 @@ int main(void) {
         c, uc, s, us, i, ui, l, ul, ll, ull, f, d);
 
     printf("Printed %d characters\n", n);
+    ASSERT(-1, c);
+    ASSERT(255, uc);
+    ASSERT(-12345, s);
+    ASSERT(54321, us);
+    ASSERT(-123456, i);
+    ASSERT(123456, ui);
+    ASSERT(-123456789, l);
+    ASSERT(123456789, ul);
+    ASSERT(-123456789012345LL, ll);
+    ASSERT(123456789012345ULL, ull);
+    ASSERT(1.25f, f);
+    ASSERT(3.14159, d);
+
+    printf("All tests passed!\n");
     return 0;
 }

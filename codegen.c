@@ -2737,13 +2737,13 @@ static void emit_text(Obj *prog)
       println("  movq %%r8, %d(%%rbp)", off + 56);
       println("  movq %%r9, %d(%%rbp)", off + 64);
       println("  movsd %%xmm0, %d(%%rbp)", off + 72);
-      println("  movsd %%xmm1, %d(%%rbp)", off + 80);
-      println("  movsd %%xmm2, %d(%%rbp)", off + 88);
-      println("  movsd %%xmm3, %d(%%rbp)", off + 96);
-      println("  movsd %%xmm4, %d(%%rbp)", off + 104);
-      println("  movsd %%xmm5, %d(%%rbp)", off + 112);
-      println("  movsd %%xmm6, %d(%%rbp)", off + 120);
-      println("  movsd %%xmm7, %d(%%rbp)", off + 128);
+      println("  movsd %%xmm1, %d(%%rbp)", off + 88);
+      println("  movsd %%xmm2, %d(%%rbp)", off + 104);
+      println("  movsd %%xmm3, %d(%%rbp)", off + 120);
+      println("  movsd %%xmm4, %d(%%rbp)", off + 136);
+      println("  movsd %%xmm5, %d(%%rbp)", off + 152);
+      println("  movsd %%xmm6, %d(%%rbp)", off + 168);
+      println("  movsd %%xmm7, %d(%%rbp)", off + 184);
     }
 
     // Save passed-by-register arguments to the stack
