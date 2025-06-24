@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdint.h>
+#include "test.h"
 
 void test_variadic(int count, ...) {
   va_list ap;
@@ -32,6 +33,18 @@ void test_variadic(int count, ...) {
   printf("unsigned long long: %llu\n", ull);
   printf("float: %f\n", f);
   printf("double: %f\n", d);
+  ASSERT(-1, c);
+  ASSERT(255, uc);
+  ASSERT(-12345, s);
+  ASSERT(54321, us);
+  ASSERT(-123456, i);
+  ASSERT(123456u, ui);
+  ASSERT(-123456789L, l);
+  ASSERT(123456789UL, ul);
+  ASSERT(-123456789012345LL, ll);
+  ASSERT(123456789012345ULL, ull);
+  ASSERT(1.25f, f);
+  ASSERT(3.14159, d);
 
   va_end(ap);
 }
