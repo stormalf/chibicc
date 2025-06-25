@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdarg.h>
+#include "test.h"
 
 typedef struct {
   char _Alignas(1024) c;
@@ -17,6 +18,7 @@ void test_va_args(const char *label, int n, ...) {
   printf("long double = %Lf\n", ld);
   printf("Aligned1024->c = %d\n", a->c);
   printf("int = %d\n", i);
+  ASSERT(77, a->c);
 
   va_end(ap);
 }

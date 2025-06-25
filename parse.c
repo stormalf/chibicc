@@ -7384,13 +7384,3 @@ static bool is_str_tok(Token **rest, Token *tok, Token **str_tok) {
   return false;
 }
 
-
-// 0: GP, 1: FP, 2: MEM
-static int classify(Type *ty) {
-  if (ty->kind == TY_FLOAT || ty->kind == TY_DOUBLE)
-    return 1;
-  if (ty->kind == TY_STRUCT || ty->kind == TY_UNION || ty->kind == TY_LDOUBLE)
-    return 2;
-  return 0;
-}
-

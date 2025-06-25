@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdarg.h>
+#include "test.h"
 
 void dummy(long double x1, long double x2, long double x3, long double x4, long double x5,
            long double x6, long double x7, long double x8, long double x9, long double x10,
@@ -10,6 +11,7 @@ void dummy(long double x1, long double x2, long double x3, long double x4, long 
 
   long double x = va_arg(ap, long double); // Should now be on stack
   printf("Overflow long double = %Lf\n", x);
+  ASSERT( 99.99L, x);
 
   va_end(ap);
 }
