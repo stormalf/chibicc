@@ -813,6 +813,7 @@ static void push_args2(Node *args, bool first_pass)
 
   gen_expr(args);
 
+
   switch (args->ty->kind)
   {
   case TY_STRUCT:
@@ -919,6 +920,7 @@ static int push_args(Node *node)
     depth++;
     stack++;
   }
+
 
   push_args2(node->args, true);
   push_args2(node->args, false);
@@ -2615,7 +2617,8 @@ static void emit_text(Obj *prog)
     println("  push %%rbp");
     println("  mov %%rsp, %%rbp");
     println("  sub $%d, %%rsp", fn->stack_size);
-    println("  and $-%d, %%rsp", fn->stack_size);
+    if (fn->stack_align > 16)
+      println("  and $-%d, %%rsp", fn->stack_align);
     println("  mov %%rsp, %d(%%rbp)", fn->alloca_bottom->offset);
 
     // Save arg registers if function is variadic
@@ -2636,7 +2639,8 @@ static void emit_text(Obj *prog)
       println("  movl $%d, %d(%%rbp)", gp * 8, off);          // gp_offset
       println("  movl $%d, %d(%%rbp)", fp * 16 + 48, off + 4); // fp_offset
       println("  movq %%rbp, %d(%%rbp)", off + 8);            // overflow_arg_area
-      println("  addq $16, %d(%%rbp)", off + 8);
+      //println("  addq $16, %d(%%rbp)", off + 8);
+      println("  addq $%d, %d(%%rbp)", fn->overflow_arg_area, off + 8);
       println("  movq %%rbp, %d(%%rbp)", off + 16); // reg_save_area
       println("  addq $%d, %d(%%rbp)", off + 24, off + 16);
 
@@ -2745,7 +2749,7 @@ static void print_offset(Obj *prog)
       
     for (Obj *var = fn->params; var; var = var->next)
     {
-    printf("=====fn_name=%s var_name=%s offset=%d stack_size=%d\n", fn->name, var->name, var->offset, fn->stack_size );
+      printf("=====fn_name=%s var_name=%s offset=%d stack_size=%d\n", fn->name, var->name, var->offset, fn->stack_size );
     }
     for (Obj *var = fn->locals; var; var = var->next)
     {
@@ -2762,8 +2766,11 @@ void assign_lvar_offsets(Obj *prog)
 {
   for (Obj *fn = prog; fn; fn = fn->next)
   {
+
     if (!fn->is_function)
       continue;
+
+    fn->stack_align = 16;
 
     // If a function has many parameters, some parameters are
     // inevitably passed by stack rather than by register.
@@ -2778,6 +2785,7 @@ void assign_lvar_offsets(Obj *prog)
     int gp = 0, fp = 0;
     bool is_variadic = fn->ty->is_variadic;
 
+
     // Assign offsets to pass-by-stack parameters.
     for (Obj *var = fn->params; var; var = var->next)
     {
@@ -2786,6 +2794,7 @@ void assign_lvar_offsets(Obj *prog)
         continue;
       }
       Type *ty = var->ty;
+      bool pass_by_stack = false;
 
       switch (ty->kind)
       {
@@ -2795,24 +2804,40 @@ void assign_lvar_offsets(Obj *prog)
           fp += has_flonum1(ty) + (ty->size > 8 && has_flonum2(ty));
           gp += !has_flonum1(ty) + (ty->size > 8 && !has_flonum2(ty));
           continue;
-        }
+        }else
+          pass_by_stack = true;
+
         break;
       case TY_FLOAT:
       case TY_DOUBLE:
         if (fp++ < FP_MAX)
           continue;
+       else
+          pass_by_stack = true;          
         break;
       case TY_LDOUBLE:
+        // long double always passed on stack per ABI
+        pass_by_stack = true;      
         break;
       default:
         if (gp++ < GP_MAX)
           continue;
+        else
+          pass_by_stack = true;          
+      }
+
+      if (pass_by_stack) {
+        var->pass_by_stack = true;  // default: passed in registers
       }
 
       top = align_to(top, 8);
       var->offset = top;
       top += var->ty->size;
+
     }
+
+    if (is_variadic)
+      fn->overflow_arg_area = top; 
 
     // Assign offsets to pass-by-register parameters and local variables.
     for (Obj *var = fn->locals; var; var = var->next)
@@ -2842,15 +2867,27 @@ void assign_lvar_offsets(Obj *prog)
       bottom += var->ty->size;
       bottom = align_to(bottom, align);
       var->offset = -bottom;
+      fn->stack_align = MAX(fn->stack_align, max_align);
     }
+    // Assign offset to va_area if present
+    // if (fn->va_area) {
+    //   int align = MAX(16, fn->va_area->align);
+    //   max_align = MAX(max_align, align);
+
+    //   bottom = align_to(bottom, align);
+    //   fn->va_area->offset = -bottom;
+    //   bottom += fn->va_area->ty->size;
+
+    //   printf("== assign_lvar_offsets: ASSIGNED va_area offset = %d align = %d name = %s func = %s\n",
+    //         fn->va_area->offset, fn->va_area->align, fn->va_area->name, fn->name);
+    // }
 
     //fn->stack_size = align_to(bottom, 16);
     fn->stack_size = align_to(bottom, MAX(16, max_align));
-
+    // printf("== assign_lvar_offsets: ASSIGNED stack_size = %d align = %d name = %s\n",
+    //        fn->stack_size, max_align, fn->name);
   }
 }
-
-
 
 //check if a register is available
 char *register_available() {
@@ -3062,4 +3099,6 @@ static void emit_destructors(void) {
   }
   println("  .text");
 }
+
+
 

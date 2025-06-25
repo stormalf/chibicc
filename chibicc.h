@@ -282,6 +282,9 @@ struct Obj
   Obj *va_area;
   Obj *alloca_bottom;
   int stack_size;
+  int stack_align;
+  int overflow_arg_area; 
+  bool pass_by_stack; 
 
   // Static inline function
   bool is_live;

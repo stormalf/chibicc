@@ -219,6 +219,7 @@ static Node *compound_stmt2(Token **rest, Token *tok);
 
 
 
+
 // static int align_down(int n, int align)
 // {
 //   return align_to(n - align + 1, align);
@@ -674,17 +675,19 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
       ctx->funcname = "declspec";          
       ctx->line_no = __LINE__ + 1;  
       tok = skip(tok->next, "(", ctx);
-      // if (is_typename(tok))
-      //   attr->align = typename(&tok, tok)->align;
-      // else
-      //   attr->align = const_expr(&tok, tok);
       int align;
       if (is_typename(tok))
         align = typename(&tok, tok)->align;
       else
         align = const_expr(&tok, tok);
       attr->align = MAX(attr->align, align);   
-     
+      // if (attr->align > ty->align) {
+      //  ty->align = attr->align;
+      // }
+      if (attr->align > ty->align) {
+        ty = copy_type(ty);
+        ty->align = attr->align;
+      }      
       ctx->filename = PARSE_C;
       ctx->funcname = "declspec";          
       ctx->line_no = __LINE__ + 1;       
@@ -7381,4 +7384,13 @@ static bool is_str_tok(Token **rest, Token *tok, Token **str_tok) {
   return false;
 }
 
+
+// 0: GP, 1: FP, 2: MEM
+static int classify(Type *ty) {
+  if (ty->kind == TY_FLOAT || ty->kind == TY_DOUBLE)
+    return 1;
+  if (ty->kind == TY_STRUCT || ty->kind == TY_UNION || ty->kind == TY_LDOUBLE)
+    return 2;
+  return 0;
+}
 
