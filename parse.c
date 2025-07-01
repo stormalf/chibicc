@@ -803,7 +803,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     case DOUBLE:
       ty = ty_double;
       break;
-    case LONG + DOUBLE:
+    case LONG + DOUBLE:    
       ty = ty_ldouble;
       break;
     default:
@@ -3558,7 +3558,7 @@ static Node *new_add(Node *lhs, Node *rhs, Token *tok)
     return new_binary(ND_ADD, lhs, rhs, tok);
   
   if ((lhs->ty->base == NULL && rhs->ty->base == NULL) || (lhs->ty->base != NULL && rhs->ty->base != NULL)) {
-    error_tok(tok, "%s %d: in new_add : invalid operands", PARSE_C, __LINE__);
+    error_tok(tok, "%s %d: in new_add : invalid operands %p %p", PARSE_C, __LINE__, rhs->ty->base, lhs->ty->base);
   }
 
   // Canonicalize `num + ptr` to `ptr + num`.
@@ -5592,6 +5592,7 @@ static Node *primary(Token **rest, Token *tok)
     }
     while (is_array(ty))
       ty = ty->base;
+
     return new_ulong(ty->align, start);
   }
 
@@ -5707,8 +5708,10 @@ static Node *primary(Token **rest, Token *tok)
 
     if (is_integer(ty) || ty->kind == TY_PTR)
       return new_num(0, start);
-    if (is_flonum(ty))
+    if (ty->kind == TY_FLOAT || ty->kind == TY_DOUBLE)
       return new_num(1, start);
+    // if (is_flonum(ty))
+    //   return new_num(1, start);
     return new_num(2, start);
   }
 

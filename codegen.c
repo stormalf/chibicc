@@ -587,7 +587,8 @@ enum
 static int getTypeId(Type *ty)
 {
   if (!ty)
-    return I32;
+    return I32;  
+
   switch (ty->kind)
   {
   case TY_CHAR:
@@ -1239,7 +1240,7 @@ static void gen_expr(Node *node)
     }
     return;
   }
-  case ND_DEREF:
+  case ND_DEREF:    
     gen_expr(node->lhs);
     load(node->ty);
     return;
@@ -2774,6 +2775,8 @@ static void emit_text(Obj *prog)
       case TY_FLOAT:
       case TY_DOUBLE:
         store_fp(fp++, var->offset, ty->size);
+        break;
+      case TY_LDOUBLE:
         break;
       default:
         store_gp(gp++, var->offset, ty->size);

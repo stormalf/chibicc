@@ -13,19 +13,32 @@ typedef struct {
 } __va_elem;
 
 typedef __va_elem va_list[1];
+typedef unsigned long uintptr_t;
+extern int printf(const char *fmt, ...);
 
 #define va_start(ap, last) \
   do { *(ap) = *(__va_elem *)__va_area__; } while (0)
 
 #define va_end(ap)
 
+// static void *__va_arg_mem(__va_elem *ap, int sz, int align) {
+//   void *p = ap->overflow_arg_area;
+//   if (align > 8)
+//     p = (p + 15) / 16 * 16;
+//   ap->overflow_arg_area = ((unsigned long)p + sz + 7) / 8 * 8;
+//   return p;
+// }
 static void *__va_arg_mem(__va_elem *ap, int sz, int align) {
-  void *p = ap->overflow_arg_area;
+  uintptr_t p = (uintptr_t)ap->overflow_arg_area;
+
+  // Align p if necessary
   if (align > 8)
-    p = (p + 15) / 16 * 16;
-  ap->overflow_arg_area = ((unsigned long)p + sz + 7) / 8 * 8;
-  return p;
+    p = (p + align - 1) / align * align;
+
+  ap->overflow_arg_area = (void *)((p + sz + 7) / 8 * 8);
+  return (void *)p;
 }
+
 
 static void *__va_arg_gp(__va_elem *ap, int sz, int align) {
   if (ap->gp_offset >= 48)
