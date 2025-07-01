@@ -2794,7 +2794,6 @@ void assign_lvar_offsets(Obj *prog)
         continue;
       }
       Type *ty = var->ty;
-      bool pass_by_stack = false;
 
       switch (ty->kind)
       {
@@ -2804,31 +2803,21 @@ void assign_lvar_offsets(Obj *prog)
           fp += has_flonum1(ty) + (ty->size > 8 && has_flonum2(ty));
           gp += !has_flonum1(ty) + (ty->size > 8 && !has_flonum2(ty));
           continue;
-        }else
-          pass_by_stack = true;
-
+        }
         break;
       case TY_FLOAT:
       case TY_DOUBLE:
         if (fp++ < FP_MAX)
-          continue;
-       else
-          pass_by_stack = true;          
+          continue;       
         break;
       case TY_LDOUBLE:
-        // long double always passed on stack per ABI
-        pass_by_stack = true;      
         break;
       default:
         if (gp++ < GP_MAX)
           continue;
-        else
-          pass_by_stack = true;          
       }
 
-      if (pass_by_stack) {
-        var->pass_by_stack = true;  // default: passed in registers
-      }
+      var->pass_by_stack = true; 
 
       top = align_to(top, 8);
       var->offset = top;
@@ -2837,7 +2826,7 @@ void assign_lvar_offsets(Obj *prog)
     }
 
     if (is_variadic)
-      fn->overflow_arg_area = top; 
+      fn->overflow_arg_area = align_to(top, 8);
 
     // Assign offsets to pass-by-register parameters and local variables.
     for (Obj *var = fn->locals; var; var = var->next)
@@ -2869,18 +2858,7 @@ void assign_lvar_offsets(Obj *prog)
       var->offset = -bottom;
       fn->stack_align = MAX(fn->stack_align, max_align);
     }
-    // Assign offset to va_area if present
-    // if (fn->va_area) {
-    //   int align = MAX(16, fn->va_area->align);
-    //   max_align = MAX(max_align, align);
 
-    //   bottom = align_to(bottom, align);
-    //   fn->va_area->offset = -bottom;
-    //   bottom += fn->va_area->ty->size;
-
-    //   printf("== assign_lvar_offsets: ASSIGNED va_area offset = %d align = %d name = %s func = %s\n",
-    //         fn->va_area->offset, fn->va_area->align, fn->va_area->name, fn->name);
-    // }
 
     //fn->stack_size = align_to(bottom, 16);
     fn->stack_size = align_to(bottom, MAX(16, max_align));

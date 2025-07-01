@@ -9,6 +9,7 @@ typedef struct {
 } __va_elem;
 
 typedef __va_elem va_list[1];
+typedef unsigned long uintptr_t;
 
 #define va_start(ap, last) \
   do { *(ap) = *(__va_elem *)__va_area__; } while (0)
@@ -17,8 +18,11 @@ typedef __va_elem va_list[1];
 
 static void *__va_arg_mem(__va_elem *ap, int sz, int align) {
   void *p = ap->overflow_arg_area;
-  if (align > 8)
-    p = (void *)(((unsigned long) p + align - 1) / align * align);
+  //chibicc only align on 8 bytes
+  // if (align > 16) {
+  //   p = (void *)(((uintptr_t)p + align - 1) & ~(align - 1));
+  // }
+
   ap->overflow_arg_area = (void *)(((unsigned long)p + sz + 7) / 8 * 8);
   return p;
 }
