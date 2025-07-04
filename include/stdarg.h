@@ -18,11 +18,9 @@ typedef unsigned long uintptr_t;
 
 static void *__va_arg_mem(__va_elem *ap, int sz, int align) {
   void *p = ap->overflow_arg_area;
-  //chibicc only align on 8 bytes
-  // if (align > 16) {
-  //   p = (void *)(((uintptr_t)p + align - 1) & ~(align - 1));
-  // }
-
+  if (align > 16) {
+    p = (void *)(((uintptr_t)p + align - 1) & ~(align - 1));
+  }
   ap->overflow_arg_area = (void *)(((unsigned long)p + sz + 7) / 8 * 8);
   return p;
 }

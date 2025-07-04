@@ -2617,8 +2617,8 @@ static void emit_text(Obj *prog)
     println("  push %%rbp");
     println("  mov %%rsp, %%rbp");
     println("  sub $%d, %%rsp", fn->stack_size);
-    if (fn->stack_align > 16)
-      println("  and $-%d, %%rsp", fn->stack_align);
+    // if (fn->stack_align > 16)
+    //println("  and $-%d, %%rsp", fn->stack_align);
     println("  mov %%rsp, %d(%%rbp)", fn->alloca_bottom->offset);
 
     // Save arg registers if function is variadic
@@ -2665,7 +2665,9 @@ static void emit_text(Obj *prog)
     int gp = 0, fp = 0;
     for (Obj *var = fn->params; var; var = var->next)
     {
-      if (var->offset > 0)
+      // if (var->offset > 0)
+      //   continue;
+      if (var->pass_by_stack)
         continue;
 
       Type *ty = var->ty;
@@ -2859,11 +2861,8 @@ void assign_lvar_offsets(Obj *prog)
       fn->stack_align = MAX(fn->stack_align, max_align);
     }
 
-
-    //fn->stack_size = align_to(bottom, 16);
     fn->stack_size = align_to(bottom, MAX(16, max_align));
-    // printf("== assign_lvar_offsets: ASSIGNED stack_size = %d align = %d name = %s\n",
-    //        fn->stack_size, max_align, fn->name);
+
   }
 }
 
@@ -3077,6 +3076,5 @@ static void emit_destructors(void) {
   }
   println("  .text");
 }
-
 
 
