@@ -90,7 +90,6 @@ static void popf(int reg)
 // align_to(5, 8) returns 8 and align_to(11, 8) returns 16.
 int align_to(int n, int align)
 {
-  //return (n + align - 1) / align * align;
   return ((n + align - 1) / align) * align;
 }
 
@@ -370,9 +369,6 @@ static void gen_addr(Node *node)
     gen_addr(node->rhs);
     return;
   case ND_MEMBER:
-    // gen_addr(node->lhs);
-    // println("  add $%d, %%rax", node->member->offset);
-    // return;
     //fix from @fuhsnn on some issues with members
     switch(node->lhs->kind) {
       case ND_FUNCALL:
@@ -807,7 +803,6 @@ static void push_args2(Node *args, bool first_pass)
     return;
   push_args2(args->next, first_pass);
 
-  // if ((first_pass && !args->pass_by_stack) || (!first_pass && args->pass_by_stack))
   if (first_pass != args->pass_by_stack)
     return;
 
@@ -835,9 +830,7 @@ static void push_args2(Node *args, bool first_pass)
   default:
     push();
   }
-  if (args->realign_stack) {
-    pushreg("rbx");
-  }
+
 
 }
 
@@ -3037,11 +3030,6 @@ int len = sizeof(newargreg64)/sizeof(newargreg64[0]);
       add_register_used(register8_to_64(newargreg8[i]));
   }
 
-}
-
-void pushreg(const char *arg) {
-  println("  push %%%s", arg);
-  depth++;
 }
 
 static int cmp_ctor(const void *a, const void *b) {
