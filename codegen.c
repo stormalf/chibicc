@@ -882,7 +882,7 @@ static int push_args(Node *node)
       if (ty->size == 0)
         continue;
 
-      if (pass_by_reg(ty, gp, fp) && !is_variadic) {
+      if (pass_by_reg(ty, gp, fp) ) {
           fp += has_flonum1(ty) + (ty->size > 8 && has_flonum2(ty));
           gp += !has_flonum1(ty) + (ty->size > 8 && !has_flonum2(ty));
         } else {
@@ -1357,8 +1357,6 @@ static void gen_expr(Node *node)
       case TY_STRUCT:
       case TY_UNION:
         if (ty->size == 0)
-          continue;
-        if (is_variadic)
           continue;
         if (!pass_by_reg(ty, gp, fp))
           continue;
@@ -2801,7 +2799,7 @@ void assign_lvar_offsets(Obj *prog)
       {
       case TY_STRUCT:
       case TY_UNION:
-        if (pass_by_reg(ty, gp, fp) && !is_variadic) {
+        if (pass_by_reg(ty, gp, fp)) {
           fp += has_flonum1(ty) + (ty->size > 8 && has_flonum2(ty));
           gp += !has_flonum1(ty) + (ty->size > 8 && !has_flonum2(ty));
           continue;
