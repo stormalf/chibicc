@@ -27,7 +27,7 @@ long double struct_test130(G g0,G g1,G g2,G g3,G g4,F f0,F f1,F f2,F f3,F f4,F f
   ret += va_arg(ap, long double);
   ret += va_arg(ap, Aligned1024).c;
   ret += va_arg(ap, int);
-  // ret += va_arg(ap, double);
+  ret += va_arg(ap, double);
   // ret += va_arg(ap, double);
   // ret += va_arg(ap, double);
   // ret += va_arg(ap, double);
@@ -46,15 +46,15 @@ int main(void) {
 
 Aligned1024 s = {.c = 77};
 
-  ASSERT(145, struct_test130(
+  ASSERT(149, struct_test130(
     g[0], g[1], g[2], g[3], g[4],
     f[0], f[1], f[2], f[3], f[4], f[5],
     (int) 11,
     (int) 22,
     (long double) 2.3,
     (Aligned1024) s,
-    (int) 33
-    // (double) 4.5,
+    (int) 33,
+    (double) 4.5
     // (double) 5.6,
     // (double) 6.7,
     // (double) 7.8,
