@@ -291,6 +291,7 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
     //TODO set a variable isQuad to be sure to use 64 bits register when %q is found
     template = subst_asm(template, " %", "%q");
     template = subst_asm(template, " %", "%w");
+    template = subst_asm(template, " %", "%b");
 
    //case of no input need to generate input for output
     if (hasOutput && !hasInput){
