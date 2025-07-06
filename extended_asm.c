@@ -360,7 +360,6 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
         //replace each %9 by the correct input register
         for (int i = 0; i < nbInput; i++)
         {
-            printf("======i=%d nbInput=%d, variable=%s\n", i, nbInput, asmExt->input[i]->variableNumber);
             if (asmExt->input[i]->isAddress) {
                 char *tmp = calloc(1, sizeof(char) * 30);
                 strncat(tmp, "(", 2);
