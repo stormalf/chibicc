@@ -129,21 +129,6 @@ as[1]));
 
 Aligned1024 s = {.c = 77};
 
-  ASSERT(257, struct_test131(
-    g[0], g[1], g[2], g[3], g[4],
-    f[0], f[1], f[2], f[3], f[4], f[5],
-    (int) 11,
-    (int) 22,
-    (long double) 2.3,
-    (Aligned1024) s,
-    (int) 33,
-    (double) 4.5,
-    (double) 5.6,
-    (double) 6.7,
-    (double) 7.8,
-    (Aligned1024) s,
-    (long double) 11.1));
-
   ASSERT(257, struct_test130(
     g[0], g[1], g[2], g[3], g[4],
     f[0], f[1], f[2], f[3], f[4], f[5],
@@ -159,6 +144,21 @@ Aligned1024 s = {.c = 77};
     (Aligned1024) s,
     (long double) 11.1));
 
+  ASSERT(257, struct_test131(
+    g[0], g[1], g[2], g[3], g[4],
+    f[0], f[1], f[2], f[3], f[4], f[5],
+    (int) 11,
+    (int) 22,
+    (long double) 2.3,
+    (Aligned1024) s,
+    (int) 33,
+    (double) 4.5,
+    (double) 5.6,
+    (double) 6.7,
+    (double) 7.8,
+    (Aligned1024) s,
+    (long double) 11.1));
+        
   printf("OK\n");
 
 }

@@ -295,7 +295,6 @@ struct Obj
   int file_no; // Index or number to identify the source file
   int line_no; // Line number where the variable or function is defined
   bool is_prototyped; // Whether the function is prototyped or not
-
 };
 
 // Global variable can be initialized either by a constant expression

@@ -10,13 +10,14 @@ typedef struct {
 
 typedef __va_elem va_list[1];
 typedef unsigned long uintptr_t;
+extern int printf(const char *fmt, ...);
 
 #define va_start(ap, last) \
   do { *(ap) = *(__va_elem *)__va_area__; } while (0)
 
 #define va_end(ap)
 
-static void *__va_arg_mem(__va_elem *ap, int sz, int align) {
+static void *__va_arg_mem(__va_elem *ap, int sz, int align) {  
   void *p = ap->overflow_arg_area;
   if (align > 16) {
     p = (void *)(((uintptr_t)p + align - 1) & ~(align - 1));

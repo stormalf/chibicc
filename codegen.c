@@ -888,22 +888,25 @@ static int push_args(Node *node)
         break;  
     case TY_FLOAT:
     case TY_DOUBLE:
-      if (fp++ >= FP_MAX)
+      if (fp >= FP_MAX)
       {
         arg->pass_by_stack = true;
         stack++;
       }
+      else 
+        fp++;
       break;
     case TY_LDOUBLE:
       arg->pass_by_stack = true;
       stack += 2;
       break;
     default:
-      if (gp++ >= GP_MAX)
+      if (gp >= GP_MAX)
       {
         arg->pass_by_stack = true;
         stack++;
-      }
+      }else 
+        gp++;
     }
   }
 
@@ -1379,8 +1382,6 @@ static void gen_expr(Node *node)
           pop(argreg64[gp++]);
       }
     }
-
-
 
     // Function call
     println("  mov %%rax, %%r10");
@@ -2619,18 +2620,38 @@ static void emit_text(Obj *prog)
       int gp = 0, fp = 0;
       for (Obj *var = fn->params; var; var = var->next)
       {
-        switch (var->ty->kind)
+        Type *ty = var->ty;
+        switch (ty->kind)
         {
-        case TY_FLOAT:
-        case TY_DOUBLE:
-          fp++;
-          break;
-        case TY_LDOUBLE:
-          // Long double is passed via stack, adjust overflow_arg_area accordingly
-          // No increment of gp/fp, but track its size for stack offset computation if needed
-          break;
-        default:
-          gp++;
+          case TY_STRUCT:
+          case TY_UNION:
+            if (ty->size == 0)
+              continue;
+            if (!pass_by_reg(ty, gp, fp))
+              break;
+
+            if (has_flonum1(ty))
+              fp++;
+            else
+              gp++;
+
+            if (ty->size > 8) {
+              if (has_flonum2(ty))
+                fp++;
+              else
+                gp++;
+            }
+            break;
+          case TY_FLOAT:
+          case TY_DOUBLE:
+            //if (fp < FP_MAX)
+              fp++;
+            continue;
+          case TY_LDOUBLE:
+            break;
+          default:
+            //if (gp < GP_MAX)
+              gp++;
         }
       }
 
