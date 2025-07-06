@@ -1184,6 +1184,7 @@ static bool consume_end(Token **rest, Token *tok)
 static Type *enum_specifier(Token **rest, Token *tok)
 {
   Type *ty = enum_type();
+  tok = attribute_list(tok, ty, type_attributes);
 
   // Read a struct tag.
   Token *tag = NULL;
@@ -1208,8 +1209,7 @@ static Type *enum_specifier(Token **rest, Token *tok)
   ctx->filename = PARSE_C;
   ctx->funcname = "enum_specifier";  
   ctx->line_no = __LINE__ + 1;
-  tok = skip(tok, "{", ctx);
-
+  tok = skip(tok, "{", ctx);  
   // Read an enum-list.
   int i = 0;
   int val = 0;
@@ -4123,7 +4123,7 @@ static Token *type_attributes(Token *tok, void *arg)
     return skip(tok, ")", ctx);
   }
 
-    if (consume(&tok, tok, "__target__") || 
+  if (consume(&tok, tok, "__target__") || 
        consume(&tok, tok, "target")) {
     ctx->filename = PARSE_C;
     ctx->funcname = "type_attributes";        
