@@ -6750,6 +6750,7 @@ static void declare_builtin_functions(void)
   builtin->is_definition = false;
 }
 
+
 // program = (typedef | function-definition | global-variable)*
 Obj *parse(Token *tok)
 {
