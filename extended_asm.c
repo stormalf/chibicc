@@ -290,6 +290,7 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
     //temp fix for bswap %q0 to indicate a 64 register (quad word)
     //TODO set a variable isQuad to be sure to use 64 bits register when %q is found
     template = subst_asm(template, " %", "%q");
+    template = subst_asm(template, " %", "%w");
 
    //case of no input need to generate input for output
     if (hasOutput && !hasInput){
@@ -359,6 +360,7 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
         //replace each %9 by the correct input register
         for (int i = 0; i < nbInput; i++)
         {
+            printf("======i=%d nbInput=%d, variable=%s\n", i, nbInput, asmExt->input[i]->variableNumber);
             if (asmExt->input[i]->isAddress) {
                 char *tmp = calloc(1, sizeof(char) * 30);
                 strncat(tmp, "(", 2);
@@ -559,6 +561,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                        error("%s : %s:%d: error: in output_asm function :reg is null!", EXTASM_C, __FILE__, __LINE__);
                     asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg;  
                     asmExt->output[nbOutput]->letter = 'a';
+                    
 
                 }
                 else if (!strncmp(tok->str, "=b", tok->len))
@@ -1071,8 +1074,8 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
         {
 
             asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(retrieve_output_index_from_letter('d'));
-            asmExt->input[nbInput]->index = nbOutput + nbInput;
-            asmExt->input[nbInput]->letter = 'd';
+            asmExt->input[nbInput]->index = nbOutput + nbInput;            
+            asmExt->input[nbInput]->letter = 'd';            
             //=====ISS-156 case we have no output for the letter
             if (retrieve_output_index_from_letter('d') == -1) {
                 asmExt->input[nbInput]->reg =  specific_register_available("%rdx");
@@ -1085,8 +1088,30 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 if (!asmExt->input[nbInput]->reg)
                     error("%s : %s:%d: error: in input_asm function input_asm :reg is null!", EXTASM_C, __FILE__, __LINE__); 
                 asmExt->input[nbInput]->reg64 = asmExt->output[retrieve_output_index_from_letter('d')]->reg64;
-            }
+            }            
         }
+               else if (tok->kind == TK_STR && !strncmp(tok->str, "Nd", tok->len))
+        {
+
+            asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(retrieve_output_index_from_letter('d'));
+            asmExt->input[nbInput]->index = nbOutput + nbInput;            
+            asmExt->input[nbInput]->letter = 'N';            
+            //=====ISS-156 case we have no output for the letter
+            if (retrieve_output_index_from_letter('N') == -1) {
+                asmExt->input[nbInput]->reg =  specific_register_available("%rdx");
+                if (!asmExt->input[nbInput]->reg)
+                    error("%s : %s:%d: error: in input_asm function input_asm :reg is null!", EXTASM_C, __FILE__, __LINE__); 
+                asmExt->input[nbInput]->reg64 = asmExt->input[nbInput]->reg;
+                asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(nbOutput + nbInput);
+            }
+            else {            
+                asmExt->input[nbInput]->reg = asmExt->output[retrieve_output_index_from_letter('N')]->reg;
+                if (!asmExt->input[nbInput]->reg)
+                    error("%s : %s:%d: error: in input_asm function input_asm :reg is null!", EXTASM_C, __FILE__, __LINE__); 
+                asmExt->input[nbInput]->reg64 = asmExt->output[retrieve_output_index_from_letter('N')]->reg64;
+            }            
+        }
+ 
         else if (tok->kind == TK_STR && !strncmp(tok->str, "m", tok->len))
         {
 
