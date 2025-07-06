@@ -1184,7 +1184,7 @@ static bool consume_end(Token **rest, Token *tok)
 static Type *enum_specifier(Token **rest, Token *tok)
 {
   Type *ty = enum_type();
-  tok = attribute_list(tok, ty, type_attributes);
+  
 
   // Read a struct tag.
   Token *tag = NULL;
@@ -1193,7 +1193,7 @@ static Type *enum_specifier(Token **rest, Token *tok)
     tag = tok;
     tok = tok->next;
   }
-
+  tok = attribute_list(tok, ty, type_attributes);
   if (tag && !equal(tok, "{"))
   {
     Type *ty2 = find_tag(tag);
@@ -1215,6 +1215,7 @@ static Type *enum_specifier(Token **rest, Token *tok)
   int val = 0;
   while (!consume_end(rest, tok))
   {
+    tok->next = attribute_list(tok->next, ty, type_attributes);
     if (i++ > 0) {
       ctx->filename = PARSE_C;
       ctx->funcname = "enum_specifier";  
@@ -1224,9 +1225,10 @@ static Type *enum_specifier(Token **rest, Token *tok)
 
     char *name = get_ident(tok);
     tok = tok->next;
-
+    tok = attribute_list(tok, ty, type_attributes);
     if (equal(tok, "="))
       val = const_expr(&tok, tok->next);
+    tok = attribute_list(tok, ty, type_attributes);
 
     VarScope *sc = push_scope(name);
     sc->enum_ty = ty;
@@ -5521,7 +5523,10 @@ static Node *primary(Token **rest, Token *tok)
       ctx->funcname = "primary";        
       ctx->line_no = __LINE__ + 1;      
       *rest = skip(tok, ")", ctx);
-     
+      // Check if the type is incomplete
+      if (ty->kind == TY_UNION && ty->size < 0)
+          error_tok(tok, "%s %d: in primary : incomplete type for sizeof", PARSE_C, __LINE__);
+              
       if ((ty->kind == TY_STRUCT || ty->kind == TY_UNION) && ty->has_vla) {
         if (!ty->vla_size) {
           Node *lhs = compute_vla_size(ty, tok); 

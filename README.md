@@ -533,7 +533,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.23    Activating GNUC macros. Fixing issue with curl test due to duplicate "case" value not detected. Fixing issue with va_area (reporting changes from @fuhsnn in commit 174da1a). Fixing some issues with variadic functions (but still some test cases not working). Fixing issue with __builtin_alloca. Fixing issue with extended assembly during util-linux.
+1.0.23    Activating GNUC macros. Fixing issue with curl test due to duplicate "case" value not detected. Fixing issue with va_area (reporting changes from @fuhsnn in commit 174da1a). Fixing some issues with variadic functions (but still some test cases not working). Fixing issue with __builtin_alloca. Fixing issue with extended assembly during util-linux. Fixing issue with attribute pre/post enum identifier. Fixing regression issue with semun.
 
 ## old release notes
 
