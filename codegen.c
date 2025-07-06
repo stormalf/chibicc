@@ -86,6 +86,7 @@ static void popf(int reg)
   depth--;
 }
 
+
 // Round up `n` to the nearest multiple of `align`. For instance,
 // align_to(5, 8) returns 8 and align_to(11, 8) returns 16.
 int align_to(int n, int align)
@@ -861,8 +862,7 @@ static int push_args(Node *node)
   // a pointer to a buffer as if it were the first argument.
   if (node->ret_buffer && node->ty->size > 16)
     gp++;
-
-  bool is_variadic = node->func_ty->is_variadic;
+  
   // Load as many arguments to the registers as possible.
   for (Node *arg = node->args; arg; arg = arg->next)
   {
@@ -1340,6 +1340,7 @@ static void gen_expr(Node *node)
     // a pointer to a buffer as if it were the first argument.
     if (node->ret_buffer && node->ty->size > 16)
       pop(argreg64[gp++]);
+    
     bool is_variadic = node->func_ty->is_variadic;
     for (Node *arg = node->args; arg; arg = arg->next)
     {
@@ -2618,10 +2619,19 @@ static void emit_text(Obj *prog)
       int gp = 0, fp = 0;
       for (Obj *var = fn->params; var; var = var->next)
       {
-        if (is_flonum(var->ty))
+        switch (var->ty->kind)
+        {
+        case TY_FLOAT:
+        case TY_DOUBLE:
           fp++;
-        else
+          break;
+        case TY_LDOUBLE:
+          // Long double is passed via stack, adjust overflow_arg_area accordingly
+          // No increment of gp/fp, but track its size for stack offset computation if needed
+          break;
+        default:
           gp++;
+        }
       }
 
       int off = fn->va_area->offset;
