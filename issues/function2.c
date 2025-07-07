@@ -65,7 +65,7 @@ float struct_test120(
 
 
 typedef struct {
-  char _Alignas(1024) c;
+  char _Alignas(16) c;
 } Aligned1024;
 extern int struct_test131(G g0,G g1,G g2,G g3,G g4,F f0,F f1,F f2,F f3,F f4,F f5,int i0,int i1,...);
 int struct_test130(G g0,G g1,G g2,G g3,G g4,F f0,F f1,F f2,F f3,F f4,F f5,int i0,int i1,...) {

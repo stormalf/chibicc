@@ -2610,8 +2610,6 @@ static void emit_text(Obj *prog)
     println("  push %%rbp");
     println("  mov %%rsp, %%rbp");
     println("  sub $%d, %%rsp", fn->stack_size);
-    // if (fn->stack_align > 16)
-    //println("  and $-%d, %%rsp", fn->stack_align);
     println("  mov %%rsp, %d(%%rbp)", fn->alloca_bottom->offset);
 
     // Save arg registers if function is variadic
@@ -2794,14 +2792,11 @@ void assign_lvar_offsets(Obj *prog)
     if (!fn->is_function)
       continue;
 
-    fn->stack_align = 16;
-
     // If a function has many parameters, some parameters are
     // inevitably passed by stack rather than by register.
     // The first passed-by-stack parameter resides at RBP+16.
     int top = 16;
-    int bottom = 0;
-    int max_align = 16;
+    int bottom = 0;    
     //trying to fix =====ISS-149 causing segmentation fault when having assembly instructions
     if (fn->alloca_bottom && fn->alloca_bottom->offset)
       bottom =  abs(fn->alloca_bottom->offset);
@@ -2859,7 +2854,7 @@ void assign_lvar_offsets(Obj *prog)
       int align = (var->ty->kind == TY_ARRAY && var->ty->size >= 16)
                       ? MAX(16, var->align)
                       : var->align;
-      max_align = MAX(max_align, align);                      
+                          
 
       if (isDebug)                      
         printf("======bottom=%d kind=%d size=%d fn_bottom=%d fn_stack_size=%d name=%s funcname=%s\n", bottom, var->ty->kind, var->ty->size, fn->alloca_bottom->offset, fn->alloca_bottom->stack_size, var->name, var->funcname);
@@ -2879,11 +2874,11 @@ void assign_lvar_offsets(Obj *prog)
 
       bottom += var->ty->size;
       bottom = align_to(bottom, align);
-      var->offset = -bottom;
-      fn->stack_align = MAX(fn->stack_align, max_align);
+      var->offset = -bottom;      
+      
     }
 
-    fn->stack_size = align_to(bottom, MAX(16, max_align));
+     fn->stack_size = align_to(bottom, 16);
 
   }
 }
