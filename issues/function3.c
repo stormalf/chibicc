@@ -16,8 +16,8 @@ typedef struct {
 
 
 typedef struct {
-  //char _Alignas(1024) c;
-  char c;
+  char _Alignas(128) c;
+  //char c;
 } Aligned1024;
 extern int struct_test131(G g0,G g1,G g2,G g3,G g4,F f0,F f1,F f2,F f3,F f4,F f5,int i0,int i1,...);
 long double struct_test130(G g0,G g1,G g2,G g3,G g4,F f0,F f1,F f2,F f3,F f4,F f5,int i0,int i1,...) {
