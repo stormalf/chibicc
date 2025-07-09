@@ -373,6 +373,7 @@ static Node *new_vla_ptr(Obj *var, Token *tok)
   return node;
 }
 
+
 Node *new_cast(Node *expr, Type *ty)
 {
   //fix for case when cast has __attribute__
@@ -3106,7 +3107,7 @@ static int64_t eval2(Node *node, char ***label)
   //from @fuhsnn eval2():Evaluate ND_DEREF for TY_ARRAY
   case ND_DEREF:
     if (node->ty->kind != TY_ARRAY)
-      error_tok(node->tok, "%s:%d: in eval2 : not a compile-time constant", PARSE_C, __LINE__);
+      error_tok(node->tok, "%s:%d: in eval2 : not a compile-time constant node->ty->kind=%d", PARSE_C, __LINE__, node->ty->kind);
     return eval2(node->lhs, label);
   }
   error_tok(node->tok, "%s %d: in eval2 : not a compile-time constant3", PARSE_C, __LINE__);

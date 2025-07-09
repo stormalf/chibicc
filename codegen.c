@@ -323,7 +323,8 @@ static void gen_addr(Node *node)
     if (node->var->is_tls)
     {
       println("  mov %%fs:0, %%rax");
-      println("  add $\"%s\"@tpoff, %%rax", node->var->name);
+      if (node->var->is_definition)
+        println("  add $\"%s\"@tpoff, %%rax", node->var->name);
       return;
     }
 
