@@ -2393,7 +2393,7 @@ static void emit_data(Obj *prog)
                     : var->align;
 
     // Common symbol
-    if (opt_fcommon && var->is_tentative)
+    if (opt_fcommon && var->is_tentative && !var->is_tls && !var->section)
     {
       //from @fuhsnn incomplete array assuming to have one element
       if (var->ty->kind == TY_ARRAY && var->ty->size < 0)
