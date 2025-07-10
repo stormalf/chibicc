@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <string.h>
+#include "test.h"
 
 struct MyStruct {
     void (*myFunc)(void *, const void *, size_t);
@@ -17,6 +18,7 @@ int main() {
     myStruct.myFunc(dest, src, strlen(src) + 1);
 
     printf("Copied string: %s\n", dest);  // Should print: "Copied string: Hello, World!"
+    ASSERT(0, !strncmp("Hello, World", dest, strlen(dest)));
 
     return 0;
 }

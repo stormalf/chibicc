@@ -1,9 +1,11 @@
 #include <stdio.h>
 #include <string.h>
+#include "test.h"
 
 // Define the functions with the required signatures
 void pgstat_archiver_init_shmem_cb(void *stats) {
     printf("Archiver init_shmem_cb called with %p\n", stats);
+    ASSERT(0x1234, stats);
 }
 
 // Define a struct with two function pointers

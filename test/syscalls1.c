@@ -85,8 +85,8 @@ int main() {
         printf("Release: %s\n", bufferinfo.release);
         printf("Version: %s\n", bufferinfo.version);
         printf("Machine: %s\n", bufferinfo.machine);
-        // ASSERT("x86_64", bufferinfo.machine);
-        // ASSERT("Linux", bufferinfo.sysname);
+        Assert("x86_64", bufferinfo.machine);
+        Assert("Linux", bufferinfo.sysname);
     } else {
         perror("syscall(SYS_uname) failed");
     }

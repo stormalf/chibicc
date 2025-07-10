@@ -1,3 +1,4 @@
+#include "test.h"
 typedef unsigned short uint16_t;
 typedef unsigned char uint8_t;
 
@@ -35,6 +36,7 @@ int main()
        and hence the whole type was garbled.  */
     int b = ( (int(ATTR *)(void))  function_pointer)();
     printf("%i\n", b);
+    ASSERT(42, b);
 
     return 0;
 }

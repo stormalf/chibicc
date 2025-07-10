@@ -1,3 +1,4 @@
+#include "test.h"
 /* This checks various ways of dead code inside if statements
    where there are non-obvious ways of how the code is actually
    not dead due to reachable by labels.  */
@@ -130,10 +131,13 @@ enterloop3:
   switch (i) {
       if (0) {
 	  printf ("error\n");
+    ASSERT(0, i);
       case 42:
 	  printf ("error2\n");
+    ASSERT(42, i);
       case 41:
 	  printf ("caseok\n");
+    ASSERT(41, i);
       }
   }
 
@@ -141,11 +145,14 @@ enterloop3:
   switch (i) {
       if (0) {
 	  printf ("error3\n");
+    ASSERT(0, i);
       default:
 	  printf ("caseok2\n");
+    ASSERT(41, i);
 	  break;
       case 42:
 	  printf ("error4\n");
+    ASSERT(42, i);
       }
   }
 

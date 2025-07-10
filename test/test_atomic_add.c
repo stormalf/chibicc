@@ -32,7 +32,7 @@ int main() {
 
     printf("Old value: %u\n", old_value);
     printf("New value: %u\n", atomic_var.value);
-    Assert(10, old_value);
-    Assert(15, atomic_var.value);
+    ASSERT(10, old_value);
+    ASSERT(15, atomic_var.value);
     return 0;
 }
