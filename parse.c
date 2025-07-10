@@ -1071,11 +1071,6 @@ static Type *pointers(Token **rest, Token *tok, Type *ty)
       }
     }
   }
-  //   while (equal(tok, "const") || equal(tok, "volatile") || equal(tok, "restrict") ||
-  //          equal(tok, "__restrict") || equal(tok, "__restrict__") ||
-  //          equal(tok, "_Atomic") || equal(tok, "_Complex") )
-  //     tok = tok->next;
-  // }
   tok = attribute_list(tok, ty, type_attributes);
   *rest = tok;
   return ty;
@@ -3040,21 +3035,6 @@ static int64_t eval2(Node *node, char ***label)
     return eval(node->lhs) || eval(node->rhs);
   case ND_CAST:
   {
-  //   int64_t val = eval2(node->lhs, label);
-  //   if (is_integer(node->ty))
-  //   {
-  //     switch (node->ty->size)
-  //     {
-  //     case 1:
-  //       return node->ty->is_unsigned ? (uint8_t)val : (int8_t)val;
-  //     case 2:
-  //       return node->ty->is_unsigned ? (uint16_t)val : (int16_t)val;
-  //     case 4:
-  //       return node->ty->is_unsigned ? (uint32_t)val : (int32_t)val;
-  //     }
-  //   }
-  //   return val;
-  // }
      if (is_flonum(node->lhs->ty)) {
         if (node->ty->kind == TY_BOOL)
           return !!eval_double(node->lhs);
@@ -3207,8 +3187,12 @@ static double eval_double(Node *node)
   case ND_COMMA:
     return eval_double(node->rhs);
   case ND_CAST:
+    // if (is_flonum(node->lhs->ty))
+    //   return eval_double(node->lhs);
     if (is_flonum(node->lhs->ty))
       return eval_double(node->lhs);
+    if (node->lhs->ty->size == 8 && node->lhs->ty->is_unsigned)
+      return (uint64_t)eval(node->lhs);
     return eval(node->lhs);
   case ND_NUM:
     return node->fval;

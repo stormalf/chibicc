@@ -67,7 +67,7 @@ zlib:
 	cd ../zlib && make clean && CC=chibicc CFLAGS="-fPIC" LDFLAGS="-fpic" ./configure && make && make test
 
 nmap:
-	cd ../nmap && make clean && CC=chibicc ./configure --with-dbus && make && make check
+	cd ../nmap && make clean && CC=chibicc LDFLAGS="-ldbus-1" ./configure --with-dbus && make && make check
 
 openssl:
 	cd ../openssl && make clean && CC=chibicc ./configure && make 
