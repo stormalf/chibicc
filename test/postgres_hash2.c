@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <limits.h>
+#include "test.h"
 
 // Define types
 typedef unsigned char uint8;	/* == 8 bits */
@@ -152,9 +153,11 @@ int main() {
     uint32_t bucket = hash_initial_lookup(&hashp, 3926571702, &bucketptr);
 
     printf("Bucket: %u\n", bucket);
+    ASSERT(6, bucket);
     if (bucketptr != NULL) {
         HASHELEMENT *elem = (HASHELEMENT *)*bucketptr;
         printf("Bucket pointer value: %u\n", elem->hashvalue);
+        ASSERT(0, elem->hashvalue);
     } else {
         printf("Bucket pointer is NULL\n");
     }

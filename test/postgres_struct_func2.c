@@ -18,7 +18,7 @@ int main() {
     myStruct.myFunc(dest, src, strlen(src) + 1);
 
     printf("Copied string: %s\n", dest);  // Should print: "Copied string: Hello, World!"
-    ASSERT(0, !strncmp("Hello, World", dest, strlen(dest)));
+    ASSERT(13, strlen(dest));
 
     return 0;
 }

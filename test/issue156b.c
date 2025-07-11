@@ -7,6 +7,7 @@ void asmfunc(void) {
   __asm__ volatile (
     ".byte 0x0f, 0x01, 0xd0\n"
     : "=a"(eax), "=d"(edx) : "c" (ecx));
+    
 }
 
 int main() {

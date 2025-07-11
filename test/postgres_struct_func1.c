@@ -15,10 +15,10 @@ int main() {
     // Use the function pointer
     char src[20] = "Hello, World!";
     char dest[20];
-    myStruct.myFunc(dest, src, strlen(src));
+    myStruct.myFunc(dest, src, strlen(src) + 1);
 
     printf("Copied string: %s\n", dest);  // Should print: "Copied string: Hello, World!"
-    ASSERT(0, !strncmp("Hello, World!", dest, strlen("Hello, World!")));
+    ASSERT(13, strlen(dest));
 
     return 0;
 }

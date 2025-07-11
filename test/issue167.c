@@ -1,6 +1,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
+#include "test.h"
 
 typedef unsigned long int uint64;
 typedef unsigned int uint32;
@@ -34,6 +35,7 @@ pg_atomic_compare_exchange_u64_impl(volatile pg_atomic_uint64 *ptr,
 :               "=a" (*expected), "=m"(ptr->value), "=q" (ret)
 :               "a" (*expected), "r" (newval), "m"(ptr->value)
 :               "memory", "cc");
+        ASSERT(1, ret);
         return (bool) ret;
 }
 
@@ -47,13 +49,13 @@ pg_atomic_compare_exchange_u32_impl(volatile pg_atomic_uint32 *ptr,
 	 * Perform cmpxchg and use the zero flag which it implicitly sets when
 	 * equal to measure the success.
 	 */
-// 	__asm__ __volatile__(
-// 		"	lock				\n"
-// 		"	cmpxchgl	%4,%5	\n"
-// 		"   setz		%2		\n"
-// :		"=a" (*expected), "=m"(ptr->value), "=q" (ret)
-// :		"a" (*expected), "r" (newval), "m"(ptr->value)
-// :		"memory", "cc");
+	__asm__ __volatile__(
+		"	lock				\n"
+		"	cmpxchgl	%4,%5	\n"
+		"   setz		%2		\n"
+:		"=a" (*expected), "=m"(ptr->value), "=q" (ret)
+:		"a" (*expected), "r" (newval), "m"(ptr->value)
+:		"memory", "cc");
 	return (bool) ret;
 }
 
@@ -64,6 +66,9 @@ int main() {
     uint32 b = 17;
     uint32 c = 0;
     pg_atomic_compare_exchange_u32_impl(&a, &b, c);
+    ASSERT(10, a.value);
+    ASSERT(10, b);
+    ASSERT(0, c);
 
 
     return 0;

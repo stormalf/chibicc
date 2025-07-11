@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <limits.h>
+#include "test.h"
 
 #define NUM_FREELISTS 32
 
@@ -257,6 +258,7 @@ int main() {
 
     // Output the result
     printf("Hash value: %u\n", hash_value);
+    ASSERT(3926571702, hash_value);
     printf("Bucket: %u\n", bucket);
     printf("Bucket pointer: %p\n", (void *)bucketptr);
 

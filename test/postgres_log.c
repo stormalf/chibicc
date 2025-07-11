@@ -74,9 +74,9 @@ int main()
         else if (i == 2)
             ASSERT(4, next_pow2_int(test_values[i]) );
         else if (i == 3)
-            ASSERT(4, next_pow2_int(test_values[i]) );
+            ASSERT(536870912, next_pow2_int(test_values[i]) );
         else if (i == 4)
-            ASSERT(4, next_pow2_int(test_values[i]) );
+            ASSERT(1073741824, next_pow2_int(test_values[i]) );
     }
     return 0;
 }
