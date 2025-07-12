@@ -1564,8 +1564,8 @@ static void gen_expr(Node *node)
     return;
   }
   case ND_FUNCALL:
-  {
-    if (node->lhs->kind == ND_VAR && !strcmp(node->lhs->var->name, "alloca"))
+  {    
+    if (node->lhs->kind == ND_VAR && (!strcmp(node->lhs->var->name, "alloca") ||  !strcmp(node->lhs->var->name, "__builtin_alloca")))
     {
       gen_expr(node->args);
       println("  mov %%rax, %%rdi");
