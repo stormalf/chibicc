@@ -19,8 +19,11 @@ long double struct_test130(
 
   long double ret = i0 + i1;       
   ret += va_arg(ap, int);                 // read int
+  ASSERT(320, ret);
   ret += va_arg(ap, long double);   
+  ASSERT(330, ret);
   ret += va_arg(ap, Aligned1024).c;      // read struct (just its char)
+  ASSERT(337, ret);
   // you can uncomment and add more va_arg calls here as needed
 
   va_end(ap);

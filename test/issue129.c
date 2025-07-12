@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include "test.h"
 
+
 #define HYPERVISOR_INFO_LEAF 0x40000000
 #define VMWARE_BDOOR_MAGIC 0x564D5868
 #define VMWARE_BDOOR_PORT 0x5658
@@ -44,5 +45,8 @@ int main(void)
 	ASSERT(1919117645, ebx);
 	ASSERT(1718580079, ecx);
 	ASSERT(1984438388, edx);
+	// uint32_t eax2, ebx2, ecx2, edx2;
+	// vmware_bdoor(&eax2, &ebx2, &ecx2, &edx2);
+	// printf("%d %d %d %d\n", eax2, ebx2, ecx2, edx2);
 	return 0;
 }

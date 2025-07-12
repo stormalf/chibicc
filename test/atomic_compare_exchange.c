@@ -23,7 +23,7 @@ int main() {
     unsigned int expected = 10;
     bool result = pg_atomic_compare_exchange_u32_impl(&val, &expected, 20);
     printf("Compare and Exchange: %d, New Value: %u\n", result, val.value);
-    Assert(1, result);
-    Assert(20, val.value);
+    ASSERT(1, result);
+    ASSERT(20, val.value);
     return 0;
 }

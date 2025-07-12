@@ -1,5 +1,7 @@
 #include <stddef.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include "test.h"
 size_t
 strlcpy(dst, src, siz)
 char *dst;
@@ -34,6 +36,13 @@ size_t siz;
 
 int main(void)
 {
+    size_t res;
+    char *src = "hello";
+    char *dst = calloc (20, sizeof(char));
+    int siz = 6;
+    res = strlcpy(dst, src, siz);
+    printf("res=%ld dst=%s\n", res, dst);
+    ASSERT(5, res);
     printf("OK\n");
     return 0;
 }

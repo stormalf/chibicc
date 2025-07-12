@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <stdarg.h>
-
+#include "test.h"
 void print_args(int count, ...) {
     va_list ap;
     va_start(ap, count);
@@ -8,6 +8,8 @@ void print_args(int count, ...) {
     for (int i = 0; i < count; i++) {
         int val = va_arg(ap, int);
         printf("arg[%d] = %d\n", i, val);
+        if (i == 127)
+            ASSERT(127, val);
     }
 
     va_end(ap);

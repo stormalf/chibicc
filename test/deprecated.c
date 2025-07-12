@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include "test.h"
 
 // Pre-attribute
 __attribute__((deprecated))
@@ -30,7 +31,10 @@ int main() {
     enum Color3 c3 = RED3;
 
     printf("Color1: %d\n", c1);
+    ASSERT(0, c1);
     printf("Color2: %d\n", c2);
+    ASSERT(0, c2);
     printf("Color3: %d\n", c3);
+    ASSERT(0, c3);
     return 0;
 }

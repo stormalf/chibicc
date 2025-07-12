@@ -3,7 +3,7 @@
  #include <stdlib.h>
  #include <wchar.h>
  #include <stdio.h>
- 
+ #include "test.h"
  // Check varargs macros.  These examples are taken from C99 6.10.3.5.
  #define debug(...) fprintf (stderr, __VA_ARGS__)
  #define showlist(...) puts (#__VA_ARGS__)
@@ -17,6 +17,8 @@
    debug ("X = %d\n", x);
    showlist (The first, second, and third items.);
    report (x>y, "x is %d but y is %d", x, y);
+   ASSERT(1234, x);
+   ASSERT(5678, y);
    printf("\n");
  }
  

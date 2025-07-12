@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdarg.h>
+#include "test.h"
 
 void test_variadic(double first_named, int count, ...) {
     printf("named arg = %f\n", first_named);
@@ -10,6 +11,8 @@ void test_variadic(double first_named, int count, ...) {
     for (int i = 0; i < count; i++) {
         double val = va_arg(ap, double);
         printf("variadic arg[%d] = %f\n", i, val);
+        if (i == 15)
+            ASSERT(15, val );
     }
 
     va_end(ap);

@@ -19,7 +19,7 @@
   MAKECRCH can be #defined to write out crc32.h. A main() routine is also
   produced, so that this one source file can be compiled to an executable.
  */
-
+#include "test.h"
 #ifdef MAKECRCH
 #include <stdio.h>
 #ifndef DYNAMIC_CRC_TABLE
@@ -1169,5 +1169,9 @@ uLong op;
 }
 
 int main() {
+    uLong a = 12, b = 17, c = 15, d = 0;
+    d = crc32_combine_op(a, b, c);
+    printf("d=%ld\n", d);
+    ASSERT(686661317, d);
     return 0;
 }
