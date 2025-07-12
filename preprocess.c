@@ -1482,6 +1482,7 @@ void init_macros(void)
   define_macro("unix", "1");
   define_macro("HAVE_RECV", "1");
   define_macro("HAVE_SEND", "1");
+  define_macro("HAVE_SYS_IO_H", "1");
   define_macro("__extension__", "");
   // define_macro("HAVE_GCC__SYNC_CHAR_TAS", "1");
   // define_macro("HAVE_GCC__SYNC_INT32_TAS", "1");
