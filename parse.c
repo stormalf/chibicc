@@ -1279,7 +1279,7 @@ static Type *enum_specifier(Token **rest, Token *tok)
 
     char *name = get_ident(tok);
     tok = tok->next;
-
+    tok = attribute_list(tok, ty, type_attributes);
     if (equal(tok, "="))
       val = const_expr(&tok, tok->next);
 
@@ -5650,7 +5650,12 @@ static Node *primary(Token **rest, Token *tok)
       ctx->funcname = "primary";        
       ctx->line_no = __LINE__ + 1;      
       *rest = skip(tok, ")", ctx);
-     
+      
+      // Check if the type is incomplete
+      if (ty->kind == TY_UNION && ty->size < 0)
+        error_tok(tok, "%s %d: in primary : incomplete type for sizeof", PARSE_C, __LINE__);
+            
+      
       if ((ty->kind == TY_STRUCT || ty->kind == TY_UNION) && ty->has_vla) {
         if (!ty->vla_size) {
           Node *lhs = compute_vla_size(ty, tok); 
@@ -5659,6 +5664,7 @@ static Node *primary(Token **rest, Token *tok)
           }
           return new_var_node(ty->vla_size, tok);
         }
+
         
       if (ty->kind == TY_STRUCT && ty->is_flexible) {
           Member *mem = ty->members;
