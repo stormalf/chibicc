@@ -1473,6 +1473,9 @@ void init_macros(void)
   define_macro("__x86_64", "1");
   define_macro("__x86_64__", "1");
   define_macro("__GNU__", "1");
+  define_macro("_GNU_SOURCE", "1");   
+  define_macro("_DEFAULT_SOURCE", "1");
+  define_macro("__USE_GNU", "1");
   //define_macro("__INTEL_COMPILER", "1");
   define_macro("__GNUC__", "9");
   define_macro("__GNUC_MINOR__", "1");
