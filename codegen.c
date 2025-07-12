@@ -2628,7 +2628,7 @@ static void emit_text(Obj *prog)
             if (ty->size == 0)
               continue;
             if (!pass_by_reg(ty, gp, fp))
-              break;
+              continue;
 
             if (has_flonum1(ty))
               fp++;
@@ -2641,14 +2641,14 @@ static void emit_text(Obj *prog)
               else
                 gp++;
             }
-            break;
+            continue;
           case TY_FLOAT:
           case TY_DOUBLE:
             //if (fp < FP_MAX)
               fp++;
             continue;
           case TY_LDOUBLE:
-            break;
+            continue;
           default:
             //if (gp < GP_MAX)
               gp++;
