@@ -1246,7 +1246,7 @@ static Type *enum_specifier(Token **rest, Token *tok)
     tag = tok;
     tok = tok->next;
   }
-
+  tok = attribute_list(tok, ty, type_attributes);
   if (tag && !equal(tok, "{"))
   {
     Type *ty2 = find_tag(tag);
@@ -1269,6 +1269,7 @@ static Type *enum_specifier(Token **rest, Token *tok)
   int val = 0;
   while (!consume_end(rest, tok))
   {
+    tok->next = attribute_list(tok->next, ty, type_attributes);
     if (i++ > 0) {
       ctx->filename = PARSE_C;
       ctx->funcname = "enum_specifier";  
