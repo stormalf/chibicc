@@ -5496,6 +5496,10 @@ static Node *primary(Token **rest, Token *tok)
       ctx->funcname = "primary";        
       ctx->line_no = __LINE__ + 1;      
       *rest = skip(tok, ")", ctx);
+
+      // Check if the type is incomplete
+      if (ty->kind == TY_UNION && ty->size < 0)
+        error_tok(tok, "%s %d: in primary : incomplete type for sizeof", PARSE_C, __LINE__);      
      
       if ((ty->kind == TY_STRUCT || ty->kind == TY_UNION) && ty->has_vla) {
         if (!ty->vla_size) {
