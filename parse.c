@@ -5115,17 +5115,31 @@ static Type *union_decl(Token **rest, Token *tok)
   if (ty->size < 0)
     return ty;
 
-  ty->size = MAX(ty->size, 0);
   // If union, we don't have to assign offsets because they
   // are already initialized to zero. We need to compute the
   // alignment and the size though.
-  for (Member *mem = ty->members; mem; mem = mem->next)
-  {
+  Member head = {0};
+  Member *cur = &head;
+  for (Member *mem = ty->members; mem; mem = mem->next) {
+    int sz;
+    if (mem->is_bitfield)
+      sz = align_to(mem->bit_width, 8) / 8;
+    else
+      sz = mem->ty->size;
+
+    ty->size = MAX(ty->size, sz);
+
+    if (!mem->name && mem->is_bitfield) {
+      cur->next = NULL;
+      continue;
+    }
+
     if (ty->align < mem->align)
       ty->align = mem->align;
-    if (ty->size < mem->ty->size)
-      ty->size = mem->ty->size;
+
+    cur = cur->next = mem;
   }
+  ty->members = head.next;
   ty->size = align_to(ty->size, ty->align);
   return ty;
 }
