@@ -26,6 +26,7 @@
 #define PREPROCESS_C "preprocess.c"
 
 
+
 typedef struct MacroParam MacroParam;
 struct MacroParam
 {
@@ -894,6 +895,7 @@ static Token *subst(Macro *m, MacroArg *args)
 static bool expand_macro(Token **rest, Token *tok)
 {
 
+
   if (hideset_contains(tok->hideset, tok->loc, tok->len))
     return false;
   Macro *m = find_macro(tok);
@@ -1117,6 +1119,45 @@ static Token *include_file(Token *tok, char *path, Token *filename_tok)
   return append(tok2, tok);
 }
 
+static void print_macro(Macro *m) {
+  FILE *out = ofile ? ofile : stdout;
+
+  fprintf(out, "#define %s", m->name);
+
+  if (!m->is_objlike) {
+    fprintf(out, "(");
+    MacroParam *p = m->params;
+    bool first = true;
+    while (p) {
+      if (!first)
+        fprintf(out, ",");
+      fprintf(out, "%s", p->name);
+      first = false;
+      p = p->next;
+    }
+
+    if (m->va_args_name) {
+      if (!first)
+        fprintf(out, ",");
+      fprintf(out, "...");
+    }
+    fprintf(out, ")");
+  }
+
+  Token *tok = m->body;
+  if (tok && tok->kind != TK_EOF)
+    fprintf(out, " ");
+
+  for (; tok && tok->kind != TK_EOF; tok = tok->next) {
+    // Add space between tokens
+    fprintf(out, "%.*s", tok->len, tok->loc);
+    if (tok->next && tok->next->kind != TK_EOF)
+      fprintf(out, " ");
+  }
+
+  fprintf(out, "\n");
+}
+
 // Read #line arguments
 static void read_line_marker(Token **rest, Token *tok)
 {
@@ -1202,8 +1243,12 @@ static Token *preprocess2(Token *tok)
     }
     if (equal(tok, "define"))
     {
-      if (isPrintMacro)
-        printf("%s\n", tok->loc);
+      // if (isPrintMacro) {
+      //   //printf("%s\n", tok->len, tok->loc);
+      //   Macro *m = find_macro(tok->next);
+      //   if (m)
+      //     print_macro(m);
+      // }
       read_macro_definition(&tok, tok->next);
 
       continue;
@@ -1351,11 +1396,15 @@ void define_macro(char *name, char *buf)
   {
     Token *tok = tokenize(new_file("<built-in>", 1, buf));
     add_macro(name, true, tok);
-    if (isPrintMacro)
+    if (isPrintMacro) {
       printf("#define %s %s\n", name, buf);
+    if (!ofile)
+      error("%s: %s:%d: error: in print_macro  :  error during opening file ", PREPROCESS_C, __FILE__, __LINE__);
+    fprintf(ofile, "#define %s %s\n", name, buf);
+
+    }
   }
 }
-
 void undef_macro(char *name)
 {
   hashmap_delete(&macros, name);
@@ -1501,12 +1550,12 @@ void init_macros(void)
   define_macro("__GNUC__", "9");
   define_macro("__GNUC_MINOR__", "1");
   define_macro("__GNUC_PATCHLEVEL__ ", "1");
-  define_macro("HAVE_ATTRIBUTE_PACKED", "1");
+  //define_macro("HAVE_ATTRIBUTE_PACKED", "1");
   define_macro("linux", "1");
   define_macro("unix", "1");
   define_macro("HAVE_RECV", "1");
   define_macro("HAVE_SEND", "1");
-  define_macro("HAVE_SYS_IO_H", "1");
+  define_macro("HAVE_SYS_IO_H", "1");  
   define_macro("__extension__", "");
   // define_macro("HAVE_GCC__SYNC_CHAR_TAS", "1");
   // define_macro("HAVE_GCC__SYNC_INT32_TAS", "1");
@@ -1760,4 +1809,14 @@ static bool file_exists_in_include_path(const char *filename) {
       return true;
   }
   return false;
+}
+
+void print_all_macros(void) {
+  for (int i = 0; i < macros.capacity; i++) {
+    HashEntry *e = &macros.buckets[i];
+    if (e->key) {
+      Macro *m = (Macro *)e->val;
+      print_macro(m);
+    }
+  }
 }

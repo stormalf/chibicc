@@ -21,12 +21,14 @@ void test_big_align(int named_int, struct big128 s128, struct big1024 s1024, int
     va_list ap;
     va_start(ap, count);
 
-    for (int i = 0; i < count; i++) {
+    for (int i = 0; i < count - 1 ; i++) {
         double val = va_arg(ap, double);
         printf("variadic double[%d] = %f\n", i, val);
         ASSERT(i+1, val);
     }
-
+    struct big1024 s1024 = va_arg(ap, struct big1024);
+    printf("struct big1024 align = %zu size = %zu\n", __alignof__(s1024), sizeof(s1024));
+    ASSERT(1024, sizeof(s1024));
     va_end(ap);
 }
 
@@ -38,10 +40,10 @@ int main() {
         42,       // named int
         s128,     // struct with align 128
         s1024,    // struct with align 1024
-        5,        // count
+        6,        // count
 
         // variadic doubles
-        1.1, 2.2, 3.3, 4.4, 5.5
+        1.1, 2.2, 3.3, 4.4, 5.5, s1024
     );
 
     return 0;

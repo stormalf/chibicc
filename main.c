@@ -55,7 +55,7 @@ static StringArray std_include_paths;
 char *base_file;
 static char *output_file;
 FILE *f;
-
+FILE *ofile;
 // for dot diagrams
 FILE *dotf;
 char *dot_file;
@@ -142,8 +142,7 @@ static void usage(int status)
 // print the version of the command
 static void printVersion()
 {
-  printf("%s version : %s\n", PRODUCT, VERSION);
-  
+  printf("%s version : %s\n", PRODUCT, VERSION);  
 }
 
 // check the length and validity of parameter to avoid non valid input values
@@ -293,7 +292,7 @@ static void parse_args(int argc, char **argv)
     if (!strcmp(argv[i], "--version") || !strcmp(argv[i], "-v")  || !strcmp(argv[i], "-V") || !strcmp(argv[i], "-version"))
     {
       printVersion();
-      print_include_directories();
+      print_include_directories();      
       opt_v = true;
       //exit(0);
       continue;
@@ -816,6 +815,7 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-fprofile-arcs")    ||          
         !strcmp(argv[i], "-ftest-coverage")    ||       
         !strcmp(argv[i], "-ansi_alias")       ||
+        !strcmp(argv[i], "-ffat-lto-objects")       ||        
         !strcmp(argv[i], "-mindirect-branch-register")         
         )
       continue;
@@ -848,7 +848,7 @@ static void parse_args(int argc, char **argv)
 }
 
 
-static FILE *open_file(char *path)
+FILE *open_file(char *path)
 {
   if (!path || strcmp(path, "-") == 0)
     return stdout;
@@ -1124,6 +1124,7 @@ static void cc1(void)
   }
 
  
+
   // Tokenize and parse.
   Token *tok2 = must_tokenize_file(base_file);
   bool isReadLine = false;
@@ -1139,10 +1140,12 @@ static void cc1(void)
       return;
   }
 
-  //print macro in preprocess.c
-  if (isPrintMacro)
-  {
-    return;
+
+  if (isPrintMacro) {
+    print_all_macros();
+    if (ofile)    
+      fclose(ofile);
+    return;      
   }
 
   // If -E is given, print out preprocessed C code as a result.
@@ -1423,10 +1426,14 @@ int main(int argc, char **argv)
       exit(1);
     }
   }
+ //print macro in preprocess.c
+  if (isPrintMacro)
+  {
+    ofile = open_file(opt_o);  
+  }
 
   // init_macros can call tokenize functions moving here to be able to print debug values
   init_macros();
-
 
   if (opt_cc1 && !isCc1input)
   {
@@ -1475,7 +1482,8 @@ int main(int argc, char **argv)
 
     FileType type = get_file_type(input);
 
- 
+   
+
     // Handle .o or .a
     if (type == FILE_OBJ || type == FILE_AR || type == FILE_DSO)
     {

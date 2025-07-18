@@ -11,7 +11,7 @@ void test(const char *fmt, ...) {
   va_start(ap, fmt);
   SmallStruct s = va_arg(ap, SmallStruct);
   printf("s.c = %d\n", s.c);
-  //ASSERT(42, s.c);
+  ASSERT(42, s.c);
 }
 
 int main() {

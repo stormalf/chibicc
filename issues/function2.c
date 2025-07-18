@@ -65,7 +65,7 @@ float struct_test120(
 
 
 typedef struct {
-  char _Alignas(16) c;
+  char _Alignas(1024) c;
 } Aligned1024;
 extern int struct_test131(G g0,G g1,G g2,G g3,G g4,F f0,F f1,F f2,F f3,F f4,F f5,int i0,int i1,...);
 int struct_test130(G g0,G g1,G g2,G g3,G g4,F f0,F f1,F f2,F f3,F f4,F f5,int i0,int i1,...) {
@@ -83,6 +83,105 @@ int struct_test130(G g0,G g1,G g2,G g3,G g4,F f0,F f1,F f2,F f3,F f4,F f5,int i0
   ret += va_arg(ap, long double);
   va_end(ap);
   return ret;
+}
+
+typedef struct {
+  long i,j;
+} DI;
+
+int struct_test141(int cnt,...);
+int struct_test140(int cnt,...) {
+  va_list ap;
+  va_start(ap, cnt);
+  long ret = 0;
+  for (int i = 0; i < cnt; i++) {
+    DI s = va_arg(ap, DI);
+    ret += s.i + s.j;
+  }
+  va_end(ap);
+  return ret;
+}
+
+typedef struct {
+  double d,f;
+} DD;
+
+int struct_test151(int cnt,...);
+int struct_test150(int cnt,...) {
+  va_list ap;
+  va_start(ap, cnt);
+  double ret = 0;
+  for (int i = 0; i < cnt; i++) {
+    DD s = va_arg(ap, DD);
+    ret += s.d + s.f;
+  }
+  va_end(ap);
+  return ret;
+}
+
+typedef struct {
+    long i;
+    double d;
+} DM;
+int struct_test161(int cnt,...);
+int struct_test160(int cnt,...) {
+  va_list ap;
+  va_start(ap, cnt);
+  double ret = 0;
+  for (int i = 0; i < cnt; i++) {
+    DM s = va_arg(ap, DM);
+    ret += s.d + s.i;
+  }
+  va_end(ap);
+  return ret;
+}
+
+typedef struct {
+    union {
+        long double ld[1];
+        long double ld2;
+    } u[1];
+} struct170;
+
+struct170 struct_test171(struct170 t1,...);
+struct170 struct_test170(struct170 t1,...) {
+  va_list ap;
+  va_start(ap, t1);
+  struct170 t = t1;
+
+  t.u[0].ld2 += va_arg(ap, struct170).u[0].ld[0];
+
+  va_end(ap);
+  return t;
+}
+
+typedef union {
+  long double ld;
+  long i;
+} struct180;
+
+struct180 struct_test181(struct180 t1,...);
+struct180 struct_test180(struct180 t1,...) {
+  va_list ap;
+  va_start(ap, t1);
+  struct180 t = t1;
+
+  t.ld += va_arg(ap, struct180).ld;
+
+  va_end(ap);
+  return t;
+}
+
+static int add_all2(int n, ...) {
+  va_list ap;
+  va_start(ap, n);
+
+  int sum = 0;
+  for (int i = 0; i < n; i++)
+    sum += ({ va_arg(ap, int); });
+
+  va_end(ap);
+  return sum;
 }
 
 
@@ -129,36 +228,106 @@ as[1]));
 
 Aligned1024 s = {.c = 77};
 
-  ASSERT(257, struct_test130(
-    g[0], g[1], g[2], g[3], g[4],
-    f[0], f[1], f[2], f[3], f[4], f[5],
-    (int) 11,
-    (int) 22,
-    (long double) 2.3,
-    (Aligned1024) s,
-    (int) 33,
-    (double) 4.5,
-    (double) 5.6,
-    (double) 6.7,
-    (double) 7.8,
-    (Aligned1024) s,
-    (long double) 11.1));
-
   ASSERT(257, struct_test131(
     g[0], g[1], g[2], g[3], g[4],
     f[0], f[1], f[2], f[3], f[4], f[5],
     (int) 11,
     (int) 22,
     (long double) 2.3,
-    (Aligned1024) s,
+    s, // (Aligned1024)
     (int) 33,
     (double) 4.5,
     (double) 5.6,
     (double) 6.7,
     (double) 7.8,
-    (Aligned1024) s,
+    s, // (Aligned1024)
     (long double) 11.1));
-        
+
+  ASSERT(257, struct_test130(
+    g[0], g[1], g[2], g[3], g[4],
+    f[0], f[1], f[2], f[3], f[4], f[5],
+    (int) 11,
+    (int) 22,
+    (long double) 2.3,
+    s, // (Aligned1024)
+    (int) 33,
+    (double) 4.5,
+    (double) 5.6,
+    (double) 6.7,
+    (double) 7.8,
+    s, // (Aligned1024)
+    (long double) 11.1));
+
+    {
+      DI s0 = {2,3};
+      DI s1 = {5,7};
+      DI s2 = {11,13};
+      DI s3 = {17,19};
+      DI s4 = {23,29};
+      DI s5 = {31,37};
+      DI s6 = {41,43};
+      DI s7 = {47,53};
+      DI s8 = {59,61};
+      DI s9 = {67,71};
+      ASSERT(639, struct_test140(10, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9));
+      ASSERT(639, struct_test141(10, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9));
+    }
+    {
+      DD s0 = {2,3};
+      DD s1 = {5,7};
+      DD s2 = {11,13};
+      DD s3 = {17,19};
+      DD s4 = {23,29};
+      DD s5 = {31,37};
+      DD s6 = {41,43};
+      DD s7 = {47,53};
+      DD s8 = {59,61};
+      DD s9 = {67,71};
+      ASSERT(639, struct_test150(10, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9));
+      ASSERT(639, struct_test151(10, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9));
+    }
+
+    {
+      DM s0 = {2,3};
+      DM s1 = {5,7};
+      DM s2 = {11,13};
+      DM s3 = {17,19};
+      DM s4 = {23,29};
+      DM s5 = {31,37};
+      DM s6 = {41,43};
+      DM s7 = {47,53};
+      DM s8 = {59,61};
+      DM s9 = {67,71};
+      ASSERT(639, struct_test160(10, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9));
+      ASSERT(639, struct_test161(10, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9));
+    }
+
+  ASSERT(6, add_all2(3,1,2,3));
+  ASSERT(5, add_all2(4,1,2,3,-1));
+
+    {
+      struct170 t1 = {13};
+      struct170 t2 = {24};
+      ASSERT(37, struct_test170(t1, t2).u[0].ld[0]);
+      ASSERT(37, struct_test171(t1, t2).u[0].ld[0]);
+    }
+    {
+      struct180 t1 = {31};
+      struct180 t2 = {42};
+      ASSERT(73, struct_test180(t1, t2).ld);
+      ASSERT(73, struct_test181(t1, t2).ld);
+    }
+
+  //ASSERT(sizeof(void*), sizeof (main + 1) );
+  ASSERT(sizeof(void*), sizeof ({ main; }) );
+  ASSERT(sizeof(void*), sizeof (0 ? main : main) );
+  ASSERT(sizeof(void*), sizeof (0, main) );
+  //ASSERT(1, sizeof * (main + 1) );
+  ASSERT(1, sizeof * ({ main; }) );
+  ASSERT(1, sizeof * (0 ? main : main) );
+  ASSERT(1, sizeof * (0, main) );
+
+
   printf("OK\n");
 
 }

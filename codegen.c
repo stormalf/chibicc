@@ -23,6 +23,14 @@ extern int64_t eval(Node *node);
 
 static Obj *current_fn;
 
+struct {
+  int *data;
+  int capacity;
+  int depth;
+  int bottom;
+} static tmp_stack;
+
+
 static void gen_expr(Node *node);
 static void gen_stmt(Node *node);
 static void print_offset(Obj *prog);
@@ -61,6 +69,46 @@ static int count(void)
   return i++;
 }
 
+static int push_tmpstack(void) {
+  if (tmp_stack.depth == tmp_stack.capacity) {
+    tmp_stack.capacity += 4;
+    tmp_stack.data = realloc(tmp_stack.data, sizeof(int) * tmp_stack.capacity);
+  }
+
+  tmp_stack.bottom += 8;
+  int offset = -tmp_stack.bottom;
+
+  tmp_stack.data[tmp_stack.depth] = offset;
+  tmp_stack.depth++;
+  return offset;
+}
+
+static int pop_tmpstack(void) {
+  tmp_stack.depth--;
+  return tmp_stack.data[tmp_stack.depth];
+}
+
+static int push_tmp(void) {
+  int offset = push_tmpstack();
+  println("  mov %%rax, %d(%%rbp)", offset);
+  return offset;
+}
+
+static void pop_tmp(char *arg) {
+  int offset = pop_tmpstack();
+  println("  mov %d(%%rbp), %s", offset, arg);
+}
+
+static void push_tmpf(void) {
+  int offset = push_tmpstack();
+  println("  movsd %%xmm0, %d(%%rbp)", offset);
+}
+
+static void pop_tmpf(int reg) {
+  int offset = pop_tmpstack();
+  println("  movsd %d(%%rbp), %%xmm%d", offset, reg);
+}
+
 static void push(void)
 {
   println("  push %%rax");
@@ -76,6 +124,7 @@ static void pop(char *arg)
 static void pushf(void)
 {
   println("  sub $8, %%rsp");
+  //println("  push %%rax");    
   println("  movsd %%xmm0, (%%rsp)");
   depth++;
 }
@@ -94,6 +143,26 @@ int align_to(int n, int align)
 {
   return ((n + align - 1) / align) * align;
 }
+
+static void print_visibility(Obj *obj) {
+  if (obj->visibility) {
+    if (!strcmp(obj->visibility, "hidden")) {
+      println("  .hidden\t%s", obj->name);
+    } else if (!strcmp(obj->visibility, "protected")) {
+      println("  .protected %s", obj->name);
+    } else {
+      println("  .globl\t%s", obj->name);
+    }
+  } else if (obj->is_static) {
+    println("  .local\t%s", obj->name);
+  } else {
+    println("  .globl\t%s", obj->name);
+  }
+  if (obj->is_weak) {
+    println("  .weak\t%s", obj->name);
+  }
+}
+
 
 char *reg_dx(int sz)
 {
@@ -515,7 +584,7 @@ static void load(Type *ty)
 // Store %rax to an address that the stack top is pointing to.
 static void store(Type *ty)
 {
-  pop("%rdi");
+  pop_tmp("%rdi");
 
   switch (ty->kind)
   {
@@ -711,6 +780,34 @@ static void cast(Type *from, Type *to)
     println("  %s", cast_table[t1][t2]);
 }
 
+// Returns true if 'ty' is or contains a pointer (recursively)
+static bool has_pointer(Type *ty) {
+  if (!ty)
+    return false;
+
+  switch (ty->kind) {
+  case TY_PTR:
+    return true;
+
+  case TY_ARRAY:
+    return has_pointer(ty->base);
+
+  case TY_STRUCT:
+  case TY_UNION: {
+    for (Member *mem = ty->members; mem; mem = mem->next) {
+      if (has_pointer(mem->ty))
+        return true;
+    }
+    return false;
+  }
+
+  default:
+    return false;
+  }
+}
+
+
+
 // Structs or unions equal or smaller than 16 bytes are passed
 // using up to two registers.
 //
@@ -783,6 +880,9 @@ static bool pass_by_reg(Type *ty, int gp, int fp) {
     return false;
   if (gp_inc && (gp + gp_inc > GP_MAX))
     return false;
+  
+  if (ty->is_variadic && !has_flonum1(ty) && !has_pointer(ty))
+    return false;
 
   return true;
 }
@@ -800,6 +900,17 @@ static void push_struct(Type *ty)
   gen_mem_copy("%rsp", ty->size);
 }
 
+// static void push_struct(Type *ty) {
+//   int sz = align_to(ty->size, 8);
+//   println("  sub $%d, %%rsp", sz);
+//   depth += sz / 8;
+
+//   for (int i = 0; i < ty->size; i++) {
+//     println("  mov %d(%%rax), %%r10b", i);
+//     println("  mov %%r10b, %d(%%rsp)", i);
+//   }
+// }
+
 static void push_args2(Node *args, bool first_pass)
 {
   if (!args)
@@ -809,16 +920,22 @@ static void push_args2(Node *args, bool first_pass)
   if (first_pass != args->pass_by_stack)
     return;
 
+  Type *ty = args->ty;
+
+  if (ty->is_variadic && ty->align > 16) {  
+    println("  and $-%d, %%rsp", ty->align);  
+  }
+
   gen_expr(args);
 
 
-  switch (args->ty->kind)
+  switch (ty->kind)
   {
   case TY_STRUCT:
   case TY_UNION:
-    if (args->ty->size == 0)
+    if (ty->size == 0)
       return;    
-    push_struct(args->ty);
+    push_struct(ty);
     break;
   case TY_FLOAT:
   case TY_DOUBLE:
@@ -1053,11 +1170,14 @@ static void copy_struct_mem(void)
   println("  mov %%rdi, %%rax");
 }
 
-static void builtin_alloca(void)
+static void builtin_alloca(Node *node)
 {
   // Align size to 16 bytes.
   println("  add $15, %%rdi");
   println("  and $0xfffffff0, %%edi");
+  // int align = node->val > 16 ? node->val : 16;
+  // println("  add $%d, %%rdi", align - 1);
+  // println("  and $-%d, %%rdi", align);
 
   // Shift the temporary area by %rdi.
   println("  mov %d(%%rbp), %%rcx", current_fn->alloca_bottom->offset);
@@ -1082,12 +1202,13 @@ static void builtin_alloca(void)
   println("  mov %%rax, %d(%%rbp)", current_fn->alloca_bottom->offset);
 }
 
+
 //from cosmopolitan
 static void HandleAtomicArithmetic(Node *node, const char *op) {
   gen_expr(node->lhs);
   push();
   gen_expr(node->rhs);
-  pop("%r9");
+  pop_tmp("%r9");
   println("\tmov\t%s,%s", reg_ax(node->ty->size), reg_si(node->ty->size));
   println("\tmov\t(%%r9),%s", reg_ax(node->ty->size));
   println("1:\tmov\t%s,%s", reg_ax(node->ty->size), reg_dx(node->ty->size));
@@ -1219,7 +1340,7 @@ static void gen_expr(Node *node)
     return;
   case ND_ASSIGN:
     gen_addr(node->lhs);
-    push();
+    int tmp_offset = push_tmp();
     gen_expr(node->rhs);
 
     if (node->lhs->kind == ND_MEMBER && node->lhs->member->is_bitfield)
@@ -1242,7 +1363,8 @@ static void gen_expr(Node *node)
       // println("  and $%ld, %%rdi", (1L << mem->bit_width) - 1);
       println("  shl $%d, %%rdi", mem->bit_offset);
 
-      println("  mov (%%rsp), %%rax");
+      //println("  mov (%%rsp), %%rax");
+      println("  mov %d(%%rbp), %%rax", tmp_offset);
       load(mem->ty);
 
       long mask = ((1L << mem->bit_width) - 1) << mem->bit_offset;
@@ -1332,7 +1454,8 @@ static void gen_expr(Node *node)
     {
       gen_expr(node->args);
       println("  mov %%rax, %%rdi");
-      builtin_alloca();
+      //builtin_alloca();
+      builtin_alloca(node);
       return;
     }
 
@@ -1382,7 +1505,9 @@ static void gen_expr(Node *node)
       default:
         if (gp < GP_MAX)
           pop(argreg64[gp++]);
+        break;
       }
+
     }
 
     // Function call
@@ -1436,14 +1561,14 @@ static void gen_expr(Node *node)
   case ND_CAS:
   {
     gen_expr(node->cas_addr);
-    push();
+    push_tmp();
     gen_expr(node->cas_new);
-    push();
+    push_tmp();
     gen_expr(node->cas_old);
     println("  mov %%rax, %%r8");
     load(node->cas_old->ty->base);
-    pop("%rdx"); // new
-    pop("%rdi"); // addr
+    pop_tmp("%rdx"); // new
+    pop_tmp("%rdi"); // addr
 
     int sz = node->cas_addr->ty->base->size;
     println("  lock cmpxchg %s, (%%rdi)", reg_dx(sz));
@@ -1457,11 +1582,11 @@ static void gen_expr(Node *node)
   case ND_CAS_N: {
     // Generate code to evaluate and push the address
     gen_expr(node->cas_addr); // Address
-    push();
+    push_tmp();
     
     // Generate code to evaluate and push the new value
     gen_expr(node->cas_new);  // New value
-    push();
+    push_tmp();
     
     // Generate code to evaluate and push the old value
     gen_expr(node->cas_old);  // Old value
@@ -1470,8 +1595,8 @@ static void gen_expr(Node *node)
     println("  mov %%rax, %%r8"); 
 
     // Pop the new value and address from the stack
-    pop("%rdx"); // New value in rdx
-    pop("%rdi"); // Address in rdi
+    pop_tmp("%rdx"); // New value in rdx
+    pop_tmp("%rdi"); // Address in rdi
 
     // Determine the size of the data type
     int sz = node->cas_addr->ty->base->size;
@@ -1493,47 +1618,47 @@ static void gen_expr(Node *node)
     if (opt_fbuiltin) {
       // Generate code to evaluate the destination address
       gen_expr(node->builtin_dest);
-      push();
+      push_tmp();
       println("  mov %%rax, %%rdi"); // Destination in RDI
 
       // Generate code to evaluate the source address
       gen_expr(node->builtin_src);
-      push();
+      push_tmp();
       println("  mov %%rax, %%rsi"); // Source in RSI
       // Generate code to evaluate the size
       gen_expr(node->builtin_size);
-      push();
+      push_tmp();
       println("  mov %%rax, %%rcx"); // Size in RCX
 
       // Call the memcpy function
       println("  rep movsb");
       // Pop the stack to balance pushes
-      pop("%rcx");
-      pop("%rsi");
-      pop("%rdi");
+      pop_tmp("%rcx");
+      pop_tmp("%rsi");
+      pop_tmp("%rdi");
     }
     else {
       // Handle the case when built-in functions are disabled
       // You might want to call an external `memcpy` function here
     // Generate code for destination pointer
     gen_expr(node->builtin_dest); 
-    push();
+    push_tmp();
     
     // Generate code for source pointer
     gen_expr(node->builtin_src);  
-    push();
+    push_tmp();
     
     // Generate code for size
     gen_expr(node->builtin_size); 
-    push();
+    push_tmp();
 
     // Make the call to memcpy
     println("  call memcpy");
 
     // Restore the stack
-    pop("%rdx"); // size
-    pop("%rsi"); // source
-    pop("%rdi"); // destination
+    pop_tmp("%rdx"); // size
+    pop_tmp("%rsi"); // source
+    pop_tmp("%rdi"); // destination
     
     }
     return;   
@@ -1542,16 +1667,16 @@ static void gen_expr(Node *node)
   case ND_BUILTIN_MEMSET: {
     // Generate code for destination, value, and size
     gen_expr(node->builtin_dest);
-    push();
+    push_tmp();
     gen_expr(node->builtin_val);
-    push();
+    push_tmp();
     gen_expr(node->builtin_size);
-    push();
+    push_tmp();
 
     // Move the arguments to the appropriate registers
-    pop("%rcx");  // size
-    pop("%rsi");  // value
-    pop("%rdi");  // destination
+    pop_tmp("%rcx");  // size
+    pop_tmp("%rsi");  // value
+    pop_tmp("%rdi");  // destination
 
     // Move the value to the lower 8-bit register
     println("  mov %%sil, %%al");  // Move the lower 8 bits of RSI to AL
@@ -1643,9 +1768,9 @@ static void gen_expr(Node *node)
   case ND_EXPECT: {
     // Generate code for the expression we are expecting
     gen_expr(node->lhs); // Generate code for the condition
-    push(); // Save the condition result on stack
+    push_tmp(); // Save the condition result on stack
     gen_expr(node->rhs); // Generate code for the expected value
-    pop("%rdi"); // Restore the condition result from stack into %rdi
+    pop_tmp("%rdi"); // Restore the condition result from stack into %rdi
     // Compare the condition result with the expected value
     println("  cmp %%rax, %%rdi");
     // Move the condition result back to %rax for use in further code
@@ -1680,16 +1805,16 @@ static void gen_expr(Node *node)
 
     // Evaluate left-hand side and right-hand side expressions
     gen_expr(node->lhs);
-    push();
+    push_tmp();
     gen_expr(node->rhs);
-    push();
+    push_tmp();
     gen_expr(node->builtin_dest);
-    push();
+    push_tmp();
 
     // Load values into registers and perform addition
-    pop("%rdx");  // Load address of result variable
-    pop("%rsi");  // Load rhs
-    pop("%rdi");  // Load lhs
+    pop_tmp("%rdx");  // Load address of result variable
+    pop_tmp("%rsi");  // Load rhs
+    pop_tmp("%rdi");  // Load lhs
 
     if (ty->size == 1) {
         println("  mov %%dil, %%al");
@@ -1730,16 +1855,16 @@ static void gen_expr(Node *node)
       ty = ty->base;
     // Evaluate left-hand side and right-hand side expressions
     gen_expr(node->lhs);
-    push();
+    push_tmp();
     gen_expr(node->rhs);
-    push();
+    push_tmp();
     gen_expr(node->builtin_dest);
-    push();
+    push_tmp();
 
     // Load values into registers and perform subtraction
-    pop("%rdx");  // Load address of result variable
-    pop("%rsi");  // Load rhs
-    pop("%rdi");  // Load lhs
+    pop_tmp("%rdx");  // Load address of result variable
+    pop_tmp("%rsi");  // Load rhs
+    pop_tmp("%rdi");  // Load lhs
 
     if (ty->size == 1) {
         println("  mov %%dil, %%al");
@@ -1781,16 +1906,16 @@ static void gen_expr(Node *node)
     int size = ty->size;
     // Evaluate left-hand side and right-hand side expressions
     gen_expr(node->lhs);
-    push();
+    push_tmp();
     gen_expr(node->rhs);
-    push();
+    push_tmp();
     gen_expr(node->builtin_dest);
-    push();
+    push_tmp();
 
     // Load values into registers and perform multiplication
-    pop("%rdx");  // Load address of result variable
-    pop("%rsi");  // Load rhs
-    pop("%rdi");  // Load lhs
+    pop_tmp("%rdx");  // Load address of result variable
+    pop_tmp("%rsi");  // Load rhs
+    pop_tmp("%rdi");  // Load lhs
 
     // Determine the suffix and size for the operations
     if (size == 1) {
@@ -1861,9 +1986,9 @@ static void gen_expr(Node *node)
   case ND_EXCH:
   {
     gen_expr(node->lhs);
-    push();
+    push_tmp();
     gen_expr(node->rhs);
-    pop("%rdi");
+    pop_tmp("%rdi");
 
     int sz = node->lhs->ty->base->size;
     println("  xchg %s, (%%rdi)", reg_ax(sz));
@@ -1872,26 +1997,26 @@ static void gen_expr(Node *node)
   case ND_EXCH_N:
   case ND_TESTANDSET: {
     gen_expr(node->lhs);
-    push();
+    push_tmp();
     gen_expr(node->rhs);
-    pop("%rdi");
+    pop_tmp("%rdi");
     println("\txchg\t%s,(%%rdi)", reg_ax(node->ty->size));
     return;
   }
   case ND_TESTANDSETA: {
     gen_expr(node->lhs);
-    push();
+    push_tmp();
     println("\tmov\t$1,%%eax");
-    pop("%rdi");
+    pop_tmp("%rdi");
     println("\txchg\t%s,(%%rdi)", reg_ax(node->ty->size));
     return;
   }
   case ND_LOAD: {
     gen_expr(node->rhs);
-    push();
+    push_tmp();
     gen_expr(node->lhs);
     println("\tmov\t(%%rax),%s", reg_ax(node->ty->size));
-    pop("%rdi");
+    pop_tmp("%rdi");
     println("\tmov\t%s,(%%rdi)", reg_ax(node->ty->size));
     return;
   }
@@ -1902,9 +2027,9 @@ static void gen_expr(Node *node)
   }
   case ND_STORE: {
     gen_expr(node->lhs);
-    push();
+    push_tmp();
     gen_expr(node->rhs);
-    pop("%rdi");
+    pop_tmp("%rdi");
     println("\tmov\t(%%rax),%s", reg_ax(node->ty->size));
     println("\tmov\t%s,(%%rdi)", reg_ax(node->ty->size));
     if (node->memorder) {
@@ -1914,9 +2039,9 @@ static void gen_expr(Node *node)
   }
   case ND_STORE_N:
     gen_expr(node->lhs);
-    push();
+    push_tmp();
     gen_expr(node->rhs);
-    pop("%rdi");
+    pop_tmp("%rdi");
     println("\tmov\t%s,(%%rdi)", reg_ax(node->ty->size));
     if (node->memorder) {
       println("\tmfence");
@@ -1933,16 +2058,16 @@ static void gen_expr(Node *node)
     return;
   case ND_FETCHADD:
     gen_expr(node->lhs);
-    push();
+    push_tmp();
     gen_expr(node->rhs);
-    pop("%rdi");
+    pop_tmp("%rdi");
     println("\txadd\t%s,(%%rdi)", reg_ax(node->ty->size));
     return;
   case ND_FETCHSUB:
     gen_expr(node->lhs);
-    push();
+    push_tmp();
     gen_expr(node->rhs);
-    pop("%rdi");
+    pop_tmp("%rdi");
     println("\tneg\t%s", reg_ax(node->ty->size));
     println("\txadd\t%s,(%%rdi)", reg_ax(node->ty->size));
     return;
@@ -1957,19 +2082,19 @@ static void gen_expr(Node *node)
     return;
   case ND_SUBFETCH:
     gen_expr(node->lhs);
-    push();
+    push_tmp();
     gen_expr(node->rhs);
-    pop("%rdi");
-    push();
+    pop_tmp("%rdi");
+    push_tmp();
     println("\tneg\t%s", reg_ax(node->ty->size));
     println("\txadd\t%s,(%%rdi)", reg_ax(node->ty->size));
-    pop("%rdi");
+    pop_tmp("%rdi");
     println("\tsub\t%s,%s", reg_di(node->ty->size), reg_ax(node->ty->size));
     return;
   case ND_RELEASE:
     gen_expr(node->lhs);
-    push();
-    pop("%rdi");
+    push_tmp();
+    pop_tmp("%rdi");
     println("\txor\t%%eax,%%eax");
     println("\tmov\t%s,(%%rdi)", reg_ax(node->ty->size));
     return;
@@ -2028,9 +2153,9 @@ static void gen_expr(Node *node)
   case TY_DOUBLE:
   {
     gen_expr(node->rhs);
-    pushf();
+    push_tmpf();
     gen_expr(node->lhs);
-    popf(1);
+    pop_tmpf(1);
 
     char *sz = (node->lhs->ty->kind == TY_FLOAT) ? "ss" : "sd";
 
@@ -2126,9 +2251,9 @@ static void gen_expr(Node *node)
   }
 
   gen_expr(node->rhs);
-  push();
+  push_tmp();
   gen_expr(node->lhs);
-  pop("%rdi");
+  pop_tmp("%rdi");
 
   char *ax, *di, *dx;
 
@@ -2380,13 +2505,13 @@ static void emit_data(Obj *prog)
 
     if (var->is_function || !var->is_definition)
       continue;
-
-    if (var->is_static)
-      println("  .local %s", var->name);
-    else if (var->ty->is_weak)
-      println("  .weak \"%s\"", var->name);
-    else
-      println("  .globl %s", var->name);
+    print_visibility(var);
+    // if (var->is_static)
+    //   println("  .local %s", var->name);
+    // else if (var->ty->is_weak)
+    //   println("  .weak \"%s\"", var->name);
+    // else
+    //   println("  .globl %s", var->name);
 
     int align = (var->ty->kind == TY_ARRAY && var->ty->size >= 16)
                     ? MAX(16, var->align)
@@ -2607,11 +2732,13 @@ static void emit_text(Obj *prog)
 
     
     current_fn = fn;
+    tmp_stack.bottom = fn->lvar_stack_size;
 
     // Prologue
     println("  push %%rbp");
     println("  mov %%rsp, %%rbp");
-    println("  sub $%d, %%rsp", fn->stack_size);
+    long reserved_pos = ftell(output_file);
+    println("                           ");
     println("  mov %%rsp, %d(%%rbp)", fn->alloca_bottom->offset);
 
     // Save arg registers if function is variadic
@@ -2724,6 +2851,14 @@ static void emit_text(Obj *prog)
     // Emit code
     gen_stmt(fn->body);
     assert(depth == 0);
+    assert(tmp_stack.depth == 0);
+
+    long cur_pos = ftell(output_file);
+
+    fseek(output_file, reserved_pos, SEEK_SET);
+    println("  sub $%d, %%rsp", align_to(tmp_stack.bottom, 16));
+
+    fseek(output_file, cur_pos, SEEK_SET);
 
     // [https://www.sigbus.info/n1570#5.1.2.2.3p1] The C spec defines
     // a special rule for the main function. Reaching the end of the
@@ -2773,11 +2908,11 @@ static void print_offset(Obj *prog)
       
     for (Obj *var = fn->params; var; var = var->next)
     {
-      printf("=====fn_name=%s var_name=%s offset=%d stack_size=%d\n", fn->name, var->name, var->offset, fn->stack_size );
+      printf("=====fn_name=%s var_name=%s offset=%d lvar_stack_size=%d\n", fn->name, var->name, var->offset, fn->lvar_stack_size );
     }
     for (Obj *var = fn->locals; var; var = var->next)
     {
-      printf("=====fn_name=%s var_name=%s offset=%d stack_size=%d\n", fn->name, var->name, var->offset, fn->stack_size );
+      printf("=====fn_name=%s var_name=%s offset=%d lvar_stack_size=%d\n", fn->name, var->name, var->offset, fn->lvar_stack_size );
       //update the function name if it's missing
       if (!var->funcname)
         var->funcname = fn->name;
@@ -2799,6 +2934,7 @@ void assign_lvar_offsets(Obj *prog)
     // The first passed-by-stack parameter resides at RBP+16.
     int top = 16;
     int bottom = 0;    
+    int max_align = 8;  
     //trying to fix =====ISS-149 causing segmentation fault when having assembly instructions
     if (fn->alloca_bottom && fn->alloca_bottom->offset)
       bottom =  abs(fn->alloca_bottom->offset);
@@ -2839,6 +2975,8 @@ void assign_lvar_offsets(Obj *prog)
       }
 
       var->pass_by_stack = true; 
+       if (var->ty->align > max_align)
+            max_align = var->ty->align;
 
       top = align_to(top, 8);
       var->offset = top;
@@ -2847,7 +2985,8 @@ void assign_lvar_offsets(Obj *prog)
     }
 
     if (is_variadic)
-      fn->overflow_arg_area = align_to(top, 8);
+      fn->overflow_arg_area = align_to(top, max_align);
+      //fn->overflow_arg_area = align_to(top, 8);
 
     // Assign offsets to pass-by-register parameters and local variables.
     for (Obj *var = fn->locals; var; var = var->next)
@@ -2859,7 +2998,7 @@ void assign_lvar_offsets(Obj *prog)
                           
 
       if (isDebug)                      
-        printf("======bottom=%d kind=%d size=%d fn_bottom=%d fn_stack_size=%d name=%s funcname=%s\n", bottom, var->ty->kind, var->ty->size, fn->alloca_bottom->offset, fn->alloca_bottom->stack_size, var->name, var->funcname);
+        printf("======bottom=%d kind=%d size=%d fn_bottom=%d fn_lvar_stack_size=%d name=%s funcname=%s\n", bottom, var->ty->kind, var->ty->size, fn->alloca_bottom->offset, fn->alloca_bottom->lvar_stack_size, var->name, var->funcname);
       //trying to fix ISS-154 Extended assembly compiled with chibicc failed with ASSERT and works fine without assert function 
       //the bottom value need to take in account the size of parameters and local variables to avoid issue with extended assembly
       if (var->offset) {
@@ -2880,7 +3019,7 @@ void assign_lvar_offsets(Obj *prog)
       
     }
 
-     fn->stack_size = align_to(bottom, 16);
+     fn->lvar_stack_size = align_to(bottom, 16);
 
   }
 }
@@ -3090,5 +3229,4 @@ static void emit_destructors(void) {
   }
   println("  .text");
 }
-
 

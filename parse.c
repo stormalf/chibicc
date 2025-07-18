@@ -5103,6 +5103,7 @@ static Type *struct_decl(Token **rest, Token *tok)
   }
 
   ty->size = align_to(bits, ty->align * 8) / 8;
+
   return ty;
 }
 
@@ -5371,11 +5372,19 @@ static Node *funcall(Token **rest, Token *tok, Node *fn)
     if (!param_ty && !ty->is_variadic)
       error_tok(tok, "%s %d: in funcall : too many arguments", PARSE_C, __LINE__);
 
+    //can't be done later because param_ty will be set to the next value
+    //if param_ty is null it means that it's a variadic argument.
+    if (!param_ty){
+      arg->ty->is_variadic = true;      
+    }
+
+
     if (param_ty)
     {
       if (param_ty->kind != TY_STRUCT && param_ty->kind != TY_UNION)
-        arg = new_cast(arg, param_ty);
+        arg = new_cast(arg, param_ty);      
       param_ty = param_ty->next;
+      
     }
     else if (arg->ty->kind == TY_FLOAT)
     {
@@ -5386,6 +5395,7 @@ static Node *funcall(Token **rest, Token *tok, Node *fn)
         arg = new_cast(arg, pointer_to(arg->ty->base));
       else if (arg->ty->kind == TY_FUNC)
         arg = new_cast(arg, pointer_to(arg->ty));
+
 
     cur = cur->next = arg;
   }
@@ -5523,7 +5533,7 @@ static Node *primary(Token **rest, Token *tok)
       ctx->line_no = __LINE__ + 1;      
       *rest = skip(tok, ")", ctx);
       // Check if the type is incomplete
-      if (ty->kind == TY_UNION && ty->size < 0)
+      if ((ty->kind == TY_UNION || ty->kind == TY_STRUCT) && ty->size < 0)
           error_tok(tok, "%s %d: in primary : incomplete type for sizeof", PARSE_C, __LINE__);
               
       if ((ty->kind == TY_STRUCT || ty->kind == TY_UNION) && ty->has_vla) {
@@ -5557,7 +5567,7 @@ static Node *primary(Token **rest, Token *tok)
 
 
         // Check if the type is incomplete
-        if (node->ty->kind == TY_UNION && node->ty->size < 0)
+        if ((node->ty->kind == TY_UNION || node->ty->kind == TY_STRUCT) && node->ty->size < 0)
           error_tok(tok, "%s %d: in primary : incomplete type for sizeof", PARSE_C, __LINE__);
               
         //trying to fix =====ISS-166 segmentation fault 

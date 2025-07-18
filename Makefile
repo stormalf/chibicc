@@ -55,7 +55,7 @@ test-stage2: $(TESTS:test/%=stage2/test/%)
 
 projects-all: projects projects-oth git
 
-projects-oth: openssl lxc vim nmap curl 
+projects-oth: openssl vim nmap curl 
 
 projects: zlib util-linux nginx
 
@@ -82,8 +82,9 @@ vim:
 	cd ../vim && make clean && CC=chibicc CFLAGS=-fPIC ./configure && make && make test
 
 lxc:
-	cd ../lxc && rm -rf build && CC=chibicc \
-	CFLAGS="-fpic" 	meson build && cd build && meson compile	
+	cd ../lxc && rm -rf build && CC=gcc \
+	CFLAGS="-fpic" 	meson build && cd build && cp /usr/bin/gcc /usr/bin/gcc_old && \
+	cp /usr/local/bin/chibicc /usr/local/gcc && meson compile && cp /usr/bin/gcc_old /usr/bin/gcc
 
 # Misc.
 

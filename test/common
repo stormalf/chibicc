@@ -11,6 +11,7 @@ void assert(int expected, int actual, char *code) {
   }
 }
 
+
 static int static_fn() { return 5; }
 int ext1 = 5;
 int *ext2 = &ext1;
@@ -19,6 +20,7 @@ int ext_fn1(int x) { return x; }
 int ext_fn2(int x) { return x; }
 int common_ext2 = 3;
 static int common_local;
+_Thread_local int extern_tls;
 
 int false_fn() { return 512; }
 int true_fn() { return 513; }
@@ -168,9 +170,9 @@ float struct_test121(
 
 
 typedef struct {
-  char _Alignas(128) c;
-  //char c;
+  char _Alignas(1024) c;
 } Aligned1024;
+
 
 int struct_test131(G g0,G g1,G g2,G g3,G g4,F f0,F f1,F f2,F f3,F f4,F f5, int i0, int i1, ... ) {
   va_list ap;
@@ -187,4 +189,86 @@ int struct_test131(G g0,G g1,G g2,G g3,G g4,F f0,F f1,F f2,F f3,F f4,F f5, int i
   ret += va_arg(ap, long double);
   va_end(ap);
   return ret;
+}
+
+typedef struct {
+  long i,j;
+} DI;
+
+int struct_test141(int cnt,...) {
+  va_list ap;
+  va_start(ap, cnt);
+  long ret = 0;
+  for (int i = 0; i < cnt; i++) {
+    DI s = va_arg(ap, DI);
+    ret += s.i + s.j;
+  }
+  va_end(ap);
+  return ret;
+}
+
+typedef struct {
+  double d,f;
+} DD;
+
+int struct_test151(int cnt,...) {
+  va_list ap;
+  va_start(ap, cnt);
+  double ret = 0;
+  for (int i = 0; i < cnt; i++) {
+    DD s = va_arg(ap, DD);
+    ret += s.d + s.f;
+  }
+  va_end(ap);
+  return ret;
+}
+
+typedef struct {
+    long i;
+    double d;
+} DM;
+int struct_test161(int cnt,...) {
+  va_list ap;
+  va_start(ap, cnt);
+  double ret = 0;
+  for (int i = 0; i < cnt; i++) {
+    DM s = va_arg(ap, DM);
+    ret += s.d + s.i;
+  }
+  va_end(ap);
+  return ret;
+}
+
+typedef struct {
+    union {
+        long double ld[1];
+        long double ld2;
+    } u[1];
+} struct170;
+
+struct170 struct_test171(struct170 t1,...) {
+  va_list ap;
+  va_start(ap, t1);
+  struct170 t = t1;
+
+  t.u[0].ld2 += va_arg(ap, struct170).u[0].ld[0];
+
+  va_end(ap);
+  return t;
+}
+
+typedef union {
+  long double ld;
+  long i;
+} struct180;
+
+struct180 struct_test181(struct180 t1,...) {
+  va_list ap;
+  va_start(ap, t1);
+  struct180 t = t1;
+
+  t.ld += va_arg(ap, struct180).ld;
+
+  va_end(ap);
+  return t;
 }

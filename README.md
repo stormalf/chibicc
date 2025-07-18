@@ -362,9 +362,10 @@ util-linux : https://github.com/util-linux/util-linux.git
     make check-programs
     cd tests
     run.sh 
-    ---------------------------------------------------------------------
-      All 280 tests PASSED
-    ---------------------------------------------------------------------
+
+    1 tests of 280 FAILED
+
+      lscpu/lscpu
         
 
 nginx: https://github.com/nginx/nginx.git 
@@ -453,7 +454,7 @@ nmap : https://github.com/nmap/nmap
 
 ## meson
 
-to be able to use meson with chibicc (meson doesn't know chibicc compiler), I changed the detect.py file in /usr/lib/python3/dist-packages/mesonbuild/compilers/detect.py to add support for chibicc. After that I can now using meson for some projects that are configured to use it.
+to be able to use meson with chibicc (meson doesn't know chibicc compiler), the trick is to use gcc to configure and after replacing renaming gcc in gcc_old and renaming gcc into chibicc before doing meson compile.
 
 lxc: https://github.com/lxc/lxc.git
 
@@ -503,6 +504,7 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
     openssh-portable regress test failed
     curl 2 tests ko
     memcached test stuck after test n° 16
+    util-linux 
 
 
 ## debug
@@ -533,7 +535,9 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.23    Activating GNUC macros. Fixing issue with curl test due to duplicate "case" value not detected. Fixing issue with va_area (reporting changes from @fuhsnn in commit 174da1a). Fixing some issues with variadic functions (but still some test cases not working). Fixing issue with __builtin_alloca. Fixing issue with extended assembly during util-linux. Fixing issue with attribute pre/post enum identifier. Fixing regression issue with semun. Reporting some fix from slimcc (@fuhsnn) concerning float.h.
+1.0.23    Activating GNUC macros. Fixing issue with curl test due to duplicate "case" value not detected. Fixing issue with va_area (reporting changes from @fuhsnn in commit 174da1a). Fixing some issues with variadic functions (but still some test cases not working). Fixing issue with __builtin_alloca. Fixing issue with extended assembly during util-linux. Fixing issue with attribute pre/post enum identifier. Fixing regression issue with semun. Reporting some fix from slimcc (@fuhsnn) concerning float.h. Reporting 
+temp stack from widcc/slimcc (@fuhsnn) but still an issue with some structs in variadic with alignment > 16.
+
 
 ## old release notes
 

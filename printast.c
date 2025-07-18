@@ -278,7 +278,7 @@ static void PrintObj(FILE *f, int l, const char *s, Obj *o) {
             "is_force_align_arg_pointer: ", o->is_force_align_arg_pointer);
   PrintBool(f, l + 2,
             "is_no_caller_saved_registers: ", o->is_no_caller_saved_registers);
-  PrintInt(f, l + 2, "stack_size: ", o->stack_size);
+  PrintInt(f, l + 2, "stack_size: ", o->lvar_stack_size);
   PrintObj(f, l + 2, "params: ", o->params);
   PrintNode(f, l + 2, "body: ", o->body);
   PrintObj(f, l + 2, "locals: ", o->locals);
