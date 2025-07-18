@@ -1243,12 +1243,6 @@ static Token *preprocess2(Token *tok)
     }
     if (equal(tok, "define"))
     {
-      // if (isPrintMacro) {
-      //   //printf("%s\n", tok->len, tok->loc);
-      //   Macro *m = find_macro(tok->next);
-      //   if (m)
-      //     print_macro(m);
-      // }
       read_macro_definition(&tok, tok->next);
 
       continue;
@@ -1395,14 +1389,7 @@ void define_macro(char *name, char *buf)
   if (strncmp(name, "__has_attribute", 15))
   {
     Token *tok = tokenize(new_file("<built-in>", 1, buf));
-    add_macro(name, true, tok);
-    if (isPrintMacro) {
-      printf("#define %s %s\n", name, buf);
-    if (!ofile)
-      error("%s: %s:%d: error: in print_macro  :  error during opening file ", PREPROCESS_C, __FILE__, __LINE__);
-    fprintf(ofile, "#define %s %s\n", name, buf);
-
-    }
+    add_macro(name, true, tok);    
   }
 }
 void undef_macro(char *name)
