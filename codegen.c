@@ -1173,11 +1173,11 @@ static void copy_struct_mem(void)
 static void builtin_alloca(Node *node)
 {
   // Align size to 16 bytes.
-  println("  add $15, %%rdi");
-  println("  and $0xfffffff0, %%edi");
-  // int align = node->val > 16 ? node->val : 16;
-  // println("  add $%d, %%rdi", align - 1);
-  // println("  and $-%d, %%rdi", align);
+  // println("  add $15, %%rdi");
+  // println("  and $0xfffffff0, %%edi");
+  int align = node->val > 16 ? node->val : 16;
+  println("  add $%d, %%rdi", align - 1);
+  println("  and $-%d, %%rdi", align);
 
   // Shift the temporary area by %rdi.
   println("  mov %d(%%rbp), %%rcx", current_fn->alloca_bottom->offset);
@@ -1351,16 +1351,20 @@ static void gen_expr(Node *node)
       // from memory and merge it with a new value.
       Member *mem = node->lhs->member;
       println("  mov %%rax, %%rdi");
-      if (mem->bit_width >= 32)
-      {
-        println("  mov $%ld, %%rax", (1L << mem->bit_width) - 1);
-        println("  and %%rax, %%rdi");
-      }
+      // if (mem->bit_width >= 32)
+      // {
+      //   println("  mov $%ld, %%rax", (1L << mem->bit_width) - 1);
+      //   println("  and %%rax, %%rdi");
+      // }
+      // else
+      // {
+      //   println("  and $%ld, %%rdi", (1L << mem->bit_width) - 1);
+      // }
+      if (mem->bit_width == 32)
+        println("  and $0xffffffff, %%edi");
       else
-      {
         println("  and $%ld, %%rdi", (1L << mem->bit_width) - 1);
-      }
-      // println("  and $%ld, %%rdi", (1L << mem->bit_width) - 1);
+
       println("  shl $%d, %%rdi", mem->bit_offset);
 
       //println("  mov (%%rsp), %%rax");

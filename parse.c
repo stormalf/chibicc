@@ -3885,17 +3885,6 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
     }
   }
 
-  // if (idx == 0)
-  // {
-  //   Member *mem = calloc(1, sizeof(Member));
-  //   if (mem == NULL)
-  //     error("%s: %s:%d: error: in struct_members : mem is null", PARSE_C, __FILE__, __LINE__);
-  //   mem->ty = ty_char;
-  //   mem->idx = 0;
-  //   mem->align = mem->ty->align;
-  //   cur = cur->next = mem;
-  // }
-
   // If the last element is an array of incomplete type, it's
   // called a "flexible array member". It should behave as if
   // if were a zero-sized array.
@@ -5069,6 +5058,8 @@ static Type *struct_decl(Token **rest, Token *tok)
 
   // Assign offsets within the struct to members.
   int bits = 0;
+  Member head = {0};
+  Member *cur = &head;
 
   for (Member *mem = ty->members; mem; mem = mem->next)
   {
@@ -5076,7 +5067,9 @@ static Type *struct_decl(Token **rest, Token *tok)
     {
       // Zero-width anonymous bitfield has a special meaning.
       // It affects only alignment.
-      bits = align_to(bits, mem->ty->size * 8);
+      bits = align_to(bits, mem->ty->size * 8);   
+      cur = cur->next = mem;
+      continue;   
     }
     else if (mem->is_bitfield)
     {
@@ -5086,7 +5079,7 @@ static Type *struct_decl(Token **rest, Token *tok)
 
       mem->offset = align_down(bits / 8, sz);
       mem->bit_offset = bits % (sz * 8);
-      bits += mem->bit_width;
+      bits += mem->bit_width;      
     }
     else
     {
@@ -5096,12 +5089,18 @@ static Type *struct_decl(Token **rest, Token *tok)
       bits += mem->ty->size * 8;
     }
 
+    if (!mem->name && mem->is_bitfield) {
+      cur->next = NULL;
+      continue;
+    }
         //from COSMOPOLITAN adding is_aligned
     //if (!ty->is_packed && ty->align < mem->align)
-    if (!ty->is_packed && !ty->is_aligned &&ty->align < mem->align)
+    if (!ty->is_packed && !ty->is_aligned && ty->align < mem->align)
       ty->align = mem->align;
+    cur = cur->next = mem;
   }
 
+  ty->members = head.next;
   ty->size = align_to(bits, ty->align * 8) / 8;
 
   return ty;
@@ -5533,8 +5532,6 @@ static Node *primary(Token **rest, Token *tok)
       ctx->line_no = __LINE__ + 1;      
       *rest = skip(tok, ")", ctx);
       // Check if the type is incomplete
-      if ((ty->kind == TY_UNION || ty->kind == TY_STRUCT) && ty->size < 0)
-          error_tok(tok, "%s %d: in primary : incomplete type for sizeof", PARSE_C, __LINE__);
               
       if ((ty->kind == TY_STRUCT || ty->kind == TY_UNION) && ty->has_vla) {
         if (!ty->vla_size) {
@@ -5544,7 +5541,8 @@ static Node *primary(Token **rest, Token *tok)
           }
           return new_var_node(ty->vla_size, tok);
         }
-        
+
+
       if (ty->kind == TY_STRUCT && ty->is_flexible) {
           Member *mem = ty->members;
           while (mem->next)
@@ -5553,7 +5551,10 @@ static Node *primary(Token **rest, Token *tok)
             return new_ulong((ty->size - mem->ty->size), tok);
       }
 
+      if ((ty->kind == TY_UNION || ty->kind == TY_STRUCT) && ty->size < 0)
+          error_tok(tok, "%s %d: in primary : incomplete type for sizeof", PARSE_C, __LINE__);
 
+        
       if (ty->kind == TY_VLA) {
         if (ty->vla_size)
           return new_var_node(ty->vla_size, tok);
