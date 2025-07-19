@@ -90,6 +90,7 @@ bool is_bitfield(Node *node) {
 //   return false;
 // }
 
+
 int int_rank(Type *t) {
   switch (t->kind) {
     case TY_ENUM:

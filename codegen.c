@@ -683,7 +683,7 @@ static char i32u8[] = "movzbl %al, %eax";
 static char i32i16[] = "movswl %ax, %eax";
 static char i32u16[] = "movzwl %ax, %eax";
 static char i32f32[] = "cvtsi2ssl %eax, %xmm0";
-static char i32i64[] = "movsxd %eax, %rax";
+static char i32i64[] = "movslq %eax, %rax";
 static char i32f64[] = "cvtsi2sdl %eax, %xmm0";
 static char i32f80[] = "mov %eax, -4(%rsp); fildl -4(%rsp)";
 
@@ -715,7 +715,10 @@ static char f32u16[] = "cvttss2sil %xmm0, %eax; movzwl %ax, %eax";
 static char f32i32[] = "cvttss2sil %xmm0, %eax";
 static char f32u32[] = "cvttss2siq %xmm0, %rax";
 static char f32i64[] = "cvttss2siq %xmm0, %rax";
-static char f32u64[] = "cvttss2siq %xmm0, %rax";
+static char f32u64[] =
+  "cvttss2siq %xmm0, %rcx; movq %rcx, %rdx; movl $0x5F000000, %eax; "
+  "movd %eax, %xmm1; subss %xmm1, %xmm0; cvttss2siq %xmm0, %rax; "
+  "sarq $63, %rdx; andq %rdx, %rax; orq %rcx, %rax;";
 static char f32f64[] = "cvtss2sd %xmm0, %xmm0";
 static char f32f80[] = "movss %xmm0, -4(%rsp); flds -4(%rsp)";
 
@@ -726,7 +729,10 @@ static char f64u16[] = "cvttsd2sil %xmm0, %eax; movzwl %ax, %eax";
 static char f64i32[] = "cvttsd2sil %xmm0, %eax";
 static char f64u32[] = "cvttsd2siq %xmm0, %rax";
 static char f64i64[] = "cvttsd2siq %xmm0, %rax";
-static char f64u64[] = "cvttsd2siq %xmm0, %rax";
+static char f64u64[] =
+  "cvttsd2siq %xmm0, %rcx; movq %rcx, %rdx; mov $0x43e0000000000000, %rax; "
+  "movq %rax, %xmm1; subsd %xmm1, %xmm0; cvttsd2siq %xmm0, %rax; "
+  "sarq $63, %rdx; andq %rdx, %rax; orq %rcx, %rax";
 static char f64f32[] = "cvtsd2ss %xmm0, %xmm0";
 static char f64f80[] = "movsd %xmm0, -8(%rsp); fldl -8(%rsp)";
 
@@ -743,7 +749,12 @@ static char f80u16[] = FROM_F80_1 "fistpl" FROM_F80_2 "movswl -24(%rsp), %eax";
 static char f80i32[] = FROM_F80_1 "fistpl" FROM_F80_2 "mov -24(%rsp), %eax";
 static char f80u32[] = FROM_F80_1 "fistpl" FROM_F80_2 "mov -24(%rsp), %eax";
 static char f80i64[] = FROM_F80_1 "fistpq" FROM_F80_2 "mov -24(%rsp), %rax";
-static char f80u64[] = FROM_F80_1 "fistpq" FROM_F80_2 "mov -24(%rsp), %rax";
+static char f80u64[] =
+  "movl $0x5f000000, -4(%rsp); flds -4(%rsp); fucomi %st(1), %st; setbe %al;"
+  "fldz; fcmovbe %st(1), %st; fstp %st(1); fsubrp %st, %st(1); fnstcw -12(%rsp);"
+  "movzwl -12(%rsp), %ecx; orl $3072, %ecx; movw %cx, -10(%rsp); fldcw -10(%rsp);"
+  "fistpll -8(%rsp); fldcw -12(%rsp); shlq $63, %rax; xorq -8(%rsp), %rax;";
+
 static char f80f32[] = "fstps -8(%rsp); movss -8(%rsp), %xmm0";
 static char f80f64[] = "fstpl -8(%rsp); movsd -8(%rsp), %xmm0";
 
@@ -1460,6 +1471,7 @@ static void gen_expr(Node *node)
 
     int stack_args = push_args(node);
     gen_expr(node->lhs);
+    
 
     int gp = 0, fp = 0;
 
