@@ -1,4 +1,3 @@
-#include <stdio.h>
 #include "test.h"
 
 typedef struct pg_atomic_flag {

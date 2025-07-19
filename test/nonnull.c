@@ -1,5 +1,5 @@
 #include <stddef.h>
-#include <stdio.h>
+
 #include "test.h"
 
 // Declarations + definitions so linker can find them

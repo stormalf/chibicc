@@ -1,4 +1,4 @@
-#include <stdio.h>
+
 #include "test.h"
 int fun( int n, int a[n]) {
     int res = 0;

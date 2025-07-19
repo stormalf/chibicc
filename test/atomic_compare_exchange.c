@@ -1,4 +1,4 @@
-#include <stdio.h>
+
 #include <stdbool.h>
 #include "test.h"
 typedef struct pg_atomic_uint32 {

@@ -1,4 +1,4 @@
-#include <stdio.h>
+
 #include "test.h"
 typedef struct pg_atomic_uint32 {
     volatile unsigned int value;

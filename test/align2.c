@@ -1,4 +1,4 @@
-#include <stdio.h>
+//#include <stdio.h>
 #include <stdarg.h>
 #include "test.h"
 
@@ -26,9 +26,9 @@ void test_big_align(int named_int, struct big128 s128, struct big1024 s1024, int
         printf("variadic double[%d] = %f\n", i, val);
         ASSERT(i+1, val);
     }
-    struct big1024 s1024 = va_arg(ap, struct big1024);
-    printf("struct big1024 align = %zu size = %zu\n", __alignof__(s1024), sizeof(s1024));
-    ASSERT(1024, sizeof(s1024));
+    struct big1024 s1024b = va_arg(ap, struct big1024);
+    printf("struct big1024 align = %zu size = %zu\n", __alignof__(s1024b), sizeof(s1024b));
+    ASSERT(1024, sizeof(s1024b));
     va_end(ap);
 }
 

@@ -1,4 +1,4 @@
-#include <stdio.h>
+
 #include "test.h"
 
 #if defined(__x86_64__) || defined(__i386__)

@@ -1,3 +1,4 @@
+#include "test.h"
 typedef unsigned char u8;
 typedef struct {} empty_s;
 struct contains_empty {

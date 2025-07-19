@@ -1,4 +1,4 @@
-#include <stdio.h>
+#include "test.h"
 
 static inline void pg_spin_delay_impl(void) {
     __asm__ __volatile__("rep; nop");

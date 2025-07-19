@@ -1,5 +1,5 @@
 #include <sys/sem.h>
-#include <stdio.h>
+#include <stddef.h>
 #include <errno.h>
 #include <string.h>
 #include "test.h"

@@ -1,5 +1,5 @@
 #include "test.h"
-#include <stdio.h>
+
 #define THREAD_LOCAL static __thread
 int uuid_generate_time_generic() {
 	const int			cs_min = 1<<6;

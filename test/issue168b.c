@@ -1,4 +1,4 @@
-#include <stdio.h>
+
 #include "test.h"
 
 int add2(int x, int y)

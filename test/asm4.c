@@ -1,5 +1,5 @@
 #include <stdint.h>
-#include <stdio.h>
+#include "test.h"
 int main() {
     uint64_t msr;
 
@@ -11,6 +11,7 @@ int main() {
             : "rdx");
 
     printf("msr: %lx\n", msr);
+    ASSERT(1, msr != 0); 
 
 
     // Do other work...
@@ -24,6 +25,7 @@ int main() {
             : "rdx");
 
     printf("msr: %lx\n", msr);
+    ASSERT(1, msr != 0); 
 
     return 0;
 }

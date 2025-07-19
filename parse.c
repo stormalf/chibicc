@@ -184,7 +184,7 @@ static Node *parse_typedef(Token **rest, Token *tok, Type *basety);
 static bool is_function(Token *tok);
 static Token *function(Token *tok, Type *basety, VarAttr *attr);
 static Token *global_variable(Token *tok, Type *basety, VarAttr *attr);
-static void initializer3(Token **rest, Token *tok, Initializer *init);
+//static void initializer3(Token **rest, Token *tok, Initializer *init);
 //from COSMOPOLITAN adding attribute for variable
 static Token *thing_attributes(Token *tok, void *arg);
 static Token *attribute_list(Token *tok, void *arg, Token *(*f)(Token *, void *));
@@ -1372,6 +1372,10 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
     if (attr && attr->is_static)
     {
       // static local variable
+
+      if (ty->kind == TY_VLA)
+        error_tok(tok, "%s %d: in declaration: variable length arrays cannot be 'static'", PARSE_C, __LINE__);
+
       Obj *var = new_anon_gvar(ty);
       //from @fuhsnn fix Handle local static _Thread_local
       var->is_tls = attr->is_tls;
@@ -1865,87 +1869,118 @@ static void struct_initializer2(Token **rest, Token *tok, Initializer *init, Mem
   *rest = tok;
 }
 
-static void union_initializer(Token **rest, Token *tok, Initializer *init)
-{
+// static void union_initializer(Token **rest, Token *tok, Initializer *init)
+// {
 
-  // Unlike structs, union initializers take only one initializer,
-  // and that initializes the first union member by default.
-  // You can initialize other member using a designated initializer.
-  if (equal(tok, "{") && equal(tok->next, "."))
-  {
-    Member *mem = struct_designator(&tok, tok->next, init->ty);
-    init->mem = mem;
-    designation(&tok, tok, init->children[mem->idx]);
-    // fix issue 113, gcc allows to have a struct finishing with ,}
-    if (equal(tok, ",") && equal(tok->next, "}"))
-      consume(&tok, tok, ",");
-    // issue #110 when union with ,
-    while (!equal(tok, "}"))
-    {
-      Member *mem = struct_designator(&tok, tok->next, init->ty);
-      init->mem = mem;
-      designation(&tok, tok, init->children[mem->idx]);
-      // fix issue 108, gcc allows to have a struct finishing with ,}
-      if (equal(tok, ",") && equal(tok->next, "}"))
-        consume(&tok, tok, ",");
-    }
-    ctx->filename = PARSE_C;
-    ctx->funcname = "union_initializer";        
-    ctx->line_no = __LINE__ + 1;         
-    *rest = skip(tok, "}", ctx);
-    return;
-  }
+//   // Unlike structs, union initializers take only one initializer,
+//   // and that initializes the first union member by default.
+//   // You can initialize other member using a designated initializer.
+//   if (equal(tok, "{") && equal(tok->next, "."))
+//   {
+//     Member *mem = struct_designator(&tok, tok->next, init->ty);
+//     init->mem = mem;
+//     designation(&tok, tok, init->children[mem->idx]);
+//     // fix issue 113, gcc allows to have a struct finishing with ,}
+//     if (equal(tok, ",") && equal(tok->next, "}"))
+//       consume(&tok, tok, ",");
+//     // issue #110 when union with ,
+//     while (!equal(tok, "}"))
+//     {
+//       Member *mem = struct_designator(&tok, tok->next, init->ty);
+//       init->mem = mem;
+//       designation(&tok, tok, init->children[mem->idx]);
+//       // fix issue 108, gcc allows to have a struct finishing with ,}
+//       if (equal(tok, ",") && equal(tok->next, "}"))
+//         consume(&tok, tok, ",");
+//     }
+//     ctx->filename = PARSE_C;
+//     ctx->funcname = "union_initializer";        
+//     ctx->line_no = __LINE__ + 1;         
+//     *rest = skip(tok, "}", ctx);
+//     return;
+//   }
 
-  init->mem = init->ty->members;
+//   init->mem = init->ty->members;
 
-  if (equal(tok, "{"))
-  {
-    //trying to fix =====ISS-157 about union empty initializer like union string_value lval = {}, rval = {};
-    if (equal(tok->next, "}")) {
-      consume(&tok, tok, "{");
+//   if (equal(tok, "{"))
+//   {
+//     //trying to fix =====ISS-157 about union empty initializer like union string_value lval = {}, rval = {};
+//     if (equal(tok->next, "}")) {
+//       consume(&tok, tok, "{");
+//       ctx->filename = PARSE_C;
+//       ctx->funcname = "union_initializer";        
+//       ctx->line_no = __LINE__ + 1;   
+//       *rest = skip(tok, "}", ctx);
+//       return;
+//     }
+//     initializer2(&tok, tok->next, init->children[0]);
+//     if (equal(tok, ",") && equal(tok->next, "}"))
+//       consume(&tok, tok, ",");
+//     ctx->filename = PARSE_C;
+//     ctx->funcname = "union_initializer";        
+//     ctx->line_no = __LINE__ + 1;   
+//     *rest = skip(tok, "}", ctx);
+//   }
+//   else if (equal(tok->next, "->"))
+//   {
+    
+//     initializer3(rest, tok, init->children[0]);
+//     return;
+//   }
+//   else
+//   {
+//     initializer2(rest, tok, init->children[0]);
+//   }
+// }
+
+static void union_initializer(Token **rest, Token *tok, Initializer *init) {
+  ctx->filename = PARSE_C;
+  ctx->funcname = "union_initializer";        
+  ctx->line_no = __LINE__ + 1;  
+  tok = skip(tok, "{", ctx);
+
+  bool first = true;
+
+  for (; !consume_end(rest, tok); first = false) {
+    if (!first) {
       ctx->filename = PARSE_C;
       ctx->funcname = "union_initializer";        
-      ctx->line_no = __LINE__ + 1;   
-      *rest = skip(tok, "}", ctx);
-      return;
+      ctx->line_no = __LINE__ + 1; 
+      tok = skip(tok, ",", ctx);
     }
-    initializer2(&tok, tok->next, init->children[0]);
-    if (equal(tok, ",") && equal(tok->next, "}"))
-      consume(&tok, tok, ",");
-    ctx->filename = PARSE_C;
-    ctx->funcname = "union_initializer";        
-    ctx->line_no = __LINE__ + 1;   
-    *rest = skip(tok, "}", ctx);
-  }
-  else if (equal(tok->next, "->"))
-  {
-    
-    initializer3(rest, tok, init->children[0]);
-    return;
-  }
-  else
-  {
-    initializer2(rest, tok, init->children[0]);
+
+    if (equal(tok, ".")) {
+      init->mem = struct_designator(&tok, tok, init->ty);
+      designation(&tok, tok, init->children[init->mem->idx]);
+      continue;
+    }
+
+    if (first && init->ty->members) {
+      init->mem = init->ty->members;
+      initializer2(&tok, tok, init->children[0]);
+    } else {
+      tok = skip_excess_element(tok);
+    }
   }
 }
 
-// initializer = struct-> union
-static void initializer3(Token **rest, Token *tok, Initializer *init)
-{
-  //ISS-154 the initial error seems more in the init->ty->kind returning TY_CHAR instead of TY_STRUCT (need to check why)
-  if (init->ty->kind == TY_STRUCT || init->ty->kind == TY_UNION || init->ty->kind == TY_CHAR)
-  {
-    Node *expr = assign(rest, tok);
-    add_type(expr);
-    if (expr->ty->kind == TY_STRUCT || expr->ty->kind == TY_UNION)
-    {
-      init->expr = expr;
-      return;
-    }
+// // initializer = struct-> union
+// static void initializer3(Token **rest, Token *tok, Initializer *init)
+// {
+//   //ISS-154 the initial error seems more in the init->ty->kind returning TY_CHAR instead of TY_STRUCT (need to check why)
+//   if (init->ty->kind == TY_STRUCT || init->ty->kind == TY_UNION || init->ty->kind == TY_CHAR)
+//   {
+//     Node *expr = assign(rest, tok);
+//     add_type(expr);
+//     if (expr->ty->kind == TY_STRUCT || expr->ty->kind == TY_UNION)
+//     {
+//       init->expr = expr;
+//       return;
+//     }
 
-    init->expr = assign(rest, tok);
-  }
-}
+//     init->expr = assign(rest, tok);
+//   }
+// }
 
 // initializer = string-initializer | array-initializer
 //             | struct-initializer | union-initializer
@@ -5121,17 +5156,28 @@ static Type *union_decl(Token **rest, Token *tok)
   if (no_list)
     return ty;
 
-  // If union, we don't have to assign offsets because they
-  // are already initialized to zero. We need to compute the
-  // alignment and the size though.
+ Member head = {0};
+  Member *cur = &head;
   for (Member *mem = ty->members; mem; mem = mem->next) {
+    int sz;
+    if (mem->is_bitfield)
+      sz = align_to(mem->bit_width, 8) / 8;
+    else
+      sz = mem->ty->size;
+
+    ty->size = MAX(ty->size, sz);
+
+    if (!mem->name && mem->is_bitfield) {
+      cur->next = NULL;
+      continue;
+    }
+
     if (ty->align < mem->align)
       ty->align = mem->align;
 
-    if (ty->size < mem->ty->size)
-      ty->size = mem->ty->size;
+    cur = cur->next = mem;
   }
-  
+  ty->members = head.next;
   ty->size = align_to(ty->size, ty->align);
   return ty;
 }

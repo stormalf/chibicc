@@ -1,5 +1,4 @@
 #include <stdint.h>
-#include <stdio.h>
 #include "test.h"
 void DoCheck(uint32_t dwSomeValue)
 {

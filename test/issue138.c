@@ -1,6 +1,6 @@
 #include <bits/types.h>
 #include <stdint.h>
-#include <stdio.h>
+
 #include "test.h"
 #define NGX_SMP_LOCK
 #define ngx_inline inline

@@ -1,4 +1,4 @@
-#include <stdio.h>
+
 #include "test.h"
 
 #if !1u - 1 > 0

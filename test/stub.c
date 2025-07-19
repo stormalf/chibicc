@@ -1,4 +1,4 @@
-#include <stdio.h>
+#include "test.h"
 
 // Declare a stub function
 void my_function() __attribute__((__stub__));

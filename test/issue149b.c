@@ -1,5 +1,5 @@
 
-#include <stdio.h>
+#include "test.h"
 #ifdef _WIN32
 #include <limits.h>
 #include <intrin.h>

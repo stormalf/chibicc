@@ -1,7 +1,7 @@
 #include <stdbool.h>
 #include <asm-generic/int-ll64.h>
 #include <errno.h>
-#include <stdio.h>
+
 #include "test.h"
 static inline int lxc_caps_down(void)
 {

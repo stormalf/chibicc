@@ -1,4 +1,4 @@
-#include <stdio.h>
+
 #include "test.h"
 
 float add_float2(float x, float y) {

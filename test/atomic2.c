@@ -1,4 +1,4 @@
-#include <stdio.h>
+
 #include <stdatomic.h>
 #include "test.h"
 

@@ -1,4 +1,4 @@
-#include <stdio.h>
+#include "test.h"
 
 #define VLC_USED  __attribute__((warn_unused_result))
 

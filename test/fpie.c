@@ -1,4 +1,4 @@
-#include <stdio.h>
+
 #include "test.h"
 char message[] = "Hello World";
 int main(int argc, char *argv[], char *envp[])

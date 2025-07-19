@@ -3,7 +3,8 @@
 
 #include <stdarg.h>
 #include <stdint.h>
-#include <stdio.h>
+#include <stddef.h>
+#include "test.h"
 
 
 struct hfa21 { double a; } hfa21 = { 21.1 };

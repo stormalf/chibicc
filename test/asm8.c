@@ -1,4 +1,4 @@
-#include <stdio.h>
+
 #include "test.h"
 
 void add_and_subtract(int a, int b, int *sum, int *diff) {

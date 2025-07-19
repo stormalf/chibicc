@@ -1,4 +1,4 @@
-#include <stdio.h>
+
 #include "test.h"
 long double x = 0;
 

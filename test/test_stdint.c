@@ -1,7 +1,7 @@
 #include <byteswap.h>
 #include <stdint.h>
 #include <float.h>
-#include <stdio.h>
+#include <stddef.h>
 #include "test.h"
 
 uint16_t swap_bytes(uint16_t x) {

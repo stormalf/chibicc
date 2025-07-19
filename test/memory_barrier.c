@@ -1,4 +1,4 @@
-#include <stdio.h>
+
 #include "test.h"
 static inline void pg_memory_barrier_impl(void) {
 #if defined(__i386__) || defined(__i386)

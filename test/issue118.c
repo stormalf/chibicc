@@ -1,5 +1,5 @@
 #include <stddef.h>
-#include <stdio.h>
+#include "test.h"
 #define NID_sha1 64
 #define NID_sha224 675
 #define NID_sha256 672

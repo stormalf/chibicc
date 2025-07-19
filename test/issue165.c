@@ -1,4 +1,4 @@
-#include <stdio.h>
+//#include <stdio.h>
 #include "test.h"
 #define BT_OFFSET_MASK                             0x0FFF
 #define INDEX_MAX_KEYS		32

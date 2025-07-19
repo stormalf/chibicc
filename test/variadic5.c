@@ -1,5 +1,6 @@
-#include <stdio.h>
+#include <stddef.h>
 #include <stdarg.h>
+#include "test.h"
 
 typedef struct {
   char _Alignas(1024) pad;

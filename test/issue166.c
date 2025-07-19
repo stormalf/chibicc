@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <stddef.h>
-#include <stdio.h>
+
 #include "test.h"
 
 #define MAXIMUM_ALIGNOF 8

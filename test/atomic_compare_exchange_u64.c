@@ -1,5 +1,5 @@
 #ifdef __x86_64__
-#include <stdio.h>
+
 #include <stdbool.h>
 #include "test.h"
 

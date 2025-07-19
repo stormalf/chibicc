@@ -1,5 +1,4 @@
 #include <stdbool.h>
-#include <stdio.h>
 #include "test.h"
 #define N 4
 

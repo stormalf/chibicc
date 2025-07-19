@@ -1,4 +1,4 @@
-#include <stdio.h>
+#include "test.h"
 
 /* This test is a snippet from the J interpreter */
 

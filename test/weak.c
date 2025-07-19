@@ -1,4 +1,4 @@
-#include <stdio.h>
+#include "test.h"
 
 // Define the original function `lxc_attach_main`.
 int lxc_attach_main(int argc, char *argv[]) {

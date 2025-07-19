@@ -1,5 +1,5 @@
 #include <stdarg.h>
-#include <stdio.h>
+#include <stddef.h>
 #include "test.h"
 
 typedef struct {

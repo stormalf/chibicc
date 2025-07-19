@@ -1,4 +1,4 @@
-#include <stdio.h>
+
 #include "test.h"
 
 static void GetCPUInfo(int cpu_info[4], int info_type) {

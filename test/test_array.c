@@ -1,4 +1,4 @@
-#include <stdio.h>
+#include <stddef.h>
 #include "test.h"
 int main(int argc, char** argv) {
     char _Alignas(1024) arr1[11];

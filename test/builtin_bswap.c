@@ -1,4 +1,4 @@
-#include <stdio.h>
+
 #include <stdint.h>
 #include <inttypes.h>  // For PRIx macros
 #include "test.h"

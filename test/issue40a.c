@@ -1,4 +1,4 @@
-#include <stdio.h>
+
 #include "test.h"
 // fails silently (pointer to VLA)
 
