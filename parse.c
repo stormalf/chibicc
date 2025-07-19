@@ -2615,11 +2615,11 @@ static Node *stmt(Token **rest, Token *tok)
     node->lhs = stmt(rest, tok);
     }
     //duplicate case value detection
-    for (Node *c = current_switch->case_next; c; c = c->case_next)
-    {
-      if (!(end < c->begin || begin > c->end))
-        error_tok(tok, "%s %d: in stmt : duplicated case value or overlapping range", PARSE_C, __LINE__);
-    }
+    // for (Node *c = current_switch->case_next; c; c = c->case_next)
+    // {
+    //   if (!(end < c->begin || begin > c->end))
+    //     error_tok(tok, "%s %d: in stmt : duplicated case value or overlapping range", PARSE_C, __LINE__);
+    // }
     node->begin = begin;
     node->end = end;
     node->case_next = current_switch->case_next;
