@@ -169,7 +169,7 @@ Type *pointer_to(Type *base)
   ty->base = base;
   ty->is_pointer = true;
   ty->pointertype = base;
-  ty->is_unsigned = true;
+  ty->is_unsigned = true;  
   return ty;
 }
 
@@ -193,7 +193,7 @@ Type *array_of(Type *base, int len)
   Type *ty = new_type(TY_ARRAY, base->size * len, base->align);
   ty->base = base;
   ty->array_len = len;  
-  ty->has_vla = false; 
+  ty->has_vla = false;     
   return ty;
 }
 

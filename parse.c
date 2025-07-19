@@ -149,7 +149,7 @@ static void initializer2(Token **rest, Token *tok, Initializer *init);
 static Initializer *initializer(Token **rest, Token *tok, Type *ty, Type **new_ty);
 static Node *lvar_initializer(Token **rest, Token *tok, Obj *var);
 static void gvar_initializer(Token **rest, Token *tok, Obj *var);
-static Node *compound_stmt(Token **rest, Token *tok);
+static Node *compound_stmt(Token **rest, Token *tok, Node **last);
 static Node *stmt(Token **rest, Token *tok);
 static Node *expr_stmt(Token **rest, Token *tok);
 static Node *expr(Token **rest, Token *tok);
@@ -2827,21 +2827,22 @@ static Node *stmt(Token **rest, Token *tok)
     return node;
   }
   if (equal(tok, "{")) 
-    return compound_stmt(rest, tok->next);
+    return compound_stmt(rest, tok->next, NULL);
 
 
   return expr_stmt(rest, tok);
 }
 
 // compound-stmt = (typedef | declaration | stmt)* "}"
-static Node *compound_stmt(Token **rest, Token *tok)
+static Node *compound_stmt(Token **rest, Token *tok, Node **last) 
 {
   Node *node = new_node(ND_BLOCK, tok);
-  Node head = {};
+  Node head = {0};
   Node *cur = &head;
   enter_scope();
 
-  while (!equal(tok, "}"))
+  //while (!equal(tok, "}"))
+  for (; !equal(tok, "}"); add_type(cur)) 
   {
     VarAttr attr = {};
     tok = attribute_list(tok, &attr, thing_attributes);
@@ -2879,6 +2880,9 @@ static Node *compound_stmt(Token **rest, Token *tok)
     }
     add_type(cur);
   }
+  
+  if (last)
+    *last = cur;
 
   leave_scope();
 
@@ -2928,7 +2932,11 @@ static Node *compound_stmt2(Token **rest, Token *tok)
         tok = global_variable(tok, basety, &attr);
         continue;
       }
-      cur = cur->next = declaration(&tok, tok, basety, &attr);
+      //cur = cur->next = declaration(&tok, tok, basety, &attr);
+      Node *expr = declaration(&tok, tok, basety, &attr);
+      if (expr)
+        cur = cur->next = new_unary(ND_EXPR_STMT, expr, tok);
+      continue;
     }
     else
     {
@@ -2937,7 +2945,7 @@ static Node *compound_stmt2(Token **rest, Token *tok)
       tok = attribute_list(tok, &attr, thing_attributes);
       cur = cur->next = stmt(&tok, tok);
     }
-    add_type(cur);
+    //add_type(cur);
   }
 
   leave_scope();
@@ -3114,6 +3122,14 @@ static int64_t eval2(Node *node, char ***label)
   case ND_LABEL_VAL:
     *label = &node->unique_label;
     return 0;
+  // fixing issue #115
+  // case ND_DEREF:
+  //   return eval2(node->lhs, label);
+  //from @fuhsnn eval2():Evaluate ND_DEREF for TY_ARRAY
+  case ND_DEREF:
+    if (node->ty->kind != TY_ARRAY)
+      error_tok(node->tok, "%s:%d: in eval2 : not a compile-time constant node->ty->kind=%d", PARSE_C, __LINE__, node->ty->kind);
+    return eval2(node->lhs, label);    
   case ND_MEMBER:
     
     if (!label) {
@@ -3138,14 +3154,7 @@ static int64_t eval2(Node *node, char ***label)
     return 0;
   case ND_NUM:
     return node->val;
-    // fixing issue #115
-  // case ND_DEREF:
-  //   return eval2(node->lhs, label);
-  //from @fuhsnn eval2():Evaluate ND_DEREF for TY_ARRAY
-  case ND_DEREF:
-    if (node->ty->kind != TY_ARRAY)
-      error_tok(node->tok, "%s:%d: in eval2 : not a compile-time constant node->ty->kind=%d", PARSE_C, __LINE__, node->ty->kind);
-    return eval2(node->lhs, label);
+
   }
   error_tok(node->tok, "%s %d: in eval2 : not a compile-time constant3", PARSE_C, __LINE__);
 }
@@ -5439,7 +5448,7 @@ static Node *funcall(Token **rest, Token *tok, Node *fn)
       // If parameter type is omitted (e.g. in "..."), float
       // arguments are promoted to double.
       arg = new_cast(arg, ty_double);
-    } else if (is_array(arg->ty))
+    } else if (is_array(arg->ty) || arg->ty->kind == TY_VLA)
         arg = new_cast(arg, pointer_to(arg->ty->base));
       else if (arg->ty->kind == TY_FUNC)
         arg = new_cast(arg, pointer_to(arg->ty));
@@ -5551,8 +5560,24 @@ static Node *primary(Token **rest, Token *tok)
   if ((equal(tok, "(") && equal(tok->next, "{")))
   {
     // This is a GNU statement expresssion.
-    Node *node = new_node(ND_STMT_EXPR, tok);
-    node->body = compound_stmt(&tok, tok->next->next)->body;
+    // Node *node = new_node(ND_STMT_EXPR, tok);
+    // node->body = compound_stmt(&tok, tok->next->next)->body;
+    Node *stmt = NULL;
+    Node *node = compound_stmt(&tok, tok->next->next, &stmt);
+    node->kind = ND_STMT_EXPR;
+
+    if (stmt && stmt->kind == ND_EXPR_STMT) {
+      Node *expr = stmt->lhs;
+      if (expr->ty->kind == TY_STRUCT || expr->ty->kind == TY_UNION) {
+        Obj *var = new_lvar("", expr->ty, NULL);
+        expr = new_binary(ND_ASSIGN, new_var_node(var, tok),
+                          expr, tok);
+        add_type(expr);
+        stmt->lhs = expr;
+      } else if (expr->ty->kind == TY_ARRAY || expr->ty->kind == TY_VLA) {
+        stmt->lhs = new_cast(expr, pointer_to(expr->ty->base));
+      }
+    }
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";        
     ctx->line_no = __LINE__ + 1;          
@@ -5573,15 +5598,14 @@ static Node *primary(Token **rest, Token *tok)
   if (equal(tok, "sizeof"))
   {
     Type *ty;
-
+    
     if (equal(tok->next, "(") && is_typename(tok->next->next)) {      
       ty = typename(&tok, tok->next->next);
       ctx->filename = PARSE_C;
       ctx->funcname = "primary";        
       ctx->line_no = __LINE__ + 1;      
       *rest = skip(tok, ")", ctx);
-      // Check if the type is incomplete
-              
+
       if ((ty->kind == TY_STRUCT || ty->kind == TY_UNION) && ty->has_vla) {
         if (!ty->vla_size) {
           Node *lhs = compute_vla_size(ty, tok); 
@@ -6694,7 +6718,7 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   // [GNU] __FUNCTION__ is yet another name of __func__.
   push_scope("__FUNCTION__")->var =
       new_string_literal(fn->name, array_of(ty_char, strlen(fn->name) + 1));
-  fn->body = compound_stmt(&tok, tok);
+  fn->body = compound_stmt(&tok, tok, NULL);
   fn->locals = locals;  
   order = 0;
   leave_scope();
