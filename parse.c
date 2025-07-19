@@ -150,7 +150,7 @@ static Initializer *initializer(Token **rest, Token *tok, Type *ty, Type **new_t
 static Node *lvar_initializer(Token **rest, Token *tok, Obj *var);
 static void gvar_initializer(Token **rest, Token *tok, Obj *var);
 static Node *compound_stmt(Token **rest, Token *tok, Node **last);
-static Node *stmt(Token **rest, Token *tok);
+static Node *stmt(Token **rest, Token *tok, bool chained);
 static Node *expr_stmt(Token **rest, Token *tok);
 static Node *expr(Token **rest, Token *tok);
 //static int64_t eval(Node *node);
@@ -2454,7 +2454,7 @@ static Node *asm_stmt(Token **rest, Token *tok)
 //      | ident ":" stmt
 //      | "{" compound-stmt
 //      | expr-stmt
-static Node *stmt(Token **rest, Token *tok)
+static Node *stmt(Token **rest, Token *tok, bool chained) 
 {
 
 
@@ -2516,12 +2516,13 @@ static Node *stmt(Token **rest, Token *tok)
     ctx->funcname = "stmt";        
     ctx->line_no = __LINE__ + 1;         
     tok = skip(tok, ")", ctx);
-    node->then = stmt(&tok, tok);
+    node->then = stmt(&tok, tok, true);
+
     if (isDotfile && dotf != NULL)
       fprintf(dotf, "%s%d -> %s%d\n", nodekind2str(node->kind), node->unique_number, nodekind2str(node->then->kind), node->then->unique_number);
     if (equal(tok, "else"))
-    {
-      node->els = stmt(&tok, tok->next);
+    {      
+      node->els = stmt(&tok, tok->next, true);
       if (isDotfile && dotf != NULL)
         fprintf(dotf, "%s%d -> %s%d\n", nodekind2str(node->kind), node->unique_number, nodekind2str(node->els->kind), node->els->unique_number);
     }
@@ -2557,7 +2558,8 @@ static Node *stmt(Token **rest, Token *tok)
     char *brk = brk_label;
     brk_label = node->brk_label = new_unique_name();
 
-    node->then = stmt(rest, tok);
+    
+    node->then = stmt(rest, tok, true);
 
     current_switch = sw;
     brk_label = brk;
@@ -2609,11 +2611,14 @@ static Node *stmt(Token **rest, Token *tok)
     VarAttr attr = {};
     tok = attribute_list(tok, &attr, thing_attributes);
     node->label = new_unique_name();
-    if (is_typename(tok)) {
-      node->lhs = compound_stmt2(rest, tok);
-    } else {
-    node->lhs = stmt(rest, tok);
-    }
+    if (chained) {
+      if (is_typename(tok)) {
+        node->lhs = compound_stmt2(rest, tok);
+      } else {
+      node->lhs = stmt(rest, tok, true);
+      }
+    } else
+      *rest = tok;
     //duplicate case value detection
     // for (Node *c = current_switch->case_next; c; c = c->case_next)
     // {
@@ -2638,11 +2643,15 @@ static Node *stmt(Token **rest, Token *tok)
     ctx->line_no = __LINE__ + 1;        
     tok = skip(tok->next, ":", ctx);
     node->label = new_unique_name();
-    if (is_typename(tok)) {
-      node->lhs = compound_stmt2(rest, tok);
-    } else {
-    node->lhs = stmt(rest, tok);
-    }
+    if (chained) {
+      if (is_typename(tok)) {
+        node->lhs = compound_stmt2(rest, tok);
+      } else {
+      node->lhs = stmt(rest, tok, true);
+      }
+    } else
+      *rest = tok;
+
     current_switch->default_case = node;
     return node;
   }
@@ -2695,7 +2704,7 @@ static Node *stmt(Token **rest, Token *tok)
     ctx->line_no = __LINE__ + 1;    
     tok = skip(tok, ")", ctx);
 
-    node->then = stmt(rest, tok);
+    node->then = stmt(rest, tok, true);
 
     if (isDotfile && dotf != NULL)
       fprintf(dotf, "%s%d -> %s%d\n", nodekind2str(node->kind), node->unique_number, nodekind2str(node->then->kind), node->then->unique_number);
@@ -2723,7 +2732,7 @@ static Node *stmt(Token **rest, Token *tok)
     brk_label = node->brk_label = new_unique_name();
     cont_label = node->cont_label = new_unique_name();
 
-    node->then = stmt(rest, tok);
+    node->then = stmt(rest, tok, true);
     brk_label = brk;
     cont_label = cont;
     return node;
@@ -2738,7 +2747,7 @@ static Node *stmt(Token **rest, Token *tok)
     brk_label = node->brk_label = new_unique_name();
     cont_label = node->cont_label = new_unique_name();
 
-    node->then = stmt(&tok, tok->next);
+    node->then = stmt(&tok, tok->next, true);
     brk_label = brk;
     cont_label = cont;
     ctx->filename = PARSE_C;
@@ -2821,7 +2830,13 @@ static Node *stmt(Token **rest, Token *tok)
     Node *node = new_node(ND_LABEL, tok);
     node->label = strndup(tok->loc, tok->len);
     node->unique_label = new_unique_name();
-    node->lhs = stmt(rest, tok->next->next);
+
+    //node->lhs = stmt(rest, tok->next->next);
+    tok = tok->next->next;
+    if (chained)
+      node->lhs = stmt(rest, tok, true);
+    else
+      *rest = tok;
     node->goto_next = labels;
     labels = node;
     return node;
@@ -2876,7 +2891,7 @@ static Node *compound_stmt(Token **rest, Token *tok, Node **last)
       //case specific of fallthrough
       //VarAttr attr= {};
       tok = attribute_list(tok, &attr, thing_attributes);
-      cur = cur->next = stmt(&tok, tok);
+      cur = cur->next = stmt(&tok, tok, false);
     }
     add_type(cur);
   }
@@ -2943,7 +2958,7 @@ static Node *compound_stmt2(Token **rest, Token *tok)
       //case specific of fallthrough
       //VarAttr attr= {};
       tok = attribute_list(tok, &attr, thing_attributes);
-      cur = cur->next = stmt(&tok, tok);
+      cur = cur->next = stmt(&tok, tok, false);
     }
     //add_type(cur);
   }

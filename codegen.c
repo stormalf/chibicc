@@ -2454,7 +2454,8 @@ static void gen_stmt(Node *node)
     return;
   case ND_CASE:
     println("%s:", node->label);
-    gen_stmt(node->lhs);
+    if (node->lhs)
+      gen_stmt(node->lhs);
     return;
   case ND_BLOCK:
     for (Node *n = node->body; n; n = n->next)
@@ -2469,7 +2470,8 @@ static void gen_stmt(Node *node)
     return;
   case ND_LABEL:
     println("%s:", node->unique_label);
-    gen_stmt(node->lhs);
+    if (node->lhs)    
+      gen_stmt(node->lhs);
     return;
   case ND_RETURN:
     if (node->lhs)
