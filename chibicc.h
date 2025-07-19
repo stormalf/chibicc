@@ -26,6 +26,7 @@
 
 
 #define ROUNDUP(X, K)   (((X) + (K) - 1) & -(K))
+#define ROUNDDOWN(X, K) ((X) & -(K))
 
 #ifndef __has_attribute
 #define __has_attribute(x) __GCC4_has_attribute_##x

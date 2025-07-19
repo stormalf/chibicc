@@ -144,7 +144,7 @@ static Type *type_suffix(Token **rest, Token *tok, Type *ty);
 static Type *declarator(Token **rest, Token *tok, Type *ty);
 static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr);
 static void array_initializer2(Token **rest, Token *tok, Initializer *init, int i);
-static void struct_initializer2(Token **rest, Token *tok, Initializer *init, Member *mem);
+static void struct_initializer2(Token **rest, Token *tok, Initializer *init, Member *mem, bool post_desig);
 static void initializer2(Token **rest, Token *tok, Initializer *init);
 static Initializer *initializer(Token **rest, Token *tok, Type *ty, Type **new_ty);
 static Node *lvar_initializer(Token **rest, Token *tok, Obj *var);
@@ -1626,7 +1626,7 @@ static void designation(Token **rest, Token *tok, Initializer *init)
     designation(&tok, tok, init->children[mem->idx]);
     init->expr = NULL;
 
-    struct_initializer2(rest, tok, init, mem->next);
+    struct_initializer2(rest, tok, init, mem->next, true);
     return;
   }
 
@@ -1826,14 +1826,14 @@ static void struct_initializer1(Token **rest, Token *tok, Initializer *init)
 }
 
 // struct-initializer2 = initializer ("," initializer)*
-static void struct_initializer2(Token **rest, Token *tok, Initializer *init, Member *mem)
+static void struct_initializer2(Token **rest, Token *tok, Initializer *init, Member *mem, bool post_desig)
 {
   bool first = true;
   for (; mem && !is_end(tok); mem = mem->next)
   {
     Token *start = tok;
 
-    if (!first) {
+    if (!first || post_desig) {
       ctx->filename = PARSE_C;
       ctx->funcname = "struct_initializer2";        
       ctx->line_no = __LINE__ + 1;         
@@ -2000,7 +2000,7 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
     if (!init->ty->members)
       error_tok(tok, "%s: %s:%d: error: in initializer2 :  initializer for empty aggregate requires explicit braces", PARSE_C, __FILE__, __LINE__);
 
-    struct_initializer2(rest, tok, init, init->ty->members);
+    struct_initializer2(rest, tok, init, init->ty->members, false);
     return;
   }
 
@@ -2529,11 +2529,12 @@ static Node *stmt(Token **rest, Token *tok)
   {
     if (!current_switch)
       error_tok(tok, "%s %d: in stmt : stray case", PARSE_C, __LINE__);
-
+  
     Node *node = new_node(ND_CASE, tok);
 
     int begin = const_expr(&tok, tok->next);
     int end;
+    
 
     if (equal(tok, "..."))
     {
@@ -3147,7 +3148,7 @@ static bool is_const_expr(Node *node)
   case ND_CAST:
     return is_const_expr(node->lhs) || node->lhs->kind == ND_NUM || node->lhs->kind == ND_CAST;
   case ND_NUM:
-    return true;
+    return true;  
   }
   
   return false;
@@ -4979,7 +4980,7 @@ static Token *thing_attributes(Token *tok, void *arg) {
 
 
 // struct-union-decl = attribute? ident? ("{" struct-members)?
-static Type *struct_union_decl(Token **rest, Token *tok)
+static Type *struct_union_decl(Token **rest, Token *tok, bool *no_list)
 {
   Type *ty = struct_type();
   tok = attribute_list(tok, ty, type_attributes);
@@ -4998,6 +4999,7 @@ static Type *struct_union_decl(Token **rest, Token *tok)
   if (tag && !equal(tok, "{"))
   {
     *rest = tok;
+    *no_list = true;
 
     Type *ty2 = find_tag(tag);
     if (ty2)
@@ -5022,11 +5024,6 @@ static Type *struct_union_decl(Token **rest, Token *tok)
     // If this is a redefinition, overwrite a previous type.
     // Otherwise, register the struct type.
     Type *ty2 = hashmap_get2(&scope->tags, tag->loc, tag->len);
-    // if (ty2)
-    // {
-    //   *ty2 = *ty;
-    //   return ty2;
-    // }
     if (ty2) {
       for (Type *t = ty2; t; t = t->decl_next) {
         t->size = ty->size;
@@ -5048,13 +5045,15 @@ static Type *struct_union_decl(Token **rest, Token *tok)
 // struct-decl = struct-union-decl
 static Type *struct_decl(Token **rest, Token *tok)
 {
-  Type *ty = struct_union_decl(rest, tok);
+  bool no_list = false;
+  Type *ty = struct_union_decl(rest, tok, &no_list);
   tok = attribute_list(tok, ty, type_attributes);
   ty->kind = TY_STRUCT;
 
-  if (ty->size < 0)
+  if (no_list)
     return ty;
-  ty->size = MAX(ty->size, 0);
+
+  //ty->size = MAX(ty->size, 0);
 
   // Assign offsets within the struct to members.
   int bits = 0;
@@ -5068,8 +5067,6 @@ static Type *struct_decl(Token **rest, Token *tok)
       // Zero-width anonymous bitfield has a special meaning.
       // It affects only alignment.
       bits = align_to(bits, mem->ty->size * 8);   
-      cur = cur->next = mem;
-      continue;   
     }
     else if (mem->is_bitfield)
     {
@@ -5079,7 +5076,7 @@ static Type *struct_decl(Token **rest, Token *tok)
 
       mem->offset = align_down(bits / 8, sz);
       mem->bit_offset = bits % (sz * 8);
-      bits += mem->bit_width;      
+      bits += mem->bit_width;            
     }
     else
     {
@@ -5089,12 +5086,14 @@ static Type *struct_decl(Token **rest, Token *tok)
       bits += mem->ty->size * 8;
     }
 
-    if (!mem->name && mem->is_bitfield) {
-      cur->next = NULL;
-      continue;
+    
+    if (!mem->name && mem->is_bitfield ) {         
+        cur->next = NULL;        
+        continue;            
     }
-        //from COSMOPOLITAN adding is_aligned
-    //if (!ty->is_packed && ty->align < mem->align)
+
+
+    //from COSMOPOLITAN adding is_aligned
     if (!ty->is_packed && !ty->is_aligned && ty->align < mem->align)
       ty->align = mem->align;
     cur = cur->next = mem;
@@ -5109,37 +5108,24 @@ static Type *struct_decl(Token **rest, Token *tok)
 // union-decl = struct-union-decl
 static Type *union_decl(Token **rest, Token *tok)
 {
-  Type *ty = struct_union_decl(rest, tok);
+  bool no_list = false;
+  Type *ty = struct_union_decl(rest, tok, &no_list);
   ty->kind = TY_UNION;
 
-  if (ty->size < 0)
+  if (no_list)
     return ty;
 
   // If union, we don't have to assign offsets because they
   // are already initialized to zero. We need to compute the
   // alignment and the size though.
-  Member head = {0};
-  Member *cur = &head;
   for (Member *mem = ty->members; mem; mem = mem->next) {
-    int sz;
-    if (mem->is_bitfield)
-      sz = align_to(mem->bit_width, 8) / 8;
-    else
-      sz = mem->ty->size;
-
-    ty->size = MAX(ty->size, sz);
-
-    if (!mem->name && mem->is_bitfield) {
-      cur->next = NULL;
-      continue;
-    }
-
     if (ty->align < mem->align)
       ty->align = mem->align;
 
-    cur = cur->next = mem;
+    if (ty->size < mem->ty->size)
+      ty->size = mem->ty->size;
   }
-  ty->members = head.next;
+  
   ty->size = align_to(ty->size, ty->align);
   return ty;
 }
@@ -5151,10 +5137,6 @@ static Member *get_struct_member(Type *ty, Token *tok)
   for (Member *mem = ty->members; mem; mem = mem->next)
   {
     // Anonymous struct member
-    // if ((mem->ty->kind == TY_STRUCT || mem->ty->kind == TY_UNION) &&
-    //     !mem->name) {
-    //   if (get_struct_member(mem->ty, tok))
-    //     return mem;
     if (!mem->name)
     {
 

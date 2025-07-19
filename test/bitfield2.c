@@ -17,6 +17,12 @@ struct Fields {
 
   ASSERT(4, sizeof(struct Fields));
   ASSERT(4, _Alignof(struct Fields));
+  printf("s1.a=%d s1.b=%d s1.c=%d s1.d=%d s1.e=%d\n", s1.a, s1.b, s1.c, s1.d, s1.e);
+  struct Fields s11 = {1,6,1,4,3};
+  unsigned char *p = (unsigned char*)&s11;
+  printf("%02x %02x\n", p[0], p[1]);
+
+
   ASSERT(0, memcmp(&(int){14689}, &s1, 2));
   ASSERT(0, memcmp(&(int){6433}, &s2, 2));
   ASSERT(1, s1.a);
@@ -30,7 +36,7 @@ struct Fields {
   ASSERT(1, s2.c);
   ASSERT(4, s2.d);
   ASSERT(1, s2.e);
-}
+ }
 
 int struct_init(void) {
   struct M m = {11,22};
