@@ -17,12 +17,6 @@ struct Fields {
 
   ASSERT(4, sizeof(struct Fields));
   ASSERT(4, _Alignof(struct Fields));
-  printf("s1.a=%d s1.b=%d s1.c=%d s1.d=%d s1.e=%d\n", s1.a, s1.b, s1.c, s1.d, s1.e);
-  struct Fields s11 = {1,6,1,4,3};
-  unsigned char *p = (unsigned char*)&s11;
-  printf("%02x %02x\n", p[0], p[1]);
-
-
   ASSERT(0, memcmp(&(int){14689}, &s1, 2));
   ASSERT(0, memcmp(&(int){6433}, &s2, 2));
   ASSERT(1, s1.a);
@@ -36,7 +30,7 @@ struct Fields {
   ASSERT(1, s2.c);
   ASSERT(4, s2.d);
   ASSERT(1, s2.e);
- }
+}
 
 int struct_init(void) {
   struct M m = {11,22};
@@ -65,11 +59,59 @@ int struct_init(void) {
   ASSERT(33, ({ struct { int :1; int a; int :1; struct { int :1; int b; int:1; int c; }; } s = {11,22,33}; s.c; }));
 }
 
+void union_init(void) {
+
+  ASSERT(33, ({ union { int :1,:1; int a; } s = {33}; s.a; }));
+  ASSERT(33, ({ struct { union { int :1,:1; }; int a;} s = {{23},33}; s.a;}));
+  ASSERT(33, ({ struct { union { int :1,:1; }; int a;} s = {{23},33}; s.a;}));
+
+  ASSERT(11, ({ struct { int a; union { int :1,:7; }; int b; } s = {11,{},33}; s.a; }));
+  ASSERT(33, ({ struct { int a; union { int :1,:7; }; int b; } s = {11,{},33}; s.b; }));
+
+  ASSERT(11, ({ union { struct { int a,:1,b,:1,:1,c,:1; }; } s = {.a=11,22,33}; s.a; }));
+  ASSERT(22, ({ union { struct { int a,:1,b,:1,:1,c,:1; }; } s = {.a=11,22,33}; s.b; }));
+  ASSERT(33, ({ union { struct { int a,:1,b,:1,:1,c,:1; }; } s = {.a=11,22,33}; s.c; }));
+
+
+  ASSERT(22, ({ union { struct { int a, :1; int b, :1, :1; int c, :1; }; } s = {.a=11,22,33}; s.b; }));
+
+  ASSERT(0, ({ union { union { }; int a; } s = {{}}; s.a; }));
+
+  ASSERT(0, ({ union { struct { int :1,:1; }; int a; } s = {{}}; s.a; }));
+
+  ASSERT(22, ({ struct { int a; union { int:1; int b; }; } s = {11,22}; s.b; }));
+}
+
+int assign_expr(void) {
+    struct {
+        int i : 2;
+        _Bool b : 1;
+        unsigned j : 2;
+    } s = {.b = 1};
+    int x = s.i = -5;
+    int y = s.j = 5;
+    ASSERT(-1, x);
+    ASSERT(1, y);
+    x = s.i += -5;
+    y = s.j += 5;
+    int z = s.b >>= 1;
+
+    ASSERT(-2, x);
+    ASSERT(2, y);
+    ASSERT(0, (s.b >>= 1));
+}
+
+int large_field(void) {
+  ASSERT(1, ({ struct { unsigned long long i: 56; } s = {.i = 0xFFFFFFFFFFFFFFFF }; s.i == 0xFFFFFFFFFFFFFF; }) );
+
+}
 
 int main(void) {
   bitextract();
   struct_init();
-
+  union_init();
+  assign_expr();
+  large_field();
 
   printf("OK\n");
 

@@ -2169,8 +2169,10 @@ static Node *create_lvar_init(Initializer *init, Type *ty, InitDesg *desg, Token
     return node;
   }
 
-  if (ty->kind == TY_UNION)
+  if (ty->kind == TY_UNION )
   {
+    if (!init->mem)
+      return new_node(ND_NULL_EXPR, tok);
     Member *mem = init->mem ? init->mem : ty->members;
     InitDesg desg2 = {desg, 0, mem};
     return create_lvar_init(init->children[mem->idx], mem->ty, &desg2, tok);
