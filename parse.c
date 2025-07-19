@@ -2571,23 +2571,36 @@ static Node *stmt(Token **rest, Token *tok)
   
     Node *node = new_node(ND_CASE, tok);
 
-    int begin = const_expr(&tok, tok->next);
-    int end;
+    int64_t begin = const_expr(&tok, tok->next);
+    int64_t end;
     
+    add_type(current_switch->cond);
 
     if (equal(tok, "..."))
     {
       // [GNU] Case ranges, e.g. "case 1 ... 5:"
       end = const_expr(&tok, tok->next);
-      if (end < begin)
-        error_tok(tok, "%s %d: in stmt : empty case range specified", PARSE_C, __LINE__);
+      // if (end < begin)
+      //   error_tok(tok, "%s %d: in stmt : empty case range specified", PARSE_C, __LINE__);
     }
     else
     {
       end = begin;
     }
 
+    if (current_switch->cond->ty->size == 4) {
+      if (!current_switch->cond->ty->is_unsigned) {
+        begin = (int32_t) begin;
+        end = (int32_t) end;
+      } else {
+        begin = (uint32_t) begin;
+        end = (uint32_t) end;
+      }
+    }
 
+    if ((!current_switch->cond->ty->is_unsigned && (end < begin)) ||
+      ((current_switch->cond->ty->is_unsigned && ((uint64_t)end < begin))))
+      error_tok(tok, "%s %d: in stmt : empty case range specified", PARSE_C, __LINE__);
 
     ctx->filename = PARSE_C;
     ctx->funcname = "stmt";        
