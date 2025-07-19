@@ -180,7 +180,7 @@ static Node *postfix(Token **rest, Token *tok);
 static Node *funcall(Token **rest, Token *tok, Node *node);
 static Node *unary(Token **rest, Token *tok);
 static Node *primary(Token **rest, Token *tok);
-static Token *parse_typedef(Token *tok, Type *basety);
+static Node *parse_typedef(Token **rest, Token *tok, Type *basety);
 static bool is_function(Token *tok);
 static Token *function(Token *tok, Type *basety, VarAttr *attr);
 static Token *global_variable(Token *tok, Type *basety, VarAttr *attr);
@@ -1266,6 +1266,8 @@ static Type *typeof_specifier(Token **rest, Token *tok)
 static Node *compute_vla_size(Type *ty, Token *tok)
 {
   Node *node = new_node(ND_NULL_EXPR, tok);
+  if (ty->vla_size)
+    return node;
 
   if (ty == ty->base)
     return node;
@@ -2799,7 +2801,9 @@ static Node *compound_stmt(Token **rest, Token *tok)
       Type *basety = declspec(&tok, tok, &attr);
       if (attr.is_typedef)
       {
-        tok = parse_typedef(tok, basety);
+        Node *vla_calc = parse_typedef(&tok, tok, basety);
+        cur = cur->next = new_unary(ND_EXPR_STMT, vla_calc, tok);
+        add_type(cur);
         continue;
       }
 
@@ -2857,7 +2861,9 @@ static Node *compound_stmt2(Token **rest, Token *tok)
       Type *basety = declspec(&tok, tok, &attr);
       if (attr.is_typedef)
       {
-        tok = parse_typedef(tok, basety);
+        Node *vla_calc = parse_typedef(&tok, tok, basety);
+        cur = cur->next = new_unary(ND_EXPR_STMT, vla_calc, tok);
+        add_type(cur);
         continue;
       }
 
@@ -6415,10 +6421,11 @@ static Node *primary(Token **rest, Token *tok)
   error_tok(tok, "%s %d: in primary : expected an expression %s", PARSE_C, __LINE__, tok->loc);
 }
 
-static Token *parse_typedef(Token *tok, Type *basety)
+static Node *parse_typedef(Token **rest, Token *tok, Type *basety) 
 {
   bool first = true;  
-  while (!consume(&tok, tok, ";"))
+  Node *node = new_node(ND_NULL_EXPR, tok);
+  while (!consume(rest, tok, ";"))
   {
     if (!first) {
       ctx->filename = PARSE_C;
@@ -6436,8 +6443,10 @@ static Token *parse_typedef(Token *tok, Type *basety)
     //from COSMOPOLITAN adding other GNUC attributes
     tok = attribute_list(tok, ty, type_attributes);      
     push_scope(get_ident(ty->name))->type_def = ty;
+    node = new_binary(ND_COMMA, node, compute_vla_size(ty, tok), tok);
   }
-  return tok;
+  
+  return node;
 }
 
 static void create_param_lvars(Type *param, char *funcname)
@@ -6803,7 +6812,7 @@ Obj *parse(Token *tok)
     // Typedef
     if (attr.is_typedef)
     {
-      tok = parse_typedef(tok, basety);
+      parse_typedef(&tok, tok, basety);
       continue;
     }
 
