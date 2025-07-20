@@ -1220,7 +1220,7 @@ static void builtin_alloca(Node *node)
 //from cosmopolitan
 static void HandleAtomicArithmetic(Node *node, const char *op) {
   gen_expr(node->lhs);
-  push();
+  push_tmp();
   gen_expr(node->rhs);
   pop_tmp("%r9");
   println("\tmov\t%s,%s", reg_ax(node->ty->size), reg_si(node->ty->size));
