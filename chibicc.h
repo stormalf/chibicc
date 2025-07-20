@@ -39,7 +39,7 @@
 #define __attribute__(x)
 #endif
 
-#define PRODUCT "gcc"
+#define PRODUCT "chibicc"
 #define VERSION "1.0.23"
 #define MAXLEN 501
 #define DEFAULT_TARGET_MACHINE "x86_64-linux-gnu"
