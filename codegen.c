@@ -907,23 +907,16 @@ static void push_struct(Type *ty)
   if (has_longdouble(ty))
     sz = align_to(ty->size, 16);
   else
-    sz = align_to(ty->size, 8);
-  println("  sub $%d, %%rsp", sz);
-  depth += sz / 8;
+    sz = align_to(ty->size, 8);  
+
+  depth += sz / 8;  
+  if (sz > 16)
+    println("  and $-%d, %%rsp", sz);  
+  println("  sub $%d, %%rsp", sz);  
+  
 
   gen_mem_copy("%rsp", ty->size);
 }
-
-// static void push_struct(Type *ty) {
-//   int sz = align_to(ty->size, 8);
-//   println("  sub $%d, %%rsp", sz);
-//   depth += sz / 8;
-
-//   for (int i = 0; i < ty->size; i++) {
-//     println("  mov %d(%%rax), %%r10b", i);
-//     println("  mov %%r10b, %d(%%rsp)", i);
-//   }
-// }
 
 static void push_args2(Node *args, bool first_pass)
 {
@@ -935,10 +928,6 @@ static void push_args2(Node *args, bool first_pass)
     return;
 
   Type *ty = args->ty;
-
-  if (ty->is_variadic && ty->align > 16) {  
-    println("  and $-%d, %%rsp", ty->align);  
-  }
 
   gen_expr(args);
 
@@ -989,7 +978,8 @@ static void push_args2(Node *args, bool first_pass)
 //   arguments to RAX.
 static int push_args(Node *node)
 {
-  int stack = 0, gp = 0, fp = 0;
+  int stack = 0, gp = 0, fp = 0, stack_size = 0;
+  int max_align = 16;
 
   // If the return type is a large struct/union, the caller passes
   // a pointer to a buffer as if it were the first argument.
@@ -1041,7 +1031,17 @@ static int push_args(Node *node)
       }else 
         gp++;
     }
+    if (arg->pass_by_stack) {
+      if (ty->align > 8) {
+        stack_size = align_to(stack_size, ty->align);
+        max_align = MAX(max_align, ty->align);
+      }    
+      stack_size += align_to(ty->size, 8);
+    }  
+    max_align = MAX(max_align, ty->align);
+           
   }
+
 
   if ((depth + stack) % 2 == 1)
   {
@@ -1050,10 +1050,14 @@ static int push_args(Node *node)
     stack++;
   }
 
+  //managing alignment and stack size
+  println("  and $-%d, %%rsp", MAX(max_align, 16));
+  println("  sub $%d, %%rsp", stack_size);
+
+  
 
   push_args2(node->args, true);
   push_args2(node->args, false);
-
   // If the return type is a large struct/union, the caller passes
   // a pointer to a buffer as if it were the first argument.
   if (node->ret_buffer && node->ty->size > 16)
@@ -1468,7 +1472,8 @@ static void gen_expr(Node *node)
       builtin_alloca(node);
       return;
     }
-
+    println("  mov %%rsp, %%rax");
+    push_tmp();
     int stack_args = push_args(node);
     gen_expr(node->lhs);
     
@@ -1529,7 +1534,8 @@ static void gen_expr(Node *node)
 
 
     println("  call *%%r10");
-    println("  add $%d, %%rsp", stack_args * 8);
+    //println("  add $%d, %%rsp", stack_args * 8);
+    pop_tmp("%rsp");
 
 
     depth -= stack_args;

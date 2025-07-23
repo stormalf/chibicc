@@ -19,7 +19,7 @@ typedef struct {
   char _Alignas(1024) c;
 } Aligned1024;
 
-//extern int struct_test131(G g0,G g1,G g2,G g3,G g4,F f0,F f1,F f2,F f3,F f4,F f5,int i0,int i1,...);
+extern int struct_test131(G g0,G g1,G g2,G g3,G g4,F f0,F f1,F f2,F f3,F f4,F f5,int i0,int i1,...);
 long double struct_test130(G g0,G g1,G g2,G g3,G g4,F f0,F f1,F f2,F f3,F f4,F f5,int i0,int i1,...) {
   va_list ap;
   va_start(ap, i1);
@@ -78,21 +78,21 @@ Aligned1024 s = {.c = 77};
     (Aligned1024) s
     ) );
 
-    // ASSERT(257, struct_test131(
-    // g[0], g[1], g[2], g[3], g[4],
-    // f[0], f[1], f[2], f[3], f[4], f[5],
-    // (int) 11,
-    // (int) 22,
-    // (long double) 2.3,
-    // (Aligned1024) s,
-    // (int) 33,
-    // (double) 4.5,
-    // (double) 5.6,
-    // (double) 6.7,
-    // (double) 7.8,
-    // (Aligned1024) s,
-    // (long double) 11.1
-    // ));
+    ASSERT(257, struct_test131(
+    g[0], g[1], g[2], g[3], g[4],
+    f[0], f[1], f[2], f[3], f[4], f[5],
+    (int) 11,
+    (int) 22,
+    (long double) 2.3,
+    (Aligned1024) s,
+    (int) 33,
+    (double) 4.5,
+    (double) 5.6,
+    (double) 6.7,
+    (double) 7.8,
+    (Aligned1024) s,
+    (long double) 11.1
+    ));
 
   printf("OK\n");
 
