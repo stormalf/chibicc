@@ -1517,6 +1517,7 @@ void init_macros(void)
   define_macro("__amd64", "1");
   define_macro("__amd64__", "1");
   define_macro("__CHIBICC__", "1");
+  define_macro("__chibicc__", "1");
   define_macro("__const__", "const");
   define_macro("__gnu_linux__", "1");
   define_macro("__inline__", "inline");
@@ -1550,7 +1551,6 @@ void init_macros(void)
   // define_macro("HAVE_GCC__SYNC_INT64_CAS", "1");
   // define_macro("HAVE_GCC__ATOMIC_INT32_CAS", "1"); 
   // define_macro("HAVE_GCC__ATOMIC_INT64_CAS", "1");
-  define_macro("HAVE_LONG_INT_64", "1");
   define_macro("HAVE_LONG_LONG_INT_64", "1");
   define_macro("__ATOMIC_RELAXED", "0");
   define_macro("__ATOMIC_CONSUME", "1");
