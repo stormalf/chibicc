@@ -3,8 +3,8 @@
 #include "test.h"
 
 typedef struct S {    
-    
-    char data[32] __attribute__((aligned(32)));
+    __attribute__((aligned(32)))
+    char data[32] ;
 } S;
 
 void print7(int count, ...) {

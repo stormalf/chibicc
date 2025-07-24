@@ -10,22 +10,26 @@ typedef struct {
 
 typedef __va_elem va_list[1];
 typedef unsigned long uintptr_t;
-//extern int printf(const char *fmt, ...);
+extern int printf(const char *fmt, ...);
 
 #define va_start(ap, last) \
   do { *(ap) = *(__va_elem *)__va_area__; } while (0)
 
 #define va_end(ap)
 
-static void *__va_arg_mem(__va_elem *ap, int sz, int align) {    
+//for now alignment is not correctly managed by chibicc when we have variadic functions.
+//we store into the stack by substracting directly the sz of the component (aligned to 8 or 16)
+//but we need a more robust way to manage alignment and activate here the correct alignment. 
+static void *__va_arg_mem(__va_elem *ap, int sz, int align) {  
   void *p = ap->overflow_arg_area;
-  if (align > 16) {
-    p = (void *)(((uintptr_t)p + align - 1) & ~(align - 1));
-  }
+  // if (align > 16) {
+    
+  //   p = (void *)(((uintptr_t)p + align - 1) & ~(align - 1));
+  // }
   ap->overflow_arg_area = (void *)(((unsigned long)p + sz + 7) / 8 * 8);
+  
   return p;
 }
-
 
 
 static void *__va_arg_gp(__va_elem *ap, int sz, int align) {  

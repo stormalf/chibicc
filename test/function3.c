@@ -23,6 +23,7 @@ extern int struct_test131(G g0,G g1,G g2,G g3,G g4,F f0,F f1,F f2,F f3,F f4,F f5
 long double struct_test130(G g0,G g1,G g2,G g3,G g4,F f0,F f1,F f2,F f3,F f4,F f5,int i0,int i1,...) {
   va_list ap;
   va_start(ap, i1);
+  printf("after i1 ret=%Lf %p\n", i1, ap);
   long double ret = i0 + i1;
   printf("after i0 + i1 ret=%Lf\n", ret);
   ret += va_arg(ap, long double);  

@@ -906,17 +906,15 @@ static void push_struct(Type *ty)
   int sz = 0;
   if (has_longdouble(ty))
     sz = align_to(ty->size, 16);
-  else
+  else  
     sz = align_to(ty->size, 8);  
 
   depth += sz / 8;  
-  // if (sz > 16)
-  //   println("  and $-%d, %%rsp", sz);  
   println("  sub $%d, %%rsp", sz);  
-  
 
   gen_mem_copy("%rsp", ty->size);
 }
+
 
 static void push_args2(Node *args, bool first_pass)
 {
@@ -930,11 +928,6 @@ static void push_args2(Node *args, bool first_pass)
   Type *ty = args->ty;
 
   gen_expr(args);
-
-  if (ty->is_variadic && ty->align > 16) {  
-    println("  and $-%d, %%rsp", ty->align);  
-  }
-
 
   switch (ty->kind)
   {
@@ -1034,16 +1027,7 @@ static int push_args(Node *node)
         stack++;
       }else 
         gp++;
-    }
-    // if (arg->pass_by_stack) {
-    //   if (ty->align > 8) {
-    //     stack_size = align_to(stack_size, ty->align);
-    //     max_align = MAX(max_align, ty->align);
-    //   }    
-    //   stack_size += align_to(ty->size, 8);
-    // }  
-    //max_align = MAX(max_align, ty->align);
-           
+    }           
   }
 
 
@@ -1054,11 +1038,7 @@ static int push_args(Node *node)
     stack++;
   }
 
-  //managing alignment and stack size
-  //println("  and $-%d, %%rsp", MAX(max_align, 16));
-  //println("  sub $%d, %%rsp", stack_size);
-
-  
+ 
 
   push_args2(node->args, true);
   push_args2(node->args, false);
@@ -1476,8 +1456,7 @@ static void gen_expr(Node *node)
       builtin_alloca(node);
       return;
     }
-    // println("  mov %%rsp, %%rax");
-    // push_tmp();
+
     int stack_args = push_args(node);
     gen_expr(node->lhs);
     
@@ -1536,11 +1515,8 @@ static void gen_expr(Node *node)
     if (is_variadic) 
       println("  movb $%d, %%al", fp);
 
-
     println("  call *%%r10");
-    println("  add $%d, %%rsp", stack_args * 8);
-    //pop_tmp("%rsp");
-
+    println("  add $%d, %%rsp", stack_args * 8);   
 
     depth -= stack_args;
 
