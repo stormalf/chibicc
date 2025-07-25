@@ -912,6 +912,7 @@ static void push_struct(Type *ty)
   depth += sz / 8;  
   println("  sub $%d, %%rsp", sz);  
 
+
   gen_mem_copy("%rsp", ty->size);
 }
 

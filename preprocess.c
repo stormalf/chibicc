@@ -1596,6 +1596,7 @@ void init_macros(void)
   define_macro("_Float64x", "double");
   define_macro("_Float128", "long double");
   define_macro("_Float128x", "long double");
+  define_macro("FAR", "");
   //define_macro("nonnull", "1");
   //====fixing ISS-147 defining the two macros for the linux platform
   define_macro("__ORDER_LITTLE_ENDIAN__", "1234");  

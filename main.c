@@ -815,7 +815,9 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-fprofile-arcs")    ||          
         !strcmp(argv[i], "-ftest-coverage")    ||       
         !strcmp(argv[i], "-ansi_alias")       ||
-        !strcmp(argv[i], "-ffat-lto-objects")       ||        
+        !strcmp(argv[i], "-ffat-lto-objects")       ||       
+        !strcmp(argv[i], "-static-libstdc++")       ||    
+        !strcmp(argv[i], "-static-libgcc")       ||               
         !strcmp(argv[i], "-mindirect-branch-register")         
         )
       continue;

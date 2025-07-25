@@ -1028,6 +1028,7 @@ static Type *type_suffix(Token **rest, Token *tok, Type *ty)
       nbFunc++;
       tok = old_style_params(rest, tok->next, ty);
       *rest = tok;    
+      return func_params(rest, tok, ty);
 
     }
     return func_params(rest, tok->next, ty);
@@ -2623,7 +2624,7 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
     for (Node *c = current_switch->case_next; c; c = c->case_next)
     {
       if (!(end < c->begin || begin > c->end))
-        error_tok(tok, "%s %d: in stmt : duplicated case value or overlapping range", PARSE_C, __LINE__);
+        error_tok(tok, "%s %d: in stmt : duplicated case value or overlapping range %d", PARSE_C, __LINE__, begin);
     }
     node->begin = begin;
     node->end = end;
@@ -2881,6 +2882,7 @@ static Node *compound_stmt(Token **rest, Token *tok, Node **last)
 
       if (attr.is_extern)
       {
+        
         tok = global_variable(tok, basety, &attr);
         continue;
       }
@@ -6743,11 +6745,11 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
 
 static Token *global_variable(Token *tok, Type *basety, VarAttr *attr)
 {
-  bool first = true;
+  bool first = true;  
   
-
   while (!consume(&tok, tok, ";"))
   {
+    
     if (!first) {
       ctx->filename = PARSE_C;
       ctx->funcname = "global_variable";        
@@ -6796,7 +6798,7 @@ static Token *global_variable(Token *tok, Type *basety, VarAttr *attr)
       gvar_initializer(&tok, tok->next, var);
     else if (!attr->is_extern && !attr->is_tls)
       var->is_tentative = true;
-    current_section=NULL;
+    current_section=NULL;    
   }
   return tok;
 }
@@ -6908,6 +6910,7 @@ Obj *parse(Token *tok)
     //from COSMOPOLITAN adding other GNUC attributes
     tok = attribute_list(tok, &attr, thing_attributes);
     Type *basety = declspec(&tok, tok, &attr);
+    tok = attribute_list(tok, &attr, thing_attributes);
 
     // Typedef
     if (attr.is_typedef)

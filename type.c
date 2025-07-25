@@ -397,7 +397,6 @@ void add_type(Node *node)
     int_promotion(&node->lhs);
     node->ty = node->lhs->ty;
     return;    
-    return;
   case ND_VAR:
       if (!node->var) {
         error_tok(node->tok, "%s %d %d variable undefined ", TYPE_C, __LINE__, node->kind);

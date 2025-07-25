@@ -2,11 +2,6 @@
 #include <stdint.h>
 #include <assert.h>
 #include "c.h"
-typedef uintptr_t Datum;
-
-#define DatumGetChar(d) ((char) (d))
-#define DatumGetInt16(d) ((int16) (d))
-#define DatumGetInt32(d) ((int32_t) (d))
 
 
 

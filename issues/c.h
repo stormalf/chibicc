@@ -64,6 +64,12 @@ typedef unsigned int Oid;
 #define PG_INT64_TYPE long int
 /* Define a signed 64-bit integer type for use in client API declarations. */
 typedef PG_INT64_TYPE pg_int64;
+typedef uintptr_t Datum;
+
+#define DatumGetChar(d) ((char) (d))
+#define DatumGetInt16(d) ((int16) (d))
+#define DatumGetInt32(d) ((int32_t) (d))
+
 
 /*
  * Identifiers of error message fields.  Kept here to keep common
@@ -530,7 +536,7 @@ typedef char *Pointer;
  */
 #ifndef HAVE_INT8
 typedef signed char int8;		/* == 8 bits */
-typedef signed short int16;		/* == 16 bits */
+typedef int16_t int16;		/* == 16 bits */
 typedef signed int int32;		/* == 32 bits */
 #endif							/* not HAVE_INT8 */
 
