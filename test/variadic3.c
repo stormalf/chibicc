@@ -1,5 +1,6 @@
-#include <stdio.h>
+#include <stddef.h>
 #include <stdarg.h>
+#include "test.h"
 
 typedef struct {
     long double ld;
@@ -12,6 +13,10 @@ void print_variadic(int count, ...) {
     for (int i = 0; i < count; i++) {
         MyStruct s = va_arg(ap, MyStruct);
         printf("MyStruct[%d].ld = %Lf\n", i, s.ld);
+        if (i == 0)
+            ASSERT(1, s.ld);
+        else if (i == 1)
+            ASSERT(9, s.ld);
     }
 
     va_end(ap);

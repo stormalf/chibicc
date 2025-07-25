@@ -1,4 +1,4 @@
-
+#include "test.h"
 typedef struct pg_atomic_flag
 {
 	volatile char value;
@@ -15,12 +15,15 @@ pg_atomic_test_set_flag_impl(volatile pg_atomic_flag *ptr)
 :		"+q"(_res), "+m"(ptr->value)
 :
 :		"memory");
+	ASSERT(8, _res);
 	return _res == 0;
 }
 
 
 int main()
 {
+	pg_atomic_flag t = {.value= 8};
+	pg_atomic_test_set_flag_impl(&t);
 
     return 0;
 }

@@ -1,4 +1,5 @@
-#include <stdio.h>
+
+#include "test.h"
 
 static int
 ngx_atomic_fetch_add(char *value, int add)
@@ -16,7 +17,11 @@ int *ptr = &add;
 }
 
 int main () {
-
+    int a = 10;
+    int *b = 8;
+    int res =  ngx_atomic_fetch_add(&b, a);
+    printf("res=%d\n", res);
+    ASSERT(10, res);
     return 0;
 
 }

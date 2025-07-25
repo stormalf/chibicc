@@ -1,5 +1,4 @@
-#include <stdio.h>
-#include <string.h>
+#include <stddef.h>
 #include "test.h"
 
 #define HASHMAP_SIZE 10

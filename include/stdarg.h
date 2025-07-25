@@ -32,8 +32,8 @@ static void *__va_arg_mem(__va_elem *ap, int sz, int align) {
   uintptr_t p = (uintptr_t)ap->overflow_arg_area;
 
   // Align p if necessary
-  if (align > 8)
-    p = (p + align - 1) / align * align;
+  // if (align > 8)
+  //   p = (p + align - 1) / align * align;
 
   ap->overflow_arg_area = (void *)((p + sz + 7) / 8 * 8);
   return (void *)p;
@@ -49,12 +49,13 @@ static void *__va_arg_gp(__va_elem *ap, int sz, int align) {
   return r;
 }
 
+
 static void *__va_arg_fp(__va_elem *ap, int sz, int align) {
-  if (ap->fp_offset >= 112)
+  if (ap->fp_offset >= 176)
     return __va_arg_mem(ap, sz, align);
 
   void *r = ap->reg_save_area + ap->fp_offset;
-  ap->fp_offset += 8;
+  ap->fp_offset += 16;
   return r;
 }
 

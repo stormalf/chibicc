@@ -1,4 +1,5 @@
-#include <stdio.h>
+
+#include "test.h"
 int fun( int n, int a[n]) {
     int res = 0;
     for (int i = 0; i < n; i++)
@@ -15,5 +16,6 @@ int main(void)
         a[i] = i + 1;
     int b = fun(c, a);
     printf("%d %d \n", b, a[0]);
+    ASSERT(6, b);
     return 0;
 }

@@ -1,4 +1,4 @@
-#include <stdio.h>
+#include "test.h"
 typedef int MyInt, MyInt2[4];
 enum MyEnum
 {
@@ -9,5 +9,6 @@ typedef enum MyEnum MyEnum;
 
 int main() {
     printf("OK\n");
-return 0;
+    ASSERT(0, ENUM_TEST);
+    return 0;
 }

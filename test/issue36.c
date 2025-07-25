@@ -1,4 +1,4 @@
-#include <stdio.h>
+
 #include "test.h"
 typedef struct empty_struct {} empty_struct;
 

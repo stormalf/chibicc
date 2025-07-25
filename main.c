@@ -55,7 +55,7 @@ static StringArray std_include_paths;
 char *base_file;
 static char *output_file;
 FILE *f;
-
+FILE *ofile;
 // for dot diagrams
 FILE *dotf;
 char *dot_file;
@@ -816,6 +816,9 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-fprofile-arcs")    ||          
         !strcmp(argv[i], "-ftest-coverage")    ||       
         !strcmp(argv[i], "-ansi_alias")       ||
+        !strcmp(argv[i], "-ffat-lto-objects")       ||       
+        !strcmp(argv[i], "-static-libstdc++")       ||    
+        !strcmp(argv[i], "-static-libgcc")       ||              
         !strcmp(argv[i], "-mindirect-branch-register")         
         )
       continue;
@@ -848,7 +851,7 @@ static void parse_args(int argc, char **argv)
 }
 
 
-static FILE *open_file(char *path)
+FILE *open_file(char *path)
 {
   if (!path || strcmp(path, "-") == 0)
     return stdout;
@@ -1139,9 +1142,11 @@ static void cc1(void)
       return;
   }
 
-  //print macro in preprocess.c
-  if (isPrintMacro)
-  {
+
+  if (isPrintMacro) {
+    print_all_macros();
+    if (ofile)    
+      fclose(ofile);
     return;
   }
 
@@ -1422,6 +1427,11 @@ int main(int argc, char **argv)
       error("%s : %s:%d: error: in main Issue with -debug or -printparameter, file not opened!", MAIN_C, __FILE__, __LINE__);
       exit(1);
     }
+  }
+ //print macro in preprocess.c
+  if (isPrintMacro)
+  {
+    ofile = open_file(opt_o);  
   }
 
   // init_macros can call tokenize functions moving here to be able to print debug values

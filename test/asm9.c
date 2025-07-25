@@ -1,7 +1,7 @@
 #include <stdint.h>
-#include <stdio.h>
+#include <stddef.h>
 #include <sys/syscall.h>
-//#include "test.h"
+#include "test.h"
 
 void ff_put_pixels8_mmx(uint8_t *block, const uint8_t *pixels, int line_size, int h) {
     __asm__ volatile(
@@ -51,18 +51,18 @@ int main(int argc, char **argv) {
     printf("%d\n", block[7]);
     printf("%d\n", pixels[0]);
     printf("%d\n", pixels[7]);
-    // ASSERT(1, block[0]);
-    // ASSERT(8, block[7]);
-    // ASSERT(1, pixels[0]);
-    // ASSERT(8, pixels[7]);
+    ASSERT(1, block[0]);
+    ASSERT(8, block[7]);
+    ASSERT(1, pixels[0]);
+    ASSERT(8, pixels[7]);
 
     int i = 8;
     int j = 0;
     int *ptr = &i;
     j = atomic_add(ptr, 1);
     printf("i=%d, j=%d\n", i, j);
-    // ASSERT(9, i);
-    // ASSERT(8, j);
+    ASSERT(9, i);
+    ASSERT(8, j);
 
     // long tid = syscall(SYS_gettid, 0, 0, 0, 0, 0, 0);
     // printf("Thread ID: %ld\n", tid);

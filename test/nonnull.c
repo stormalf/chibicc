@@ -1,5 +1,6 @@
 #include <stddef.h>
-#include <stdio.h>
+
+#include "test.h"
 
 // Declarations + definitions so linker can find them
 void foo(char *p, char *q) __attribute__((__nonnull__));
@@ -31,5 +32,8 @@ int main() {
 
   use_typedef(baz, &x, &y);
   printf("x: %c, y: %c, z: %c\n", x, y, z);
+  ASSERT(65, x);
+  ASSERT(66, y);
+  ASSERT(122, z);
   return 0;
 }

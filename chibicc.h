@@ -26,6 +26,7 @@
 
 
 #define ROUNDUP(X, K)   (((X) + (K) - 1) & -(K))
+#define ROUNDDOWN(X, K) ((X) & -(K))
 
 #ifndef __has_attribute
 #define __has_attribute(x) __GCC4_has_attribute_##x
@@ -39,7 +40,7 @@
 #endif
 
 #define PRODUCT "chibicc"
-#define VERSION "1.0.22.7"
+#define VERSION "1.0.22.8"
 #define MAXLEN 501
 #define DEFAULT_TARGET_MACHINE "x86_64-linux-gnu"
 
@@ -220,6 +221,7 @@ void undef_macro(char *name);
 Token *preprocess(Token *tok, bool isReadLine);
 Token *preprocess3(Token *tok);
 void define_typedefs(void);
+void print_all_macros(void);
 
 //
 // parse.c
@@ -282,6 +284,8 @@ struct Obj
   Obj *va_area;
   Obj *alloca_bottom;
   int stack_size;
+  int overflow_arg_area; 
+  bool pass_by_stack; 
 
   // Static inline function
   bool is_live;
@@ -756,6 +760,9 @@ extern char *extract_path(char *tmpl);
 extern bool opt_sse3;
 extern bool opt_sse4;
 extern bool opt_g;
+extern FILE *open_file(char *path);
+extern FILE *ofile;
+
 
 //
 // extended_asm.c

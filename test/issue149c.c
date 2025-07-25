@@ -1,5 +1,6 @@
 
-#include <stdio.h>
+
+#include "test.h"
 #ifdef _WIN32
 #include <limits.h>
 #include <intrin.h>
@@ -25,6 +26,7 @@ void asmfunc(void) {
 	for (int i = 0; i < (sizeof(r)/sizeof(r[0])); i++)
 		printf("%d\n", r[i]);
 
+	ASSERT(12334, r[0]);
 }
 
 int

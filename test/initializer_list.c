@@ -1,4 +1,4 @@
-#include <stdio.h>
+
 #include "test.h"
 struct __pthread_rwlock_arch_t {	
 	unsigned int __readers;

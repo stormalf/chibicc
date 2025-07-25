@@ -1,4 +1,4 @@
-#include <stdio.h>
+
 #include <unistd.h>
 #include "test.h"
 /* Container's specific file/directory names */

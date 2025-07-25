@@ -1,4 +1,5 @@
-#include <stdio.h>
+
+#include "test.h"
 
 void foo(int [5]);
 void fooc(int x[const 5]);
@@ -33,5 +34,6 @@ void foovm(int x[const *])
 int main()
 {
   printf("sizeof(const *) = %ld\n", sizeof(const *));
+  ASSERT(8, sizeof(const *) );
   return 0;
 }

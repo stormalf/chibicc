@@ -1,5 +1,7 @@
-#include <stdio.h>
+
 #include <stdbool.h>
+#include <stddef.h>
+#include "test.h"
 // represents a variable
 union Var {
   float f;
@@ -26,7 +28,7 @@ union Var {
 
 // // setter
 void set_int(union Var *var, int newval) { var->f = (float)newval; var->type = 'f'; }
-void set_float(union Var *var, float newval) { var->f = newval; var->type = 'f'; }
+void set_float(union Var *var, float newval) { var->f = newval; var->type = 'f';  printf("var->f=%f\n", var->f); ASSERT(1, var->f);}
 void set_char(union Var *var, char newval) { var->s = (char[2]){newval, 0}; var->type = 's'; }
 void set_string(union Var *var, char *newval) { var->s = newval; var->type = 's'; }
 void set_bool(union Var *var, bool newval) { var->b = newval; var->type = 'b'; }
@@ -42,12 +44,14 @@ void set_bool(union Var *var, bool newval) { var->b = newval; var->type = 'b'; }
 int main(void) {
     union Var myvar;
 
-    // myvar.f = 1.5; myvar.type = 'f'; works, but i want to do this instead:
+    
     set(&myvar, 1.5);
     char c = 'c';
     char *pc = &c;
     int i = 0;
     union Var *tsubtree[1];
     const union Var *child = &ts_subtree_children(tsubtree)[i];
+    ASSERT(NULL, child);
+    printf("child is null! = %p\n", child);
     return 0;
 }

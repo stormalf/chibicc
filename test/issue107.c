@@ -1,5 +1,5 @@
 
-#include <stdio.h>
+#include "test.h"
 #define gettext_noop(str) (str)
 #define N_(str)           gettext_noop (str)
 static const char vlc_usage[] = N_(

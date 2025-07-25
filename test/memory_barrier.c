@@ -1,4 +1,4 @@
-#include <stdio.h>
+
 #include "test.h"
 static inline void pg_memory_barrier_impl(void) {
 #if defined(__i386__) || defined(__i386)
@@ -14,6 +14,6 @@ int main() {
     x = 1;
     pg_memory_barrier_impl();
     printf("Memory barrier applied. x = %d\n", x);
-    Assert(1, x);
+    ASSERT(1, x);
     return 0;
 }

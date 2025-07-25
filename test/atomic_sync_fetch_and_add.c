@@ -1,4 +1,4 @@
-#include <stdio.h>
+
 #include "test.h"
 
 // static inline int __sync_fetch_and_add(int *ptr, int value) {

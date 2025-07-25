@@ -1,4 +1,4 @@
-#include <stdio.h>
+#include "test.h"
  /* confdefs.h */
 #define PACKAGE_NAME "PostgreSQL"
 #define PACKAGE_TARNAME "postgresql"

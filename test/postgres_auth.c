@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <assert.h>
 
+
 typedef uint32_t uint32;
 
 typedef struct {
@@ -38,6 +39,7 @@ pg_atomic_compare_exchange_u32_impl(volatile pg_atomic_uint32 *ptr,
     : "=a" (*expected), "=q" (ret), "+m" (ptr->value)
     : "r" (newval), "a" (*expected)
     : "memory", "cc");
+    assert(1 == ret);
     return (bool) ret;
 }
 

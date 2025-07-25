@@ -16,8 +16,8 @@ int main() {
     }
 
     printf("t1=%d iovused=%d iovcnt=%d\n", t1, iovused, iovcnt);
-    ASSERT(1023, t1);
-    ASSERT(10, iovused);
-    ASSERT(10, iovcnt);
+    assert(1023 == t1);
+    assert(10 == iovused);
+    assert(10 == iovcnt);
     return 0;
 }

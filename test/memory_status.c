@@ -1,5 +1,6 @@
-#include <stdio.h>
+
 #include <stdlib.h>
+#include "test.h"
 
 #define MEM_SIZE 100 // Define the size of the memory block
 
@@ -43,7 +44,9 @@ int main() {
 void printMemoryStatus(char *memory, int size) {
     printf("Memory Status:\n");
     for (int i = 0; i < size; ++i) {
-        printf("%c ", memory[i]);
+        printf("memory[%d]=%c ", i, memory[i]);
+        if (i < 10 )
+            ASSERT(70, memory[i]);
     }
     printf("\n");
 }
