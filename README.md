@@ -363,7 +363,7 @@ util-linux : https://github.com/util-linux/util-linux.git
     cd tests
     run.sh 
 
-    1 tests of 280 FAILED
+    1 tests of 280 FAILED (failed only when GNUC is activated and > 2).
 
       lscpu/lscpu
         
@@ -506,7 +506,15 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
     memcached test stuck after test n° 16
     util-linux 
 
+## projects compiled successfully with chibicc
 
+    util-linux : compile OK, tests OK (except 1 lscpu when activating GNUC)
+    vim: compile OK, tests OK
+    nginx: compile OK
+    zlib: compile OK, tests OK
+    nmap: compile OK, tests OK   
+    
+    
 ## debug
 
 To debug with gdb don't forget to use the set follow-fork-mode child because chibicc creates a child job.

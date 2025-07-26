@@ -751,13 +751,14 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
       counter += SHORT;
     else if (equal(tok, "int"))
       counter += INT;
-    else if (equal(tok, "long"))
+    else if (equal(tok, "long") || equal(tok, "_Float128") || equal(tok, "_Float128x"))
       counter += LONG;
-    else if (equal(tok, "float"))
+    else if (equal(tok, "float") || equal(tok, "_Float16") || equal(tok, "_Float16x") ||
+            equal(tok, "_Float32") || equal(tok, "_Float32x"))
       counter += FLOAT;
-    else if (equal(tok, "double"))
+    else if (equal(tok, "double") || equal(tok, "_Float64") || equal(tok, "_Float64x") )
       counter += DOUBLE;
-    else if (equal(tok, "signed"))
+    else if (equal(tok, "signed") || equal(tok, "_Float128") || equal(tok, "_Float128"))
       counter |= SIGNED;
     else if (equal(tok, "unsigned"))
       counter |= UNSIGNED;
@@ -2401,7 +2402,9 @@ static bool is_typename(Token *tok)
         "typedef", "enum", "static", "extern", "_Alignas", "signed", "unsigned",
         "const", "volatile", "auto", "register", "restrict", "__restrict",
         "__restrict__", "_Noreturn", "float", "double", "typeof", "inline",
-        "_Thread_local", "__thread", "_Atomic", "_Complex", "__label__", "__typeof"};
+        "_Thread_local", "__thread", "_Atomic", "_Complex", "__label__", "__typeof", "_Float16",
+        "_Float16x", "_Float32", "_Float32x", "_Float64", "_Float64x", "_Float128", "_Float128x"
+      };
 
     for (int i = 0; i < sizeof(kw) / sizeof(*kw); i++)
       hashmap_put(&map, kw[i], (void *)1);
@@ -2476,17 +2479,21 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
 
 
     Node *exp = expr(&tok, tok->next);
+    add_type(exp);
+    if (!exp->ty)
+      error_tok(exp->tok, "%s %d: in stmt : exp->ty is null", PARSE_C, __LINE__);
+
+    tok = attribute_list(tok, exp->ty, type_attributes);
     ctx->filename = PARSE_C;
     ctx->funcname = "stmt";        
     ctx->line_no = __LINE__ + 1;       
     *rest = skip(tok, ";", ctx);
-    add_type(exp);
+
     // Type *ty = current_fn->ty->return_ty;
     // if (ty->kind != TY_STRUCT && ty->kind != TY_UNION)
     //   exp = new_cast(exp, current_fn->ty->return_ty);
 
-    if (!exp->ty)
-      error_tok(exp->tok, "%s %d: in stmt : exp->ty is null", PARSE_C, __LINE__);
+
       
     if (ret_ty->kind == TY_VOID && exp->ty->kind != TY_VOID)
     {
@@ -4321,7 +4328,6 @@ static Token *type_attributes(Token *tok, void *arg)
       consume(&tok, tok, "transparent_union") ||
       consume(&tok, tok, "gnu_inline") ||
       consume(&tok, tok, "__gnu_inline__") ||
-      consume(&tok, tok, "__always_inline__") ||
       consume(&tok, tok, "used") ||
       consume(&tok, tok, "__used__") ||
       consume(&tok, tok, "unused") ||
@@ -4430,7 +4436,7 @@ static Token *type_attributes(Token *tok, void *arg)
         consume(&tok, tok, "__V2SI__") || consume(&tok, tok, "__V4SI__") || consume(&tok, tok, "__V8HI__") ||
         consume(&tok, tok, "__V16QI__") || consume(&tok, tok, "__word__") || consume(&tok, tok, "__pointer__") ||
         consume(&tok, tok, "__CQI__") || consume(&tok, tok, "__CHI__") || consume(&tok, tok, "__CDF__") ||
-        consume(&tok, tok, "__BI__")) {
+        consume(&tok, tok, "__TC__") || consume(&tok, tok, "__BI__")) {
         ctx->line_no = __LINE__ + 1;  
       return skip(tok, ")", ctx);
     }
@@ -4449,6 +4455,11 @@ static Token *type_attributes(Token *tok, void *arg)
 
   if (consume(&tok, tok, "const") || consume(&tok, tok, "__const__")) {
       ty->is_const = true;
+    return tok;
+  }
+
+  if (consume(&tok, tok, "always_inline") || consume(&tok, tok, "__always_inline__")) {
+      ty->is_inline = true;
     return tok;
   }
 
@@ -4785,7 +4796,7 @@ static Token *thing_attributes(Token *tok, void *arg) {
         consume(&tok, tok, "__V2SI__") || consume(&tok, tok, "__V4SI__") || consume(&tok, tok, "__V8HI__") ||
         consume(&tok, tok, "__V16QI__") || consume(&tok, tok, "__word__") || consume(&tok, tok, "__pointer__") ||
         consume(&tok, tok, "__CQI__") || consume(&tok, tok, "__CHI__") || consume(&tok, tok, "__CDF__") ||
-        consume(&tok, tok, "__BI__")) {
+        consume(&tok, tok, "__TC__") || consume(&tok, tok, "__BI__")) {
         ctx->line_no = __LINE__ + 1;  
       return skip(tok, ")", ctx);
     }
@@ -4903,7 +4914,6 @@ static Token *thing_attributes(Token *tok, void *arg) {
       consume(&tok, tok, "transparent_union") ||
       consume(&tok, tok, "gnu_inline") ||
       consume(&tok, tok, "__gnu_inline__") ||
-      consume(&tok, tok, "__always_inline__") ||
       consume(&tok, tok, "used") ||
       consume(&tok, tok, "__used__") ||
       consume(&tok, tok, "unused") ||
@@ -5114,7 +5124,7 @@ static Type *struct_union_decl(Token **rest, Token *tok, bool *no_list)
         t->align = MAX(t->align, ty->align);
         t->members = ty->members;
         t->is_flexible = ty->is_flexible;
-        t->is_packed = ty->is_packed;
+        t->is_packed = ty->is_packed;        
         t->origin = ty;
       }
       return ty2;
@@ -5322,7 +5332,7 @@ static Node *postfix(Token **rest, Token *tok)
     ctx->filename = PARSE_C;
     ctx->funcname = "postfix";        
     ctx->line_no = __LINE__ + 1;   
-    tok = skip(tok, ")", ctx);
+    tok = skip(tok, ")", ctx);    
 
     if (scope->next == NULL)
     {
@@ -6651,7 +6661,7 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
     fn->is_function = true;
     fn->is_definition = equal(tok, "{");
     fn->is_static = attr->is_static || (attr->is_inline && !attr->is_extern);
-    fn->is_inline = attr->is_inline;
+    fn->is_inline = attr->is_inline ;
     fn->alias_name = attr->alias_name;
   }
   //from COSMOPOLITAN adding other GNUC attributes

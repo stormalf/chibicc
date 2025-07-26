@@ -1,0 +1,2 @@
+sockets 2
+cores 4

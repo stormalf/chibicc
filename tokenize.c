@@ -304,6 +304,14 @@ static bool is_keyword(Token *tok)
         "__restrict__",
         "_Noreturn",
         "float",
+        "_Float16",
+        "_Float32",
+        "_Float64",
+        "_Float128",
+        "_Float16x",
+        "_Float32x",
+        "_Float64x",
+        "_Float128x",        
         "double",
         "typeof",
         "asm",
@@ -626,10 +634,11 @@ static void convert_pp_number(Token *tok)
   // Try to parse as an integer constant.
   if (convert_pp_int(tok))
     return;
-
+  
   // If it's not an integer, it must be a floating point constant.
   char *end;
   long double val = strtold(tok->loc, &end);
+  bool is_complex = false;
 
   Type *ty;
   if (*end == 'f' || *end == 'F')
@@ -647,12 +656,22 @@ static void convert_pp_number(Token *tok)
     ty = ty_double;
   }
 
+  // Check for imaginary suffix after float suffix
+  if (*end == 'i' || *end == 'I')
+  {
+    is_complex = true;
+    end++;
+  }
+
   if (tok->loc + tok->len != end)
     error_tok(tok, "%s: in convert_pp_number : invalid numeric constant", TOKENIZE_C);
 
   tok->kind = TK_NUM;
   tok->fval = val;
   tok->ty = ty;
+  if (is_complex) {
+    tok->is_complex = true; 
+  }
 }
 
 void convert_pp_tokens(Token *tok)

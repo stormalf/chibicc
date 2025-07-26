@@ -190,6 +190,7 @@ struct Token
   bool has_space;   // True if this token follows a space character
   Hideset *hideset; // For macro expansion
   Token *origin;    // If this is expanded from a macro, the original token
+  bool is_complex; //true if we found a Complex number (suffix "I")
 };
 
 noreturn void error(char *fmt, ...) __attribute__((format(printf, 1, 2)));
@@ -586,6 +587,7 @@ struct Type
   bool is_aligned;
   bool is_weak;
   char *visibility;
+  bool is_inline;
 
   bool is_compound_lit; // Flag to indicate if this type is a compound literal
   // Function type

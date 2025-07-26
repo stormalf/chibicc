@@ -1539,8 +1539,8 @@ void init_macros(void)
   define_macro("_DEFAULT_SOURCE", "1");
   //define_macro("__INTEL_COMPILER", "1");
   define_macro("__GNUC__", "9");
-  define_macro("__GNUC_MINOR__", "1");
-  define_macro("__GNUC_PATCHLEVEL__ ", "1");
+  define_macro("__GNUC_MINOR__", "0");
+  define_macro("__GNUC_PATCHLEVEL__", "0");
   //define_macro("HAVE_ATTRIBUTE_PACKED", "1");
   define_macro("linux", "1");
   define_macro("unix", "1");
@@ -1589,12 +1589,14 @@ void init_macros(void)
   define_macro("linux", "1");
   define_macro("unix", "1");
   define_macro("__extension__", "");
-  define_macro("_Float32", "float");
-  define_macro("_Float32x", "float");
-  define_macro("_Float64", "double");
-  define_macro("_Float64x", "double");
-  define_macro("_Float128", "long double");
-  define_macro("_Float128x", "long double");
+  // define_macro("_Float16", "float");
+  // define_macro("_Float16x", "float");
+  // define_macro("_Float32", "float");
+  // define_macro("_Float32x", "float");
+  // define_macro("_Float64", "double");
+  // define_macro("_Float64x", "double");
+  // define_macro("_Float128", "long double");
+  // define_macro("_Float128x", "long double");
   define_macro("FAR", "");
   //define_macro("nonnull", "1");
   //====fixing ISS-147 defining the two macros for the linux platform
