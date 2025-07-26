@@ -1,4 +1,4 @@
-#include <stdio.h>
+#include "test.h"
 
 
 void Increment(int a) {

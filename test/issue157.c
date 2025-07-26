@@ -1,5 +1,6 @@
 #include <stdbool.h>
 #include <stdint.h>
+#include "test.h"
 
 #define Array(T)       \
   struct {             \

@@ -1,4 +1,4 @@
-#include <stdio.h>
+
 #include "test.h"
 #define HOST_IS_BIG_ENDIAN (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
 

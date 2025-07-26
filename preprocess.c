@@ -1117,6 +1117,45 @@ static Token *include_file(Token *tok, char *path, Token *filename_tok)
   return append(tok2, tok);
 }
 
+static void print_macro(Macro *m) {
+  FILE *out = ofile ? ofile : stdout;
+
+  fprintf(out, "#define %s", m->name);
+
+  if (!m->is_objlike) {
+    fprintf(out, "(");
+    MacroParam *p = m->params;
+    bool first = true;
+    while (p) {
+      if (!first)
+        fprintf(out, ",");
+      fprintf(out, "%s", p->name);
+      first = false;
+      p = p->next;
+    }
+
+    if (m->va_args_name) {
+      if (!first)
+        fprintf(out, ",");
+      fprintf(out, "...");
+    }
+    fprintf(out, ")");
+  }
+
+  Token *tok = m->body;
+  if (tok && tok->kind != TK_EOF)
+    fprintf(out, " ");
+
+  for (; tok && tok->kind != TK_EOF; tok = tok->next) {
+    // Add space between tokens
+    fprintf(out, "%.*s", tok->len, tok->loc);
+    if (tok->next && tok->next->kind != TK_EOF)
+      fprintf(out, " ");
+  }
+
+  fprintf(out, "\n");
+}
+
 // Read #line arguments
 static void read_line_marker(Token **rest, Token *tok)
 {
@@ -1202,8 +1241,6 @@ static Token *preprocess2(Token *tok)
     }
     if (equal(tok, "define"))
     {
-      if (isPrintMacro)
-        printf("%s\n", tok->loc);
       read_macro_definition(&tok, tok->next);
 
       continue;
@@ -1460,15 +1497,18 @@ void init_macros(void)
   define_macro("__UINTPTR_TYPE__", "unsigned long");
   define_macro("__INT32_TYPE__", "int");
   define_macro("__SIZEOF_INT__", "4");
-  //define_macro("SIZEOF_INT", "4");
+  define_macro("SIZEOF_INT", "4");
   define_macro("__SIZEOF_LONG_DOUBLE__", "16");
   define_macro("__SIZEOF_LONG_LONG__", "8");
   define_macro("__SIZEOF_LONG__", "8");
-  //define_macro("SIZEOF_LONG", "8");
+  define_macro("SIZEOF_LONG", "8");
   define_macro("__SIZEOF_POINTER__", "8");
   define_macro("__SIZEOF_PTRDIFF_T__", "8");
   define_macro("__SIZEOF_SHORT__", "2");
   define_macro("__SIZEOF_SIZE_T__", "8");
+  define_macro("__SIZEOF_WCHAR_T__", "4");
+  define_macro("__WCHAR_TYPE__", "int"); 
+  define_macro("__WINT_TYPE__", "unsigned int");
   define_macro("__SIZE_TYPE__", "unsigned long");
   define_macro("__STDC_HOSTED__", "1");
   define_macro("__STDC_NO_COMPLEX__", "1");
@@ -1481,6 +1521,7 @@ void init_macros(void)
   define_macro("__amd64", "1");
   define_macro("__amd64__", "1");
   define_macro("__CHIBICC__", "1");
+  define_macro("__chibicc__", "1");
   define_macro("__const__", "const");
   define_macro("__gnu_linux__", "1");
   define_macro("__inline__", "inline");
@@ -1495,15 +1536,25 @@ void init_macros(void)
   define_macro("__x86_64", "1");
   define_macro("__x86_64__", "1");
   define_macro("__GNU__", "1");
-  define_macro("__INTEL_COMPILER", "1");
-
-  define_macro("HAVE_GCC__SYNC_CHAR_TAS", "1");
-  define_macro("HAVE_GCC__SYNC_INT32_TAS", "1");
-  define_macro("HAVE_GCC__SYNC_INT32_CAS", "1");
-  define_macro("HAVE_GCC__SYNC_INT64_CAS", "1");
-  define_macro("HAVE_GCC__ATOMIC_INT32_CAS", "1"); 
-  define_macro("HAVE_GCC__ATOMIC_INT64_CAS", "1");
-  define_macro("HAVE_LONG_INT_64", "1");
+  define_macro("_GNU_SOURCE", "1");  
+  define_macro("_DEFAULT_SOURCE", "1");
+  //define_macro("__INTEL_COMPILER", "1");
+  //define_macro("__GNUC__", "9");
+  //define_macro("__GNUC_MINOR__", "1");
+  //define_macro("__GNUC_PATCHLEVEL__ ", "1");
+  //define_macro("HAVE_ATTRIBUTE_PACKED", "1");
+  define_macro("linux", "1");
+  define_macro("unix", "1");
+  define_macro("HAVE_RECV", "1");
+  define_macro("HAVE_SEND", "1");
+  define_macro("HAVE_SYS_IO_H", "1");  
+  define_macro("__extension__", "");
+  // define_macro("HAVE_GCC__SYNC_CHAR_TAS", "1");
+  // define_macro("HAVE_GCC__SYNC_INT32_TAS", "1");
+  // define_macro("HAVE_GCC__SYNC_INT32_CAS", "1");
+  // define_macro("HAVE_GCC__SYNC_INT64_CAS", "1");
+  // define_macro("HAVE_GCC__ATOMIC_INT32_CAS", "1"); 
+  // define_macro("HAVE_GCC__ATOMIC_INT64_CAS", "1");
   define_macro("HAVE_LONG_LONG_INT_64", "1");
   define_macro("__ATOMIC_RELAXED", "0");
   define_macro("__ATOMIC_CONSUME", "1");
@@ -1743,4 +1794,14 @@ static bool file_exists_in_include_path(const char *filename) {
       return true;
   }
   return false;
+}
+
+void print_all_macros(void) {
+  for (int i = 0; i < macros.capacity; i++) {
+    HashEntry *e = &macros.buckets[i];
+    if (e->key) {
+      Macro *m = (Macro *)e->val;
+      print_macro(m);
+    }
+  }
 }

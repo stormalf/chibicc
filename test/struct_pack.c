@@ -1,4 +1,4 @@
-#include <stdio.h>  
+
 #include "test.h"
   struct Fields {
     _Bool    a :1;

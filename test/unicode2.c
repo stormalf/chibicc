@@ -1,5 +1,6 @@
 #include <fcntl.h>
-#include <stdio.h>
+#include <stddef.h>
+#include "test.h"
 
 int main(void) {
     printf("\xE2\x98\xA0 \n");
@@ -8,5 +9,6 @@ int main(void) {
     printf("\x09\x65\n");
     printf("\u0965\n");
     printf("%d\n", '\\');
+    ASSERT(92, '\\');
     return 0;
 }

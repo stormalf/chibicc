@@ -1,6 +1,7 @@
-#include <stdio.h>
+
 #include <stdbool.h>
 #include <stdint.h>
+#include "test.h"
 typedef uint32_t uint32;
 typedef struct {
     volatile uint32_t value;
@@ -23,6 +24,7 @@ pg_atomic_compare_exchange_u32_impl(volatile pg_atomic_uint32 *ptr,
 :		"=a" (*expected), "=m"(ptr->value), "=q" (ret)
 :		"a" (*expected), "r" (newval), "m"(ptr->value)
 :		"memory", "cc");
+	ASSERT(1, ret);
 	return (bool) ret;
 }
 

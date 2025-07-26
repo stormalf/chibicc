@@ -1,4 +1,5 @@
-#include <stdio.h>
+
+#include "test.h"
 
 enum fred
 {
@@ -57,14 +58,25 @@ int main()
    enum Epositive epos = epos_two;
 
    printf("%d %d %d %d %d %d %d %d\n", a, b, c, d, e, f, g, h);
+   ASSERT(0, a);
+   ASSERT(1, b);
+   ASSERT(2, c);
+   ASSERT(3, d);
+   ASSERT(54, e);
+   ASSERT(73, f);
+   ASSERT(74, g);
+   ASSERT(75, h);
    /* printf("%d\n", frod); */
    frod = 12;
    printf("%d\n", frod);
+   ASSERT(12, frod);
    frod = e;
    printf("%d\n", frod);
+   ASSERT(54, frod);
 
    /* Following should compile without warning.  */
    printf ("enum to int: %u\n", deref_uintptr(&epos));
+   ASSERT(1, deref_uintptr(&epos));
 
    return 0;
 }

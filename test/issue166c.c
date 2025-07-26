@@ -1,6 +1,5 @@
 #include <stdbool.h>
-#include <stdio.h>
-//#include "test.h"
+#include "test.h"
 #define N 4
 
 typedef struct {
@@ -18,7 +17,7 @@ int main() {
     S s = {0};
     s.arr[0] = 1;
     printf("%d\n", foo(10)); //should return 11 
-    //ASSERT(11, foo(10));
+    ASSERT(11, foo(10));
     if (s.arr[0])
         return 0;
     return 1;

@@ -3,8 +3,8 @@
 #include <stdint.h>
 #include <string.h>
 #include <stddef.h>
-#include <stdio.h>
 
+#include "test.h"
 
 #define MAXIMUM_ALIGNOF 8
 #define BLCKSZ 8192
@@ -116,7 +116,9 @@ heap_page_prune()
 	PruneState	prstate;
 	memset(prstate.marked, 0, sizeof(prstate.marked));
 	printf("====%ld\n", sizeof(prstate.marked));
+	ASSERT(291, sizeof(prstate.marked) );
 	printf("====%d\n", MaxHeapTuplesPerPage + 1);
+	ASSERT(291, MaxHeapTuplesPerPage + 1);
 
     return 0;
 }

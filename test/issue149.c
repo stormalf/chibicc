@@ -1,5 +1,5 @@
 
-#include <stdio.h>
+#include "test.h"
 #ifdef _WIN32
 #include <limits.h>
 #include <intrin.h>
@@ -38,6 +38,7 @@ main (void)
 	//fprintf(f, "%u", vaddr);
 	printf("%d, %d, %d, %d\n", r[0], r[1], r[2], r[3]);
 	//fclose(f);
+	ASSERT(12334, r[3]);
 	return 0;
 
   ;

@@ -1,4 +1,4 @@
-#include <stdio.h>
+#include "test.h"
 
 #define SIZE 10
 
@@ -14,5 +14,6 @@ int main()
     for (int i = 0; i < SIZE; ++i)
         printf("%d: %d\n", i, myarr2[i]);
 
+    ASSERT(0, myarr2[9]);
     return 0;
 }

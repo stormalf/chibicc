@@ -1,4 +1,4 @@
-#include <stdio.h>
+
 #include <stdbool.h>
 #include "test.h"
 
@@ -21,6 +21,6 @@ int main() {
     pg_atomic_flag flag = {0};
     bool result = pg_atomic_test_set_flag_impl(&flag);
     printf("Test and Set Flag: %d\n", result);
-    Assert(1, result);
+    ASSERT(1, result);
     return 0;
 }

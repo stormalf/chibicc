@@ -1,4 +1,4 @@
-#include <stdio.h>
+
 #include "test.h"
 static inline int __sync_bool_compare_and_swap(int *ptr, int oldval, int newval) {
     char result;

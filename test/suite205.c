@@ -1,4 +1,4 @@
-#include <stdio.h>
+#include "test.h"
 
 /* This test is a snippet from the J interpreter */
 
@@ -21,8 +21,14 @@ int main() {
     int i, j;
 
     for(j=0; j < sizeof(cases)/sizeof(cases[0]); j++) {
-	for(i=0; i < sizeof(cases->c)/sizeof(cases->c[0]); i++)
+	for(i=0; i < sizeof(cases->c)/sizeof(cases->c[0]); i++) {
 	    printf("cases[%d].c[%d]=%ld\n", j, i, cases[j].c[i]);
+		if (j ==0 && i == 0)
+			ASSERT( 73400320,cases[j].c[i]);
+		else if (j == 0 && i == 1)
+			ASSERT( 262144,cases[j].c[i]);
+
+	}
 
 	printf("cases[%d].b=%ld\n", j, cases[j].b);
 	printf("cases[%d].e=%ld\n", j, cases[j].e);

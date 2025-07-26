@@ -1,4 +1,4 @@
-#include <stdio.h>
+
 #include <stdint.h>
 #include "test.h"
 
@@ -26,11 +26,11 @@ int main() {
         unsigned int result = my_clzl(value);
         printf("my_clzl(%ld) = %u\n", value, result);
         if (i == 0 || i == 1)
-            Assert(63, result );
-        elif (i == 2 || i == 3 || i == 5)
-            Assert(0, result);
-        elif (i == 4)
-            Assert(1, result );
+            ASSERT(63, result );
+        else if (i == 2 || i == 3 || i == 5)
+            ASSERT(0, result);
+        else if (i == 4)
+            ASSERT(1, result );
 
     }
 

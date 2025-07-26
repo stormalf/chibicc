@@ -1,4 +1,3 @@
-#include <stdio.h>
 #include "test.h"
 int add(int a, int b) {
     asm ("add %1, %0\n\t" 

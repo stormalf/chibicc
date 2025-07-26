@@ -1,4 +1,4 @@
-#include <stdio.h>
+
 #include "test.h"
 struct info {
     int key;

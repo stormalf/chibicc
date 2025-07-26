@@ -1,5 +1,5 @@
 #include <stdint.h>
-#include <stdio.h>
+#include <stddef.h>
 #include "test.h"
 static inline uint32_t lj_bswap(uint32_t x)
 {

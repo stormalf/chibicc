@@ -12,11 +12,12 @@ static char *argreg32[] = {"%edi", "%esi", "%edx", "%ecx", "%r8d", "%r9d"};
 static char *argreg64[] = {"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"};
 
 
-static char *newargreg8[] =   {"%cl",   "%bl",  "%dl",  "%al",  "%dil", "%r8b", "%r9b", "r10b", "r11b"};
-static char *newargreg16[] =  {"%cx",   "%bx",  "%dx",  "%ax",  "%di",  "%r8w", "%r9w", "r10w", "r11w" };
-static char *newargreg32[] =  {"%ecx",  "%ebx", "%edx", "%eax", "%edi", "%r8d", "%r9d", "r10d", "r11d" };
-static char *newargreg64[] =  {"%rcx",  "%rbx", "%rdx", "%rax", "%rdi", "%r8",  "%r9",  "r10",  "r11" };
-static char *registerUsed[] = {"free",  "free", "free", "free", "free", "free", "free", "free", "free"};
+static char *newargreg8[] =  {"%cl", "%bl", "%dl", "%al", "%sil", "%dil", "%r8b", "%r9b", "%r10b", "%r11b", "%r12b", "%r13b", "%r14b", "%r15b"};
+static char *newargreg16[] = {"%cx", "%bx", "%dx", "%ax", "%si",  "%di",  "%r8w", "%r9w", "%r10w", "%r11w", "%r12w", "%r13w", "%r14w", "%r15w"};
+static char *newargreg32[] = {"%ecx","%ebx","%edx","%eax","%esi","%edi","%r8d", "%r9d", "%r10d", "%r11d", "%r12d", "%r13d", "%r14d", "%r15d"};
+static char *newargreg64[] = {"%rcx","%rbx","%rdx","%rax","%rsi","%rdi","%r8",  "%r9",  "%r10",  "%r11",  "%r12",  "%r13",  "%r14",  "%r15"};
+static char *registerUsed[] = {"free", "free", "free", "free", "free", "free", "free", "free", "free", "free", "free", "free", "free", "free"};
+
 
 extern int64_t eval(Node *node);
 
@@ -90,8 +91,29 @@ static void popf(int reg)
 // align_to(5, 8) returns 8 and align_to(11, 8) returns 16.
 int align_to(int n, int align)
 {
-  return (n + align - 1) / align * align;
+  return ((n + align - 1) / align) * align;
 }
+
+static void print_visibility(Obj *obj) {
+  if (obj->visibility) {
+    if (!strcmp(obj->visibility, "hidden")) {
+      println("  .hidden\t%s", obj->name);
+    } else if (!strcmp(obj->visibility, "protected")) {
+      println("  .protected %s", obj->name);
+    } else {
+      println("  .globl\t%s", obj->name);
+    }
+  } 
+  if (obj->is_static) {
+    println("  .local\t%s", obj->name);
+  } else {
+    println("  .globl\t%s", obj->name);
+  }
+  if (obj->is_weak) {
+    println("  .weak\t%s", obj->name);
+  }
+}
+
 
 char *reg_dx(int sz)
 {
@@ -321,7 +343,8 @@ static void gen_addr(Node *node)
     if (node->var->is_tls)
     {
       println("  mov %%fs:0, %%rax");
-      println("  add $\"%s\"@tpoff, %%rax", node->var->name);
+      if (node->var->is_definition)
+        println("  add $\"%s\"@tpoff, %%rax", node->var->name);
       return;
     }
 
@@ -410,7 +433,7 @@ static void gen_addr(Node *node)
     return;
   }
 
-  error_tok(node->tok, "%s not an lvalue", CODEGEN_C);
+  error_tok(node->tok, "%s:%d not an lvalue %d", CODEGEN_C, __LINE__, node->kind);
 }
 
 // Copy n bytes from the source address in %rax to the destination in dst_reg.
@@ -615,7 +638,7 @@ static char i32u8[] = "movzbl %al, %eax";
 static char i32i16[] = "movswl %ax, %eax";
 static char i32u16[] = "movzwl %ax, %eax";
 static char i32f32[] = "cvtsi2ssl %eax, %xmm0";
-static char i32i64[] = "movsxd %eax, %rax";
+static char i32i64[] = "movslq %eax, %rax";
 static char i32f64[] = "cvtsi2sdl %eax, %xmm0";
 static char i32f80[] = "mov %eax, -4(%rsp); fildl -4(%rsp)";
 
@@ -628,7 +651,10 @@ static char i64f32[] = "cvtsi2ssq %rax, %xmm0";
 static char i64f64[] = "cvtsi2sdq %rax, %xmm0";
 static char i64f80[] = "movq %rax, -8(%rsp); fildll -8(%rsp)";
 
-static char u64f32[] = "cvtsi2ssq %rax, %xmm0";
+static char u64f32[] =
+  "test %rax,%rax; js 1f; pxor %xmm0,%xmm0; cvtsi2ss %rax,%xmm0; jmp 2f; "
+  "1: mov %rax,%rdi; and $1,%eax; pxor %xmm0,%xmm0; shr %rdi; "
+  "or %rax,%rdi; cvtsi2ss %rdi,%xmm0; addss %xmm0,%xmm0; 2:";
 static char u64f64[] =
     "test %rax,%rax; js 1f; pxor %xmm0,%xmm0; cvtsi2sd %rax,%xmm0; jmp 2f; "
     "1: mov %rax,%rdi; and $1,%eax; pxor %xmm0,%xmm0; shr %rdi; "
@@ -644,7 +670,10 @@ static char f32u16[] = "cvttss2sil %xmm0, %eax; movzwl %ax, %eax";
 static char f32i32[] = "cvttss2sil %xmm0, %eax";
 static char f32u32[] = "cvttss2siq %xmm0, %rax";
 static char f32i64[] = "cvttss2siq %xmm0, %rax";
-static char f32u64[] = "cvttss2siq %xmm0, %rax";
+static char f32u64[] =
+  "cvttss2siq %xmm0, %rcx; movq %rcx, %rdx; movl $0x5F000000, %eax; "
+  "movd %eax, %xmm1; subss %xmm1, %xmm0; cvttss2siq %xmm0, %rax; "
+  "sarq $63, %rdx; andq %rdx, %rax; orq %rcx, %rax;";
 static char f32f64[] = "cvtss2sd %xmm0, %xmm0";
 static char f32f80[] = "movss %xmm0, -4(%rsp); flds -4(%rsp)";
 
@@ -655,7 +684,10 @@ static char f64u16[] = "cvttsd2sil %xmm0, %eax; movzwl %ax, %eax";
 static char f64i32[] = "cvttsd2sil %xmm0, %eax";
 static char f64u32[] = "cvttsd2siq %xmm0, %rax";
 static char f64i64[] = "cvttsd2siq %xmm0, %rax";
-static char f64u64[] = "cvttsd2siq %xmm0, %rax";
+static char f64u64[] =
+  "cvttsd2siq %xmm0, %rcx; movq %rcx, %rdx; mov $0x43e0000000000000, %rax; "
+  "movq %rax, %xmm1; subsd %xmm1, %xmm0; cvttsd2siq %xmm0, %rax; "
+  "sarq $63, %rdx; andq %rdx, %rax; orq %rcx, %rax";
 static char f64f32[] = "cvtsd2ss %xmm0, %xmm0";
 static char f64f80[] = "movsd %xmm0, -8(%rsp); fldl -8(%rsp)";
 
@@ -672,7 +704,12 @@ static char f80u16[] = FROM_F80_1 "fistpl" FROM_F80_2 "movswl -24(%rsp), %eax";
 static char f80i32[] = FROM_F80_1 "fistpl" FROM_F80_2 "mov -24(%rsp), %eax";
 static char f80u32[] = FROM_F80_1 "fistpl" FROM_F80_2 "mov -24(%rsp), %eax";
 static char f80i64[] = FROM_F80_1 "fistpq" FROM_F80_2 "mov -24(%rsp), %rax";
-static char f80u64[] = FROM_F80_1 "fistpq" FROM_F80_2 "mov -24(%rsp), %rax";
+static char f80u64[] =
+  "movl $0x5f000000, -4(%rsp); flds -4(%rsp); fucomi %st(1), %st; setbe %al;"
+  "fldz; fcmovbe %st(1), %st; fstp %st(1); fsubrp %st, %st(1); fnstcw -12(%rsp);"
+  "movzwl -12(%rsp), %ecx; orl $3072, %ecx; movw %cx, -10(%rsp); fldcw -10(%rsp);"
+  "fistpll -8(%rsp); fldcw -12(%rsp); shlq $63, %rax; xorq -8(%rsp), %rax;";
+
 static char f80f32[] = "fstps -8(%rsp); movss -8(%rsp), %xmm0";
 static char f80f64[] = "fstpl -8(%rsp); movsd -8(%rsp), %xmm0";
 
@@ -711,6 +748,34 @@ static void cast(Type *from, Type *to)
   if (cast_table[t1][t2])
     println("  %s", cast_table[t1][t2]);
 }
+
+// Returns true if 'ty' is or contains a pointer (recursively)
+static bool has_pointer(Type *ty) {
+  if (!ty)
+    return false;
+
+  switch (ty->kind) {
+  case TY_PTR:
+    return true;
+
+  case TY_ARRAY:
+    return has_pointer(ty->base);
+
+  case TY_STRUCT:
+  case TY_UNION: {
+    for (Member *mem = ty->members; mem; mem = mem->next) {
+      if (has_pointer(mem->ty))
+        return true;
+    }
+    return false;
+  }
+
+  default:
+    return false;
+  }
+}
+
+
 
 // Structs or unions equal or smaller than 16 bytes are passed
 // using up to two registers.
@@ -784,6 +849,9 @@ static bool pass_by_reg(Type *ty, int gp, int fp) {
     return false;
   if (gp_inc && (gp + gp_inc > GP_MAX))
     return false;
+  
+  if (ty->is_variadic && !has_flonum1(ty) && !has_pointer(ty))
+    return false;
 
   return true;
 }
@@ -834,17 +902,8 @@ static void push_args2(Node *args, bool first_pass)
   default:
     push();
   }
-  if (args->realign_stack) {
-    pushreg("rbx");
-  }
 
-    //   if (args->realign_stack) {
-    //     // Save the current stack pointer and align it
-    //     //pushreg("rbx");                  // Save current stack pointer
-    //     println("  mov %%rsp, %%rbx");   // Save the current stack pointer in RBX
-    //     println("  and $-16, %%rsp");     // Align the stack pointer to a 16-byte boundary
-    //     println("  sub $16, %%rsp");      // Allocate space for local variables
-    // }
+
 }
 
 // Load function call arguments. Arguments are already evaluated and
@@ -875,7 +934,6 @@ static int push_args(Node *node)
   if (node->ret_buffer && node->ty->size > 16)
     gp++;
 
-  bool is_variadic = node->func_ty->is_variadic;
   // Load as many arguments to the registers as possible.
   for (Node *arg = node->args; arg; arg = arg->next)
   {
@@ -889,7 +947,7 @@ static int push_args(Node *node)
       if (ty->size == 0)
         continue;
 
-      if (pass_by_reg(ty, gp, fp) && !is_variadic) {
+      if (pass_by_reg(ty, gp, fp) ) {
           fp += has_flonum1(ty) + (ty->size > 8 && has_flonum2(ty));
           gp += !has_flonum1(ty) + (ty->size > 8 && !has_flonum2(ty));
         } else {
@@ -900,28 +958,6 @@ static int push_args(Node *node)
             stack += align_to(ty->size, 8) / 8;
         }
         break;  
-      // if (ty->size > 16)
-      // {
-      //   arg->pass_by_stack = true;
-      //   stack += align_to(ty->size, 8) / 8;
-      // }
-      // else
-      // {
-      //   bool fp1 = has_flonum1(ty);
-      //   bool fp2 = has_flonum2(ty);
-
-      //   if (fp + fp1 + fp2 < FP_MAX && gp + !fp1 + !fp2 < GP_MAX)
-      //   {
-      //     fp = fp + fp1 + fp2;
-      //     gp = gp + !fp1 + !fp2;
-      //   }
-      //   else
-      //   {
-      //     arg->pass_by_stack = true;
-      //     stack += align_to(ty->size, 8) / 8;
-      //   }
-      // }
-      // break;
     case TY_FLOAT:
     case TY_DOUBLE:
       if (fp++ >= FP_MAX)
@@ -1083,11 +1119,14 @@ static void copy_struct_mem(void)
   println("  mov %%rdi, %%rax");
 }
 
-static void builtin_alloca(void)
+static void builtin_alloca(Node *node)
 {
   // Align size to 16 bytes.
-  println("  add $15, %%rdi");
-  println("  and $0xfffffff0, %%edi");
+  // println("  add $15, %%rdi");
+  // println("  and $0xfffffff0, %%edi");
+  int align = node->val > 16 ? node->val : 16;
+  println("  add $%d, %%rdi", align - 1);
+  println("  and $-%d, %%rdi", align);
 
   // Shift the temporary area by %rdi.
   println("  mov %d(%%rbp), %%rcx", current_fn->alloca_bottom->offset);
@@ -1358,11 +1397,12 @@ static void gen_expr(Node *node)
   }
   case ND_FUNCALL:
   {
-    if (node->lhs->kind == ND_VAR && !strcmp(node->lhs->var->name, "alloca"))
+    if (node->lhs->kind == ND_VAR && (!strcmp(node->lhs->var->name, "alloca") ||  !strcmp(node->lhs->var->name, "__builtin_alloca")))
     {
       gen_expr(node->args);
       println("  mov %%rax, %%rdi");
-      builtin_alloca();
+      //builtin_alloca();
+      builtin_alloca(node);
       return;
     }
 
@@ -1375,7 +1415,7 @@ static void gen_expr(Node *node)
     // a pointer to a buffer as if it were the first argument.
     if (node->ret_buffer && node->ty->size > 16)
       pop(argreg64[gp++]);
-    bool is_variadic = node->func_ty->is_variadic;
+    
     for (Node *arg = node->args; arg; arg = arg->next)
     {
       Type *ty = arg->ty;
@@ -1385,8 +1425,6 @@ static void gen_expr(Node *node)
       case TY_STRUCT:
       case TY_UNION:
         if (ty->size == 0)
-          continue;
-        if (is_variadic)
           continue;
         if (!pass_by_reg(ty, gp, fp))
           continue;
@@ -1403,28 +1441,6 @@ static void gen_expr(Node *node)
             pop(argreg64[gp++]);
         }
         break;
-        // if (ty->size > 16)
-        //   continue;
-
-        // bool fp1 = has_flonum1(ty);
-        // bool fp2 = has_flonum2(ty);
-
-        // if (fp + fp1 + fp2 < FP_MAX && gp + !fp1 + !fp2 < GP_MAX)
-        // {
-        //   if (fp1)
-        //     popf(fp++);
-        //   else
-        //     pop(argreg64[gp++]);
-
-        //   if (ty->size > 8)
-        //   {
-        //     if (fp2)
-        //       popf(fp++);
-        //     else
-        //       pop(argreg64[gp++]);
-        //   }
-        // }
-        // break;
       case TY_FLOAT:
       case TY_DOUBLE:
         if (fp < FP_MAX)
@@ -1435,6 +1451,7 @@ static void gen_expr(Node *node)
       default:
         if (gp < GP_MAX)
           pop(argreg64[gp++]);
+        break;
       }
     }
 
@@ -2347,20 +2364,31 @@ static void gen_stmt(Node *node)
 
     for (Node *n = node->case_next; n; n = n->case_next)
     {
-      char *ax = (node->cond->ty->size == 8) ? "%rax" : "%eax";
-      char *di = (node->cond->ty->size == 8) ? "%rdi" : "%edi";
+      char *ax, *di, *dx;
 
-      if (n->begin == n->end)
-      {
-        println("  cmp $%ld, %s", n->begin, ax);
+      if (node->cond->ty->size == 8) {
+        ax = "%rax";
+        di = "%rdi";
+        dx = "%rdx";
+      } else {
+        ax = "%eax";
+        di = "%edi";
+        dx = "%edx";
+      }
+
+      if (n->begin == n->end) {
+        println("  mov $%ld, %s", n->begin, dx);
+        println("  cmp %s, %s", dx, ax);
         println("  je %s", n->label);
         continue;
       }
 
       // [GNU] Case ranges
       println("  mov %s, %s", ax, di);
-      println("  sub $%ld, %s", n->begin, di);
-      println("  cmp $%ld, %s", n->end - n->begin, di);
+      println("  mov $%ld, %s", n->begin, dx);
+      println("  sub %s, %s", dx, di);
+      println("  mov $%ld, %s", n->end - n->begin, dx);
+      println("  cmp %s, %s", dx, di);
       println("  jbe %s", n->label);
     }
 
@@ -2373,7 +2401,8 @@ static void gen_stmt(Node *node)
     return;
   case ND_CASE:
     println("%s:", node->label);
-    gen_stmt(node->lhs);
+    if (node->lhs)
+      gen_stmt(node->lhs);
     return;
   case ND_BLOCK:
     for (Node *n = node->body; n; n = n->next)
@@ -2388,7 +2417,8 @@ static void gen_stmt(Node *node)
     return;
   case ND_LABEL:
     println("%s:", node->unique_label);
-    gen_stmt(node->lhs);
+    if (node->lhs)    
+      gen_stmt(node->lhs);
     return;
   case ND_RETURN:
     if (node->lhs)
@@ -2434,20 +2464,20 @@ static void emit_data(Obj *prog)
 
     if (var->is_function || !var->is_definition)
       continue;
-
-    if (var->is_static)
-      println("  .local %s", var->name);
-    else if (var->ty->is_weak)
-      println("  .weak \"%s\"", var->name);
-    else
-      println("  .globl %s", var->name);
+    print_visibility(var);
+    // if (var->is_static)
+    //   println("  .local %s", var->name);
+    // else if (var->ty->is_weak)
+    //   println("  .weak \"%s\"", var->name);
+    // else
+    //   println("  .globl %s", var->name);
 
     int align = (var->ty->kind == TY_ARRAY && var->ty->size >= 16)
                     ? MAX(16, var->align)
                     : var->align;
 
     // Common symbol
-    if (opt_fcommon && var->is_tentative)
+    if (opt_fcommon && var->is_tentative && !var->is_tls && !var->section)
     {
       //from @fuhsnn incomplete array assuming to have one element
       if (var->ty->kind == TY_ARRAY && var->ty->size < 0)
@@ -2478,7 +2508,7 @@ static void emit_data(Obj *prog)
       println("  .type %s, @object", var->name);
       println("  .size %s, %d", var->name, abs(var->ty->size));
       //println("  .align %d", align);
-      if (align > 1) println("  .balign %d", align);
+      if (align > 1) println("  .align %d", align);
       println("%s:", var->name);
 
       Relocation *rel = var->rel;
@@ -2567,32 +2597,6 @@ static void store_fp(int r, int offset, int sz)
   printf("===== r=%d offset=%d sz=%d\n", r, offset, sz);
   unreachable();
 }
-
-// static void store_gp(int r, int offset, int sz)
-// {
-//   switch (sz)
-//   {
-//   case 1:
-//     println("  mov %s, %d(%%rbp)", argreg8[r], offset);
-//     return;
-//   case 2:
-//     println("  mov %s, %d(%%rbp)", argreg16[r], offset);
-//     return;
-//   case 4:
-//     println("  mov %s, %d(%%rbp)", argreg32[r], offset);
-//     return;
-//   case 8:
-//     println("  mov %s, %d(%%rbp)", argreg64[r], offset);
-//     return;
-//   default:
-//     for (int i = 0; i < sz; i++)
-//     {
-//       println("  mov %s, %d(%%rbp)", argreg8[r], offset + i);
-//       println("  shr $8, %s", argreg64[r]);
-//     }
-//     return;
-//   }
-// }
 
 static void store_gp(int r, int offset, int sz) {
   switch (sz) {
@@ -2712,19 +2716,49 @@ static void emit_text(Obj *prog)
       int gp = 0, fp = 0;
       for (Obj *var = fn->params; var; var = var->next)
       {
-        if (is_flonum(var->ty))
+        Type *ty = var->ty;
+        switch (ty->kind)
+        {
+          case TY_STRUCT:
+          case TY_UNION:
+            if (ty->size == 0)
+              continue;
+            if (!pass_by_reg(ty, gp, fp))
+              continue;
+
+            if (has_flonum1(ty))
+              fp++;
+            else
+              gp++;
+
+            if (ty->size > 8) {
+              if (has_flonum2(ty))
           fp++;
         else
           gp++;
+            }
+            continue;
+          case TY_FLOAT:
+          case TY_DOUBLE:
+            //if (fp < FP_MAX)
+              fp++;
+            continue;
+          case TY_LDOUBLE:
+            continue;
+          default:
+            //if (gp < GP_MAX)
+              gp++;
+        }
       }
 
       int off = fn->va_area->offset;
 
       // va_elem
       println("  movl $%d, %d(%%rbp)", gp * 8, off);          // gp_offset
-      println("  movl $%d, %d(%%rbp)", fp * 8 + 48, off + 4); // fp_offset
+      println("  movl $%d, %d(%%rbp)", fp * 16 + 48, off + 4); // fp_offset
       println("  movq %%rbp, %d(%%rbp)", off + 8);            // overflow_arg_area
-      println("  addq $16, %d(%%rbp)", off + 8);
+      //println("  addq $16, %d(%%rbp)", off + 8);
+      println("  addq $%d, %d(%%rbp)", fn->overflow_arg_area, off + 8);
       println("  movq %%rbp, %d(%%rbp)", off + 16); // reg_save_area
       println("  addq $%d, %d(%%rbp)", off + 24, off + 16);
 
@@ -2736,20 +2770,22 @@ static void emit_text(Obj *prog)
       println("  movq %%r8, %d(%%rbp)", off + 56);
       println("  movq %%r9, %d(%%rbp)", off + 64);
       println("  movsd %%xmm0, %d(%%rbp)", off + 72);
-      println("  movsd %%xmm1, %d(%%rbp)", off + 80);
-      println("  movsd %%xmm2, %d(%%rbp)", off + 88);
-      println("  movsd %%xmm3, %d(%%rbp)", off + 96);
-      println("  movsd %%xmm4, %d(%%rbp)", off + 104);
-      println("  movsd %%xmm5, %d(%%rbp)", off + 112);
-      println("  movsd %%xmm6, %d(%%rbp)", off + 120);
-      println("  movsd %%xmm7, %d(%%rbp)", off + 128);
+      println("  movsd %%xmm1, %d(%%rbp)", off + 88);
+      println("  movsd %%xmm2, %d(%%rbp)", off + 104);
+      println("  movsd %%xmm3, %d(%%rbp)", off + 120);
+      println("  movsd %%xmm4, %d(%%rbp)", off + 136);
+      println("  movsd %%xmm5, %d(%%rbp)", off + 152);
+      println("  movsd %%xmm6, %d(%%rbp)", off + 168);
+      println("  movsd %%xmm7, %d(%%rbp)", off + 184);
     }
 
     // Save passed-by-register arguments to the stack
     int gp = 0, fp = 0;
     for (Obj *var = fn->params; var; var = var->next)
     {
-      if (var->offset > 0)
+      // if (var->offset > 0)
+      //   continue;
+      if (var->pass_by_stack)
         continue;
 
       Type *ty = var->ty;
@@ -2775,8 +2811,6 @@ static void emit_text(Obj *prog)
       case TY_FLOAT:
       case TY_DOUBLE:
         store_fp(fp++, var->offset, ty->size);
-        break;
-      case TY_LDOUBLE:
         break;
       default:
         store_gp(gp++, var->offset, ty->size);
@@ -2848,95 +2882,6 @@ static void print_offset(Obj *prog)
   }
 }
 
-
-// //here the goal is to update offset for parameters and local variables to be able to use them when managing assembly inline
-// void assign_lvar_offsets_assembly(Obj *fn)
-// {
-
-
-//     // If a function has many parameters, some parameters are
-//     // inevitably passed by stack rather than by register.
-//     // The first passed-by-stack parameter resides at RBP+16.
-//     int top = 16;
-//     int bottom = 16;
-
-//     int gp = 0, fp = 0;
-
-//     // Assign offsets to pass-by-stack parameters.
-//     for (Obj *var = fn->params; var; var = var->next)
-//     {
-//       Type *ty = var->ty;
-
-//       switch (ty->kind)
-//       {
-//       case TY_STRUCT:
-//       case TY_UNION:
-//           if (ty->size <= 8) {
-//             bool fp1 = has_flonum(ty, 0, 8, 0);
-//             if (fp + fp1 < FP_MAX && gp + !fp1 < GP_MAX) {
-//               fp = fp + fp1;
-//               gp = gp + !fp1;
-//               continue;
-//             }
-//           } else if (ty->size <= 16) {
-//         //if (ty->size <= 16)
-//         //{
-//           bool fp1 = has_flonum(ty, 0, 8, 0);
-//           bool fp2 = has_flonum(ty, 8, 16, 8);
-//           if (fp + fp1 + fp2 < FP_MAX && gp + !fp1 + !fp2 < GP_MAX)
-//           {
-//             fp = fp + fp1 + fp2;
-//             gp = gp + !fp1 + !fp2;
-//             continue;
-//           }
-//         }
-//         break;
-//       case TY_FLOAT:
-//       case TY_DOUBLE:
-//         if (fp++ < FP_MAX)
-//           continue;
-//         break;
-//       case TY_LDOUBLE:
-//         break;
-//       default:
-//         if (gp++ < GP_MAX)
-//           continue;
-//       }
-
-//       top = align_to(top, 8);
-//       var->offset = top;
-//       top += var->ty->size;
-//     }
-
-//     // Assign offsets to pass-by-register parameters and local variables.
-//     for (Obj *var = fn->locals; var; var = var->next)
-//     {
-//       int align = (var->ty->kind == TY_ARRAY && var->ty->size >= 16)
-//                       ? MAX(16, var->align)
-//                       : var->align;
-
-
-//       if (var->offset) {
-//         bottom += var->ty->size;
-//         bottom = align_to(bottom, align);
-//         continue;
-//       }
-
-//       // AMD64 System V ABI has a special alignment rule for an array of
-//       // length at least 16 bytes. We need to align such array to at least
-//       // 16-byte boundaries. See p.14 of
-//       // https://github.com/hjl-tools/x86-psABI/wiki/x86-64-psABI-draft.pdf.
-
-//       bottom += var->ty->size;
-//       bottom = align_to(bottom, align);
-//       var->offset = -bottom;
-
-//     }
-
-//     fn->stack_size = align_to(bottom, 16);
-
-// }
-
 void assign_lvar_offsets(Obj *prog)
 {
   for (Obj *fn = prog; fn; fn = fn->next)
@@ -2949,6 +2894,7 @@ void assign_lvar_offsets(Obj *prog)
     // The first passed-by-stack parameter resides at RBP+16.
     int top = 16;
     int bottom = 0;
+    int max_align = 8;  
     //trying to fix =====ISS-149 causing segmentation fault when having assembly instructions
     if (fn->alloca_bottom && fn->alloca_bottom->offset)
       bottom =  abs(fn->alloca_bottom->offset);
@@ -2969,32 +2915,12 @@ void assign_lvar_offsets(Obj *prog)
       {
       case TY_STRUCT:
       case TY_UNION:
-        if (pass_by_reg(ty, gp, fp) && !is_variadic) {
+        if (pass_by_reg(ty, gp, fp)) {
           fp += has_flonum1(ty) + (ty->size > 8 && has_flonum2(ty));
           gp += !has_flonum1(ty) + (ty->size > 8 && !has_flonum2(ty));
           continue;
         }
         break;
-        //   if (ty->size <= 8) {
-        //     bool fp1 = has_flonum(ty, 0, 8, 0);
-        //     if (fp + fp1 < FP_MAX && gp + !fp1 < GP_MAX) {
-        //       fp = fp + fp1;
-        //       gp = gp + !fp1;
-        //       continue;
-        //     }
-        //   } else if (ty->size <= 16) {
-        // //if (ty->size <= 16)
-        // //{
-        //   bool fp1 = has_flonum(ty, 0, 8, 0);
-        //   bool fp2 = has_flonum(ty, 8, 16, 8);
-        //   if (fp + fp1 + fp2 < FP_MAX && gp + !fp1 + !fp2 < GP_MAX)
-        //   {
-        //     fp = fp + fp1 + fp2;
-        //     gp = gp + !fp1 + !fp2;
-        //     continue;
-        //   }
-        // }
-        // break;
       case TY_FLOAT:
       case TY_DOUBLE:
         if (fp++ < FP_MAX)
@@ -3007,11 +2933,18 @@ void assign_lvar_offsets(Obj *prog)
           continue;
       }
 
+      var->pass_by_stack = true; 
+       if (var->ty->align > max_align)
+            max_align = var->ty->align;
+
       top = align_to(top, 8);
       var->offset = top;
       top += var->ty->size;
     }
 
+    if (is_variadic)
+      fn->overflow_arg_area = align_to(top, max_align);
+      //fn->overflow_arg_area = align_to(top, 8);
 
     // Assign offsets to pass-by-register parameters and local variables.
     for (Obj *var = fn->locals; var; var = var->next)
@@ -3223,11 +3156,6 @@ int len = sizeof(newargreg64)/sizeof(newargreg64[0]);
 
 }
 
-void pushreg(const char *arg) {
-  println("  push %%%s", arg);
-  depth++;
-}
-
 static int cmp_ctor(const void *a, const void *b) {
   return (*(CtorFunc **)a)->priority - (*(CtorFunc **)b)->priority;
 }
@@ -3258,4 +3186,3 @@ static void emit_destructors(void) {
   }
   println("  .text");
 }
-

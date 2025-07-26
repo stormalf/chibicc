@@ -1,5 +1,6 @@
 #include <stdbool.h>
 #include <string.h>
+#include "test.h"
 //#include <ctype.h>
 
 #define HIGHBIT					(0x80)

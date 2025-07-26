@@ -1,3 +1,5 @@
+#include <stdbool.h>
+#include "test.h"
 #ifndef __cplusplus
 #ifdef HAVE__STATIC_ASSERT
 #define StaticAssertDecl(condition, errmessage) \
@@ -53,7 +55,7 @@
 
 
 int main() {
-
-    unconstify(int, 5 + 8);
+	bool b =  unconstify(int, 5 + 8);
+	ASSERT(1, b);
     return 0;
 }

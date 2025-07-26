@@ -11,6 +11,7 @@ void assert(int expected, int actual, char *code) {
   }
 }
 
+
 static int static_fn() { return 5; }
 int ext1 = 5;
 int *ext2 = &ext1;
@@ -19,6 +20,7 @@ int ext_fn1(int x) { return x; }
 int ext_fn2(int x) { return x; }
 int common_ext2 = 3;
 static int common_local;
+_Thread_local int extern_tls;
 
 int false_fn() { return 512; }
 int true_fn() { return 513; }
@@ -116,4 +118,157 @@ Ty20 struct_test27(void) {
 
 Ty21 struct_test28(void) {
   return (Ty21){1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20};
+}
+
+typedef struct {
+  char g;
+} G;
+
+typedef struct {
+  float f;
+} F;
+
+typedef struct {
+  char l;
+  float d;
+} A;
+
+
+float struct_test101(
+  G g0, G g1, G g2, G g3, G g4, G g5,
+  F f0, F f1, F f2, F f3, F f4, F f5, F f6, F f7,
+  G gs0, F fs0, G gs1, F fs1
+) {
+  return g0.g + g1.g + g2.g + g3.g + g4.g + g5.g +
+  f0.f + f1.f + f2.f + f3.f + f4.f + f5.f + f6.f + f7.f +
+  gs0.g + gs1.g + fs0.f + fs1.f;
+}
+
+float struct_test111(
+  F f0, F f1, F f2, F f3, F f4, F f5, F f6, F f7,
+  G g0, G g1, G g2, G g3, G g4, G g5,
+  G gs0, F fs0, G gs1, F fs1
+) {
+  return
+  g0.g + g1.g + g2.g + g3.g + g4.g + g5.g +
+  f0.f + f1.f + f2.f + f3.f + f4.f + f5.f + f6.f + f7.f +
+  gs0.g + gs1.g + fs0.f + fs1.f;
+}
+
+
+float struct_test121(
+  A reg0, A reg1, A reg2, A reg3, A reg4, A reg5,
+  A s0,
+  F f6, F f7,
+  A s1)
+{
+  return
+  reg0.l + reg0.d + reg1.l + reg1.d + reg2.l + reg2.d +
+  reg3.l + reg3.d + reg4.l + reg4.d + reg5.l + reg5.d +
+  s0.l + s0.d + s1.l + s1.d + f6.f + f7.f;
+}
+
+
+typedef struct {
+  char _Alignas(1024) c;
+} Aligned1024;
+
+
+int struct_test131(G g0,G g1,G g2,G g3,G g4,F f0,F f1,F f2,F f3,F f4,F f5, int i0, int i1, ... ) {
+  va_list ap;
+  va_start(ap, i1);
+  long double ret = i0 + i1;
+  ret += va_arg(ap, long double);
+  ret += va_arg(ap, Aligned1024).c;
+  ret += va_arg(ap, int);
+  ret += va_arg(ap, double);
+  ret += va_arg(ap, double);
+  ret += va_arg(ap, double);
+  ret += va_arg(ap, double);
+  ret += va_arg(ap, Aligned1024).c;
+  ret += va_arg(ap, long double);
+  va_end(ap);
+  return ret;
+}
+
+typedef struct {
+  long i,j;
+} DI;
+
+int struct_test141(int cnt,...) {
+  va_list ap;
+  va_start(ap, cnt);
+  long ret = 0;
+  for (int i = 0; i < cnt; i++) {
+    DI s = va_arg(ap, DI);
+    ret += s.i + s.j;
+  }
+  va_end(ap);
+  return ret;
+}
+
+typedef struct {
+  double d,f;
+} DD;
+
+int struct_test151(int cnt,...) {
+  va_list ap;
+  va_start(ap, cnt);
+  double ret = 0;
+  for (int i = 0; i < cnt; i++) {
+    DD s = va_arg(ap, DD);
+    ret += s.d + s.f;
+  }
+  va_end(ap);
+  return ret;
+}
+
+typedef struct {
+    long i;
+    double d;
+} DM;
+int struct_test161(int cnt,...) {
+  va_list ap;
+  va_start(ap, cnt);
+  double ret = 0;
+  for (int i = 0; i < cnt; i++) {
+    DM s = va_arg(ap, DM);
+    ret += s.d + s.i;
+  }
+  va_end(ap);
+  return ret;
+}
+
+typedef struct {
+    union {
+        long double ld[1];
+        long double ld2;
+    } u[1];
+} struct170;
+
+struct170 struct_test171(struct170 t1,...) {
+  va_list ap;
+  va_start(ap, t1);
+  struct170 t = t1;
+
+  t.u[0].ld2 += va_arg(ap, struct170).u[0].ld[0];
+
+  va_end(ap);
+  return t;
+}
+
+typedef union {
+  long double ld;
+  long i;
+} struct180;
+
+struct180 struct_test181(struct180 t1,...) {
+  va_list ap;
+  va_start(ap, t1);
+  struct180 t = t1;
+
+  t.ld += va_arg(ap, struct180).ld;
+
+  va_end(ap);
+  return t;
 }

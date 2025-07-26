@@ -1,4 +1,5 @@
-#include <stdio.h>
+
+#include "test.h"
 
 // Define the struct with float, double, and int types
 struct Data {
@@ -24,6 +25,11 @@ void process_array(ARR arr, int size) {
         printf("  a = %.2f\n", arr[i].a);
         printf("  b = %.2lf\n", arr[i].b);
         printf("  c = %d\n", arr[i].c);
+        if (i == 0) {
+         ASSERT(1, arr[i].a);
+         ASSERT(2, arr[i].b);
+         ASSERT(3, arr[i].c);
+        }
     }
 }
 

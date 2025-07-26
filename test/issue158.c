@@ -1,5 +1,6 @@
-#include <stdio.h>
+#include "test.h"
 #include <stdint.h>
+#include <stddef.h>
 
 #define MPACK_PARENT_NODE(n) (((n) - 1)->pos == (size_t)-1 ? NULL : (n) - 1)
 
