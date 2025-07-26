@@ -55,25 +55,25 @@ test-stage2: $(TESTS:test/%=stage2/test/%)
 
 projects-all: projects projects-oth git
 
-projects-oth: openssl lxc vim nmap curl 
+projects-oth: openssl vim nmap curl 
 
 projects: zlib util-linux nginx
 
 
 curl:
-	cd ../curl && make clean && make && make test
+	cd ../curl && make clean && CC=chibicc ./configure && make && make test
 
 zlib:
-	cd ../zlib && make clean && make && make test
+	cd ../zlib && make clean && CC=chibicc ./configure && make && make test
 
 nmap:
-	cd ../nmap && make clean && make && make check
+	cd ../nmap && make clean && CC=chibicc LDFLAGS="-ldbus-1" LIBS="-ldbus-1" ./configure --with-dbus && make && make check
 
 openssl:
-	cd ../openssl && make clean && make 
+	cd ../openssl && make clean && CC=chibicc ./configure && make 
 
 util-linux:
-	cd ../util-linux && make clean && make && make check-programs && cd tests && ./run.sh
+	cd ../util-linux && make clean && CC=chibicc CFLAGS=-fPIC ./configure && make && make check-programs && cd tests && ./run.sh
 
 nginx:
 	cd ../nginx && make clean && CC=chibicc CFLAGS=-fPIC ./auto/configure --with-http_ssl_module && make && make check
@@ -82,8 +82,15 @@ vim:
 	cd ../vim && make clean && CC=chibicc CFLAGS=-fPIC ./configure && make && make test
 
 lxc:
-	cd ../lxc && rm -rf build && CC=chibicc \
-	CFLAGS="-fpic" 	meson build && cd build && meson compile	
+	cd ../lxc && rm -rf build && CC=gcc \
+	CFLAGS="-fpic" 	meson build && cd build && cp /usr/bin/gcc /usr/bin/gcc_old && \
+	cp /usr/local/bin/chibicc /usr/local/gcc && meson compile && cp /usr/bin/gcc_old /usr/bin/gcc
+
+git: 
+	cd ../git && CC=chibicc CFLAGS=-fPIC ./configure && make && make test
+
+memcached:
+	cd ../memcached && make clean && CC=chibicc CFLAGS=-fPIC ./configure && make && make test
 
 # Misc.
 

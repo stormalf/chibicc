@@ -616,8 +616,10 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
         attr->is_extern = true;
       else if (equal(tok, "inline"))
         attr->is_inline = true;
-      else
+      else if (equal(tok, "_Thread_local") || equal(tok, "__thread"))
         attr->is_tls = true;
+      else        
+        error_tok(tok, "%s %d: in declspec : unknown storage class specifier", PARSE_C, __LINE__);
 
       //fixing  check for typedef specifier/attribute not strict enough #142 suggested by @samkho
       if (attr->is_typedef &&

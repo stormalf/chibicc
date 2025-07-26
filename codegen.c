@@ -103,7 +103,8 @@ static void print_visibility(Obj *obj) {
     } else {
       println("  .globl\t%s", obj->name);
     }
-  } else if (obj->is_static) {
+  } 
+  if (obj->is_static) {
     println("  .local\t%s", obj->name);
   } else {
     println("  .globl\t%s", obj->name);
@@ -901,17 +902,8 @@ static void push_args2(Node *args, bool first_pass)
   default:
     push();
   }
-  if (args->realign_stack) {
-    pushreg("rbx");
-  }
 
-    //   if (args->realign_stack) {
-    //     // Save the current stack pointer and align it
-    //     //pushreg("rbx");                  // Save current stack pointer
-    //     println("  mov %%rsp, %%rbx");   // Save the current stack pointer in RBX
-    //     println("  and $-16, %%rsp");     // Align the stack pointer to a 16-byte boundary
-    //     println("  sub $16, %%rsp");      // Allocate space for local variables
-    // }
+
 }
 
 // Load function call arguments. Arguments are already evaluated and
@@ -966,28 +958,6 @@ static int push_args(Node *node)
             stack += align_to(ty->size, 8) / 8;
         }
         break;  
-      // if (ty->size > 16)
-      // {
-      //   arg->pass_by_stack = true;
-      //   stack += align_to(ty->size, 8) / 8;
-      // }
-      // else
-      // {
-      //   bool fp1 = has_flonum1(ty);
-      //   bool fp2 = has_flonum2(ty);
-
-      //   if (fp + fp1 + fp2 < FP_MAX && gp + !fp1 + !fp2 < GP_MAX)
-      //   {
-      //     fp = fp + fp1 + fp2;
-      //     gp = gp + !fp1 + !fp2;
-      //   }
-      //   else
-      //   {
-      //     arg->pass_by_stack = true;
-      //     stack += align_to(ty->size, 8) / 8;
-      //   }
-      // }
-      // break;
     case TY_FLOAT:
     case TY_DOUBLE:
       if (fp++ >= FP_MAX)
@@ -1149,11 +1119,14 @@ static void copy_struct_mem(void)
   println("  mov %%rdi, %%rax");
 }
 
-static void builtin_alloca(void)
+static void builtin_alloca(Node *node)
 {
   // Align size to 16 bytes.
-  println("  add $15, %%rdi");
-  println("  and $0xfffffff0, %%edi");
+  // println("  add $15, %%rdi");
+  // println("  and $0xfffffff0, %%edi");
+  int align = node->val > 16 ? node->val : 16;
+  println("  add $%d, %%rdi", align - 1);
+  println("  and $-%d, %%rdi", align);
 
   // Shift the temporary area by %rdi.
   println("  mov %d(%%rbp), %%rcx", current_fn->alloca_bottom->offset);
@@ -1428,7 +1401,8 @@ static void gen_expr(Node *node)
     {
       gen_expr(node->args);
       println("  mov %%rax, %%rdi");
-      builtin_alloca();
+      //builtin_alloca();
+      builtin_alloca(node);
       return;
     }
 
@@ -2534,7 +2508,7 @@ static void emit_data(Obj *prog)
       println("  .type %s, @object", var->name);
       println("  .size %s, %d", var->name, abs(var->ty->size));
       //println("  .align %d", align);
-      if (align > 1) println("  .balign %d", align);
+      if (align > 1) println("  .align %d", align);
       println("%s:", var->name);
 
       Relocation *rel = var->rel;
@@ -2623,32 +2597,6 @@ static void store_fp(int r, int offset, int sz)
   printf("===== r=%d offset=%d sz=%d\n", r, offset, sz);
   unreachable();
 }
-
-// static void store_gp(int r, int offset, int sz)
-// {
-//   switch (sz)
-//   {
-//   case 1:
-//     println("  mov %s, %d(%%rbp)", argreg8[r], offset);
-//     return;
-//   case 2:
-//     println("  mov %s, %d(%%rbp)", argreg16[r], offset);
-//     return;
-//   case 4:
-//     println("  mov %s, %d(%%rbp)", argreg32[r], offset);
-//     return;
-//   case 8:
-//     println("  mov %s, %d(%%rbp)", argreg64[r], offset);
-//     return;
-//   default:
-//     for (int i = 0; i < sz; i++)
-//     {
-//       println("  mov %s, %d(%%rbp)", argreg8[r], offset + i);
-//       println("  shr $8, %s", argreg64[r]);
-//     }
-//     return;
-//   }
-// }
 
 static void store_gp(int r, int offset, int sz) {
   switch (sz) {
@@ -2934,95 +2882,6 @@ static void print_offset(Obj *prog)
   }
 }
 
-
-// //here the goal is to update offset for parameters and local variables to be able to use them when managing assembly inline
-// void assign_lvar_offsets_assembly(Obj *fn)
-// {
-
-
-//     // If a function has many parameters, some parameters are
-//     // inevitably passed by stack rather than by register.
-//     // The first passed-by-stack parameter resides at RBP+16.
-//     int top = 16;
-//     int bottom = 16;
-
-//     int gp = 0, fp = 0;
-
-//     // Assign offsets to pass-by-stack parameters.
-//     for (Obj *var = fn->params; var; var = var->next)
-//     {
-//       Type *ty = var->ty;
-
-//       switch (ty->kind)
-//       {
-//       case TY_STRUCT:
-//       case TY_UNION:
-//           if (ty->size <= 8) {
-//             bool fp1 = has_flonum(ty, 0, 8, 0);
-//             if (fp + fp1 < FP_MAX && gp + !fp1 < GP_MAX) {
-//               fp = fp + fp1;
-//               gp = gp + !fp1;
-//               continue;
-//             }
-//           } else if (ty->size <= 16) {
-//         //if (ty->size <= 16)
-//         //{
-//           bool fp1 = has_flonum(ty, 0, 8, 0);
-//           bool fp2 = has_flonum(ty, 8, 16, 8);
-//           if (fp + fp1 + fp2 < FP_MAX && gp + !fp1 + !fp2 < GP_MAX)
-//           {
-//             fp = fp + fp1 + fp2;
-//             gp = gp + !fp1 + !fp2;
-//             continue;
-//           }
-//         }
-//         break;
-//       case TY_FLOAT:
-//       case TY_DOUBLE:
-//         if (fp++ < FP_MAX)
-//           continue;
-//         break;
-//       case TY_LDOUBLE:
-//         break;
-//       default:
-//         if (gp++ < GP_MAX)
-//           continue;
-//       }
-
-//       top = align_to(top, 8);
-//       var->offset = top;
-//       top += var->ty->size;
-//     }
-
-//     // Assign offsets to pass-by-register parameters and local variables.
-//     for (Obj *var = fn->locals; var; var = var->next)
-//     {
-//       int align = (var->ty->kind == TY_ARRAY && var->ty->size >= 16)
-//                       ? MAX(16, var->align)
-//                       : var->align;
-
-
-//       if (var->offset) {
-//         bottom += var->ty->size;
-//         bottom = align_to(bottom, align);
-//         continue;
-//       }
-
-//       // AMD64 System V ABI has a special alignment rule for an array of
-//       // length at least 16 bytes. We need to align such array to at least
-//       // 16-byte boundaries. See p.14 of
-//       // https://github.com/hjl-tools/x86-psABI/wiki/x86-64-psABI-draft.pdf.
-
-//       bottom += var->ty->size;
-//       bottom = align_to(bottom, align);
-//       var->offset = -bottom;
-
-//     }
-
-//     fn->stack_size = align_to(bottom, 16);
-
-// }
-
 void assign_lvar_offsets(Obj *prog)
 {
   for (Obj *fn = prog; fn; fn = fn->next)
@@ -3062,26 +2921,6 @@ void assign_lvar_offsets(Obj *prog)
           continue;
         }
         break;
-        //   if (ty->size <= 8) {
-        //     bool fp1 = has_flonum(ty, 0, 8, 0);
-        //     if (fp + fp1 < FP_MAX && gp + !fp1 < GP_MAX) {
-        //       fp = fp + fp1;
-        //       gp = gp + !fp1;
-        //       continue;
-        //     }
-        //   } else if (ty->size <= 16) {
-        // //if (ty->size <= 16)
-        // //{
-        //   bool fp1 = has_flonum(ty, 0, 8, 0);
-        //   bool fp2 = has_flonum(ty, 8, 16, 8);
-        //   if (fp + fp1 + fp2 < FP_MAX && gp + !fp1 + !fp2 < GP_MAX)
-        //   {
-        //     fp = fp + fp1 + fp2;
-        //     gp = gp + !fp1 + !fp2;
-        //     continue;
-        //   }
-        // }
-        // break;
       case TY_FLOAT:
       case TY_DOUBLE:
         if (fp++ < FP_MAX)
@@ -3317,11 +3156,6 @@ int len = sizeof(newargreg64)/sizeof(newargreg64[0]);
 
 }
 
-void pushreg(const char *arg) {
-  println("  push %%%s", arg);
-  depth++;
-}
-
 static int cmp_ctor(const void *a, const void *b) {
   return (*(CtorFunc **)a)->priority - (*(CtorFunc **)b)->priority;
 }
@@ -3352,4 +3186,3 @@ static void emit_destructors(void) {
   }
   println("  .text");
 }
-
