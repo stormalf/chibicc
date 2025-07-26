@@ -61,10 +61,10 @@ projects: zlib util-linux nginx
 
 
 curl:
-	cd ../curl && make clean && CC=chibicc ./configure && make && make test
+	cd ../curl && make clean && CC=chibicc CFLAGS=-fPIC ./configure && make && make test
 
 zlib:
-	cd ../zlib && make clean && CC=chibicc ./configure && make && make test
+	cd ../zlib && make clean && CC=chibicc CFLAGS=-fPIC ./configure && make && make test
 
 nmap:
 	cd ../nmap && make clean && CC=chibicc LDFLAGS="-ldbus-1" LIBS="-ldbus-1" ./configure --with-dbus && make && make check

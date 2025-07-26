@@ -542,7 +542,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.22.9    
+1.0.22.9    Reporting fix from 1.0.23 (ISS-187) and activating overlapping range detection.
 
 ## old release notes
 

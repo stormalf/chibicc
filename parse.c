@@ -2620,11 +2620,11 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
     } else
       *rest = tok;
     //duplicate case value detection
-    // for (Node *c = current_switch->case_next; c; c = c->case_next)
-    // {
-    //   if (!(end < c->begin || begin > c->end))
-    //     error_tok(tok, "%s %d: in stmt : duplicated case value or overlapping range %d", PARSE_C, __LINE__, begin);
-    // }
+    for (Node *c = current_switch->case_next; c; c = c->case_next)
+    {
+      if (!(end < c->begin || begin > c->end))
+        error_tok(tok, "%s %d: in stmt : duplicated case value or overlapping range %ld", PARSE_C, __LINE__, begin);
+    }
     node->begin = begin;
     node->end = end;
     node->case_next = current_switch->case_next;
@@ -4156,7 +4156,7 @@ static Token *type_attributes(Token *tok, void *arg)
         error_tok(tok, "%s %d: unsupported vector_size %d; only 2, 4, 8 and 16 are supported", PARSE_C, __LINE__, vs);
     }
     if (vs != ty->vector_size) {
-        ty->size = vs;
+        //ty->size = vs;
         ty->vector_size = vs;
         if (!ty->is_aligned) ty->align = vs;
     }
@@ -4441,7 +4441,7 @@ static Token *type_attributes(Token *tok, void *arg)
         consume(&tok, tok, "__V2SI__") || consume(&tok, tok, "__V4SI__") || consume(&tok, tok, "__V8HI__") ||
         consume(&tok, tok, "__V16QI__") || consume(&tok, tok, "__word__") || consume(&tok, tok, "__pointer__") ||
         consume(&tok, tok, "__CQI__") || consume(&tok, tok, "__CHI__") || consume(&tok, tok, "__CDF__") ||
-        consume(&tok, tok, "__BI__")) {
+        consume(&tok, tok, "__TC__") ||consume(&tok, tok, "__BI__")) {
         ctx->line_no = __LINE__ + 1;  
       return skip(tok, ")", ctx);
     }
@@ -4796,7 +4796,7 @@ static Token *thing_attributes(Token *tok, void *arg) {
         consume(&tok, tok, "__V2SI__") || consume(&tok, tok, "__V4SI__") || consume(&tok, tok, "__V8HI__") ||
         consume(&tok, tok, "__V16QI__") || consume(&tok, tok, "__word__") || consume(&tok, tok, "__pointer__") ||
         consume(&tok, tok, "__CQI__") || consume(&tok, tok, "__CHI__") || consume(&tok, tok, "__CDF__") ||
-        consume(&tok, tok, "__BI__")) {
+        consume(&tok, tok, "__TC__") || consume(&tok, tok, "__BI__")) {
         ctx->line_no = __LINE__ + 1;  
       return skip(tok, ")", ctx);
     }
