@@ -86,6 +86,13 @@ lxc:
 	CFLAGS="-fpic" 	meson build && cd build && cp /usr/bin/gcc /usr/bin/gcc_old && \
 	cp /usr/local/bin/chibicc /usr/local/gcc && meson compile && cp /usr/bin/gcc_old /usr/bin/gcc
 
+git: 
+	cd ../git && CC=chibicc CFLAGS=-fPIC ./configure && make && make test
+
+memcached:
+	cd ../memcached && make clean && CC=chibicc CFLAGS=-fPIC ./configure && make && make test
+
+
 # Misc.
 
 libchibicc:  $(OBJECT) $(OBJECTLIB).so

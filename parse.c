@@ -4152,7 +4152,7 @@ static Token *type_attributes(Token *tok, void *arg)
         error_tok(tok, "%s %d: unsupported vector_size %d; only 2, 4, 8 and 16 are supported", PARSE_C, __LINE__, vs);
     }
     if (vs != ty->vector_size) {
-        ty->size = vs;
+        //ty->size = vs;
         ty->vector_size = vs;
         if (!ty->is_aligned) ty->align = vs;
     }
@@ -5634,7 +5634,7 @@ static Node *primary(Token **rest, Token *tok)
       ctx->funcname = "primary";        
       ctx->line_no = __LINE__ + 1;      
       *rest = skip(tok, ")", ctx);
-
+      
       if ((ty->kind == TY_STRUCT || ty->kind == TY_UNION) && ty->has_vla) {
         if (!ty->vla_size) {
           Node *lhs = compute_vla_size(ty, tok); 
@@ -5667,8 +5667,7 @@ static Node *primary(Token **rest, Token *tok)
       } else {
         Node *node = unary(rest, tok->next);
         add_type(node);
-
-
+        
         // Check if the type is incomplete
         if ((node->ty->kind == TY_UNION || node->ty->kind == TY_STRUCT) && node->ty->size < 0)
           error_tok(tok, "%s %d: in primary : incomplete type for sizeof", PARSE_C, __LINE__);
@@ -5704,7 +5703,7 @@ static Node *primary(Token **rest, Token *tok)
       
       // if (node->ty->kind == TY_VLA)
       //   return new_var_node(node->ty->vla_size, tok);
-      return new_ulong(node->ty->size, tok);   
+      return new_ulong(node->ty->size, start);   
 
     }
   }
