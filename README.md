@@ -512,6 +512,7 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
     nginx: compile OK
     zlib: compile OK, tests OK
     nmap: compile OK, tests OK    
+    openssh-portable: compile OK, tests OK
 
 
 ## debug
@@ -542,7 +543,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.22.9    Reporting fix from 1.0.23 (ISS-187) and activating overlapping range detection.
+1.0.22.9    Reporting fix from 1.0.23 (ISS-187) and activating overlapping range detection. Defining GNUC version 2 because some projects handle compilation directives for INTEL_COMPILER or GNUC only. 
 
 ## old release notes
 

@@ -404,8 +404,7 @@ void add_type(Node *node)
     node->ty = node->var->ty;
     return;
   case ND_COND:
-    //======ISS-154 trying to fix deferencing pointer issue when we have a macro that can return a pointer or null  (self) ? NULL
-    //printf("======%d %d %s\n", node->then->ty->kind, node->els->ty->kind,  node->tok->loc);
+    //======ISS-154 trying to fix deferencing pointer issue when we have a macro that can return a pointer or null  (self) ? NULL      
     if (node->then->ty->kind == TY_VOID && node->els->ty->kind == TY_VOID)
     {
       node->ty = ty_void;
@@ -415,7 +414,7 @@ void add_type(Node *node)
       usual_arith_conv(&node->then, &node->els);
       node->ty = node->then->ty;
     }
-    return;
+    return; 
   case ND_COMMA:
     node->ty = node->rhs->ty;
     return;
@@ -444,7 +443,6 @@ void add_type(Node *node)
         error_tok(node->tok, "%s %d: invalid pointer dereference", TYPE_C, __LINE__);
     }
     //======ISS-154 trying to fix deferencing pointer issue when we have a macro that can return a pointer or null  (self) ? NULL      
-    //printf("======%d %d %s\n", node->lhs->ty->base->kind, node->lhs->ty->kind, node->lhs->tok->loc);
     if (node->lhs->ty->base->kind == TY_VOID && node->lhs->ty->kind == TY_VOID)
       error_tok(node->tok, "%s %d : dereferencing a void pointer", TYPE_C, __LINE__);
     if (node->lhs->ty->base->kind == TY_VOID)

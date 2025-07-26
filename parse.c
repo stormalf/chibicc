@@ -736,8 +736,8 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     // Handle built-in types.
     if (equal(tok, "void"))
       counter += VOID;
-    else if (equal(tok, "_Bool"))
-      counter += BOOL;
+    else if (equal(tok, "_Bool")) 
+      counter += BOOL;    
     else if (equal(tok, "char"))
       counter += CHAR;
     else if (equal(tok, "short"))
@@ -1869,69 +1869,6 @@ static void struct_initializer2(Token **rest, Token *tok, Initializer *init, Mem
   *rest = tok;
 }
 
-// static void union_initializer(Token **rest, Token *tok, Initializer *init)
-// {
-
-//   // Unlike structs, union initializers take only one initializer,
-//   // and that initializes the first union member by default.
-//   // You can initialize other member using a designated initializer.
-//   if (equal(tok, "{") && equal(tok->next, "."))
-//   {
-//     Member *mem = struct_designator(&tok, tok->next, init->ty);
-//     init->mem = mem;
-//     designation(&tok, tok, init->children[mem->idx]);
-//     // fix issue 113, gcc allows to have a struct finishing with ,}
-//     if (equal(tok, ",") && equal(tok->next, "}"))
-//       consume(&tok, tok, ",");
-//     // issue #110 when union with ,
-//     while (!equal(tok, "}"))
-//     {
-//       Member *mem = struct_designator(&tok, tok->next, init->ty);
-//       init->mem = mem;
-//       designation(&tok, tok, init->children[mem->idx]);
-//       // fix issue 108, gcc allows to have a struct finishing with ,}
-//       if (equal(tok, ",") && equal(tok->next, "}"))
-//         consume(&tok, tok, ",");
-//     }
-//     ctx->filename = PARSE_C;
-//     ctx->funcname = "union_initializer";        
-//     ctx->line_no = __LINE__ + 1;         
-//     *rest = skip(tok, "}", ctx);
-//     return;
-//   }
-
-//   init->mem = init->ty->members;
-
-//   if (equal(tok, "{"))
-//   {
-//     //trying to fix =====ISS-157 about union empty initializer like union string_value lval = {}, rval = {};
-//     if (equal(tok->next, "}")) {
-//       consume(&tok, tok, "{");
-//       ctx->filename = PARSE_C;
-//       ctx->funcname = "union_initializer";        
-//       ctx->line_no = __LINE__ + 1;   
-//       *rest = skip(tok, "}", ctx);
-//       return;
-//     }
-//     initializer2(&tok, tok->next, init->children[0]);
-//     if (equal(tok, ",") && equal(tok->next, "}"))
-//       consume(&tok, tok, ",");
-//     ctx->filename = PARSE_C;
-//     ctx->funcname = "union_initializer";        
-//     ctx->line_no = __LINE__ + 1;   
-//     *rest = skip(tok, "}", ctx);
-//   }
-//   else if (equal(tok->next, "->"))
-//   {
-    
-//     initializer3(rest, tok, init->children[0]);
-//     return;
-//   }
-//   else
-//   {
-//     initializer2(rest, tok, init->children[0]);
-//   }
-// }
 
 static void union_initializer(Token **rest, Token *tok, Initializer *init) {
     ctx->filename = PARSE_C;
@@ -3956,8 +3893,9 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
       Member *mem = calloc(1, sizeof(Member));
       if (mem == NULL)
         error("%s: %s:%d: error: in struct_members : mem is null", PARSE_C, __FILE__, __LINE__);
-      if (tok->kind == TK_KEYWORD)
-        basety = declspec(&tok, tok, &attr);
+      if (tok->kind == TK_KEYWORD) {
+        basety = declspec(&tok, tok, &attr);        
+      }
       mem->ty = declarator(&tok, tok, basety);
       mem->name = mem->ty->name;
       //mem->idx = idx++;
@@ -5284,7 +5222,6 @@ static Node *struct_ref(Node *node, Token *tok)
   for (;;)
   {
     Member *mem = get_struct_member(ty, tok);
-    //printf("=====%p %s\n", mem, tok->loc);
     if (!mem)
       error_tok(tok, "%s %d: in struct_ref : no such member", PARSE_C, __LINE__);
     node = new_unary(ND_MEMBER, node, tok);
