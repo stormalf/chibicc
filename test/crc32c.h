@@ -1,6 +1,6 @@
 
-#ifndef CRC32_H
-#define CRC32_H
+#ifndef CRC32C_H
+#define CRC32C_H
 
 // -- CRC32C table used by PostgreSQL (partial for brevity, fill as needed) --
 static const uint32_t pg_crc32c_table[8][256] = {
