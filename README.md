@@ -542,7 +542,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.28    Fixing ISS-188 on old C style (K&R) parameter omitted by mistake. Reporting some fixes from 1.0.23 to 1.0.22.8. Fixing ISS-186 with lscpu tests (util-linux).
+1.0.22.9    
 
 ## old release notes
 
