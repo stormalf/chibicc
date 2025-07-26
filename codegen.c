@@ -153,7 +153,8 @@ static void print_visibility(Obj *obj) {
     } else {
       println("  .globl\t%s", obj->name);
     }
-  } else if (obj->is_static) {
+  } 
+  if (obj->is_static) {
     println("  .local\t%s", obj->name);
   } else {
     println("  .globl\t%s", obj->name);

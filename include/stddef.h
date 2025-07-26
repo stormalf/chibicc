@@ -4,12 +4,12 @@
 #define NULL ((void *)0)
 
 // Define sizes of various types
-//#define SIZEOF_CHAR 1
-//#define SIZEOF_SHORT 2
-#define SIZEOF_INT 4 
+#define SIZEOF_CHAR 1
+#define SIZEOF_SHORT 2
+#define SIZEOF_INT 4 // Ensure this is set to 4
 #define SIZEOF_LONG 8
-// #define SIZEOF_LONG_LONG 8
-// #define SIZEOF_POINTER 8
+#define SIZEOF_LONG_LONG 8
+#define SIZEOF_POINTER 8
 #define LONG_MAX 9223372036854775807
 #define INT_MIN -2147483648
 #define INT_MAX 2147483647

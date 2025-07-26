@@ -627,8 +627,10 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
         attr->is_extern = true;
       else if (equal(tok, "inline"))
         attr->is_inline = true;
-      else
+      else if (equal(tok, "_Thread_local") || equal(tok, "__thread"))
         attr->is_tls = true;
+      else
+        error_tok(tok, "%s %d: in declspec : unknown storage class specifier", PARSE_C, __LINE__);
 
       //fixing  check for typedef specifier/attribute not strict enough #142 suggested by @samkho
       if (attr->is_typedef &&
@@ -2624,7 +2626,7 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
     for (Node *c = current_switch->case_next; c; c = c->case_next)
     {
       if (!(end < c->begin || begin > c->end))
-        error_tok(tok, "%s %d: in stmt : duplicated case value or overlapping range %d", PARSE_C, __LINE__, begin);
+        error_tok(tok, "%s %d: in stmt : duplicated case value or overlapping range %ld", PARSE_C, __LINE__, begin);
     }
     node->begin = begin;
     node->end = end;
