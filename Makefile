@@ -61,7 +61,7 @@ projects: zlib util-linux nginx
 
 
 curl:
-	cd ../curl && make clean && CC=chibicc CFLAGS=-fPIC ./configure && make && make test
+	cd ../curl && make clean && CC=chibicc ./configure && make && make test
 
 zlib:
 	cd ../zlib && make clean && CC=chibicc CFLAGS=-fPIC ./configure && make && make test

@@ -568,9 +568,11 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             }
 
             // assuming that it's =a =b ???
-            else if (!strncmp(tok->str, "=a", tok->len) || !strncmp(tok->str, "=b", tok->len) || !strncmp(tok->str, "=c", tok->len) || !strncmp(tok->str, "=d", tok->len))
+            else if (!strncmp(tok->str, "=a", tok->len) || !strncmp(tok->str, "=b", tok->len) || !strncmp(tok->str, "=c", tok->len)
+             || !strncmp(tok->str, "=d", tok->len) || !strncmp(tok->str, "=&a", tok->len) || !strncmp(tok->str, "=&b", tok->len) ||
+              !strncmp(tok->str, "=&c", tok->len) || !strncmp(tok->str, "=&d", tok->len))
             {
-                if (!strncmp(tok->str, "=a", tok->len))
+                if (!strncmp(tok->str, "=a", tok->len) || !strncmp(tok->str, "=&a", tok->len))
                 {
                     asmExt->output[nbOutput]->prefix = "=";
                     asmExt->output[nbOutput]->reg = specific_register_available("%rax");
@@ -581,7 +583,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
 
                 }
-                else if (!strncmp(tok->str, "=b", tok->len))
+                else if (!strncmp(tok->str, "=b", tok->len) || !strncmp(tok->str, "=&b", tok->len))
                 {
                     asmExt->output[nbOutput]->prefix = "=";
                     asmExt->output[nbOutput]->reg = specific_register_available("%rbx");
@@ -591,7 +593,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->output[nbOutput]->letter = 'b';
                     asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
                 }
-                else if (!strncmp(tok->str, "=c", tok->len))
+                else if (!strncmp(tok->str, "=c", tok->len) || !strncmp(tok->str, "=&c", tok->len))
                 {
                     asmExt->output[nbOutput]->prefix = "=";
                     asmExt->output[nbOutput]->reg = specific_register_available("%rcx");
@@ -601,7 +603,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->output[nbOutput]->letter = 'c';
                     asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
                 }
-                else if (!strncmp(tok->str, "=d", tok->len))
+                else if (!strncmp(tok->str, "=d", tok->len) || !strncmp(tok->str, "=&d", tok->len))
                 {
                     asmExt->output[nbOutput]->prefix = "=";
                     asmExt->output[nbOutput]->reg = specific_register_available("%rdx");
@@ -994,7 +996,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             }
         }
         // register in write only mode
-        if (tok->kind == TK_STR && !strncmp(tok->str, "0", tok->len))
+        if (tok->kind == TK_STR && (!strncmp(tok->str, "0", tok->len) || !strncmp(tok->str, "%0", tok->len) ))
         {
             asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(0);
             asmExt->input[nbInput]->index = 0;
@@ -1003,7 +1005,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 error("%s : %s:%d: error: in input_asm function input_asm :reg is null!", EXTASM_C, __FILE__, __LINE__);            
             asmExt->input[nbInput]->reg64 = asmExt->output[0]->reg64;
         }
-        else if (tok->kind == TK_STR && !strncmp(tok->str, "1", tok->len))
+        else if (tok->kind == TK_STR && (!strncmp(tok->str, "1", tok->len) || !strncmp(tok->str, "%1", tok->len)))
         {
 
             asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(1);
@@ -1013,7 +1015,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 error("%s : %s:%d: error: in input_asm function input_asm :reg is null!", EXTASM_C, __FILE__, __LINE__);            
             asmExt->input[nbInput]->reg64 = asmExt->output[1]->reg64;
         }
-        else if (tok->kind == TK_STR && !strncmp(tok->str, "2", tok->len))
+        else if (tok->kind == TK_STR && (!strncmp(tok->str, "2", tok->len) || !strncmp(tok->str, "%2", tok->len)))
         {
 
             asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(2);
@@ -1023,7 +1025,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 error("%s : %s:%d: error: in input_asm function input_asm :reg is null!", EXTASM_C, __FILE__, __LINE__);            
             asmExt->input[nbInput]->reg64 = asmExt->output[2]->reg64;
         }
-        else if (tok->kind == TK_STR && !strncmp(tok->str, "3", tok->len))
+        else if (tok->kind == TK_STR && (!strncmp(tok->str, "3", tok->len) || !strncmp(tok->str, "%3", tok->len)))
         {
 
             asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(3);
@@ -1162,7 +1164,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             }            
         }
  
-        else if (tok->kind == TK_STR && !strncmp(tok->str, "m", tok->len))
+        else if (tok->kind == TK_STR && (!strncmp(tok->str, "m", tok->len) ||  !strncmp(tok->str, "rm", tok->len)))
         {
 
             asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(nbOutput + nbInput);

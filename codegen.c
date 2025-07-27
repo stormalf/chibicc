@@ -493,6 +493,8 @@ static void gen_mem_zero(int offset, int n) {
 // Load a value from where %rax is pointing to.
 static void load(Type *ty)
 {
+  if (!ty)
+    error("%s: %s:%d: error: in load : ty is null!", CODEGEN_C, __FILE__, __LINE__);
   switch (ty->kind)
   {
   case TY_ARRAY:

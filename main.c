@@ -779,8 +779,6 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-mno-red-zone") ||
         !strcmp(argv[i], "-fvisibility=default") ||
         !strcmp(argv[i], "-fvisibility=hidden") ||
-        // !strcmp(argv[i], "-Werror=invalid-command-line-argument") ||
-        // !strcmp(argv[i], "-Werror=unknown-warning-option") ||
         !strcmp(argv[i], "-Wsign-compare") ||
         !strcmp(argv[i], "-Wundef") ||
         !strcmp(argv[i], "-Wpointer-arith") ||

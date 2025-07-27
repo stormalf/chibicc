@@ -232,8 +232,6 @@ List of options ignored :
     "-mno-red-zone"
     "-fvisibility=default"
     "-fvisibility=hidden"
-    "-Werror=invalid-command-line-argument"
-    "-Werror=unknown-warning-option"
     "-Wsign-compare"
     "-Wundef"
     "-Wpointer-arith"
@@ -269,6 +267,11 @@ List of options ignored :
     "-fp-model"
     "-fprofile-arcs"
     "-ftest-coverage"
+    "-ansi_alias"
+    "-ffat-lto-objects"
+    "-static-libstdc++"
+    "-static-libgcc"            
+    "-mindirect-branch-register"  
 
 ## Dockerfile and devcontainer
 
@@ -310,8 +313,14 @@ curl : https://github.com/curl/curl.git
         CCLD     curl
 
     make test
-    TESTDONE: 1722 tests were considered during 3895 seconds.
-    TESTDONE: 1392 tests out of 1392 reported OK: 100%
+    * curl 8.4.0-DEV (x86_64-pc-linux-gnu)
+    * libcurl/8.4.0-DEV OpenSSL/3.0.13 zlib/1.3 zstd/1.5.5 libidn2/2.3.7 OpenLDAP/2.6.7
+    * Features: alt-svc AsynchDNS HSTS HTTPS-proxy IDN IPv6 Largefile libz NTLM NTLM_WB SSL threadsafe TLS-SRP UnixSockets zstd
+    * Disabled:
+    TESTDONE: 1635 tests were considered during 3084 seconds.
+    TESTDONE: 1329 tests out of 1330 reported OK: 99%
+    
+    TESTFAIL: These test cases failed: 1474
 
 
 openssl : https://github.com/openssl/openssl.git
@@ -336,7 +345,10 @@ openssh-portable : https://github.com/openssh/openssh-portable.git
     autoreconf -fi
     CC=chibicc ./configure
     make
-
+    make[1]: Leaving directory 'openssh-portable/regress'
+    unit tests passed
+    echo all tests passed
+    all tests passed
 
 luajit: https://github.com/LuaJIT/LuaJIT.git 
     
@@ -353,7 +365,6 @@ git: https://github.com/git/git.git
 
 util-linux : https://github.com/util-linux/util-linux.git
 
-    Manually fixing the config.status and removing D["HAVE_UNION_SEMUN"]=" 1"
     ./autogen.sh
     CC=chibicc CFLAGS=-fPIC ./configure
     make
@@ -451,6 +462,11 @@ nmap : https://github.com/nmap/nmap
     Ran 292 tests. 0 failures.
 
 
+xrdp: https://github.com/neutrinolabs/xrdp.git
+    
+    For testing need libcheck framework (https://github.com/libcheck/check.git) and Cmocka (sudo apt-get install libcmocka-dev)
+    CC=chibicc CFLAGS=-fpic LDFLAGS=-fpic LIBS=-lcheck ./configure && make && make check
+
 ## meson
 
 to be able to use meson with chibicc (meson doesn't know chibicc compiler), I changed the detect.py file in /usr/lib/python3/dist-packages/mesonbuild/compilers/detect.py to add support for chibicc. After that I can now using meson for some projects that are configured to use it.
@@ -499,10 +515,11 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
 ## known issues
 
     postgres execution : ko
-    git 2 tests failed
-    openssh-portable regress test failed
-    curl 2 tests ko
+    git 2 tests failed 
     memcached test stuck at t/binary-extstore.t ......... 5947/?
+    openssl compile failed (due to extended assembly in macros not correctly managed by chibicc)
+    vlc compile failed on VLC_WARN_CALL.
+    curl 1 test failed (1474)
     
 
 ## projects compiled successfully with chibicc
@@ -512,6 +529,8 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
     nginx: compile OK
     zlib: compile OK, tests OK
     nmap: compile OK, tests OK    
+    openssh-portable: compile OK, tests OK
+    xrdp: compile OK, tests OK    
     openssh-portable: compile OK, tests OK
 
 
@@ -543,7 +562,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.22.9    Reporting fix from 1.0.23 (ISS-187) and activating overlapping range detection. Defining GNUC version 2 because some projects handle compilation directives for INTEL_COMPILER or GNUC only. 
+1.0.22.9    Reporting fix from 1.0.23 (ISS-187) and activating overlapping range detection. Defining GNUC version 2 because some projects handle compilation directives for INTEL_COMPILER or GNUC only. Fixing ISS-191 some extended assembly not managed found during php-src compile. Fixing ISS-192 with asm at global level.
 
 ## old release notes
 

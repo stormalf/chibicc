@@ -1538,10 +1538,10 @@ void init_macros(void)
   define_macro("_DEFAULT_SOURCE", "1");
   //to be able to compile some projects at least INTEL COMPILER or GNUC should be defined.
   //but activating GNUC > 2 causes some issue if our compiler doesn't manage well all GNUC features like _Float16...
-  //define_macro("__INTEL_COMPILER", "1");
+  //define_macro("__INTEL_COMPILER", "1");  
   define_macro("__GNUC__", "2");
-  define_macro("__GNUC_MINOR__", "0");
-  define_macro("__GNUC_PATCHLEVEL__ ", "0");
+  // define_macro("__GNUC_MINOR__", "0");
+  // define_macro("__GNUC_PATCHLEVEL__ ", "0");
   //define_macro("HAVE_ATTRIBUTE_PACKED", "1");
   define_macro("linux", "1");
   define_macro("unix", "1");
