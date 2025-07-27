@@ -253,6 +253,7 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     else
                         input_asm_str = subst_asm(input_asm_str, asmExt->input[nbInput]->reg, asmExt->input[nbInput]->variableNumber);
                     // concatenate the input final strings to add to the assembly
+                    
                     strncat(input_final, input_asm_str, strlen(input_asm_str));
                 }
             }  else { //to manage the case of no input
@@ -295,9 +296,10 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
 
    //case of no input need to generate input for output
     if (hasOutput && !hasInput){
-        input_for_output = generate_input_for_output();
-        if (input_for_output != NULL) {
+        input_for_output = generate_input_for_output();        
+        if (input_for_output != NULL) {                
                 strncat(asm_str, input_for_output, strlen(input_for_output));
+                
             }
     }
 
@@ -314,6 +316,7 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
         char *tmp_asm = calloc(1, sizeof(char) * 300);
         for (int i = 0; i < nbOutput; i++)
         {
+           
             if (asmExt->output[i]->isAddress) {
                 char *tmp = calloc(1, sizeof(char) * 30);
                 strncat(tmp, "(", 2);
@@ -322,9 +325,11 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 tmp_asm = subst_asm(template, tmp, asmExt->output[i]->variableNumber);
                 free(tmp);
             }else {
-                tmp_asm = subst_asm(template, asmExt->output[i]->reg, asmExt->output[i]->variableNumber);                
+                tmp_asm = subst_asm(template, asmExt->output[i]->reg, asmExt->output[i]->variableNumber); 
+                        
                 }
-            }
+        }
+            
         //special case %b0 %h0
         for (int i = 0; i < nbOutput; i++) {
             // Replace %bN with regl
@@ -1288,6 +1293,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 if (!asmExt->input[nbInput]->reg)
                     error("%s : %s:%d: error: in input_asm function input_asm :reg is null! %d", EXTASM_C, __FILE__, __LINE__, nbInput);
                 asmExt->input[nbInput]->reg = update_register_size(asmExt->input[nbInput]->reg, asmExt->input[nbInput]->size);
+
                 //managing specific case of arrays
                 if (sc->var->ty->kind == TY_ARRAY) {
                     ctx->line_no = __LINE__ + 1;
@@ -1392,6 +1398,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 asmExt->input[nbInput]->isAddress = false;
                 asmExt->input[nbInput]->input_value = input_value;
                 asmExt->input[nbInput]->size = tok->ty->size;
+                asmExt->input[nbInput]->reg = update_register_size(asmExt->input[nbInput]->reg, asmExt->input[nbInput]->size);                                
                 tok = tok->next;
                 ctx->line_no = __LINE__ + 1;
                 *rest = skip(tok, ")", ctx);
@@ -1584,7 +1591,7 @@ char *generate_input_asm(char *input_str)
     else if (asmExt->input[nbInput]->input_value)
     {
         strncat(tmp, "\n", 3);
-        strncat(tmp, opcode(asmExt->input[nbInput]->size), strlen(opcode(asmExt->input[nbInput]->size)));
+        strncat(tmp, opcode(asmExt->input[nbInput]->size), strlen(opcode(asmExt->input[nbInput]->size)));        
         strncat(tmp, " $", 3);
         strncat(tmp, asmExt->input[nbInput]->input_value, strlen(asmExt->input[nbInput]->input_value));
         strncat(tmp, ", ", 3);
@@ -1823,8 +1830,7 @@ char *generate_input_for_output() {
     char *tmp = calloc(1, sizeof(char) * 500);
 
     for (int i = 0; i < nbOutput; i++)
-    {
-      //not sure yet about in which case exactly we need to generate the input for the output
+    {      
       //not sure yet about in which case exactly we need to generate the input for the output
         if ((asmExt->output[i]->offset != 0 && (!strncmp(asmExt->output[i]->prefix, "+", 2) || asmExt->output[i]->isAddress))) {
             if (asmExt->output[i]->isVariable && !asmExt->output[i]->isAddress)

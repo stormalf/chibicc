@@ -563,6 +563,7 @@ Example of diagram generated with -dotfile parameter :
 ## release notes
 
 1.0.22.9    Reporting fix from 1.0.23 (ISS-187) and activating overlapping range detection. Defining GNUC version 2 because some projects handle compilation directives for INTEL_COMPILER or GNUC only. Fixing ISS-191 some extended assembly not managed found during php-src compile. Fixing ISS-192 with asm at global level.
+Fixing ISS-193 segfault due to type null when dealing with atomics functions (temp fix). 
 
 ## old release notes
 

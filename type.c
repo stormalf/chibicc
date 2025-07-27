@@ -424,12 +424,6 @@ void add_type(Node *node)
   case ND_ADDR:
   {
     Type *ty = node->lhs->ty;
-  //   if (ty->kind == TY_ARRAY )
-  //     node->ty = pointer_to(ty->base);
-  //   else
-  //     node->ty = pointer_to(ty);
-  //   return;
-  // }
   //from @fuhsnn add_type():Remove overaggressive array decaying
       node->ty = pointer_to(ty);
     return;
@@ -453,10 +447,15 @@ void add_type(Node *node)
     if (node->body)
     {
       Node *stmt = node->body;
-      while (stmt->next)
+      while (stmt->next) {
         stmt = stmt->next;
-      while (stmt->kind == ND_LABEL)
+        add_type(stmt);
+      }
+
+      while (stmt->kind == ND_LABEL) {
         stmt = stmt->lhs;
+        add_type(stmt);
+      }
       if (stmt->kind == ND_EXPR_STMT)
       {
         node->ty = stmt->lhs->ty;
