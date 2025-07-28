@@ -1,4 +1,4 @@
-#include <stdio.h>
+#include "test.h"
 
 int main(void) {
   unsigned int eax, edx;
@@ -10,5 +10,7 @@ int main(void) {
   );
 
   printf("xgetbv eax: %08x edx: %08x\n", eax, edx);
+  ASSERT(7, eax);
+  ASSERT(0, edx);
   return 0;
 }
