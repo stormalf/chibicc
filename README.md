@@ -336,6 +336,7 @@ openssh-portable : https://github.com/openssh/openssh-portable.git
     autoreconf -fi
     CC=chibicc ./configure
     make
+    make tests
 
 
 luajit: https://github.com/LuaJIT/LuaJIT.git 
@@ -500,11 +501,10 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
 ## known issues
 
     postgres execution : ko
-    git 3 tests failed
-    openssh-portable regress test failed
-    curl 2 tests ko
-    memcached test stuck after test n° 16
-    util-linux 
+    git 2 tests failed (order of results given test 57 and test 58 in ./t7900-maintenance.sh)   
+    curl 1 test ko (1474)
+    memcached test stuck after test t/binary-extstore.t ......... 4618/?
+    util-linux 1 test failed (lscpu 12 of 18 failed when activating GNUC > 2).
 
 ## projects compiled successfully with chibicc
 
@@ -513,6 +513,7 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
     nginx: compile OK
     zlib: compile OK, tests OK
     nmap: compile OK, tests OK   
+    openssh-portable : compile OK, tests OK
     
     
 ## debug
@@ -544,7 +545,7 @@ Example of diagram generated with -dotfile parameter :
 ## release notes
 
 1.0.23    Activating GNUC macros. Fixing issue with curl test due to duplicate "case" value not detected. Fixing issue with va_area (reporting changes from @fuhsnn in commit 174da1a). Fixing some issues with variadic functions (but still some test cases not working). Fixing issue with __builtin_alloca. Fixing issue with extended assembly during util-linux. Fixing issue with attribute pre/post enum identifier. Fixing regression issue with semun. Reporting some fix from slimcc (@fuhsnn) concerning float.h. Reporting 
-temp stack from widcc/slimcc (@fuhsnn) but still an issue with some structs in variadic with alignment > 16. Fixing issue with bitfield (using fixes from widcc @fuhsnn). Integrating fix from @fuhsnn/widcc about VLA typedef and commit 42b33ec. Fixing issue with align > 16 during variadic functions(workaround in stdarg.h). Fixing ISS-188 on old C style (K&R) parameter omitted by mistake. Fixing ISS-187 with overlapping range during postgres due to vector size that replaces the original size value.
+temp stack from widcc/slimcc (@fuhsnn) but still an issue with some structs in variadic with alignment > 16. Fixing issue with bitfield (using fixes from widcc @fuhsnn). Integrating fix from @fuhsnn/widcc about VLA typedef and commit 42b33ec. Fixing issue with align > 16 during variadic functions(workaround in stdarg.h). Fixing ISS-188 on old C style (K&R) parameter omitted by mistake. Fixing ISS-187 with overlapping range during postgres due to vector size that replaces the original size value. Reporting somes fixes in extended assembly from 1.0.22.8 and adding limits.h that seems to solve issue with curl test 557.
 
 
 

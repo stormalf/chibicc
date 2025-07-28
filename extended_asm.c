@@ -149,6 +149,14 @@ static bool hasOperandName = false;
 static char *register_lower(char *reg);
 static char *register_higher(char *reg);
 
+
+
+
+static bool has_percent_letter(const char *template, char suffix) { 
+    char pattern[3] = {'%', suffix, '\0'};
+    return strstr(template, pattern) != NULL;
+}
+
 char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
 {
     char *input_asm_str;
@@ -160,6 +168,10 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
     nbLabel = 0;
     hasInput = false;
     hasOutput = false;
+    bool isb = false;
+    bool isq = false;
+    bool isw = false;
+    bool ish = false;
     char *template = tok->str;
     char *asm_str = calloc(1, sizeof(char) * 10000);
     ctx->filename = EXTASM_C;
@@ -253,6 +265,7 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     else
                         input_asm_str = subst_asm(input_asm_str, asmExt->input[nbInput]->reg, asmExt->input[nbInput]->variableNumber);
                     // concatenate the input final strings to add to the assembly
+                    
                     strncat(input_final, input_asm_str, strlen(input_asm_str));
                 }
             }  else { //to manage the case of no input
@@ -289,15 +302,30 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
 
     //temp fix for bswap %q0 to indicate a 64 register (quad word)
     //TODO set a variable isQuad to be sure to use 64 bits register when %q is found
+    if (has_percent_letter(template, 'b')) {
+        isb = true;
+    }
+    if (has_percent_letter(template, 'q')) {
+        isq = true;
+    }     
+    if (has_percent_letter(template, 'w')) {
+        isw = true;
+    }
+    if (has_percent_letter(template, 'h')) {
+        ish = true;
+    }    
+
     template = subst_asm(template, " %", "%q");
     template = subst_asm(template, " %", "%w");
     template = subst_asm(template, " %", "%b");
+    template = subst_asm(template, " %", "%h");
 
    //case of no input need to generate input for output
     if (hasOutput && !hasInput){
-        input_for_output = generate_input_for_output();
-        if (input_for_output != NULL) {
+        input_for_output = generate_input_for_output();        
+        if (input_for_output != NULL) {                
                 strncat(asm_str, input_for_output, strlen(input_for_output));
+                
             }
     }
 
@@ -314,6 +342,7 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
         char *tmp_asm = calloc(1, sizeof(char) * 300);
         for (int i = 0; i < nbOutput; i++)
         {
+           
             if (asmExt->output[i]->isAddress) {
                 char *tmp = calloc(1, sizeof(char) * 30);
                 strncat(tmp, "(", 2);
@@ -322,9 +351,10 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 tmp_asm = subst_asm(template, tmp, asmExt->output[i]->variableNumber);
                 free(tmp);
             }else {
-                tmp_asm = subst_asm(template, asmExt->output[i]->reg, asmExt->output[i]->variableNumber);                
+                    tmp_asm = subst_asm(template, asmExt->output[i]->reg, asmExt->output[i]->variableNumber);                         
                 }
-            }
+        }
+            
         //special case %b0 %h0
         for (int i = 0; i < nbOutput; i++) {
             // Replace %bN with regl
@@ -478,6 +508,8 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 if (!asmExt->output[nbOutput]->reg)
                     error("%s : %s:%d: error: in output_asm function :reg is null!", EXTASM_C, __FILE__, __LINE__);
                 asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg;
+                asmExt->output[nbOutput]->regh = register_higher(asmExt->output[nbOutput]->reg64);
+                asmExt->output[nbOutput]->regl = register_lower(asmExt->output[nbOutput]->reg64);
                 asmExt->output[nbOutput]->letter = 'r';       
                 asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);         
             }
@@ -489,6 +521,8 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 if (!asmExt->output[nbOutput]->reg)
                     error("%s : %s:%d: error: in output_asm function :reg is null!", EXTASM_C, __FILE__, __LINE__);
                 asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg;
+                asmExt->output[nbOutput]->regh = register_higher(asmExt->output[nbOutput]->reg64);
+                asmExt->output[nbOutput]->regl = register_lower(asmExt->output[nbOutput]->reg64);
                 asmExt->output[nbOutput]->letter = 'r';       
                 asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);         
             }
@@ -504,7 +538,9 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 asmExt->output[nbOutput]->reg = specific_register_available("%rdi");
                 if (!asmExt->output[nbOutput]->reg)
                     error("%s : %s:%d: error: in output_asm function :reg is null!", EXTASM_C, __FILE__, __LINE__);
-                asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg;                
+                asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg; 
+                asmExt->output[nbOutput]->regh = register_higher(asmExt->output[nbOutput]->reg64);
+                asmExt->output[nbOutput]->regl = register_lower(asmExt->output[nbOutput]->reg64);               
                 asmExt->output[nbOutput]->letter = 'm';
                 asmExt->output[nbOutput]->inputToGenerate = true;
                 asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
@@ -522,7 +558,9 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 asmExt->output[nbOutput]->reg = specific_register_available("%rdx");
                 if (!asmExt->output[nbOutput]->reg)
                     error("%s : %s:%d: error: in output_asm function :reg is null!", EXTASM_C, __FILE__, __LINE__);
-                asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg;                
+                asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg; 
+                asmExt->output[nbOutput]->regh = register_higher(asmExt->output[nbOutput]->reg64);
+                asmExt->output[nbOutput]->regl = register_lower(asmExt->output[nbOutput]->reg64);                               
                 asmExt->output[nbOutput]->letter = 'q';
                 asmExt->output[nbOutput]->inputToGenerate = true;
                 asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
@@ -560,7 +598,9 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 asmExt->output[nbOutput]->reg = specific_register_available("%rdx");
                 if (!asmExt->output[nbOutput]->reg)
                     error("%s : %s:%d: error: in output_asm function :reg is null!", EXTASM_C, __FILE__, __LINE__);
-                asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg;                
+                asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg;
+                asmExt->output[nbOutput]->regh = register_higher(asmExt->output[nbOutput]->reg64);
+                asmExt->output[nbOutput]->regl = register_lower(asmExt->output[nbOutput]->reg64);                                
                 asmExt->output[nbOutput]->letter = 'l';
                 asmExt->output[nbOutput]->inputToGenerate = true;
                 asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
@@ -568,46 +608,56 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             }
 
             // assuming that it's =a =b ???
-            else if (!strncmp(tok->str, "=a", tok->len) || !strncmp(tok->str, "=b", tok->len) || !strncmp(tok->str, "=c", tok->len) || !strncmp(tok->str, "=d", tok->len))
+            else if (!strncmp(tok->str, "=a", tok->len) || !strncmp(tok->str, "=b", tok->len) || !strncmp(tok->str, "=c", tok->len)
+             || !strncmp(tok->str, "=d", tok->len) || !strncmp(tok->str, "=&a", tok->len) || !strncmp(tok->str, "=&b", tok->len) ||
+              !strncmp(tok->str, "=&c", tok->len) || !strncmp(tok->str, "=&d", tok->len))
             {
-                if (!strncmp(tok->str, "=a", tok->len))
+                if (!strncmp(tok->str, "=a", tok->len) || !strncmp(tok->str, "=&a", tok->len))
                 {
                     asmExt->output[nbOutput]->prefix = "=";
                     asmExt->output[nbOutput]->reg = specific_register_available("%rax");
                     if (!asmExt->output[nbOutput]->reg)
                        error("%s : %s:%d: error: in output_asm function :reg is null!", EXTASM_C, __FILE__, __LINE__);
                     asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg;  
+                    asmExt->output[nbOutput]->regh = register_higher(asmExt->output[nbOutput]->reg64);
+                    asmExt->output[nbOutput]->regl = register_lower(asmExt->output[nbOutput]->reg64);
                     asmExt->output[nbOutput]->letter = 'a';
                     asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
 
                 }
-                else if (!strncmp(tok->str, "=b", tok->len))
+                else if (!strncmp(tok->str, "=b", tok->len) || !strncmp(tok->str, "=&b", tok->len))
                 {
                     asmExt->output[nbOutput]->prefix = "=";
                     asmExt->output[nbOutput]->reg = specific_register_available("%rbx");
                     if (!asmExt->output[nbOutput]->reg)
                         error("%s : %s:%d: error: in output_asm function :reg is null!", EXTASM_C, __FILE__, __LINE__);
                     asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg; 
+                    asmExt->output[nbOutput]->regh = register_higher(asmExt->output[nbOutput]->reg64);
+                    asmExt->output[nbOutput]->regl = register_lower(asmExt->output[nbOutput]->reg64);                    
                     asmExt->output[nbOutput]->letter = 'b';
                     asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
                 }
-                else if (!strncmp(tok->str, "=c", tok->len))
+                else if (!strncmp(tok->str, "=c", tok->len) || !strncmp(tok->str, "=&c", tok->len))
                 {
                     asmExt->output[nbOutput]->prefix = "=";
                     asmExt->output[nbOutput]->reg = specific_register_available("%rcx");
                     if (!asmExt->output[nbOutput]->reg)
                         error("%s : %s:%d: error: in output_asm function :reg is null!", EXTASM_C, __FILE__, __LINE__);
                     asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg; 
+                    asmExt->output[nbOutput]->regh = register_higher(asmExt->output[nbOutput]->reg64);
+                    asmExt->output[nbOutput]->regl = register_lower(asmExt->output[nbOutput]->reg64);                     
                     asmExt->output[nbOutput]->letter = 'c';
                     asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
                 }
-                else if (!strncmp(tok->str, "=d", tok->len))
+                else if (!strncmp(tok->str, "=d", tok->len) || !strncmp(tok->str, "=&d", tok->len))
                 {
                     asmExt->output[nbOutput]->prefix = "=";
                     asmExt->output[nbOutput]->reg = specific_register_available("%rdx");
                     if (!asmExt->output[nbOutput]->reg)
                         error("%s : %s:%d: error: in output_asm function :reg is null!", EXTASM_C, __FILE__, __LINE__);
                     asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg; 
+                    asmExt->output[nbOutput]->regh = register_higher(asmExt->output[nbOutput]->reg64);
+                    asmExt->output[nbOutput]->regl = register_lower(asmExt->output[nbOutput]->reg64);                     
                     asmExt->output[nbOutput]->letter = 'd';
                     asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
                 }                            
@@ -633,7 +683,9 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->output[nbOutput]->reg = specific_register_available("%rax");
                     if (!asmExt->output[nbOutput]->reg)
                        error("%s : %s:%d: error: in output_asm function :reg is null!", EXTASM_C, __FILE__, __LINE__);
-                    asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg;  
+                    asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg; 
+                    asmExt->output[nbOutput]->regh = register_higher(asmExt->output[nbOutput]->reg64);
+                    asmExt->output[nbOutput]->regl = register_lower(asmExt->output[nbOutput]->reg64);                     
                     asmExt->output[nbOutput]->letter = 'a';
                     asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
 
@@ -645,6 +697,8 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     if (!asmExt->output[nbOutput]->reg)
                         error("%s : %s:%d: error: in output_asm function :reg is null!", EXTASM_C, __FILE__, __LINE__);
                     asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg; 
+                    asmExt->output[nbOutput]->regh = register_higher(asmExt->output[nbOutput]->reg64);
+                    asmExt->output[nbOutput]->regl = register_lower(asmExt->output[nbOutput]->reg64);                    
                     asmExt->output[nbOutput]->letter = 'b';
                     asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
                 }
@@ -655,6 +709,8 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     if (!asmExt->output[nbOutput]->reg)
                         error("%s : %s:%d: error: in output_asm function :reg is null!", EXTASM_C, __FILE__, __LINE__);
                     asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg; 
+                    asmExt->output[nbOutput]->regh = register_higher(asmExt->output[nbOutput]->reg64);
+                    asmExt->output[nbOutput]->regl = register_lower(asmExt->output[nbOutput]->reg64);                    
                     asmExt->output[nbOutput]->letter = 'c';
                     asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
                 }
@@ -665,6 +721,8 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     if (!asmExt->output[nbOutput]->reg)
                         error("%s : %s:%d: error: in output_asm function :reg is null!", EXTASM_C, __FILE__, __LINE__);
                     asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg; 
+                    asmExt->output[nbOutput]->regh = register_higher(asmExt->output[nbOutput]->reg64);
+                    asmExt->output[nbOutput]->regl = register_lower(asmExt->output[nbOutput]->reg64);                    
                     asmExt->output[nbOutput]->letter = 'd';
                     asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
                 }                            
@@ -694,7 +752,9 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 asmExt->output[nbOutput]->reg = specific_register_available("%rax");
                 if (!asmExt->output[nbOutput]->reg)
                     error("%s : %s:%d: error: in output_asm function :reg is null!", EXTASM_C, __FILE__, __LINE__);
-                asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg;                
+                asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg;    
+                asmExt->output[nbOutput]->regh = register_higher(asmExt->output[nbOutput]->reg64);
+                asmExt->output[nbOutput]->regl = register_lower(asmExt->output[nbOutput]->reg64);                            
                 asmExt->output[nbOutput]->letter = 'D';
                 asmExt->output[nbOutput]->inputToGenerate = true;
             }   
@@ -710,7 +770,9 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 asmExt->output[nbOutput]->reg = specific_register_available("%rax");
                 if (!asmExt->output[nbOutput]->reg)
                     error("%s : %s:%d: error: in output_asm function :reg is null!", EXTASM_C, __FILE__, __LINE__);
-                asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg;                
+                asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg;     
+                asmExt->output[nbOutput]->regh = register_higher(asmExt->output[nbOutput]->reg64);
+                asmExt->output[nbOutput]->regl = register_lower(asmExt->output[nbOutput]->reg64);                           
                 asmExt->output[nbOutput]->letter = 'S';
                 asmExt->output[nbOutput]->inputToGenerate = true;
             } 
@@ -994,7 +1056,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             }
         }
         // register in write only mode
-        if (tok->kind == TK_STR && !strncmp(tok->str, "0", tok->len))
+        if (tok->kind == TK_STR && (!strncmp(tok->str, "0", tok->len) || !strncmp(tok->str, "%0", tok->len) ))
         {
             asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(0);
             asmExt->input[nbInput]->index = 0;
@@ -1003,7 +1065,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 error("%s : %s:%d: error: in input_asm function input_asm :reg is null!", EXTASM_C, __FILE__, __LINE__);            
             asmExt->input[nbInput]->reg64 = asmExt->output[0]->reg64;
         }
-        else if (tok->kind == TK_STR && !strncmp(tok->str, "1", tok->len))
+        else if (tok->kind == TK_STR && (!strncmp(tok->str, "1", tok->len) || !strncmp(tok->str, "%1", tok->len)))
         {
 
             asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(1);
@@ -1013,7 +1075,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 error("%s : %s:%d: error: in input_asm function input_asm :reg is null!", EXTASM_C, __FILE__, __LINE__);            
             asmExt->input[nbInput]->reg64 = asmExt->output[1]->reg64;
         }
-        else if (tok->kind == TK_STR && !strncmp(tok->str, "2", tok->len))
+        else if (tok->kind == TK_STR && (!strncmp(tok->str, "2", tok->len) || !strncmp(tok->str, "%2", tok->len)))
         {
 
             asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(2);
@@ -1023,7 +1085,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 error("%s : %s:%d: error: in input_asm function input_asm :reg is null!", EXTASM_C, __FILE__, __LINE__);            
             asmExt->input[nbInput]->reg64 = asmExt->output[2]->reg64;
         }
-        else if (tok->kind == TK_STR && !strncmp(tok->str, "3", tok->len))
+        else if (tok->kind == TK_STR && (!strncmp(tok->str, "3", tok->len) || !strncmp(tok->str, "%3", tok->len)))
         {
 
             asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(3);
@@ -1162,7 +1224,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             }            
         }
  
-        else if (tok->kind == TK_STR && !strncmp(tok->str, "m", tok->len))
+        else if (tok->kind == TK_STR && (!strncmp(tok->str, "m", tok->len) ||  !strncmp(tok->str, "rm", tok->len)))
         {
 
             asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(nbOutput + nbInput);
@@ -1286,6 +1348,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 if (!asmExt->input[nbInput]->reg)
                     error("%s : %s:%d: error: in input_asm function input_asm :reg is null! %d", EXTASM_C, __FILE__, __LINE__, nbInput);
                 asmExt->input[nbInput]->reg = update_register_size(asmExt->input[nbInput]->reg, asmExt->input[nbInput]->size);
+
                 //managing specific case of arrays
                 if (sc->var->ty->kind == TY_ARRAY) {
                     ctx->line_no = __LINE__ + 1;
@@ -1390,6 +1453,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 asmExt->input[nbInput]->isAddress = false;
                 asmExt->input[nbInput]->input_value = input_value;
                 asmExt->input[nbInput]->size = tok->ty->size;
+                asmExt->input[nbInput]->reg = update_register_size(asmExt->input[nbInput]->reg, asmExt->input[nbInput]->size);                                
                 tok = tok->next;
                 ctx->line_no = __LINE__ + 1;
                 *rest = skip(tok, ")", ctx);
@@ -1582,7 +1646,7 @@ char *generate_input_asm(char *input_str)
     else if (asmExt->input[nbInput]->input_value)
     {
         strncat(tmp, "\n", 3);
-        strncat(tmp, opcode(asmExt->input[nbInput]->size), strlen(opcode(asmExt->input[nbInput]->size)));
+        strncat(tmp, opcode(asmExt->input[nbInput]->size), strlen(opcode(asmExt->input[nbInput]->size)));        
         strncat(tmp, " $", 3);
         strncat(tmp, asmExt->input[nbInput]->input_value, strlen(asmExt->input[nbInput]->input_value));
         strncat(tmp, ", ", 3);
@@ -1821,8 +1885,7 @@ char *generate_input_for_output() {
     char *tmp = calloc(1, sizeof(char) * 500);
 
     for (int i = 0; i < nbOutput; i++)
-    {
-      //not sure yet about in which case exactly we need to generate the input for the output
+    {      
       //not sure yet about in which case exactly we need to generate the input for the output
         if ((asmExt->output[i]->offset != 0 && (!strncmp(asmExt->output[i]->prefix, "+", 2) || asmExt->output[i]->isAddress))) {
             if (asmExt->output[i]->isVariable && !asmExt->output[i]->isAddress)
