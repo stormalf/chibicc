@@ -150,13 +150,6 @@ static char *register_lower(char *reg);
 static char *register_higher(char *reg);
 
 
-
-
-static bool has_percent_letter(const char *template, char suffix) { 
-    char pattern[3] = {'%', suffix, '\0'};
-    return strstr(template, pattern) != NULL;
-}
-
 char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
 {
     char *input_asm_str;
@@ -168,10 +161,6 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
     nbLabel = 0;
     hasInput = false;
     hasOutput = false;
-    bool isb = false;
-    bool isq = false;
-    bool isw = false;
-    bool ish = false;
     char *template = tok->str;
     char *asm_str = calloc(1, sizeof(char) * 10000);
     ctx->filename = EXTASM_C;
@@ -300,25 +289,6 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
         tok = tok->next;
     }
 
-    //temp fix for bswap %q0 to indicate a 64 register (quad word)
-    //TODO set a variable isQuad to be sure to use 64 bits register when %q is found
-    if (has_percent_letter(template, 'b')) {
-        isb = true;
-    }
-    if (has_percent_letter(template, 'q')) {
-        isq = true;
-    }     
-    if (has_percent_letter(template, 'w')) {
-        isw = true;
-    }
-    if (has_percent_letter(template, 'h')) {
-        ish = true;
-    }    
-
-    template = subst_asm(template, " %", "%q");
-    template = subst_asm(template, " %", "%w");
-    template = subst_asm(template, " %", "%b");
-    template = subst_asm(template, " %", "%h");
 
    //case of no input need to generate input for output
     if (hasOutput && !hasInput){
@@ -351,7 +321,7 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 tmp_asm = subst_asm(template, tmp, asmExt->output[i]->variableNumber);
                 free(tmp);
             }else {
-                    tmp_asm = subst_asm(template, asmExt->output[i]->reg, asmExt->output[i]->variableNumber);                         
+                  tmp_asm = subst_asm(template, asmExt->output[i]->reg, asmExt->output[i]->variableNumber);                         
                 }
         }
             

@@ -6917,6 +6917,14 @@ Obj *parse(Token *tok)
       continue;
     }
 
+    //fixing ISS-192 found during php-src compile
+    if (equal(tok, "asm") || equal(tok, "__asm__")) {
+      Node *node = asm_stmt(&tok, tok);
+      add_type(node);
+      continue;
+    }
+
+
     VarAttr attr = {};
     //from COSMOPOLITAN adding other GNUC attributes
     tok = attribute_list(tok, &attr, thing_attributes);

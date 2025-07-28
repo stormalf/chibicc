@@ -540,6 +540,8 @@ static void gen_mem_zero(int offset, int n) {
 // Load a value from where %rax is pointing to.
 static void load(Type *ty)
 {
+  if (!ty)
+    error("%s: %s:%d: error: in load : ty is null!", CODEGEN_C, __FILE__, __LINE__);
   switch (ty->kind)
   {
   case TY_ARRAY:
@@ -585,7 +587,9 @@ static void load(Type *ty)
 // Store %rax to an address that the stack top is pointing to.
 static void store(Type *ty)
 {
-  pop_tmp("%rdi");
+  if (!ty)
+    error("%s %d: in store : ty is null!", CODEGEN_C, __LINE__);
+  pop("%rdi");
 
   switch (ty->kind)
   {
@@ -616,6 +620,8 @@ static void store(Type *ty)
 
 static void cmp_zero(Type *ty)
 {
+  if (!ty)
+    error("%s %d: in cmp_zero : ty is null!", CODEGEN_C, __LINE__);
   switch (ty->kind)
   {
   case TY_FLOAT:
@@ -778,6 +784,10 @@ static char *cast_table[][11] = {
 
 static void cast(Type *from, Type *to)
 {
+  if (!to)
+    error("%s %d: in cast : to type is null!", CODEGEN_C, __LINE__);    
+  if (!from)
+    from = copy_type(to);    
   if (to->kind == TY_VOID)
     return;
 
@@ -989,6 +999,9 @@ static int push_args(Node *node)
   for (Node *arg = node->args; arg; arg = arg->next)
   {
     Type *ty = arg->ty;
+    if (!ty)
+      error("%s %d: in push_args : type is null!", CODEGEN_C, __LINE__);  
+
 
     switch (ty->kind)
     {
@@ -1058,6 +1071,9 @@ static int push_args(Node *node)
 static void copy_ret_buffer(Obj *var)
 {
   Type *ty = var->ty;
+  if (!ty)
+    error("%s %d: in copy_ret_buffer : type is null!", CODEGEN_C, __LINE__);  
+
   int gp = 0, fp = 0;
 
     if (has_flonum1(ty)) {
@@ -1115,6 +1131,8 @@ static void copy_ret_buffer(Obj *var)
 static void copy_struct_reg(void)
 {
   Type *ty = current_fn->ty->return_ty;
+  if (!ty)
+    error("%s %d: in copy_struct_reg : type is null!", CODEGEN_C, __LINE__);  
   int gp = 0, fp = 0;
 
   println("  mov %%rax, %%rdi");
@@ -1166,6 +1184,9 @@ static void copy_struct_reg(void)
 static void copy_struct_mem(void)
 {
   Type *ty = current_fn->ty->return_ty;
+
+  if (!ty)
+    error("%s %d: in copy_struct_mem : type is null!", CODEGEN_C, __LINE__);  
   Obj *var = current_fn->params;
 
   println("  mov %d(%%rbp), %%rdi", var->offset);
@@ -1311,11 +1332,15 @@ static void gen_expr(Node *node)
     return;
   case ND_VAR:
     gen_addr(node);
+    if (!node->ty)
+      add_type(node);
     load(node->ty);
     return;
   case ND_MEMBER:
   {
     gen_addr(node);
+    if (!node->ty)
+      error("%s %d: in gen_expr : ND_MEMBER node type is null!", CODEGEN_C, __LINE__);  
     load(node->ty);
 
     Member *mem = node->member;
@@ -1337,6 +1362,8 @@ static void gen_expr(Node *node)
   }
   case ND_DEREF:
     gen_expr(node->lhs);
+    if (!node->ty)
+      error("%s %d: in gen_expr : ND_DEREF node type is null!", CODEGEN_C, __LINE__); 
     load(node->ty);
     return;
   case ND_ADDR:
@@ -1388,6 +1415,8 @@ static void gen_expr(Node *node)
     return;
   case ND_CAST:
     gen_expr(node->lhs);    
+    if (!node->ty)   
+      error("%s %d: in gen_expr : ND_CAST node type is null!", CODEGEN_C, __LINE__); 
     cast(node->lhs->ty, node->ty);
     return;
   case ND_MEMZERO:
@@ -1474,6 +1503,8 @@ static void gen_expr(Node *node)
     for (Node *arg = node->args; arg; arg = arg->next)
     {
       Type *ty = arg->ty;
+      if (!ty)
+        error("%s %d: in gen_expr : type is null!", CODEGEN_C, __LINE__);  
 
       switch (ty->kind)
       {
