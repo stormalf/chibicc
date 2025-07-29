@@ -317,6 +317,7 @@ static Node *new_unary(NodeKind kind, Node *expr, Token *tok)
   if (isDotfile && dotf != NULL)
     fprintf(dotf, "%s%d -> %s%d\n", nodekind2str(node->kind), node->unique_number, nodekind2str(expr->kind), expr->unique_number);
   node->lhs = expr;
+  add_type(node->lhs);
   return node;
 }
 
@@ -847,6 +848,8 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     ty->is_atomic = true;
   }
   *rest = tok;
+  if (!ty)
+    error_tok(tok, "%s %d: in declspec : ty is null!", PARSE_C, __LINE__);
   return ty;
 }
 
@@ -967,6 +970,8 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
     ty->params = head.next;
   ty->is_variadic = is_variadic;
   *rest = tok->next;
+  if (!ty)
+    error_tok(tok, "%s %d: in func_params : ty is null!", PARSE_C, __LINE__);
   return ty;
 }
 
@@ -1041,6 +1046,8 @@ static Type *type_suffix(Token **rest, Token *tok, Type *ty)
     return array_dimensions(rest, tok->next, ty);
 
   *rest = tok;
+  if (!ty)
+    error_tok(tok, "%s %d: in type_suffix : ty is null!", PARSE_C, __LINE__);
   return ty;
 }
 
@@ -1077,6 +1084,8 @@ static Type *pointers(Token **rest, Token *tok, Type *ty)
   }
   tok = attribute_list(tok, ty, type_attributes);
   *rest = tok;
+  if (!ty)
+    error_tok(tok, "%s %d: in pointers : ty is null!", PARSE_C, __LINE__);
   return ty;
 }
 
@@ -1119,6 +1128,8 @@ static Type *declarator(Token **rest, Token *tok, Type *ty)
   ty->name = name;
   ty->name_pos = name_pos;
   tok = attribute_list(tok, ty, type_attributes);
+  if (!ty)
+    error_tok(tok, "%s %d: in declarator : ty is null!", PARSE_C, __LINE__);
   return ty;
 }
 
@@ -1204,6 +1215,9 @@ static Type *enum_specifier(Token **rest, Token *tok)
     *rest = tok;
     if (ty2)
       return ty2;
+
+    if (!ty)
+      error_tok(tok, "%s %d: in enum_specifier : ty is null!", PARSE_C, __LINE__);  
     return ty;
   }
   ctx->filename = PARSE_C;
@@ -1237,6 +1251,8 @@ static Type *enum_specifier(Token **rest, Token *tok)
 
   if (tag)
     push_tag_scope(tag, ty);
+  if (!ty)
+    error_tok(tok, "%s %d: in enum_specifier : ty is null!", PARSE_C, __LINE__);    
   return ty;
 }
 
@@ -1263,6 +1279,8 @@ static Type *typeof_specifier(Token **rest, Token *tok)
   ctx->funcname = "typeof_specifier";
   ctx->line_no = __LINE__ + 1;
   *rest = skip(tok, ")", ctx);
+  if (!ty)
+    error_tok(tok, "%s %d: in typeof_specifier : ty is null!", PARSE_C, __LINE__);
   return ty;
 }
 
@@ -2099,6 +2117,8 @@ static Type *copy_struct_type(Type *ty)
   }
 
   ty->members = head.next;
+  if (!ty)
+    error("%s %d: in copy_struct_type : ty is null!", PARSE_C, __LINE__);
   return ty;
 }
 
@@ -2493,7 +2513,8 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
     // if (ty->kind != TY_STRUCT && ty->kind != TY_UNION)
     //   exp = new_cast(exp, current_fn->ty->return_ty);
 
-
+    if (!exp->ty)
+      error_tok(exp->tok, "%s %d: in stmt : exp->ty is null", PARSE_C, __LINE__);
       
     if (ret_ty->kind == TY_VOID && exp->ty->kind != TY_VOID)
     {
@@ -5101,6 +5122,8 @@ static Type *struct_union_decl(Token **rest, Token *tok, bool *no_list)
 
     ty->size = -1;
     push_tag_scope(tag, ty);
+    if (!ty)
+      error_tok(tok, "%s %d: in struct_union_decl : ty is null!", PARSE_C, __LINE__);
     return ty;
   }
 
@@ -5132,7 +5155,8 @@ static Type *struct_union_decl(Token **rest, Token *tok, bool *no_list)
 
     push_tag_scope(tag, ty);
   }
-
+  if (!ty)
+    error_tok(tok, "%s %d: in struct_union_decl : ty is null!", PARSE_C, __LINE__);
   return ty;
 }
 
@@ -5195,7 +5219,8 @@ static Type *struct_decl(Token **rest, Token *tok)
 
   ty->members = head.next;
   ty->size = align_to(bits, ty->align * 8) / 8;
-
+  if (!ty)
+    error_tok(tok, "%s %d: in struct_decl : ty is null!", PARSE_C, __LINE__);
   return ty;
 }
 
@@ -5232,6 +5257,8 @@ static Type *union_decl(Token **rest, Token *tok)
   }
   ty->members = head.next;
   ty->size = align_to(ty->size, ty->align);
+  if (!ty)
+    error_tok(tok, "%s %d: in union_decl : ty is null!", PARSE_C, __LINE__);
   return ty;
 }
 
@@ -5477,7 +5504,7 @@ static Node *funcall(Token **rest, Token *tok, Node *fn)
       // If parameter type is omitted (e.g. in "..."), float
       // arguments are promoted to double.
       arg = new_cast(arg, ty_double);
-    } else if (is_array(arg->ty) || arg->ty->kind == TY_VLA)
+    } else if (is_array(arg->ty))
         arg = new_cast(arg, pointer_to(arg->ty->base));
       else if (arg->ty->kind == TY_FUNC)
         arg = new_cast(arg, pointer_to(arg->ty));
@@ -5543,6 +5570,7 @@ static Node *generic_selection(Token **rest, Token *tok)
       ctx->line_no = __LINE__ + 1;            
       tok = skip(tok->next, ":", ctx);
       Node *node = assign(&tok, tok);
+      add_type(node);
       if (!ret)
         ret = node;
       continue;
@@ -5554,6 +5582,7 @@ static Node *generic_selection(Token **rest, Token *tok)
     ctx->line_no = __LINE__ + 1;          
     tok = skip(tok, ":", ctx);
     Node *node = assign(&tok, tok);
+    add_type(node);
     if (is_compatible(t1, t2))
       ret = node;
   }
@@ -5813,7 +5842,7 @@ static Node *primary(Token **rest, Token *tok)
 
     // Parse the expression inside __builtin_constant_p
     Node *expr = assign(&tok, tok);
-
+    add_type(expr);
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";        
     ctx->line_no = __LINE__ + 1;    
@@ -5878,16 +5907,19 @@ static Node *primary(Token **rest, Token *tok)
     ctx->line_no = __LINE__ + 1;      
     tok = skip(tok->next, "(", ctx);
     node->cas_addr = assign(&tok, tok);
+    add_type(node->cas_addr);
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";        
     ctx->line_no = __LINE__ + 1;      
     tok = skip(tok, ",", ctx);
     node->cas_old = assign(&tok, tok);
+    add_type(node->cas_old);
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";        
     ctx->line_no = __LINE__ + 1;      
     tok = skip(tok, ",", ctx);
     node->cas_new = assign(&tok, tok);
+    add_type(node->cas_new);
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";        
     ctx->line_no = __LINE__ + 1;      
@@ -5904,11 +5936,13 @@ static Node *primary(Token **rest, Token *tok)
     ctx->line_no = __LINE__ + 1;      
     tok = skip(tok->next, "(", ctx);
     node->lhs = assign(&tok, tok);
+    add_type(node->lhs);
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";        
     ctx->line_no = __LINE__ + 1;      
     tok = skip(tok, ",", ctx);
     node->rhs = assign(&tok, tok);
+    add_type(node->rhs);
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";        
     ctx->line_no = __LINE__ + 1;      
@@ -5923,16 +5957,19 @@ static Node *primary(Token **rest, Token *tok)
     ctx->line_no = __LINE__ + 1;      
     tok = skip(tok->next, "(", ctx);
     node->cas_addr = assign(&tok, tok);
+    add_type(node->cas_addr);
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";        
     ctx->line_no = __LINE__ + 1;      
     tok = skip(tok, ",", ctx);
     node->cas_old = assign(&tok, tok);
+    add_type(node->cas_old);
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";        
     ctx->line_no = __LINE__ + 1;      
     tok = skip(tok, ",", ctx);
     node->cas_new = assign(&tok, tok);
+    add_type(node->cas_new);
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";        
     ctx->line_no = __LINE__ + 1;      
@@ -5979,7 +6016,7 @@ static Node *primary(Token **rest, Token *tok)
   }
 
   if (equal(tok, "__builtin_inf")) {
-    Node *node = new_node(ND_BUILTIN_INF, tok);  // or ND_BUILTIN_HUGE_VAL
+    Node *node = new_node(ND_BUILTIN_INF, tok); 
     node->ty = ty_double;
     node->fval = INFINITY;
     ctx->filename = PARSE_C;
@@ -5993,7 +6030,7 @@ static Node *primary(Token **rest, Token *tok)
     return node;
   }
   if (equal(tok, "__builtin_huge_val")) {
-    Node *node = new_node(ND_BUILTIN_HUGE_VAL, tok);  // or ND_BUILTIN_HUGE_VAL
+    Node *node = new_node(ND_BUILTIN_HUGE_VAL, tok); 
     node->ty = ty_double;
     node->fval = INFINITY;
     ctx->filename = PARSE_C;
@@ -6010,7 +6047,7 @@ static Node *primary(Token **rest, Token *tok)
   if (equal(tok, "__builtin_huge_vall")) {
     Node *node = new_node(ND_BUILTIN_HUGE_VALL, tok);
     node->ty = ty_ldouble;
-    node->fval = INFINITY;  // if you're using long double, make sure node supports this or adapt accordingly
+    node->fval = INFINITY; 
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";
     ctx->line_no = __LINE__ + 1;    
@@ -6024,7 +6061,7 @@ static Node *primary(Token **rest, Token *tok)
 
   if (equal(tok, "__builtin_inff")) {
     Node *node = new_node(ND_BUILTIN_INFF, tok);
-    node->ty = ty_float;            // or ty_double if that's your convention
+    node->ty = ty_float;    
     node->fval = INFINITY;     
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";
@@ -6146,22 +6183,22 @@ static Node *primary(Token **rest, Token *tok)
     ctx->line_no = __LINE__ + 1;    
     tok = skip(tok->next, "(", ctx);
     node->lhs = assign(&tok, tok); 
+    add_type(node->lhs);
     tok = skip(tok, ",", ctx);
     node->rhs = assign(&tok, tok); 
+    add_type(node->rhs);
     *rest = skip(tok, ")", ctx);    
     return node;
   }
 
   if (equal(tok, "__builtin_abort")) {
-      Node *node = new_node(ND_ABORT, tok); // Create a node for the built-in function
+      Node *node = new_node(ND_ABORT, tok); 
       ctx->filename = PARSE_C;
       ctx->funcname = "primary";
       ctx->line_no = __LINE__ + 1;    
-      tok = skip(tok->next, "(", ctx); // Skip the opening parenthesis
-
-      // Since __builtin_abort has no parameters, you can directly skip to the closing parenthesis
-      *rest = skip(tok, ")", ctx); // Skip to the closing parenthesis
-      return node; // Return the node for further processing
+      tok = skip(tok->next, "(", ctx);    
+      *rest = skip(tok, ")", ctx);
+      return node; 
   }
 
 
@@ -6172,6 +6209,7 @@ static Node *primary(Token **rest, Token *tok)
     ctx->line_no = __LINE__ + 1;
     tok = skip(tok->next, "(", ctx);
     node->lhs = assign(&tok, tok); 
+    add_type(node->lhs);
     *rest = skip(tok, ")", ctx);
     return node;
   }
@@ -6179,11 +6217,13 @@ static Node *primary(Token **rest, Token *tok)
   if (equal(tok, "__builtin_frame_address"))
   {
     Node *node = new_node(ND_BUILTIN_FRAME_ADDRESS, tok);
+    add_type(node);
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";
     ctx->line_no = __LINE__ + 1;
     tok = skip(tok->next, "(", ctx);
     node->lhs = assign(&tok, tok); 
+    add_type(node->lhs);
     *rest = skip(tok, ")", ctx);
     return node;
   }
@@ -6264,6 +6304,7 @@ static Node *primary(Token **rest, Token *tok)
     ctx->line_no = __LINE__ + 1;     
     tok = skip(tok,  ",", ctx);
     node->rhs = assign(&tok, tok);
+    add_type(node->rhs);
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";        
     ctx->line_no = __LINE__ + 1;     
@@ -6299,6 +6340,7 @@ static Node *primary(Token **rest, Token *tok)
     ctx->line_no = __LINE__ + 1;      
     tok = skip(tok, ",", ctx);
     Node *val = assign(&tok, tok);
+    add_type(val);
     Node *node;
     node = new_add(obj, val, tok);
     node->atomic_fetch = true;
@@ -6319,87 +6361,67 @@ static Node *primary(Token **rest, Token *tok)
     ctx->line_no = __LINE__ + 1;      
     tok = skip(tok, ",", ctx);
     Node *val = assign(&tok, tok);
+    add_type(val);
     Node *node;
     node = new_sub(obj, val, tok);
     node->atomic_fetch = true;
-        *rest = tok->next;
+    *rest = tok->next;
     return to_assign(node);
   }
   
   if (equal(tok, "__sync_fetch_and_or"))
   {
-      ctx->filename = PARSE_C;
-      ctx->funcname = "primary";
-      ctx->line_no = __LINE__ + 1;
-      tok = skip(tok->next, "(", ctx);
-      
-      // Parse the object
-      Node *obj = new_unary(ND_DEREF, assign(&tok, tok), tok);
-      
-      ctx->filename = PARSE_C;
-      ctx->funcname = "primary";
-      ctx->line_no = __LINE__ + 1;
-      tok = skip(tok, ",", ctx);
-      
-      // Parse the value to be ORed
-      Node *val = assign(&tok, tok);
-      
-      // Use ND_BITOR to represent the OR operation
-      Node *node = new_binary(ND_BITOR, obj, val, tok);
-      
-      node->atomic_fetch = true;  // Mark as atomic fetch operation
-      *rest = tok->next;
-      return to_assign(node);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";
+    ctx->line_no = __LINE__ + 1;
+    tok = skip(tok->next, "(", ctx);
+    Node *obj = new_unary(ND_DEREF, assign(&tok, tok), tok);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";
+    ctx->line_no = __LINE__ + 1;
+    tok = skip(tok, ",", ctx);
+    Node *val = assign(&tok, tok);
+    add_type(val);      
+    Node *node = new_binary(ND_BITOR, obj, val, tok);
+    node->atomic_fetch = true;  
+    *rest = tok->next;
+    return to_assign(node);
   }
 
   if (equal(tok, "__sync_fetch_and_xor"))
   {
-      ctx->filename = PARSE_C;
-      ctx->funcname = "primary";
-      ctx->line_no = __LINE__ + 1;
-      tok = skip(tok->next, "(", ctx);
-      
-      // Parse the object
-      Node *obj = new_unary(ND_DEREF, assign(&tok, tok), tok);
-      
-      ctx->filename = PARSE_C;
-      ctx->funcname = "primary";
-      ctx->line_no = __LINE__ + 1;
-      tok = skip(tok, ",", ctx);
-      
-      // Parse the value to be XORed
-      Node *val = assign(&tok, tok);
-      
-      // Use ND_BITXOR to represent the XOR operation
-      Node *node = new_binary(ND_BITXOR, obj, val, tok);
-      
-      node->atomic_fetch = true;  // Mark as atomic fetch operation
-      *rest = tok->next;
-      return to_assign(node);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";
+    ctx->line_no = __LINE__ + 1;
+    tok = skip(tok->next, "(", ctx);
+    Node *obj = new_unary(ND_DEREF, assign(&tok, tok), tok);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";
+    ctx->line_no = __LINE__ + 1;
+    tok = skip(tok, ",", ctx);
+    Node *val = assign(&tok, tok);
+    add_type(val);      
+    Node *node = new_binary(ND_BITXOR, obj, val, tok);
+    node->atomic_fetch = true; 
+    *rest = tok->next;
+    return to_assign(node);
   }
 
   if (equal(tok, "__sync_fetch_and_and"))
   {
-      ctx->filename = PARSE_C;
-      ctx->funcname = "primary";
-      ctx->line_no = __LINE__ + 1;
-      tok = skip(tok->next, "(", ctx);
-      
-      // Parse the object
-      Node *obj = new_unary(ND_DEREF, assign(&tok, tok), tok);
-      
-      ctx->filename = PARSE_C;
-      ctx->funcname = "primary";
-      ctx->line_no = __LINE__ + 1;
-      tok = skip(tok, ",", ctx);
-      
-      // Parse the value to be ANDed
-      Node *val = assign(&tok, tok);
-      
-      // Use ND_BITAND to represent the AND operation
-      Node *node = new_binary(ND_BITAND, obj, val, tok);
-      
-      node->atomic_fetch = true;  // Mark as atomic fetch operation
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";
+    ctx->line_no = __LINE__ + 1;
+    tok = skip(tok->next, "(", ctx);
+    Node *obj = new_unary(ND_DEREF, assign(&tok, tok), tok);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";
+    ctx->line_no = __LINE__ + 1;
+    tok = skip(tok, ",", ctx);
+    Node *val = assign(&tok, tok);
+    add_type(val);   
+    Node *node = new_binary(ND_BITAND, obj, val, tok);
+    node->atomic_fetch = true; 
     *rest = tok->next;
     return to_assign(node);
   }
@@ -6417,12 +6439,12 @@ static Node *primary(Token **rest, Token *tok)
     ctx->line_no = __LINE__ + 1;      
     tok = skip(tok, ",", ctx);
     Node *val = assign(&tok, tok);
+    add_type(val);    
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";        
     ctx->line_no = __LINE__ + 1;      
     tok = skip(tok, ",", ctx);
     Node *node;
-
     if (equal(tok, "0"))
       node = new_add(obj, val, tok);
     else if (equal(tok, "1"))
@@ -6660,7 +6682,7 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
     fn->is_function = true;
     fn->is_definition = equal(tok, "{");
     fn->is_static = attr->is_static || (attr->is_inline && !attr->is_extern);
-    fn->is_inline = attr->is_inline ;
+    fn->is_inline = attr->is_inline;
     fn->alias_name = attr->alias_name;
   }
   //from COSMOPOLITAN adding other GNUC attributes
@@ -6829,12 +6851,26 @@ static bool is_function(Token *tok)
   return ty->kind == TY_FUNC;
 }
 
+
+static bool var_in_array(const char *str, Obj *varArr[], size_t count) {
+    for (size_t i = 0; i < count ; i++) {
+        if (varArr[i] && varArr[i]->name && strcmp(str, varArr[i]->name) == 0) {
+            return true; 
+        }
+    }
+    return false;  
+}
+
 // Remove redundant tentative definitions.
+// works fine when we have tentative and definition but didn't work when we have multiple tentatives.
+// that's why here we're doing two passes and managed the case of duplicate tentatives.
 static void scan_globals(void)
 {
   Obj head;
   Obj *cur = &head;
-
+  Obj *varArr[10000];  
+  int i = 0;
+  //the first pass skipped the duplicated tentative and stores in an Array of objects duplicated tentative
   for (Obj *var = globals; var; var = var->next)
   {
     if (!var->is_tentative)
@@ -6845,19 +6881,40 @@ static void scan_globals(void)
 
     // Find another definition of the same identifier.
     Obj *var2 = globals;
-    for (; var2; var2 = var2->next)
-      if (var != var2 && var2->is_definition && !strcmp(var->name, var2->name))
+    
+    for (; var2; var2 = var2->next) {
+      if (var != var2 && var2->is_definition && !strcmp(var->name, var2->name)) {
+        //warn_tok(var->tok, "%s %d: in scan_globals : duplicated tentative definition", PARSE_C, __LINE__);  
+        if (var2->is_tentative && !var_in_array(var->name, varArr, i + 1 ) && i + 1 < 10000) {
+          varArr[i++] = var;                
+        }
         break;
+      }
+    }
 
     // If there's another definition, the tentative definition
     // is redundant
     if (!var2)
       cur = cur->next = var;
   }
+  //here now we have globals without duplicated tentative, we start from de-duplicated tentatives
+  //and we add after all the remaining globals.
+  cur = &head;
+  head.next = NULL;
+  for (int j = 0; j < i; j++) {
+    if (varArr[j]) {
+      cur = cur->next = varArr[j];
+    }
+  }
+ for (Obj *var = globals; var; var = var->next)
+  {
+      cur = cur->next = var;
+  }
 
   cur->next = NULL;
   globals = head.next;
 }
+
 
 static void declare_builtin_functions(void)
 {

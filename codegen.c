@@ -150,9 +150,9 @@ static void print_visibility(Obj *obj) {
       println("  .hidden\t%s", obj->name);
     } else if (!strcmp(obj->visibility, "protected")) {
       println("  .protected %s", obj->name);
-    } else {
-      println("  .globl\t%s", obj->name);
-    }
+    } 
+    println("  .globl\t%s", obj->name);
+    return;
   } 
   if (obj->is_static) {
     println("  .local\t%s", obj->name);
@@ -1728,37 +1728,50 @@ static void gen_expr(Node *node)
       println("  bswap %%rax");     // Reverse the byte order of the 64-bit value in rax
       return;
   }  
-
-    // For __builtin_frame_address
   case ND_BUILTIN_FRAME_ADDRESS: {
     int c = count();  // Unique label counter
-    // Get the level argument from the stack
-    println("  mov %%rdi, %%rax"); // Move the level argument into rax
     
-    // Check if level is 0
+    gen_expr(node->lhs);  // level in %rax   
+    
+    // Guard: limit frame walking to 64 levels
+    println("  mov $64, %%rdi");
+    println("  cmp %%rax, %%rdi");
+    println("  ja .Lframe_address_ok%d", c);   // if rax < 64, continue
+    println("  jmp .Lframe_address_null%d", c); // else, bail out
+
+    println(".Lframe_address_ok%d:", c);
+
+    // Check if level == 0
     println("  cmp $0, %%rax");
     println("  je .Lframe_address_%d", c);
-    
-    // For level > 0, we need to follow the frame pointers
-    // We will need to move up the stack `level` times
-    // Note: The actual implementation depends on how you manage stack frames
-    println("  mov %%rbp, %%rcx"); // Move current frame pointer to rcx
-    println("  sub $1, %%rax");   // Decrement level (level - 1)
+
+    // For level > 0, follow the frame pointer chain
+    println("  mov %%rbp, %%rcx");  // rcx = current frame pointer
+    //println("  sub $1, %%rax");     // rax = level - 1
+
     println(".Lframe_address_loop%d:", c);
-    println("  test %%rax, %%rax"); // Check if level == 0
+    println("  test %%rax, %%rax");
     println("  jz .Lframe_address_done%d", c);
-    println("  mov (%%rcx), %%rcx"); // Move up one frame
-    println("  sub $1, %%rax"); // Decrement level
+    println("  test %%rcx, %%rcx");
+    println("  jz .Lframe_address_null%d", c);
+    println("  mov (%%rcx), %%rcx");  // rcx = *(rcx) (next frame)
+    println("  sub $1, %%rax");
     println("  jmp .Lframe_address_loop%d", c);
+
     println(".Lframe_address_done%d:", c);
-    println("  mov %%rcx, %%rax"); // Return the frame pointer
+    println("  mov %%rcx, %%rax");  // return result
+    println("  jmp .Lframe_address_return%d", c);
 
     println(".Lframe_address_%d:", c);
-    println("  mov %%rbp, %%rax"); // Return the current frame pointer
+    println("  mov %%rbp, %%rax");  // level 0: return current frame
+    println("  jmp .Lframe_address_return%d", c);
+
+    println(".Lframe_address_null%d:", c);
+    println("  mov $0, %%rax");     // return NULL
+
+    println(".Lframe_address_return%d:", c);
     return;
   }
-
-
   case ND_POPCOUNT:
     gen_expr(node->builtin_val); // Generate code for the expression
     println("  popcnt %%rax, %%rax"); // Count the number of set bits
