@@ -1561,25 +1561,17 @@ static void gen_expr(Node *node)
     return;
   }
   case ND_CAS_N: {
-    // Generate code to evaluate and push the address
-    gen_expr(node->cas_addr); // Address
+    gen_expr(node->cas_addr);
     push();
-    
-    // Generate code to evaluate and push the new value
-    gen_expr(node->cas_new);  // New value
-    push();
-    
-    // Generate code to evaluate and push the old value
-    gen_expr(node->cas_old);  // Old value
+    gen_expr(node->cas_new);  
+    push();    
+    gen_expr(node->cas_old); 
 
     // Move the old value to r8 to preserve it
     println("  mov %%rax, %%r8"); 
 
-    // Pop the new value and address from the stack
-    pop("%rdx"); // New value in rdx
-    pop("%rdi"); // Address in rdi
-
-    // Determine the size of the data type
+    pop("%rdx"); 
+    pop("%rdi"); 
     int sz = node->cas_addr->ty->base->size;
 
     // Perform the atomic compare-and-swap operation
@@ -1597,43 +1589,30 @@ static void gen_expr(Node *node)
   }
   case ND_BUILTIN_MEMCPY: {
     if (opt_fbuiltin) {
-      // Generate code to evaluate the destination address
       gen_expr(node->builtin_dest);
       push();
-      println("  mov %%rax, %%rdi"); // Destination in RDI
-
-      // Generate code to evaluate the source address
+      println("  mov %%rax, %%rdi"); 
       gen_expr(node->builtin_src);
       push();
-      println("  mov %%rax, %%rsi"); // Source in RSI
-      // Generate code to evaluate the size
+      println("  mov %%rax, %%rsi");
       gen_expr(node->builtin_size);
       push();
-      println("  mov %%rax, %%rcx"); // Size in RCX
-
-      // Call the memcpy function
+      println("  mov %%rax, %%rcx"); 
       println("  rep movsb");
-      // Pop the stack to balance pushes
       pop("%rcx");
       pop("%rsi");
       pop("%rdi");
     }
     else {
-      // Handle the case when built-in functions are disabled
-      // You might want to call an external `memcpy` function here
-    // Generate code for destination pointer
     gen_expr(node->builtin_dest); 
     push();
-    
-    // Generate code for source pointer
+
     gen_expr(node->builtin_src);  
     push();
-    
-    // Generate code for size
+
     gen_expr(node->builtin_size); 
     push();
 
-    // Make the call to memcpy
     println("  call memcpy");
 
     // Restore the stack
@@ -1646,7 +1625,6 @@ static void gen_expr(Node *node)
   }
 
   case ND_BUILTIN_MEMSET: {
-    // Generate code for destination, value, and size
     gen_expr(node->builtin_dest);
     push();
     gen_expr(node->builtin_val);
@@ -1654,96 +1632,104 @@ static void gen_expr(Node *node)
     gen_expr(node->builtin_size);
     push();
 
-    // Move the arguments to the appropriate registers
     pop("%rcx");  // size
     pop("%rsi");  // value
     pop("%rdi");  // destination
-
-    // Move the value to the lower 8-bit register
-    println("  mov %%sil, %%al");  // Move the lower 8 bits of RSI to AL
-    println("  rep stosb");        // Use REP STOSB to set memory
+  
+    println("  mov %%sil, %%al");  
+    println("  rep stosb");       
 
     return;
   }
   case ND_BUILTIN_CLZ: {
-    gen_expr(node->builtin_val); // Generate code for the expression
-    println("  bsr %%eax, %%eax"); // Bit Scan Reverse to find the highest set bit
-    println("  xor $31, %%eax"); // Count leading zeros
+    gen_expr(node->builtin_val); 
+    println("  bsr %%eax, %%eax"); 
+    println("  xor $31, %%eax"); 
     return;
   }
   case ND_BUILTIN_CLZLL:
   case ND_BUILTIN_CLZL: {
-    gen_expr(node->builtin_val); // Generate code for the expression
-    println("  bsr %%rax, %%rax");       // Calculate number of leading zeros for 64-bit
-    println("  xor $63, %%eax");       // Special handling if input was -1
+    gen_expr(node->builtin_val); 
+    println("  bsr %%rax, %%rax");       
+    println("  xor $63, %%eax");       
 
     return;
   }
   case ND_BUILTIN_CTZ: {
-    gen_expr(node->builtin_val); // Generate code for the expression
-    println("  bsf %%eax, %%eax"); // Bit Scan Forward to find the lowest set bit
+    gen_expr(node->builtin_val); 
+    println("  bsf %%eax, %%eax"); 
     return;
   }
   case ND_BUILTIN_CTZLL:
   case ND_BUILTIN_CTZL: {
-    gen_expr(node->builtin_val); // Generate code for the expression
-    println("  bsf %%rax, %%rax"); // Bit Scan Forward to find the lowest set bit
+    gen_expr(node->builtin_val); 
+    println("  bsf %%rax, %%rax"); 
     return;
   }
 
   case ND_BUILTIN_BSWAP16: {
-      gen_expr(node->builtin_val);  // Generate code for the expression
-      println("  mov %%ax, %%dx");  // Move the lower 16 bits of the result into dx
-      println("  rol $8, %%dx");    // Rotate the bits in dx by 8 bits to the left
-      println("  mov %%dx, %%ax");  // Move the result back into ax
+      gen_expr(node->builtin_val);  
+      println("  mov %%ax, %%dx");  
+      println("  rol $8, %%dx");    
+      println("  mov %%dx, %%ax");  
       return;
   }
 
   case ND_BUILTIN_BSWAP32: {
-      gen_expr(node->builtin_val);  // Generate code for the expression
-      println("  bswap %%eax");     // Reverse the byte order of the 32-bit value in eax
+      gen_expr(node->builtin_val);  
+      println("  bswap %%eax");     
       return;
   }
 
   case ND_BUILTIN_BSWAP64: {
-      gen_expr(node->builtin_val);  // Generate code for the expression
-      println("  bswap %%rax");     // Reverse the byte order of the 64-bit value in rax
+      gen_expr(node->builtin_val);  
+      println("  bswap %%rax");     
       return;
   }  
+case ND_BUILTIN_FRAME_ADDRESS: {
+  int c = count();  // Unique label counter
+  
+  gen_expr(node->lhs);  // level in %rax   
+  
+  // Guard: limit frame walking to 64 levels
+  println("  mov $64, %%rdi");
+  println("  cmp %%rax, %%rdi");
+  println("  ja .Lframe_address_ok%d", c);   // if rax < 64, continue
+  println("  jmp .Lframe_address_null%d", c); // else, bail out
 
-  // For __builtin_frame_address
-  case ND_BUILTIN_FRAME_ADDRESS: {
-    int c = count();  // Unique label counter
-    gen_expr(node->lhs);
-    
-    // Check if level is 0
-    println("  cmp $0, %%rax");
-    println("  je .Lframe_address_%d", c);
-    
-    // For level > 0, we need to follow the frame pointers
-    // We will need to move up the stack `level` times
-    // Note: The actual implementation depends on how you manage stack frames
-    println("  mov %%rbp, %%rcx"); // Move current frame pointer to rcx
-    println("  sub $1, %%rax");   // Decrement level (level - 1)
-    println(".Lframe_address_loop%d:", c);
-    println("  test %%rax, %%rax"); // Check if level == 0
-    println("  jz .Lframe_address_done%d", c);
-    println("  test %%rcx, %%rcx"); // Check if rcx is null
-    println("  jz .Lframe_address_null%d", c);
-    println("  mov (%%rcx), %%rcx"); // Move up one frame
-    println("  sub $1, %%rax"); // Decrement level
-    println("  jmp .Lframe_address_loop%d", c);
-    println(".Lframe_address_done%d:", c);
-    println("  mov %%rcx, %%rax"); // Return the frame pointer   
-    println("  jmp .Lframe_address_return%d", c);
-    println(".Lframe_address_%d:", c);
-    println("  mov %%rbp, %%rax"); // Return the current frame pointer   
-    println("  jmp .Lframe_address_return%d", c);
-    println(".Lframe_address_null%d:", c);
-    println("  mov $0, %%rax");     
-    println(".Lframe_address_return%d:", c);    
-    return;
-  }
+  println(".Lframe_address_ok%d:", c);
+
+  // Check if level == 0
+  println("  cmp $0, %%rax");
+  println("  je .Lframe_address_%d", c);
+
+  // For level > 0, follow the frame pointer chain
+  println("  mov %%rbp, %%rcx");  // rcx = current frame pointer
+  //println("  sub $1, %%rax");     // rax = level - 1
+
+  println(".Lframe_address_loop%d:", c);
+  println("  test %%rax, %%rax");
+  println("  jz .Lframe_address_done%d", c);
+  println("  test %%rcx, %%rcx");
+  println("  jz .Lframe_address_null%d", c);
+  println("  mov (%%rcx), %%rcx");  // rcx = *(rcx) (next frame)
+  println("  sub $1, %%rax");
+  println("  jmp .Lframe_address_loop%d", c);
+
+  println(".Lframe_address_done%d:", c);
+  println("  mov %%rcx, %%rax");  // return result
+  println("  jmp .Lframe_address_return%d", c);
+
+  println(".Lframe_address_%d:", c);
+  println("  mov %%rbp, %%rax");  // level 0: return current frame
+  println("  jmp .Lframe_address_return%d", c);
+
+  println(".Lframe_address_null%d:", c);
+  println("  mov $0, %%rax");     // return NULL
+
+  println(".Lframe_address_return%d:", c);
+  return;
+}
 
   case ND_POPCOUNT:
     gen_expr(node->builtin_val); // Generate code for the expression

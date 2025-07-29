@@ -9,9 +9,8 @@ int main() {
     printf("%p\n", f2);
     void *f3 = __builtin_frame_address(3);
     printf("%p\n", f3);
-    
     printf("Frame address (level 0): %p\n", f0);
     printf("Frame address (level 1): %p\n", f1);
     printf("Frame address (level 2): %p\n", f2);
-    printf("Frame address (level 3): %p\n", f3);
+    printf("Frame address (level 3): %p\n", f3);  
 }
