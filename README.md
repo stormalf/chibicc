@@ -467,6 +467,13 @@ xrdp: https://github.com/neutrinolabs/xrdp.git
     For testing need libcheck framework (https://github.com/libcheck/check.git) and Cmocka (sudo apt-get install libcmocka-dev)
     CC=chibicc CFLAGS=-fpic LDFLAGS=-fpic LIBS=-lcheck ./configure && make && make check
 
+php: https://github.com/php/php-src.git
+
+    CC=chibicc ./configure
+    make
+    make test
+    
+
 ## meson
 
 to be able to use meson with chibicc (meson doesn't know chibicc compiler), I changed the detect.py file in /usr/lib/python3/dist-packages/mesonbuild/compilers/detect.py to add support for chibicc. After that I can now using meson for some projects that are configured to use it.
@@ -563,7 +570,7 @@ Example of diagram generated with -dotfile parameter :
 ## release notes
 
 1.0.22.9    Reporting fix from 1.0.23 (ISS-187) and activating overlapping range detection. Defining GNUC version 2 because some projects handle compilation directives for INTEL_COMPILER or GNUC only. Fixing ISS-191 some extended assembly not managed found during php-src compile. Fixing ISS-192 with asm at global level.
-Fixing ISS-193 segfault due to type null when dealing with atomics functions (temp fix).
+Fixing ISS-193 segfault due to type null when dealing with atomics functions (temp fix). Fixing issue with duplicate tentative (reworking scan_globals) and fixing segfault due to wrong builtin_frame_address (still one difference between chibicc and gcc on this point that can probably cause some strange behaviour ?).
 
 ## old release notes
 

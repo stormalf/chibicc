@@ -97,22 +97,23 @@ int align_to(int n, int align)
 static void print_visibility(Obj *obj) {
   if (obj->visibility) {
     if (!strcmp(obj->visibility, "hidden")) {
-      println("  .hidden\t%s", obj->name);
+      println("  .hidden\t%s", obj->name);      
     } else if (!strcmp(obj->visibility, "protected")) {
       println("  .protected %s", obj->name);
-    } else {
-      println("  .globl\t%s", obj->name);
-    }
-  } 
-  if (obj->is_static) {
+      
+    } 
+    println("  .globl\t%s", obj->name);          
+  } else  if (obj->is_static) {
     println("  .local\t%s", obj->name);
   } else {
     println("  .globl\t%s", obj->name);
   }
+
   if (obj->is_weak) {
     println("  .weak\t%s", obj->name);
   }
 }
+
 
 
 char *reg_dx(int sz)
@@ -1710,11 +1711,10 @@ static void gen_expr(Node *node)
       return;
   }  
 
-    // For __builtin_frame_address
+  // For __builtin_frame_address
   case ND_BUILTIN_FRAME_ADDRESS: {
     int c = count();  // Unique label counter
-    // Get the level argument from the stack
-    println("  mov %%rdi, %%rax"); // Move the level argument into rax
+    gen_expr(node->lhs);
     
     // Check if level is 0
     println("  cmp $0, %%rax");
@@ -1728,17 +1728,22 @@ static void gen_expr(Node *node)
     println(".Lframe_address_loop%d:", c);
     println("  test %%rax, %%rax"); // Check if level == 0
     println("  jz .Lframe_address_done%d", c);
+    println("  test %%rcx, %%rcx"); // Check if rcx is null
+    println("  jz .Lframe_address_null%d", c);
     println("  mov (%%rcx), %%rcx"); // Move up one frame
     println("  sub $1, %%rax"); // Decrement level
     println("  jmp .Lframe_address_loop%d", c);
     println(".Lframe_address_done%d:", c);
-    println("  mov %%rcx, %%rax"); // Return the frame pointer
-
+    println("  mov %%rcx, %%rax"); // Return the frame pointer   
+    println("  jmp .Lframe_address_return%d", c);
     println(".Lframe_address_%d:", c);
-    println("  mov %%rbp, %%rax"); // Return the current frame pointer
+    println("  mov %%rbp, %%rax"); // Return the current frame pointer   
+    println("  jmp .Lframe_address_return%d", c);
+    println(".Lframe_address_null%d:", c);
+    println("  mov $0, %%rax");     
+    println(".Lframe_address_return%d:", c);    
     return;
   }
-
 
   case ND_POPCOUNT:
     gen_expr(node->builtin_val); // Generate code for the expression

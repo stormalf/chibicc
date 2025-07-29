@@ -2034,6 +2034,7 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
   }
 
   init->expr = assign(rest, tok);
+  add_type(init->expr);
 
 }
 
@@ -2964,6 +2965,7 @@ static Node *expr(Token **rest, Token *tok)
 {
 
   Node *node = assign(&tok, tok);
+  add_type(node);
 
   if (equal(tok, ","))
     return new_binary(ND_COMMA, node, expr(rest, tok->next), tok);
@@ -5495,6 +5497,7 @@ static Node *generic_selection(Token **rest, Token *tok)
       ctx->line_no = __LINE__ + 1;            
       tok = skip(tok->next, ":", ctx);
       Node *node = assign(&tok, tok);
+      add_type(node);
       if (!ret)
         ret = node;
       continue;
@@ -5506,6 +5509,7 @@ static Node *generic_selection(Token **rest, Token *tok)
     ctx->line_no = __LINE__ + 1;          
     tok = skip(tok, ":", ctx);
     Node *node = assign(&tok, tok);
+    add_type(node);
     if (is_compatible(t1, t2))
       ret = node;
   }
@@ -5723,7 +5727,7 @@ static Node *primary(Token **rest, Token *tok)
 
     // Parse the expression inside __builtin_constant_p
     Node *expr = assign(&tok, tok);
-
+    add_type(expr);
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";        
     ctx->line_no = __LINE__ + 1;    
@@ -5818,16 +5822,19 @@ static Node *primary(Token **rest, Token *tok)
     ctx->line_no = __LINE__ + 1;      
     tok = skip(tok->next, "(", ctx);
     node->cas_addr = assign(&tok, tok);
+    add_type(node->cas_addr);
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";        
     ctx->line_no = __LINE__ + 1;      
     tok = skip(tok, ",", ctx);
     node->cas_old = assign(&tok, tok);
+    add_type(node->cas_old);
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";        
     ctx->line_no = __LINE__ + 1;      
     tok = skip(tok, ",", ctx);
     node->cas_new = assign(&tok, tok);
+    add_type(node->cas_new);
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";        
     ctx->line_no = __LINE__ + 1;      
@@ -5844,11 +5851,13 @@ static Node *primary(Token **rest, Token *tok)
     ctx->line_no = __LINE__ + 1;      
     tok = skip(tok->next, "(", ctx);
     node->lhs = assign(&tok, tok);
+    add_type(node->lhs);
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";        
     ctx->line_no = __LINE__ + 1;      
     tok = skip(tok, ",", ctx);
     node->rhs = assign(&tok, tok);
+    add_type(node->rhs);
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";        
     ctx->line_no = __LINE__ + 1;      
@@ -5863,16 +5872,19 @@ static Node *primary(Token **rest, Token *tok)
     ctx->line_no = __LINE__ + 1;      
     tok = skip(tok->next, "(", ctx);
     node->cas_addr = assign(&tok, tok);
+    add_type(node->cas_addr);
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";        
     ctx->line_no = __LINE__ + 1;      
     tok = skip(tok, ",", ctx);
     node->cas_old = assign(&tok, tok);
+    add_type(node->cas_old);
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";        
     ctx->line_no = __LINE__ + 1;      
     tok = skip(tok, ",", ctx);
     node->cas_new = assign(&tok, tok);
+    add_type(node->cas_new);
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";        
     ctx->line_no = __LINE__ + 1;      
@@ -6081,7 +6093,6 @@ static Node *primary(Token **rest, Token *tok)
 
   if (equal(tok, "__builtin_expect")) {
     Node *node = new_node(ND_EXPECT, tok);
-    add_type(node);
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";
     ctx->line_no = __LINE__ + 1;    
@@ -6090,13 +6101,13 @@ static Node *primary(Token **rest, Token *tok)
     add_type(node->lhs);
     tok = skip(tok, ",", ctx);
     node->rhs = assign(&tok, tok); 
+    add_type(node->rhs);
     *rest = skip(tok, ")", ctx);    
     return node;
   }
 
   if (equal(tok, "__builtin_abort")) {
       Node *node = new_node(ND_ABORT, tok); 
-      add_type(node);
       ctx->filename = PARSE_C;
       ctx->funcname = "primary";
       ctx->line_no = __LINE__ + 1;    
@@ -6108,12 +6119,11 @@ static Node *primary(Token **rest, Token *tok)
 
   if (equal(tok, "__builtin_return_address")) {
     Node *node = new_node(ND_RETURN_ADDR, tok);
-    add_type(node);
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";
     ctx->line_no = __LINE__ + 1;
     tok = skip(tok->next, "(", ctx);
-    node->lhs = assign(&tok, tok); 
+    node->lhs = assign(&tok, tok);     
     add_type(node->lhs);
     *rest = skip(tok, ")", ctx);
     return node;
@@ -6127,7 +6137,7 @@ static Node *primary(Token **rest, Token *tok)
     ctx->funcname = "primary";
     ctx->line_no = __LINE__ + 1;
     tok = skip(tok->next, "(", ctx);
-    node->lhs = assign(&tok, tok); 
+    node->lhs = assign(&tok, tok);     
     add_type(node->lhs);
     *rest = skip(tok, ")", ctx);
     return node;
@@ -6147,7 +6157,6 @@ static Node *primary(Token **rest, Token *tok)
 
   if (equal(tok, "__builtin_unreachable")) {
     Node *node = new_node(ND_UNREACHABLE, tok);
-    add_type(node);
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";
     ctx->line_no = __LINE__ + 1;
@@ -6210,6 +6219,7 @@ static Node *primary(Token **rest, Token *tok)
     ctx->line_no = __LINE__ + 1;     
     tok = skip(tok,  ",", ctx);
     node->rhs = assign(&tok, tok);
+    add_type(node->rhs);
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";        
     ctx->line_no = __LINE__ + 1;     
@@ -6245,6 +6255,7 @@ static Node *primary(Token **rest, Token *tok)
     ctx->line_no = __LINE__ + 1;      
     tok = skip(tok, ",", ctx);
     Node *val = assign(&tok, tok);
+    add_type(val);
     Node *node;
     node = new_add(obj, val, tok);
     node->atomic_fetch = true;
@@ -6265,6 +6276,7 @@ static Node *primary(Token **rest, Token *tok)
     ctx->line_no = __LINE__ + 1;      
     tok = skip(tok, ",", ctx);
     Node *val = assign(&tok, tok);
+    add_type(val);
     Node *node;
     node = new_sub(obj, val, tok);
     node->atomic_fetch = true;
@@ -6284,8 +6296,7 @@ static Node *primary(Token **rest, Token *tok)
     ctx->line_no = __LINE__ + 1;
     tok = skip(tok, ",", ctx);
     Node *val = assign(&tok, tok);
-      
-      // Use ND_BITOR to represent the OR operation
+    add_type(val);      
     Node *node = new_binary(ND_BITOR, obj, val, tok);  
     node->atomic_fetch = true;  
     *rest = tok->next;
@@ -6303,7 +6314,8 @@ static Node *primary(Token **rest, Token *tok)
     ctx->funcname = "primary";
     ctx->line_no = __LINE__ + 1;
     tok = skip(tok, ",", ctx);            
-    Node *val = assign(&tok, tok);   
+    Node *val = assign(&tok, tok); 
+    add_type(val);      
     Node *node = new_binary(ND_BITXOR, obj, val, tok);           
     node->atomic_fetch = true; 
     *rest = tok->next;
@@ -6321,7 +6333,8 @@ static Node *primary(Token **rest, Token *tok)
     ctx->funcname = "primary";
     ctx->line_no = __LINE__ + 1;
     tok = skip(tok, ",", ctx);
-    Node *val = assign(&tok, tok);    
+    Node *val = assign(&tok, tok); 
+    add_type(val);   
     Node *node = new_binary(ND_BITAND, obj, val, tok);    
     node->atomic_fetch = true; 
     *rest = tok->next;
@@ -6340,7 +6353,8 @@ static Node *primary(Token **rest, Token *tok)
     ctx->funcname = "primary";        
     ctx->line_no = __LINE__ + 1;      
     tok = skip(tok, ",", ctx);
-    Node *val = assign(&tok, tok);    
+    Node *val = assign(&tok, tok);
+    add_type(val);    
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";        
     ctx->line_no = __LINE__ + 1;      
@@ -6753,12 +6767,26 @@ static bool is_function(Token *tok)
   return ty->kind == TY_FUNC;
 }
 
+
+static bool var_in_array(const char *str, Obj *varArr[], size_t count) {
+    for (size_t i = 0; i < count ; i++) {
+        if (varArr[i] && varArr[i]->name && strcmp(str, varArr[i]->name) == 0) {
+            return true; 
+        }
+    }
+    return false;  
+}
+
 // Remove redundant tentative definitions.
+// works fine when we have tentative and definition but didn't work when we have multiple tentatives.
+// that's why here we're doing two passes and managed the case of duplicate tentatives.
 static void scan_globals(void)
 {
   Obj head;
   Obj *cur = &head;
-
+  Obj *varArr[10000];  
+  int i = 0;
+  //the first pass skipped the duplicated tentative and stores in an Array of objects duplicated tentative
   for (Obj *var = globals; var; var = var->next)
   {
     if (!var->is_tentative)
@@ -6769,19 +6797,40 @@ static void scan_globals(void)
 
     // Find another definition of the same identifier.
     Obj *var2 = globals;
-    for (; var2; var2 = var2->next)
-      if (var != var2 && var2->is_definition && !strcmp(var->name, var2->name))
+    
+    for (; var2; var2 = var2->next) {
+      if (var != var2 && var2->is_definition && !strcmp(var->name, var2->name)) {
+        //warn_tok(var->tok, "%s %d: in scan_globals : duplicated tentative definition", PARSE_C, __LINE__);  
+        if (var2->is_tentative && !var_in_array(var->name, varArr, i + 1 ) && i + 1 < 10000) {
+          varArr[i++] = var;                
+        }
         break;
+      }
+    }
 
     // If there's another definition, the tentative definition
     // is redundant
     if (!var2)
       cur = cur->next = var;
   }
+  //here now we have globals without duplicated tentative, we start from de-duplicated tentatives
+  //and we add after all the remaining globals.
+  cur = &head;
+  head.next = NULL;
+  for (int j = 0; j < i; j++) {
+    if (varArr[j]) {
+      cur = cur->next = varArr[j];
+    }
+  }
+ for (Obj *var = globals; var; var = var->next)
+  {
+   cur = cur->next = var; 
+  }     
 
   cur->next = NULL;
   globals = head.next;
 }
+
 
 static void declare_builtin_functions(void)
 {

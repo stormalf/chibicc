@@ -1266,7 +1266,7 @@ static void run_linker(StringArray *inputs, char *output)
   strarray_push(&arr, output);
   strarray_push(&arr, "-m");
   strarray_push(&arr, "elf_x86_64");
-  strarray_push(&arr, "-allow-multiple-definition");
+  strarray_push(&arr, "--allow-multiple-definition");
 
 
   //for some projects like POSTGRES it seems that the specific path for the project 
