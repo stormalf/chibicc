@@ -583,6 +583,7 @@ struct Type
   //from COSMOPOLITAN adding is_aligned
   bool is_aligned;
   bool is_weak;
+  bool is_inline;
   char *visibility;
 
   bool is_compound_lit; // Flag to indicate if this type is a compound literal

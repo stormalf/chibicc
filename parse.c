@@ -219,7 +219,7 @@ static Node *compound_stmt2(Token **rest, Token *tok);
 
 static int align_down(int n, int align)
 {
-  return align_to(n - align + 1, align);
+    return (n / align) * align;
 }
 
 static void enter_scope(void)
@@ -671,10 +671,6 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
       ctx->funcname = "declspec";          
       ctx->line_no = __LINE__ + 1;  
       tok = skip(tok->next, "(", ctx);
-      // if (is_typename(tok))
-      //   attr->align = typename(&tok, tok)->align;
-      // else
-      //   attr->align = const_expr(&tok, tok);
       int align;
       if (is_typename(tok))
         align = typename(&tok, tok)->align;
@@ -1076,11 +1072,6 @@ static Type *pointers(Token **rest, Token *tok, Type *ty)
       }
     }
   }
-  //   while (equal(tok, "const") || equal(tok, "volatile") || equal(tok, "restrict") ||
-  //          equal(tok, "__restrict") || equal(tok, "__restrict__") ||
-  //          equal(tok, "_Atomic") || equal(tok, "_Complex") )
-  //     tok = tok->next;
-  // }
   tok = attribute_list(tok, ty, type_attributes);
   *rest = tok;
   if (!ty)
@@ -1922,23 +1913,7 @@ static void union_initializer(Token **rest, Token *tok, Initializer *init) {
   }
 }
 
-// // initializer = struct-> union
-// static void initializer3(Token **rest, Token *tok, Initializer *init)
-// {
-//   //ISS-154 the initial error seems more in the init->ty->kind returning TY_CHAR instead of TY_STRUCT (need to check why)
-//   if (init->ty->kind == TY_STRUCT || init->ty->kind == TY_UNION || init->ty->kind == TY_CHAR)
-//   {
-//     Node *expr = assign(rest, tok);
-//     add_type(expr);
-//     if (expr->ty->kind == TY_STRUCT || expr->ty->kind == TY_UNION)
-//     {
-//       init->expr = expr;
-//       return;
-//     }
 
-//     init->expr = assign(rest, tok);
-//   }
-// }
 
 // initializer = string-initializer | array-initializer
 //             | struct-initializer | union-initializer
@@ -2224,8 +2199,6 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
       if (mem->is_bitfield)
       {
         Node *expr = init->children[mem->idx]->expr;
-        // if (!expr)
-        //   break;
         if (!expr)
           continue;
         add_type(expr);
@@ -4280,7 +4253,6 @@ static Token *type_attributes(Token *tok, void *arg)
       consume(&tok, tok, "transparent_union") ||
       consume(&tok, tok, "gnu_inline") ||
       consume(&tok, tok, "__gnu_inline__") ||
-      consume(&tok, tok, "__always_inline__") ||
       consume(&tok, tok, "used") ||
       consume(&tok, tok, "__used__") ||
       consume(&tok, tok, "unused") ||
@@ -4408,6 +4380,11 @@ static Token *type_attributes(Token *tok, void *arg)
 
   if (consume(&tok, tok, "const") || consume(&tok, tok, "__const__")) {
       ty->is_const = true;
+    return tok;
+  }
+
+  if (consume(&tok, tok, "always_inline") || consume(&tok, tok, "__always_inline__")) {
+      ty->is_inline = true;
     return tok;
   }
 
@@ -4862,7 +4839,6 @@ static Token *thing_attributes(Token *tok, void *arg) {
       consume(&tok, tok, "transparent_union") ||
       consume(&tok, tok, "gnu_inline") ||
       consume(&tok, tok, "__gnu_inline__") ||
-      consume(&tok, tok, "__always_inline__") ||
       consume(&tok, tok, "used") ||
       consume(&tok, tok, "__used__") ||
       consume(&tok, tok, "unused") ||
@@ -4897,6 +4873,12 @@ static Token *thing_attributes(Token *tok, void *arg) {
       consume(&tok, tok, "__no_profile_instrument_function__")) 
     {
         return tok;
+    }
+
+
+    if (consume(&tok, tok, "always_inline") || consume(&tok, tok, "__always_inline__")) {
+      attr->is_inline = true;
+      return tok;
     }
 
     //fallthrough is the last instruction in case: followed by a semicolon
@@ -5660,7 +5642,7 @@ static Node *primary(Token **rest, Token *tok)
       
       // if (node->ty->kind == TY_VLA)
       //   return new_var_node(node->ty->vla_size, tok);
-      return new_ulong(node->ty->size, tok);   
+      return new_ulong(node->ty->size, start);   
 
     }
   }

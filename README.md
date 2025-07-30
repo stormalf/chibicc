@@ -527,6 +527,7 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
     openssl compile failed (due to extended assembly in macros not correctly managed by chibicc)
     vlc compile failed on VLC_WARN_CALL.
     curl 1 test failed (1474)
+    php-src compile but seems completely broken only 4 tests passed.
     
 
 ## projects compiled successfully with chibicc
@@ -570,7 +571,7 @@ Example of diagram generated with -dotfile parameter :
 ## release notes
 
 1.0.22.9    Reporting fix from 1.0.23 (ISS-187) and activating overlapping range detection. Defining GNUC version 2 because some projects handle compilation directives for INTEL_COMPILER or GNUC only. Fixing ISS-191 some extended assembly not managed found during php-src compile. Fixing ISS-192 with asm at global level.
-Fixing ISS-193 segfault due to type null when dealing with atomics functions (temp fix). Fixing issue with duplicate tentative (reworking scan_globals) and fixing segfault due to wrong builtin_frame_address.
+Fixing ISS-193 segfault due to type null when dealing with atomics functions (temp fix). Fixing issue with duplicate tentative (reworking scan_globals) and fixing segfault due to wrong builtin_frame_address. Fixing issue with bitfield2.c. Fixing regression on util-linux if GNUC is defined. Fixing issue with extended assembly when %w1 inside templates.
 
 ## old release notes
 

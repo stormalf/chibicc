@@ -393,9 +393,6 @@ static void gen_addr(Node *node)
     gen_addr(node->rhs);
     return;
   case ND_MEMBER:
-    // gen_addr(node->lhs);
-    // println("  add $%d, %%rax", node->member->offset);
-    // return;
     //fix from @fuhsnn on some issues with members
     switch(node->lhs->kind) {
       case ND_FUNCALL:
@@ -1299,8 +1296,9 @@ static void gen_expr(Node *node)
       println("  shl $%d, %%rax", 64 - mem->bit_width - mem->bit_offset);
       if (mem->ty->is_unsigned)
         println("  shr $%d, %%rax", 64 - mem->bit_width);
-      else
+      else {
         println("  sar $%d, %%rax", 64 - mem->bit_width);
+      }
     }
     return;
   }
@@ -1318,37 +1316,47 @@ static void gen_expr(Node *node)
     push();
     gen_expr(node->rhs);
 
-    if (node->lhs->kind == ND_MEMBER && node->lhs->member->is_bitfield)
+    if (is_bitfield(node->lhs))
     {
-      println("  mov %%rax, %%r8");
+      //println("  mov %%rax, %%r8");
 
       // If the lhs is a bitfield, we need to read the current value
       // from memory and merge it with a new value.
       Member *mem = node->lhs->member;
-      println("  mov %%rax, %%rdi");
-      if (mem->bit_width >= 32)
-      {
-        println("  mov $%ld, %%rax", (1L << mem->bit_width) - 1);
-        println("  and %%rax, %%rdi");
-      }
-      else
-      {
-        println("  and $%ld, %%rdi", (1L << mem->bit_width) - 1);
-      }
-      // println("  and $%ld, %%rdi", (1L << mem->bit_width) - 1);
-      println("  shl $%d, %%rdi", mem->bit_offset);
-
+      //println("  mov %%rax, %%rdi");
+      // if (mem->bit_width >= 32)
+      // {
+      //   println("  mov $%ld, %%rdi", (1L << mem->bit_width) - 1);
+      //   println("  and %%rdi, %%rax");
+      // }
+      // else
+      // {
+      //   println("  and $%ld, %%rdi", (1L << mem->bit_width) - 1);
+      // }
+      // // println("  and $%ld, %%rdi", (1L << mem->bit_width) - 1);
+      // println("  shl $%d, %%rdi", mem->bit_offset);
+      println("  mov $%ld, %%rdi", (1L << mem->bit_width) - 1);
+      println("  and %%rdi, %%rax");
+      println("  mov %%rax, %%r8");
       println("  mov (%%rsp), %%rax");
       if (!mem->ty)
         error("%s %d: in gen_expr : ND_ASSIGN member type is null!", CODEGEN_C, __LINE__); 
       load(mem->ty);
 
       long mask = ((1L << mem->bit_width) - 1) << mem->bit_offset;
-      println("  mov $%ld, %%r9", ~mask);
-      println("  and %%r9, %%rax");
+      println("  mov $%ld, %%rdi", ~mask);
+      println("  and %%rdi, %%rax");
+      println("  mov %%r8, %%rdi");
+      println("  shl $%d, %%rdi", mem->bit_offset);
+
       println("  or %%rdi, %%rax");
       store(node->ty);
       println("  mov %%r8, %%rax");
+      if (!mem->ty->is_unsigned && mem->ty->kind != TY_BOOL) {
+        int shift = 64 - mem->bit_width - mem->bit_offset;
+        println("  shl $%d, %%rax", shift);
+        println("  sar $%d, %%rax", shift);
+      }
       return;
     }
 
@@ -1732,19 +1740,16 @@ case ND_BUILTIN_FRAME_ADDRESS: {
 }
 
   case ND_POPCOUNT:
-    gen_expr(node->builtin_val); // Generate code for the expression
-    println("  popcnt %%rax, %%rax"); // Count the number of set bits
+    gen_expr(node->builtin_val); 
+    println("  popcnt %%rax, %%rax"); 
     return;
 
   case ND_EXPECT: {
-    // Generate code for the expression we are expecting
-    gen_expr(node->lhs); // Generate code for the condition
-    push(); // Save the condition result on stack
-    gen_expr(node->rhs); // Generate code for the expected value
-    pop("%rdi"); // Restore the condition result from stack into %rdi
-    // Compare the condition result with the expected value
+    gen_expr(node->lhs); 
+    push(); 
+    gen_expr(node->rhs); 
+    pop("%rdi"); 
     println("  cmp %%rax, %%rdi");
-    // Move the condition result back to %rax for use in further code
     println("  mov %%rdi, %%rax");
     return;
   }   
@@ -1753,28 +1758,22 @@ case ND_BUILTIN_FRAME_ADDRESS: {
     return;
   }
   case ND_RETURN_ADDR: {
-    // Generate code to get the frame pointer of the current function
-    println("  mov %%rbp, %%rax");
-    
-    // Get the depth of the return address
+    println("  mov %%rbp, %%rax");    
     int tmpdepth = eval(node->lhs);
-    
-    // Walk up the stack frames to the correct depth
+
     for (int i = 0; i < tmpdepth; i++) {
       println("  mov (%%rax), %%rax");
     }
-    
-    // Load the return address from the frame pointer
+
     println("  mov 8(%%rax), %%rax");
     return;
   }
   case ND_BUILTIN_ADD_OVERFLOW: {
    int c = count();  // Unique label counter
-    Type *ty = node->builtin_dest->ty;  // Get the type of the operands
+    Type *ty = node->builtin_dest->ty;  
     if (ty->base)
       ty = ty->base;
 
-    // Evaluate left-hand side and right-hand side expressions
     gen_expr(node->lhs);
     push();
     gen_expr(node->rhs);
@@ -1782,10 +1781,9 @@ case ND_BUILTIN_FRAME_ADDRESS: {
     gen_expr(node->builtin_dest);
     push();
 
-    // Load values into registers and perform addition
-    pop("%rdx");  // Load address of result variable
-    pop("%rsi");  // Load rhs
-    pop("%rdi");  // Load lhs
+    pop("%rdx");  
+    pop("%rsi");  
+    pop("%rdi"); 
 
     if (ty->size == 1) {
         println("  mov %%dil, %%al");
@@ -1820,11 +1818,11 @@ case ND_BUILTIN_FRAME_ADDRESS: {
     return;
   }
   case ND_BUILTIN_SUB_OVERFLOW: {
-    int c = count();  // Unique label counter
-    Type *ty = node->builtin_dest->ty;  // Get the type of the operands
+    int c = count(); 
+    Type *ty = node->builtin_dest->ty;  
     if (ty->base)
       ty = ty->base;
-    // Evaluate left-hand side and right-hand side expressions
+
     gen_expr(node->lhs);
     push();
     gen_expr(node->rhs);
@@ -1832,10 +1830,9 @@ case ND_BUILTIN_FRAME_ADDRESS: {
     gen_expr(node->builtin_dest);
     push();
 
-    // Load values into registers and perform subtraction
-    pop("%rdx");  // Load address of result variable
-    pop("%rsi");  // Load rhs
-    pop("%rdi");  // Load lhs
+    pop("%rdx");  
+    pop("%rsi");  
+    pop("%rdi"); 
 
     if (ty->size == 1) {
         println("  mov %%dil, %%al");
@@ -2983,8 +2980,8 @@ void assign_lvar_offsets(Obj *prog)
                       ? MAX(16, var->align)
                       : var->align;
 
-      if (isDebug)                      
-        printf("======bottom=%d kind=%d size=%d fn_bottom=%d fn_stack_size=%d name=%s funcname=%s\n", bottom, var->ty->kind, var->ty->size, fn->alloca_bottom->offset, fn->alloca_bottom->stack_size, var->name, var->funcname);
+      // if (isDebug)                      
+      //   printf("======bottom=%d kind=%d size=%d fn_bottom=%d fn_stack_size=%d name=%s funcname=%s\n", bottom, var->ty->kind, var->ty->size, fn->alloca_bottom->offset, fn->alloca_bottom->stack_size, var->name, var->funcname);
       //trying to fix ISS-154 Extended assembly compiled with chibicc failed with ASSERT and works fine without assert function 
       //the bottom value need to take in account the size of parameters and local variables to avoid issue with extended assembly
       if (var->offset) {
