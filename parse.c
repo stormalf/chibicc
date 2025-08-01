@@ -5295,7 +5295,7 @@ static Node *postfix(Token **rest, Token *tok)
 
   for (;;)
   {
-
+   
     if (equal(tok, "("))
     {
       node = funcall(&tok, tok->next, node);
@@ -5362,6 +5362,12 @@ static Node *postfix(Token **rest, Token *tok)
   }
 }
 
+static char *token_to_string(Token *tok) {
+  char *buf = calloc(tok->len + 1, 1);  // allocate and zero-initialize
+  memcpy(buf, tok->loc, tok->len);
+  return buf;
+}
+
 
 // funcall = (assign ("," assign)*)? ")"
 static Node *funcall(Token **rest, Token *tok, Node *fn)
@@ -5371,6 +5377,7 @@ static Node *funcall(Token **rest, Token *tok, Node *fn)
   if (fn->ty->kind != TY_FUNC &&
       (fn->ty->kind != TY_PTR || fn->ty->base->kind != TY_FUNC))
     error_tok(fn->tok, "%s %d: in funcall : not a function %d %s", PARSE_C, __LINE__, fn->ty->kind, tok->loc);
+
 
   Type *ty = (fn->ty->kind == TY_FUNC) ? fn->ty : fn->ty->base;
   Type *param_ty = ty->params;
@@ -6405,6 +6412,11 @@ static Node *primary(Token **rest, Token *tok)
 
     if (equal(tok->next, "("))
     {
+      Obj *check_fn = find_func(token_to_string(tok));
+
+      if (!check_fn ) {
+        error_tok(tok, "%s %d: in primary : implicit declaration of function", PARSE_C, __LINE__);
+      }    
 
       Node *node = unary(rest, tok->next);      
       return node;
@@ -6584,6 +6596,7 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
     fn->alias_name = attr->alias_name;
   }
   //from COSMOPOLITAN adding other GNUC attributes
+  fn->is_extern |= attr->is_extern;
   fn->is_weak |= attr->is_weak;
   fn->section = attr->section;
   fn->is_ms_abi |= attr->is_ms_abi;

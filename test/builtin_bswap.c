@@ -20,7 +20,7 @@ int main() {
 
     printf("Original 32-bit value: 0x%08" PRIx32 "\n", value32);
     printf("Swapped 32-bit value: 0x%08" PRIx32 "\n", swapped32);
-    Assert(0x78563412, swapped32);
+    ASSERT(0x78563412, swapped32);
     printf("Original 64-bit value: 0x%016" PRIx64 "\n", value64);
     printf("Swapped 64-bit value: 0x%016" PRIx64 "\n", swapped64);
     ASSERT(0xf0debc9a78563412, swapped64);

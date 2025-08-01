@@ -1,5 +1,6 @@
 
 #include <string.h>
+#include "test.h"
 
 int main() {
     char src[] = "Hello, world!";

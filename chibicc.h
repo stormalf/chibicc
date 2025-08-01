@@ -249,6 +249,7 @@ struct Obj
   bool is_function;
   bool is_definition;
   bool is_static;
+  bool is_extern;
 
   // Global variable
   bool is_tentative;

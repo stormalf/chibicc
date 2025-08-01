@@ -35,7 +35,7 @@ main (void)
 
 	printf("%d, %d, %d, %d\n", a, b, c, d);
 	printf("%d, %d, %d, %d\n", r[0], r[1], r[2], r[3]);
-	ASSERT(12334, r[0]);
+	ASSERT(12336, r[0]);
 
 	// if (vaddr > (sizeof(void *) << 3)) {
 	// 	vaddr = sizeof(void *) << 3;

@@ -26,7 +26,7 @@ void asmfunc(void) {
 	for (int i = 0; i < (sizeof(r)/sizeof(r[0])); i++)
 		printf("%d\n", r[i]);
 
-	ASSERT(12334, r[0]);
+	ASSERT(12336, r[0]);
 }
 
 int

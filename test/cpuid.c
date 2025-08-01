@@ -1,6 +1,7 @@
-#include <stdio.h>
+#include "test.h"
+#include <string.h>
 #include <stdint.h>
-#include <assert.h>
+
 
 // Simple cpuid wrapper function
 void cpuid(uint32_t eax_in, uint32_t ecx_in,
@@ -33,8 +34,8 @@ int main(void)
 
     printf("CPUID vendor: %s\n", vendor); 
     printf("Max cpuid leaf: %u\n", eax);
-    assert(0 == !strncmp("GenuineIntel", vendor, strlen(vendor)));
-    assert(20 == eax);
+    ASSERT(0,  !strncmp("GenuineIntel", vendor, strlen(vendor)));
+    ASSERT(13, eax);
 
     return 0;
 }

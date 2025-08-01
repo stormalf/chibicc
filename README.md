@@ -571,7 +571,7 @@ Example of diagram generated with -dotfile parameter :
 ## release notes
 
 1.0.22.9    Reporting fix from 1.0.23 (ISS-187) and activating overlapping range detection. Defining GNUC version 2 because some projects handle compilation directives for INTEL_COMPILER or GNUC only. Fixing ISS-191 some extended assembly not managed found during php-src compile. Fixing ISS-192 with asm at global level.
-Fixing ISS-193 segfault due to type null when dealing with atomics functions (temp fix). Fixing issue with duplicate tentative (reworking scan_globals) and fixing segfault due to wrong builtin_frame_address. Fixing issue with bitfield2.c. Fixing regression on util-linux if GNUC is defined. Fixing issue with extended assembly when %w1 inside templates.
+Fixing ISS-193 segfault due to type null when dealing with atomics functions (temp fix). Fixing issue with duplicate tentative (reworking scan_globals) and fixing segfault due to wrong builtin_frame_address. Fixing issue with bitfield2.c. Fixing regression on util-linux if GNUC is defined. Fixing issue with extended assembly when %w1 inside templates. Adding detection of undeclared function (because during configure it can detect wrong support if chibicc returns always 0 even if the source contains undeclared functions).
 
 ## old release notes
 

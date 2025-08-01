@@ -1,5 +1,6 @@
 
 #include <math.h>
+#include "test.h"
 
 int main() {
     // Test with NaN (Not a Number)

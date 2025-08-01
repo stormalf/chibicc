@@ -1,4 +1,5 @@
 #include "test.h"
+
 int main() {
     char buffer[10];
     __builtin_memset(buffer, 'A', sizeof(buffer));
