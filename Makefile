@@ -67,7 +67,7 @@ zlib:
 	cd ../zlib && make clean && CC=chibicc CFLAGS=-fPIC ./configure && make && make test
 
 nmap:
-	cd ../nmap && make clean && CC=chibicc LDFLAGS="-fPIC -ldbus-1 -latomic" LIBS="-fPIC -ldbus-1" ./configure --with-dbus && make && make check
+	cd ../nmap && make clean && CC=chibicc LDFLAGS="-fPIC -ldbus-1" LIBS="-ldbus-1 -latomic" ./configure --with-dbus && make && make check
 
 openssl:
 	cd ../openssl && make clean && CC=chibicc ./configure && make 
@@ -79,7 +79,7 @@ nginx:
 	cd ../nginx && make clean && CC=chibicc CFLAGS=-fPIC ./auto/configure --with-http_ssl_module && make && make check
 
 vim:
-	cd ../vim && make clean && CC=chibicc CFLAGS=-fPIC ./configure && make && make test
+	cd ../vim && make clean && CC=chibicc CFLAGS=-fPIC ./configure && make && make tests
 
 lxc:
 	cd ../lxc && rm -rf build && CC=gcc \
@@ -91,6 +91,9 @@ git:
 
 memcached:
 	cd ../memcached && make clean && CC=chibicc CFLAGS="-fPIC -std=c11" ./configure && make && make test
+
+openssh-portable:
+	cd ../openssh-portable && make clean && CC=chibicc ./configure && make && make test
 
 # Misc.
 

@@ -6153,7 +6153,7 @@ static Node *primary(Token **rest, Token *tok)
   }
 
 
-  if (equal(tok, "__builtin_atomic_exchange_n")) {
+  if (equal(tok, "__builtin_atomic_exchange_n") || equal(tok, "__atomic_exchange_n")) {
     return ParseAtomic3(ND_EXCH_N, tok, rest);
   }
   if (equal(tok, "__builtin_atomic_load")) {
@@ -6165,7 +6165,7 @@ static Node *primary(Token **rest, Token *tok)
   if (equal(tok, "__builtin_atomic_load_n") || equal(tok, "__atomic_load_n")) {
     return ParseAtomic2(ND_LOAD_N, tok, rest);
   }
-  if (equal(tok, "__builtin_atomic_store_n")) {
+  if (equal(tok, "__builtin_atomic_store_n") || equal(tok, "__atomic_store_n")) {
     return ParseAtomic3(ND_STORE_N, tok, rest);
   }
   if (equal(tok, "__builtin_atomic_fetch_add")) {

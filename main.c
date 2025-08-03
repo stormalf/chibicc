@@ -18,6 +18,7 @@ bool opt_fbuiltin = true;
 bool opt_fpic;
 bool opt_fpie;
 bool opt_shared;
+bool opt_sse2;
 bool opt_sse3;
 bool opt_sse4;
 bool opt_g;
@@ -312,16 +313,20 @@ static void parse_args(int argc, char **argv)
       continue;
     }
 
+    if (!strcmp(argv[i], "-msse2")) {
+      opt_sse2 = true;
+      continue;
+    }
 
-    // if (!strcmp(argv[i], "-msse3")) {
-    //   opt_sse3 = true;
-    //   continue;
-    // }
+    if (!strcmp(argv[i], "-msse3")) {
+      opt_sse3 = true;
+      continue;
+    }
 
-    // if (startsWith(argv[i], "-msse4")) {
-    //   opt_sse4 = true;
-    //   continue;
-    // }
+    if (startsWith(argv[i], "-msse4")) {
+      opt_sse4 = true;
+      continue;
+    }
 
     if (startsWith(argv[i], "-flto"))
     {

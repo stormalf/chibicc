@@ -761,6 +761,7 @@ extern bool printTokens;
 extern bool isPrintMacro;
 extern char *extract_filename(char *tmpl);
 extern char *extract_path(char *tmpl);
+extern bool opt_sse2;
 extern bool opt_sse3;
 extern bool opt_sse4;
 extern bool opt_g;

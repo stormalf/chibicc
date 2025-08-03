@@ -547,7 +547,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.22.9    Reporting fixes from 1.0.22.9_dev (like implicit function declaration, -std=c11 -std=c99...).
+1.0.22.9    Reporting fixes from 1.0.22.9_dev (like implicit function declaration, -std=c11 -std=c99...). Fixing issue with \__atomic_load_n during linking of nmap.
 
 ## old release notes
 
