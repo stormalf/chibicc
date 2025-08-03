@@ -82,3 +82,5 @@ Fixing issue #131 (ISS-131) parsing issue when trying to compile nginx project c
 1.0.22.6    fixing cmake issue.
 
 1.0.22.7    Fixing issue with named operand on assembly. Fixing issue with struct union found during vlc compile. Reporting fix for c-testsuite 152, 162 and 205. Fixing constructor and destructor. Fixing bug on preprocess that skipped some attributes. Ignoring some other gcc attributes like nonnull. Fixing c-testsuite 213. Fixing issue 36 with empty struct. Fixing c-testsuite 204. Fixing issue 166 struct with VLA. Fixing issue with semun.
+
+1.0.28    Fixing ISS-188 on old C style (K&R) parameter omitted by mistake. Reporting some fixes from 1.0.23 to 1.0.22.8. Fixing ISS-186 with lscpu tests (util-linux).

@@ -70,6 +70,12 @@ or
         -dM Print macro definitions in -E mode instead of normal output
         -print print all tokens in a log file in /tmp/chibicc.log
         -A print Abstract Syntax Tree in a log file in /tmp/chibicc.log
+        -msse3 enabling sse3 support 
+        -msse4 enabling sse4 support 
+        -nostdlib  Do not use the standard system startup files or libraries when linking 
+        -nostdinc Do not use the standard system header files when compiling 
+        -std=c99 generates an error on implicit function declaration (without -std only a warning is emitted)
+        -std=c11 generates an error on implicit function declaration (without -std only a warning is emitted)
         chibicc [ -o <path> ] <file>
 
 ## compile
@@ -542,7 +548,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.28    Fixing ISS-188 on old C style (K&R) parameter omitted by mistake. Reporting some fixes from 1.0.23 to 1.0.22.8. Fixing ISS-186 with lscpu tests (util-linux).
+1.0.22.9    Reporting fixes from 1.0.22.9_dev (like implicit function declaration, -std=c11 -std=c99...).
 
 ## old release notes
 

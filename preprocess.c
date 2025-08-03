@@ -1388,8 +1388,6 @@ void define_macro(char *name, char *buf)
   {
     Token *tok = tokenize(new_file("<built-in>", 1, buf));
     add_macro(name, true, tok);
-    if (isPrintMacro)
-      printf("#define %s %s\n", name, buf);
   }
 }
 
@@ -1535,11 +1533,11 @@ void init_macros(void)
   define_macro("__volatile__", "volatile");
   define_macro("__x86_64", "1");
   define_macro("__x86_64__", "1");
-  define_macro("__GNU__", "1");
   define_macro("_GNU_SOURCE", "1");  
   define_macro("_DEFAULT_SOURCE", "1");
   //define_macro("__INTEL_COMPILER", "1");
   //define_macro("__GNUC__", "9");
+   define_macro("__GNUC__", "2");
   //define_macro("__GNUC_MINOR__", "1");
   //define_macro("__GNUC_PATCHLEVEL__ ", "1");
   //define_macro("HAVE_ATTRIBUTE_PACKED", "1");
@@ -1555,6 +1553,7 @@ void init_macros(void)
   // define_macro("HAVE_GCC__SYNC_INT64_CAS", "1");
   // define_macro("HAVE_GCC__ATOMIC_INT32_CAS", "1"); 
   // define_macro("HAVE_GCC__ATOMIC_INT64_CAS", "1");
+  define_macro("HAVE_TEST_AND_SET", "1");  
   define_macro("HAVE_LONG_LONG_INT_64", "1");
   define_macro("__ATOMIC_RELAXED", "0");
   define_macro("__ATOMIC_CONSUME", "1");
@@ -1562,10 +1561,8 @@ void init_macros(void)
   define_macro("__ATOMIC_RELEASE", "3");
   define_macro("__ATOMIC_ACQ_REL", "4");
   define_macro("__ATOMIC_SEQ_CST", "5");
-  define_macro("offsetof", "__builtin_offsetof");
   define_macro("__builtin_choose_expr(cond, true_expr, false_expr)", "(cond ? true_expr : false_expr)");
-  //define_macro("__GNUC__", "9");
-    define_macro("__SHRT_MAX__", "32767");
+  define_macro("__SHRT_MAX__", "32767");
   define_macro("__INT_MAX__", "2147483647");
   define_macro("__LONG_MAX__", "9223372036854775807L");
   define_macro("__LONG_LONG_MAX__", "9223372036854775807LL");

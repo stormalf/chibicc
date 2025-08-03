@@ -21,8 +21,8 @@ bool opt_shared;
 bool opt_sse3;
 bool opt_sse4;
 bool opt_g;
-
-
+bool opt_c99;
+bool opt_c11;
 
 static FileType opt_x;
 static StringArray opt_include;
@@ -779,8 +779,6 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-mno-red-zone") ||
         !strcmp(argv[i], "-fvisibility=default") ||
         !strcmp(argv[i], "-fvisibility=hidden") ||
-        // !strcmp(argv[i], "-Werror=invalid-command-line-argument") ||
-        // !strcmp(argv[i], "-Werror=unknown-warning-option") ||
         !strcmp(argv[i], "-Wsign-compare") ||
         !strcmp(argv[i], "-Wundef") ||
         !strcmp(argv[i], "-Wpointer-arith") ||
@@ -825,6 +823,16 @@ static void parse_args(int argc, char **argv)
 
     if (startsWith(argv[i], "-std"))
     {
+      char *stdver = argv[i] + 5; 
+
+      if (!strcmp(stdver, "c99")) {
+        opt_c99 = true;
+      } else if (!strcmp(stdver, "c11")) {
+        opt_c11 = true;
+      } else {
+        error("%s : %s:%d: error: in parse_args : unsupported -std option: %s", MAIN_C, __FILE__, __LINE__, stdver);
+        exit(1);
+      }
       continue;
     }
 
@@ -1268,7 +1276,7 @@ static void run_linker(StringArray *inputs, char *output)
   strarray_push(&arr, output);
   strarray_push(&arr, "-m");
   strarray_push(&arr, "elf_x86_64");
-  strarray_push(&arr, "-allow-multiple-definition");
+  strarray_push(&arr, "--allow-multiple-definition");
 
 
   //for some projects like POSTGRES it seems that the specific path for the project 
@@ -1298,7 +1306,7 @@ static void run_linker(StringArray *inputs, char *output)
       strarray_push(&arr, format("%s/Scrt1.o", libpath));
       strarray_push(&arr, format("%s/crti.o", libpath));
       strarray_push(&arr, format("%s/crtbeginS.o", gcc_libpath));
-      strarray_push(&arr, format("%s/crtendS.o", gcc_libpath));
+      //strarray_push(&arr, format("%s/crtendS.o", gcc_libpath));
 
     }
   else
@@ -1328,9 +1336,6 @@ static void run_linker(StringArray *inputs, char *output)
   {
     strarray_push(&arr, "-dynamic-linker");
     strarray_push(&arr, "/lib64/ld-linux-x86-64.so.2");
-      //adding -lm to fix issue with math.h
-      if (!opt_nostdlib)
-        strarray_push(&arr, "-lm");
   }
 
   
@@ -1356,6 +1361,10 @@ static void run_linker(StringArray *inputs, char *output)
     strarray_push(&arr, "-lgcc_s");
     //strarray_push(&arr, "--no-as-needed");
   }
+
+    // Add math lib if not -nostdlib and not static (optional)
+  if (!opt_nostdlib && !opt_static)
+    strarray_push(&arr, "-lm");
 
   // Add the ending object file if not using -nostdlib
   if (!opt_nostdlib) {

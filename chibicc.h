@@ -40,7 +40,7 @@
 #endif
 
 #define PRODUCT "chibicc"
-#define VERSION "1.0.22.8"
+#define VERSION "1.0.22.9"
 #define MAXLEN 501
 #define DEFAULT_TARGET_MACHINE "x86_64-linux-gnu"
 
@@ -110,6 +110,8 @@ this " PRODUCT " contains only some differences for now like new parameters\n"
 -msse4 enabling sse4 support \n \
 -nostdlib  Do not use the standard system startup files or libraries when linking \n \
 -nostdinc Do not use the standard system header files when compiling \n \
+-std=c99 generates an error on implicit function declaration (without -std only a warning is emitted) \n \
+-std=c11 generates an error on implicit function declaration (without -std only a warning is emitted) \n \
 chibicc [ -o <path> ] <file>\n"
 
 typedef struct Type Type;
@@ -249,6 +251,7 @@ struct Obj
   bool is_function;
   bool is_definition;
   bool is_static;
+  bool is_extern;
 
   // Global variable
   bool is_tentative;
@@ -584,6 +587,7 @@ struct Type
   bool is_aligned;
   bool is_weak;
   char *visibility;
+  bool is_inline;
 
   bool is_compound_lit; // Flag to indicate if this type is a compound literal
   // Function type
@@ -762,7 +766,8 @@ extern bool opt_sse4;
 extern bool opt_g;
 extern FILE *open_file(char *path);
 extern FILE *ofile;
-
+extern bool opt_c99;
+extern bool opt_c11;
 
 //
 // extended_asm.c

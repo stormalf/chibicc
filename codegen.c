@@ -100,8 +100,6 @@ static void print_visibility(Obj *obj) {
       println("  .hidden\t%s", obj->name);
     } else if (!strcmp(obj->visibility, "protected")) {
       println("  .protected %s", obj->name);
-    } else {
-      println("  .globl\t%s", obj->name);
     }
   } 
   if (obj->is_static) {
@@ -392,9 +390,6 @@ static void gen_addr(Node *node)
     gen_addr(node->rhs);
     return;
   case ND_MEMBER:
-    // gen_addr(node->lhs);
-    // println("  add $%d, %%rax", node->member->offset);
-    // return;
     //fix from @fuhsnn on some issues with members
     switch(node->lhs->kind) {
       case ND_FUNCALL:
@@ -493,6 +488,8 @@ static void gen_mem_zero(int offset, int n) {
 // Load a value from where %rax is pointing to.
 static void load(Type *ty)
 {
+  if (!ty)
+    error("%s: %s:%d: error: in load : ty is null!", CODEGEN_C, __FILE__, __LINE__);
   switch (ty->kind)
   {
   case TY_ARRAY:
@@ -538,6 +535,8 @@ static void load(Type *ty)
 // Store %rax to an address that the stack top is pointing to.
 static void store(Type *ty)
 {
+  if (!ty)
+    error("%s %d: in store : ty is null!", CODEGEN_C, __LINE__);
   pop("%rdi");
 
   switch (ty->kind)
@@ -569,6 +568,8 @@ static void store(Type *ty)
 
 static void cmp_zero(Type *ty)
 {
+  if (!ty)
+    error("%s %d: in cmp_zero : ty is null!", CODEGEN_C, __LINE__);
   switch (ty->kind)
   {
   case TY_FLOAT:
@@ -732,6 +733,10 @@ static char *cast_table[][11] = {
 
 static void cast(Type *from, Type *to)
 {
+  if (!to)
+    error("%s %d: in cast : to type is null!", CODEGEN_C, __LINE__);    
+  if (!from)
+    from = copy_type(to);    
   if (to->kind == TY_VOID)
     return;
 
@@ -938,6 +943,8 @@ static int push_args(Node *node)
   for (Node *arg = node->args; arg; arg = arg->next)
   {
     Type *ty = arg->ty;
+    if (!ty)
+      error("%s %d: in push_args : type is null!", CODEGEN_C, __LINE__);  
 
 
     switch (ty->kind)
@@ -1003,6 +1010,9 @@ static int push_args(Node *node)
 static void copy_ret_buffer(Obj *var)
 {
   Type *ty = var->ty;
+  if (!ty)
+    error("%s %d: in copy_ret_buffer : type is null!", CODEGEN_C, __LINE__);  
+
   int gp = 0, fp = 0;
 
     if (has_flonum1(ty)) {
@@ -1060,6 +1070,8 @@ static void copy_ret_buffer(Obj *var)
 static void copy_struct_reg(void)
 {
   Type *ty = current_fn->ty->return_ty;
+  if (!ty)
+    error("%s %d: in copy_struct_reg : type is null!", CODEGEN_C, __LINE__);  
   int gp = 0, fp = 0;
 
   println("  mov %%rax, %%rdi");
@@ -1111,6 +1123,9 @@ static void copy_struct_reg(void)
 static void copy_struct_mem(void)
 {
   Type *ty = current_fn->ty->return_ty;
+
+  if (!ty)
+    error("%s %d: in copy_struct_mem : type is null!", CODEGEN_C, __LINE__);  
   Obj *var = current_fn->params;
 
   println("  mov %d(%%rbp), %%rdi", var->offset);
@@ -1255,11 +1270,15 @@ static void gen_expr(Node *node)
     return;
   case ND_VAR:
     gen_addr(node);
+    if (!node->ty)
+      add_type(node);
     load(node->ty);
     return;
   case ND_MEMBER:
   {
     gen_addr(node);
+    if (!node->ty)
+      error("%s %d: in gen_expr : ND_MEMBER node type is null!", CODEGEN_C, __LINE__);  
     load(node->ty);
 
     Member *mem = node->member;
@@ -1281,6 +1300,8 @@ static void gen_expr(Node *node)
   }
   case ND_DEREF:    
     gen_expr(node->lhs);
+    if (!node->ty)
+      error("%s %d: in gen_expr : ND_DEREF node type is null!", CODEGEN_C, __LINE__); 
     load(node->ty);
     return;
   case ND_ADDR:
@@ -1291,35 +1312,47 @@ static void gen_expr(Node *node)
     push();
     gen_expr(node->rhs);
 
-    if (node->lhs->kind == ND_MEMBER && node->lhs->member->is_bitfield)
+    if (is_bitfield(node->lhs))
     {
-      println("  mov %%rax, %%r8");
+      //println("  mov %%rax, %%r8");
 
       // If the lhs is a bitfield, we need to read the current value
       // from memory and merge it with a new value.
       Member *mem = node->lhs->member;
-      println("  mov %%rax, %%rdi");
-      if (mem->bit_width >= 32)
-      {
-        println("  mov $%ld, %%rax", (1L << mem->bit_width) - 1);
-        println("  and %%rax, %%rdi");
-      }
-      else
-      {
-        println("  and $%ld, %%rdi", (1L << mem->bit_width) - 1);
-      }
-      // println("  and $%ld, %%rdi", (1L << mem->bit_width) - 1);
-      println("  shl $%d, %%rdi", mem->bit_offset);
-
+      //println("  mov %%rax, %%rdi");
+      // if (mem->bit_width >= 32)
+      // {
+      //   println("  mov $%ld, %%rdi", (1L << mem->bit_width) - 1);
+      //   println("  and %%rdi, %%rax");
+      // }
+      // else
+      // {
+      //   println("  and $%ld, %%rdi", (1L << mem->bit_width) - 1);
+      // }
+      // // println("  and $%ld, %%rdi", (1L << mem->bit_width) - 1);
+      // println("  shl $%d, %%rdi", mem->bit_offset);
+      println("  mov $%ld, %%rdi", (1L << mem->bit_width) - 1);
+      println("  and %%rdi, %%rax");
+      println("  mov %%rax, %%r8");
       println("  mov (%%rsp), %%rax");
+      if (!mem->ty)
+        error("%s %d: in gen_expr : ND_ASSIGN member type is null!", CODEGEN_C, __LINE__); 
       load(mem->ty);
 
       long mask = ((1L << mem->bit_width) - 1) << mem->bit_offset;
-      println("  mov $%ld, %%r9", ~mask);
-      println("  and %%r9, %%rax");
+      println("  mov $%ld, %%rdi", ~mask);
+      println("  and %%rdi, %%rax");
+      println("  mov %%r8, %%rdi");
+      println("  shl $%d, %%rdi", mem->bit_offset);
+
       println("  or %%rdi, %%rax");
       store(node->ty);
       println("  mov %%r8, %%rax");
+      if (!mem->ty->is_unsigned && mem->ty->kind != TY_BOOL) {
+        int shift = 64 - mem->bit_width - mem->bit_offset;
+        println("  shl $%d, %%rax", shift);
+        println("  sar $%d, %%rax", shift);
+      }
       return;
     }
 
@@ -1335,6 +1368,8 @@ static void gen_expr(Node *node)
     return;
   case ND_CAST:
     gen_expr(node->lhs);    
+    if (!node->ty)   
+      error("%s %d: in gen_expr : ND_CAST node type is null!", CODEGEN_C, __LINE__); 
     cast(node->lhs->ty, node->ty);
     return;
   case ND_MEMZERO:
@@ -1419,6 +1454,8 @@ static void gen_expr(Node *node)
     for (Node *arg = node->args; arg; arg = arg->next)
     {
       Type *ty = arg->ty;
+      if (!ty)
+        error("%s %d: in gen_expr : type is null!", CODEGEN_C, __LINE__);  
 
       switch (ty->kind)
       {
@@ -1512,6 +1549,8 @@ static void gen_expr(Node *node)
     push();
     gen_expr(node->cas_old);
     println("  mov %%rax, %%r8");
+    if (!node->cas_old->ty->base)
+      error("%s %d: in gen_expr : ND_CAS node base type is null!", CODEGEN_C, __LINE__); 
     load(node->cas_old->ty->base);
     pop("%rdx"); // new
     pop("%rdi"); // addr
@@ -1526,25 +1565,17 @@ static void gen_expr(Node *node)
     return;
   }
   case ND_CAS_N: {
-    // Generate code to evaluate and push the address
-    gen_expr(node->cas_addr); // Address
+    gen_expr(node->cas_addr);
     push();
-    
-    // Generate code to evaluate and push the new value
-    gen_expr(node->cas_new);  // New value
+    gen_expr(node->cas_new);  
     push();
-    
-    // Generate code to evaluate and push the old value
-    gen_expr(node->cas_old);  // Old value
+    gen_expr(node->cas_old); 
 
     // Move the old value to r8 to preserve it
     println("  mov %%rax, %%r8"); 
 
-    // Pop the new value and address from the stack
-    pop("%rdx"); // New value in rdx
-    pop("%rdi"); // Address in rdi
-
-    // Determine the size of the data type
+    pop("%rdx"); 
+    pop("%rdi"); 
     int sz = node->cas_addr->ty->base->size;
 
     // Perform the atomic compare-and-swap operation
@@ -1562,43 +1593,30 @@ static void gen_expr(Node *node)
   }
   case ND_BUILTIN_MEMCPY: {
     if (opt_fbuiltin) {
-      // Generate code to evaluate the destination address
       gen_expr(node->builtin_dest);
       push();
-      println("  mov %%rax, %%rdi"); // Destination in RDI
-
-      // Generate code to evaluate the source address
+      println("  mov %%rax, %%rdi"); 
       gen_expr(node->builtin_src);
       push();
-      println("  mov %%rax, %%rsi"); // Source in RSI
-      // Generate code to evaluate the size
+      println("  mov %%rax, %%rsi");
       gen_expr(node->builtin_size);
       push();
-      println("  mov %%rax, %%rcx"); // Size in RCX
-
-      // Call the memcpy function
+      println("  mov %%rax, %%rcx"); 
       println("  rep movsb");
-      // Pop the stack to balance pushes
       pop("%rcx");
       pop("%rsi");
       pop("%rdi");
     }
     else {
-      // Handle the case when built-in functions are disabled
-      // You might want to call an external `memcpy` function here
-    // Generate code for destination pointer
     gen_expr(node->builtin_dest); 
     push();
     
-    // Generate code for source pointer
     gen_expr(node->builtin_src);  
     push();
     
-    // Generate code for size
     gen_expr(node->builtin_size); 
     push();
 
-    // Make the call to memcpy
     println("  call memcpy");
 
     // Restore the stack
@@ -1611,7 +1629,6 @@ static void gen_expr(Node *node)
   }
 
   case ND_BUILTIN_MEMSET: {
-    // Generate code for destination, value, and size
     gen_expr(node->builtin_dest);
     push();
     gen_expr(node->builtin_val);
@@ -1619,107 +1636,116 @@ static void gen_expr(Node *node)
     gen_expr(node->builtin_size);
     push();
 
-    // Move the arguments to the appropriate registers
     pop("%rcx");  // size
     pop("%rsi");  // value
     pop("%rdi");  // destination
 
-    // Move the value to the lower 8-bit register
-    println("  mov %%sil, %%al");  // Move the lower 8 bits of RSI to AL
-    println("  rep stosb");        // Use REP STOSB to set memory
+    println("  mov %%sil, %%al");  
+    println("  rep stosb");       
 
     return;
   }
   case ND_BUILTIN_CLZ: {
-    gen_expr(node->builtin_val); // Generate code for the expression
-    println("  bsr %%eax, %%eax"); // Bit Scan Reverse to find the highest set bit
-    println("  xor $31, %%eax"); // Count leading zeros
+    gen_expr(node->builtin_val); 
+    println("  bsr %%eax, %%eax"); 
+    println("  xor $31, %%eax"); 
     return;
   }
   case ND_BUILTIN_CLZLL:
   case ND_BUILTIN_CLZL: {
-    gen_expr(node->builtin_val); // Generate code for the expression
-    println("  bsr %%rax, %%rax");       // Calculate number of leading zeros for 64-bit
-    println("  xor $63, %%eax");       // Special handling if input was -1
+    gen_expr(node->builtin_val); 
+    println("  bsr %%rax, %%rax");       
+    println("  xor $63, %%eax");       
 
     return;
   }
   case ND_BUILTIN_CTZ: {
-    gen_expr(node->builtin_val); // Generate code for the expression
-    println("  bsf %%eax, %%eax"); // Bit Scan Forward to find the lowest set bit
+    gen_expr(node->builtin_val); 
+    println("  bsf %%eax, %%eax"); 
     return;
   }
   case ND_BUILTIN_CTZLL:
   case ND_BUILTIN_CTZL: {
-    gen_expr(node->builtin_val); // Generate code for the expression
-    println("  bsf %%rax, %%rax"); // Bit Scan Forward to find the lowest set bit
+    gen_expr(node->builtin_val); 
+    println("  bsf %%rax, %%rax"); 
     return;
   }
 
   case ND_BUILTIN_BSWAP16: {
-      gen_expr(node->builtin_val);  // Generate code for the expression
-      println("  mov %%ax, %%dx");  // Move the lower 16 bits of the result into dx
-      println("  rol $8, %%dx");    // Rotate the bits in dx by 8 bits to the left
-      println("  mov %%dx, %%ax");  // Move the result back into ax
+      gen_expr(node->builtin_val);  
+      println("  mov %%ax, %%dx");  
+      println("  rol $8, %%dx");    
+      println("  mov %%dx, %%ax");  
       return;
   }
 
   case ND_BUILTIN_BSWAP32: {
-      gen_expr(node->builtin_val);  // Generate code for the expression
-      println("  bswap %%eax");     // Reverse the byte order of the 32-bit value in eax
+      gen_expr(node->builtin_val);  
+      println("  bswap %%eax");     
       return;
   }
 
   case ND_BUILTIN_BSWAP64: {
-      gen_expr(node->builtin_val);  // Generate code for the expression
-      println("  bswap %%rax");     // Reverse the byte order of the 64-bit value in rax
+      gen_expr(node->builtin_val);  
+      println("  bswap %%rax");     
       return;
   }  
-
-    // For __builtin_frame_address
   case ND_BUILTIN_FRAME_ADDRESS: {
     int c = count();  // Unique label counter
-    // Get the level argument from the stack
-    println("  mov %%rdi, %%rax"); // Move the level argument into rax
+  
+  gen_expr(node->lhs);  // level in %rax   
+  
+  // Guard: limit frame walking to 64 levels
+  println("  mov $64, %%rdi");
+  println("  cmp %%rax, %%rdi");
+  println("  ja .Lframe_address_ok%d", c);   // if rax < 64, continue
+  println("  jmp .Lframe_address_null%d", c); // else, bail out
+
+  println(".Lframe_address_ok%d:", c);
     
-    // Check if level is 0
+  // Check if level == 0
     println("  cmp $0, %%rax");
     println("  je .Lframe_address_%d", c);
     
-    // For level > 0, we need to follow the frame pointers
-    // We will need to move up the stack `level` times
-    // Note: The actual implementation depends on how you manage stack frames
-    println("  mov %%rbp, %%rcx"); // Move current frame pointer to rcx
-    println("  sub $1, %%rax");   // Decrement level (level - 1)
+  // For level > 0, follow the frame pointer chain
+  println("  mov %%rbp, %%rcx");  // rcx = current frame pointer
+  //println("  sub $1, %%rax");     // rax = level - 1
+
     println(".Lframe_address_loop%d:", c);
-    println("  test %%rax, %%rax"); // Check if level == 0
+  println("  test %%rax, %%rax");
     println("  jz .Lframe_address_done%d", c);
-    println("  mov (%%rcx), %%rcx"); // Move up one frame
-    println("  sub $1, %%rax"); // Decrement level
+  println("  test %%rcx, %%rcx");
+  println("  jz .Lframe_address_null%d", c);
+  println("  mov (%%rcx), %%rcx");  // rcx = *(rcx) (next frame)
+  println("  sub $1, %%rax");
     println("  jmp .Lframe_address_loop%d", c);
+
     println(".Lframe_address_done%d:", c);
-    println("  mov %%rcx, %%rax"); // Return the frame pointer
+  println("  mov %%rcx, %%rax");  // return result
+  println("  jmp .Lframe_address_return%d", c);
 
     println(".Lframe_address_%d:", c);
-    println("  mov %%rbp, %%rax"); // Return the current frame pointer
+  println("  mov %%rbp, %%rax");  // level 0: return current frame
+  println("  jmp .Lframe_address_return%d", c);
+
+  println(".Lframe_address_null%d:", c);
+  println("  mov $0, %%rax");     // return NULL
+
+  println(".Lframe_address_return%d:", c);
     return;
   }
 
-
   case ND_POPCOUNT:
-    gen_expr(node->builtin_val); // Generate code for the expression
-    println("  popcnt %%rax, %%rax"); // Count the number of set bits
+    gen_expr(node->builtin_val); 
+    println("  popcnt %%rax, %%rax"); 
     return;
 
   case ND_EXPECT: {
-    // Generate code for the expression we are expecting
-    gen_expr(node->lhs); // Generate code for the condition
-    push(); // Save the condition result on stack
-    gen_expr(node->rhs); // Generate code for the expected value
-    pop("%rdi"); // Restore the condition result from stack into %rdi
-    // Compare the condition result with the expected value
+    gen_expr(node->lhs); 
+    push(); 
+    gen_expr(node->rhs); 
+    pop("%rdi"); 
     println("  cmp %%rax, %%rdi");
-    // Move the condition result back to %rax for use in further code
     println("  mov %%rdi, %%rax");
     return;
   }   
@@ -1728,28 +1754,22 @@ static void gen_expr(Node *node)
     return;
   }
   case ND_RETURN_ADDR: {
-    // Generate code to get the frame pointer of the current function
     println("  mov %%rbp, %%rax");
-    
-    // Get the depth of the return address
     int tmpdepth = eval(node->lhs);
     
-    // Walk up the stack frames to the correct depth
     for (int i = 0; i < tmpdepth; i++) {
       println("  mov (%%rax), %%rax");
     }
     
-    // Load the return address from the frame pointer
     println("  mov 8(%%rax), %%rax");
     return;
   }
   case ND_BUILTIN_ADD_OVERFLOW: {
    int c = count();  // Unique label counter
-    Type *ty = node->builtin_dest->ty;  // Get the type of the operands
+    Type *ty = node->builtin_dest->ty;  
     if (ty->base)
       ty = ty->base;
 
-    // Evaluate left-hand side and right-hand side expressions
     gen_expr(node->lhs);
     push();
     gen_expr(node->rhs);
@@ -1757,10 +1777,9 @@ static void gen_expr(Node *node)
     gen_expr(node->builtin_dest);
     push();
 
-    // Load values into registers and perform addition
-    pop("%rdx");  // Load address of result variable
-    pop("%rsi");  // Load rhs
-    pop("%rdi");  // Load lhs
+    pop("%rdx");  
+    pop("%rsi");  
+    pop("%rdi"); 
 
     if (ty->size == 1) {
         println("  mov %%dil, %%al");
@@ -1795,11 +1814,11 @@ static void gen_expr(Node *node)
     return;
   }
   case ND_BUILTIN_SUB_OVERFLOW: {
-    int c = count();  // Unique label counter
-    Type *ty = node->builtin_dest->ty;  // Get the type of the operands
+    int c = count(); 
+    Type *ty = node->builtin_dest->ty;  
     if (ty->base)
       ty = ty->base;
-    // Evaluate left-hand side and right-hand side expressions
+
     gen_expr(node->lhs);
     push();
     gen_expr(node->rhs);
@@ -1807,10 +1826,9 @@ static void gen_expr(Node *node)
     gen_expr(node->builtin_dest);
     push();
 
-    // Load values into registers and perform subtraction
-    pop("%rdx");  // Load address of result variable
-    pop("%rsi");  // Load rhs
-    pop("%rdi");  // Load lhs
+    pop("%rdx");  
+    pop("%rsi");  
+    pop("%rdi"); 
 
     if (ty->size == 1) {
         println("  mov %%dil, %%al");
@@ -2477,7 +2495,7 @@ static void emit_data(Obj *prog)
                     : var->align;
 
     // Common symbol
-    if (opt_fcommon && var->is_tentative && !var->is_tls && !var->section)
+    if (opt_fcommon && var->is_tentative && !var->is_tls && !var->section && !var->is_static)
     {
       //from @fuhsnn incomplete array assuming to have one element
       if (var->ty->kind == TY_ARRAY && var->ty->size < 0)
@@ -2717,6 +2735,8 @@ static void emit_text(Obj *prog)
       for (Obj *var = fn->params; var; var = var->next)
       {
         Type *ty = var->ty;
+        if (!ty)
+          error("%s %d: in emit_text : type is null!", CODEGEN_C, __LINE__);  
         switch (ty->kind)
         {
           case TY_STRUCT:
@@ -2789,7 +2809,8 @@ static void emit_text(Obj *prog)
         continue;
 
       Type *ty = var->ty;
-
+      if (!ty)
+        error("%s %d: in emit_text : type is null!", CODEGEN_C, __LINE__);  
       switch (ty->kind)
       {
       case TY_STRUCT:
@@ -2910,7 +2931,8 @@ void assign_lvar_offsets(Obj *prog)
         continue;
       }
       Type *ty = var->ty;
-
+      if (!ty)
+        error("%s %d: in assign_lvar_offsets : type is null!", CODEGEN_C, __LINE__);  
       switch (ty->kind)
       {
       case TY_STRUCT:
@@ -2954,8 +2976,8 @@ void assign_lvar_offsets(Obj *prog)
                       ? MAX(16, var->align)
                       : var->align;
 
-      if (isDebug)                      
-        printf("======bottom=%d kind=%d size=%d fn_bottom=%d fn_stack_size=%d name=%s funcname=%s\n", bottom, var->ty->kind, var->ty->size, fn->alloca_bottom->offset, fn->alloca_bottom->stack_size, var->name, var->funcname);
+      // if (isDebug)                      
+      //   printf("======bottom=%d kind=%d size=%d fn_bottom=%d fn_stack_size=%d name=%s funcname=%s\n", bottom, var->ty->kind, var->ty->size, fn->alloca_bottom->offset, fn->alloca_bottom->stack_size, var->name, var->funcname);
       //trying to fix ISS-154 Extended assembly compiled with chibicc failed with ASSERT and works fine without assert function 
       //the bottom value need to take in account the size of parameters and local variables to avoid issue with extended assembly
       if (var->offset) {
