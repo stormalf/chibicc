@@ -6162,7 +6162,7 @@ static Node *primary(Token **rest, Token *tok)
   if (equal(tok, "__builtin_atomic_store")) {
     return ParseAtomic3(ND_STORE, tok, rest);
   }
-  if (equal(tok, "__builtin_atomic_load_n")) {
+  if (equal(tok, "__builtin_atomic_load_n") || equal(tok, "__atomic_load_n")) {
     return ParseAtomic2(ND_LOAD_N, tok, rest);
   }
   if (equal(tok, "__builtin_atomic_store_n")) {

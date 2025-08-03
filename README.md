@@ -369,7 +369,7 @@ util-linux : https://github.com/util-linux/util-linux.git
     cd tests
     run.sh 
     ---------------------------------------------------------------------
-      All 280 tests PASSED
+    All 340 tests PASSED
     ---------------------------------------------------------------------
         
 
@@ -509,12 +509,11 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
     openssh-portable regress test failed
     curl 2 tests ko
     memcached test stuck at t/binary-extstore.t ......... 5947/?
-    
+    vim: compile OK, tests KO (depending the version of chibicc failed early or in the last tests).
 
 ## projects compiled successfully with chibicc
 
-    util-linux : compile OK, tests OK
-    vim: compile OK, tests OK
+    util-linux : compile OK, tests OK    
     nginx: compile OK
     zlib: compile OK, tests OK
     nmap: compile OK, tests OK    
