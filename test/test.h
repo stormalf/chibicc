@@ -1,4 +1,5 @@
 #if defined(__slimcc__) || defined(__chibicc__)
+#include <stdio.h>
 #define ASSERT(x, y) assert(x, y, #y)
 #define DASSERT(x) static_assert(x); ASSERT(1, x)
 #define EASSERT(x,y) static_assert((x) == (y)); ASSERT(x, y)

@@ -1,5 +1,6 @@
 
 //#include <libavutil/common.h>
+#include <stdio.h>
 #include <assert.h>
 #include <stddef.h>
 #include <stdatomic.h>
@@ -56,6 +57,7 @@ int main(void)
 {
 
     printf("%llu\n", offsetof(PodType, c));
+    assert(16 ==  offsetof(PodType, c));
 
     return 0;
 }

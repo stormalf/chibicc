@@ -1,4 +1,3 @@
-#include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -125,7 +124,7 @@ my_log2(long num) {
 #if SIZEOF_LONG < 8
     return pg_ceil_log2_32(num);
 #else
-    return pg_ceil_log2_64(num);
+   // return pg_ceil_log2_64(num);
 #endif
 }
 
