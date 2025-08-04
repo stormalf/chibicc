@@ -14,5 +14,15 @@ int main() {
     ASSERT(22, c[1]);
     ASSERT(33, c[2]);
     ASSERT(44, c[3]);
+
+    // test 1: expression
+    float4 a, b, c;
+    a = (float4){1, 2, 3, 4};
+    b = (float4){10, 20, 30, 40};
+    c = a + b;  // ← This must NOT go to vector_initializer*
+
+    // test 2: brace init
+    float4 d = {100, 200, 300, 400};  // ← This should go to vector_initializer1
+
     return 0;
 }

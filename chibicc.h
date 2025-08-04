@@ -509,6 +509,8 @@ Obj *find_func(char *name);
 //from COSMOPOLITAN adding function ConsumeStringLiteral
 char *ConsumeStringLiteral(Token **rest, Token *tok) ;
 int64_t eval(Node *node);
+bool is_vector_type(Type *ty) ;
+
 
 extern bool opt_fbuiltin;
 //

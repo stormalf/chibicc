@@ -1434,12 +1434,24 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
     //   var->align = attr->align;
 
 
-    if (equal(tok, "="))
-    {
-      Node *expr = lvar_initializer(&tok, tok->next, var);
+    // if (equal(tok, "="))
+    // {
+
+    //   Node *expr = lvar_initializer(&tok, tok->next, var);
+    //   cur = cur->next = new_unary(ND_EXPR_STMT, expr, tok);
+    // }
+    if (equal(tok, "=")) {
+      tok = tok->next;
+
+      Node *expr;
+      if (ty->is_vector && !equal(tok, "{")) {
+        expr = new_binary(ND_ASSIGN, new_var_node(var, tok), assign(&tok, tok), tok);
+      } else {
+        expr = lvar_initializer(&tok, tok, var);
+      }
+
       cur = cur->next = new_unary(ND_EXPR_STMT, expr, tok);
     }
-
     //ISS-146
     if (var->ty->size < 0)
       error_tok(ty->name, "%s %d: in declaration : variable has incomplete type", PARSE_C, __LINE__);
@@ -1932,15 +1944,15 @@ static void vector_initializer1(Token **rest, Token *tok, Initializer *init) {
   *rest = skip(tok, "}", ctx);
 }
 
-static void vector_initializer2(Token **rest, Token *tok, Initializer *init, int i) {
-  if (i >= init->ty->array_len)
-    return;
+// static void vector_initializer2(Token **rest, Token *tok, Initializer *init, int i) {
+//   if (i >= init->ty->array_len)
+//     return;
 
-  init->children[i] = calloc(1, sizeof(Initializer));
-  init->children[i]->ty = init->ty->base;
-  initializer2(&tok, tok, init->children[i]);
-  vector_initializer2(rest, tok, init, i + 1);
-}
+//   init->children[i] = calloc(1, sizeof(Initializer));
+//   init->children[i]->ty = init->ty->base;
+//   initializer2(&tok, tok, init->children[i]);
+//   vector_initializer2(rest, tok, init, i + 1);
+// }
 
 
 // initializer = string-initializer | array-initializer
@@ -1974,12 +1986,10 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
   if (init->ty->kind == TY_ARRAY && init->ty->is_vector) {
     if (equal(tok, "{"))
       vector_initializer1(rest, tok, init); 
-    else
-      vector_initializer2(rest, tok, init, 0);
     return;
   }
 
-  if (init->ty->kind == TY_ARRAY) {
+  if (init->ty->kind == TY_ARRAY && !init->ty->is_vector) {
     if (equal(tok, "{"))
       array_initializer1(rest, tok, init);
     else

@@ -336,6 +336,13 @@ static void usual_arith_conv(Node **lhs, Node **rhs)
   
 }
 
+
+bool is_vector_type(Type *ty) {
+  return ty && ty->is_vector;
+}
+
+
+
 void add_type(Node *node)
 {
   if (!node || node->ty)
@@ -367,8 +374,12 @@ void add_type(Node *node)
   case ND_BITAND:
   case ND_BITOR:
   case ND_BITXOR:
-    usual_arith_conv(&node->lhs, &node->rhs);
-    node->ty = node->lhs->ty;
+    if (is_vector_type(node->lhs->ty) && is_vector_type(node->rhs->ty)) {
+          node->ty = node->lhs->ty;
+    } else {
+        usual_arith_conv(&node->lhs, &node->rhs);
+        node->ty = node->lhs->ty;
+    }
     return;
   case ND_NEG:
   {
