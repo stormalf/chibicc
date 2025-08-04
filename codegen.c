@@ -490,6 +490,7 @@ static void load(Type *ty)
 {
   if (!ty)
     error("%s: %s:%d: error: in load : ty is null!", CODEGEN_C, __FILE__, __LINE__);
+
   switch (ty->kind)
   {
   case TY_ARRAY:
@@ -538,6 +539,7 @@ static void store(Type *ty)
   if (!ty)
     error("%s %d: in store : ty is null!", CODEGEN_C, __LINE__);
   pop("%rdi");
+
 
   switch (ty->kind)
   {
@@ -1182,6 +1184,120 @@ static void HandleAtomicArithmetic(Node *node, const char *op) {
   println("\tmov\t%s,%s", reg_di(node->ty->size), reg_ax(node->ty->size));
 }
 
+// static void gen_vector_op(Node *node) {
+
+// if (node->kind != ND_ADD)
+//     error_tok(node->tok, "%s: %s:%d: error: in gen_vector_op : unsupported vector operation ", CODEGEN_C, __FILE__, __LINE__);
+
+//   // get address of rhs left operand (a)
+//   gen_addr(node->lhs);
+//   println("  mov %%rax, %%rsi");  // lhs vector addr in rsi
+//   // get address of rhs right operand (b)
+//   gen_addr(node->rhs);
+//   println("  mov %%rax, %%rdx");  // rhs vector addr in rdx
+
+
+//   int len = node->lhs->ty->array_len;     // e.g., 4
+//   int sz = node->lhs->ty->base->size;     // size of base type, e.g., 4 bytes for float
+
+//   // Choose instructions according to base type
+//   char *mov_load = NULL;
+//   char *add_ins = NULL;
+//   char *mov_store = NULL;
+
+//   switch (node->lhs->ty->base->kind) {
+//     case TY_FLOAT:
+//       mov_load = "movups";
+//       add_ins = "addps";
+//       mov_store = "movups";
+//       break;
+//     case TY_DOUBLE:
+//       mov_load = "movupd";
+//       add_ins = "addpd";
+//       mov_store = "movupd";
+//       break;
+//     // For integers, it's more complicated; you might use movdqu/paddd etc.
+//     default:
+//       error_tok(node->tok, "%s: %s:%d: error: in gen_vector_op : unsupported vector base type", CODEGEN_C, __FILE__, __LINE__);
+//   }
+ 
+
+//   println("  %s (%%rsi), %%xmm0", mov_load);     // load full lhs vector
+//   println("  %s (%%rdx), %%xmm1", mov_load);     // load full rhs vector
+//   println("  %s %%xmm1, %%xmm0", add_ins);       // add vectors
+//   println("  %s %%xmm0, (%%rdi)", mov_store);    // store result to destination
+//   println("  mov (%%rdi), %%rax");      
+
+// }
+static void gen_vector_op(Node *node) {
+  // Check supported kinds
+  switch (node->kind) {
+    case ND_ADD: case ND_SUB: case ND_MUL:
+      break;
+    case ND_DIV:
+      if (node->lhs->ty->base->kind == TY_INT)
+        error_tok(node->tok, "%s: %s:%d: error: in gen_vector_op : integer vector division not supported", CODEGEN_C, __FILE__, __LINE__);
+      break;
+    default:
+      error_tok(node->tok, "%s: %s:%d: error: in gen_vector_op : unsupported vector operation", CODEGEN_C, __FILE__, __LINE__);
+  }
+
+  // Load destination address (lhs)
+  gen_addr(node->lhs);
+  println("  mov %%rax, %%rsi");
+
+  // Load source address (rhs)
+  gen_addr(node->rhs);
+  println("  mov %%rax, %%rdx");
+
+  char *mov_load = NULL;
+  char *mov_store = NULL;
+  char *op_inst = NULL;
+
+  switch (node->lhs->ty->base->kind) {
+    case TY_FLOAT:
+      mov_load = "movups";
+      mov_store = "movups";
+      if (node->kind == ND_ADD) op_inst = "addps";
+      else if (node->kind == ND_SUB) op_inst = "subps";
+      else if (node->kind == ND_MUL) op_inst = "mulps";
+      else if (node->kind == ND_DIV) op_inst = "divps";
+      break;
+
+    case TY_DOUBLE:
+      mov_load = "movupd";
+      mov_store = "movupd";
+      if (node->kind == ND_ADD) op_inst = "addpd";
+      else if (node->kind == ND_SUB) op_inst = "subpd";
+      else if (node->kind == ND_MUL) op_inst = "mulpd";
+      else if (node->kind == ND_DIV) op_inst = "divpd";
+      break;
+
+    case TY_INT:
+      mov_load = "movdqu";  // unaligned load/store for integers
+      mov_store = "movdqu";
+
+      if (node->kind == ND_ADD) op_inst = "paddd";
+      else if (node->kind == ND_SUB) op_inst = "psubd";
+      else if (node->kind == ND_MUL) op_inst = "pmulld";
+      else if (node->kind == ND_DIV) {
+        error_tok(node->tok, "%s: %s:%d: error: in gen_vector_op : integer vector division not supported", CODEGEN_C, __FILE__, __LINE__);
+      }
+      break;
+
+    default:
+      error_tok(node->tok, "%s: %s:%d: error: in gen_vector_op : unsupported vector base type", CODEGEN_C, __FILE__, __LINE__);
+  }
+
+  println("  %s (%%rsi), %%xmm0", mov_load);
+  println("  %s (%%rdx), %%xmm1", mov_load);
+  println("  %s %%xmm1, %%xmm0", op_inst);
+  println("  %s %%xmm0, (%%rdi)", mov_store);
+
+  // Return result in rax (load first 8 bytes scalar)
+  println("  mov (%%rdi), %%rax");
+}
+
 
 // Generate code for a given node.
 static void gen_expr(Node *node)
@@ -1310,7 +1426,15 @@ static void gen_expr(Node *node)
   case ND_ASSIGN:
     gen_addr(node->lhs);
     push();
+    if (node->lhs->ty->is_vector) {
+      println("  mov (%%rsp), %%rdi");
+    }   
     gen_expr(node->rhs);
+
+    if (node->lhs->ty->is_vector) {
+      store(node->ty);
+      return;
+    }  
 
     if (node->lhs->kind == ND_MEMBER && node->lhs->member->is_bitfield)
     {
@@ -2100,6 +2224,12 @@ static void gen_expr(Node *node)
 
   }
 
+  if (node->lhs->ty->is_vector) {
+    gen_vector_op(node);
+    return;
+  }
+
+  
   switch (node->lhs->ty->kind)
   {
   case TY_FLOAT:

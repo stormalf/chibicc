@@ -601,6 +601,7 @@ struct Type
   bool is_destructor;
   int destructor_priority;
   int constructor_priority;
+  bool is_vector;
 };
 
 // Struct member
@@ -646,6 +647,7 @@ Type *copy_type(Type *ty);
 Type *pointer_to(Type *base);
 Type *func_type(Type *return_ty);
 Type *array_of(Type *base, int size);
+Type *vector_of(Type *base, int size);
 Type *vla_of(Type *base, Node *expr);
 Type *enum_type(void);
 Type *struct_type(void);

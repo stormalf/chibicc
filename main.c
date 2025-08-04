@@ -135,8 +135,8 @@ static void print_include_directories() {
 
 static void usage(int status)
 {
-  fprintf(stderr, HELP);
-  fprintf(stderr, USAGE);
+  fprintf(stdout, HELP);
+  fprintf(stdout, USAGE);
   exit(status);
 }
 

@@ -1913,6 +1913,34 @@ static void union_initializer(Token **rest, Token *tok, Initializer *init) {
   }
 }
 
+static void vector_initializer1(Token **rest, Token *tok, Initializer *init) {
+  ctx->filename = PARSE_C;
+  ctx->funcname = "vector_initializer1";
+  ctx->line_no = __LINE__ + 1;
+  tok = skip(tok, "{", ctx);
+  for (int i = 0; i < init->ty->array_len && !equal(tok, "}"); i++) {
+    init->children[i] = calloc(1, sizeof(Initializer));
+    init->children[i]->ty = init->ty->base;
+    initializer2(&tok, tok, init->children[i]);
+    if (equal(tok, ","))
+      tok = tok->next;
+  }
+
+  ctx->filename = PARSE_C;
+  ctx->funcname = "vector_initializer1";
+  ctx->line_no = __LINE__ + 1;
+  *rest = skip(tok, "}", ctx);
+}
+
+static void vector_initializer2(Token **rest, Token *tok, Initializer *init, int i) {
+  if (i >= init->ty->array_len)
+    return;
+
+  init->children[i] = calloc(1, sizeof(Initializer));
+  init->children[i]->ty = init->ty->base;
+  initializer2(&tok, tok, init->children[i]);
+  vector_initializer2(rest, tok, init, i + 1);
+}
 
 
 // initializer = string-initializer | array-initializer
@@ -1941,6 +1969,14 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
       string_initializer(&tok, str_tok, init);
       return;
     }
+  }
+
+  if (init->ty->kind == TY_ARRAY && init->ty->is_vector) {
+    if (equal(tok, "{"))
+      vector_initializer1(rest, tok, init); 
+    else
+      vector_initializer2(rest, tok, init, 0);
+    return;
   }
 
   if (init->ty->kind == TY_ARRAY) {
@@ -3580,6 +3616,16 @@ static Node *new_add(Node *lhs, Node *rhs, Token *tok)
   add_type(lhs);
   add_type(rhs);
 
+  // case of vectors
+  if (lhs->ty->is_vector && rhs->ty->is_vector) {
+    if (lhs->ty->array_len != rhs->ty->array_len || lhs->ty->base->kind != rhs->ty->base->kind)
+      error_tok(tok, "%s %d: in new_add: incompatible vector types", PARSE_C, __LINE__);
+
+    Node *node = new_binary(ND_ADD, lhs, rhs, tok);
+    node->ty = lhs->ty; 
+    return node;
+  }
+
   // num + num
   if (is_numeric(lhs->ty) && is_numeric(rhs->ty))
     return new_binary(ND_ADD, lhs, rhs, tok);
@@ -3613,6 +3659,16 @@ static Node *new_sub(Node *lhs, Node *rhs, Token *tok)
 {
   add_type(lhs);
   add_type(rhs);
+
+  // case of vectors
+  if (lhs->ty->is_vector && rhs->ty->is_vector) {
+    if (lhs->ty->array_len != rhs->ty->array_len || lhs->ty->base->kind != rhs->ty->base->kind)
+      error_tok(tok, "%s %d: in new_add: incompatible vector types", PARSE_C, __LINE__);
+
+    Node *node = new_binary(ND_SUB, lhs, rhs, tok);
+    node->ty = lhs->ty; 
+    return node;
+  }
 
   // num - num
   if (is_numeric(lhs->ty) && is_numeric(rhs->ty))
@@ -4079,6 +4135,14 @@ static Token *type_attributes(Token *tok, void *arg)
         ty->vector_size = vs;
         if (!ty->is_aligned) ty->align = vs;
     }
+    int base_size = ty->size;
+    if (!base_size || vs % base_size != 0)
+      error_tok(tok, "%s %d: in attribute_list: invalid vector_size %d", PARSE_C, __LINE__, vs);
+
+    int n = vs / base_size;
+    
+    ty->is_vector = true;
+    ty = vector_of(ty, n);
     ctx->filename = PARSE_C;
     ctx->funcname = "type_attributes";        
     ctx->line_no = __LINE__ + 1;  
@@ -6493,7 +6557,14 @@ static Node *parse_typedef(Token **rest, Token *tok, Type *basety)
       error_tok(ty->name_pos, "%s %d: in parse_typedef : typedef name omitted", PARSE_C, __LINE__);
     //from COSMOPOLITAN adding other GNUC attributes
     tok = attribute_list(tok, ty, type_attributes);      
-    push_scope(get_ident(ty->name))->type_def = ty;
+    //if the typedef is a vector we transform the base type into an array of type base.
+    if (ty->is_vector && !is_array(ty)) {
+      int len = ty->vector_size / ty->size;
+      Token *name = ty->name;
+      ty = vector_of(ty, len);
+      ty->name = name;
+    }
+    push_scope(get_ident(ty->name))->type_def = ty;    
     node = new_binary(ND_COMMA, node, compute_vla_size(ty, tok), tok);
   }
   
@@ -6972,6 +7043,13 @@ Obj *parse(Token *tok)
     // Typedef
     if (attr.is_typedef)
     {
+      //checking if the typedef has attributes set at the end;
+      Token *start = tok;
+      while (!equal(tok, ";")) {
+        tok = attribute_list(tok, basety, type_attributes);
+        tok = tok->next;
+      }
+      tok = start;
       parse_typedef(&tok, tok, basety);
       continue;
     }

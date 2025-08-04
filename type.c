@@ -240,8 +240,22 @@ Type *array_of(Type *base, int len)
   ty->base = base;
   ty->array_len = len;  
   ty->has_vla = base->has_vla; 
+  ty->is_vector = base->is_vector;
   return ty;
 }
+
+Type *vector_of(Type *base, int len)
+{
+  if (!base)
+  error("%s %d: in vector_of : base is null", TYPE_C, __LINE__); 
+  Type *ty = new_type(TY_ARRAY, base->size * len, base->align);
+  ty->base = base;
+  ty->array_len = len;  
+  ty->has_vla = base->has_vla; 
+  ty->is_vector = true;
+  return ty;
+}
+
 
 Type *vla_of(Type *base, Node *len)
 {
@@ -364,7 +378,7 @@ void add_type(Node *node)
     return;
   }
   case ND_ASSIGN:
-    if (node->lhs->ty->kind == TY_ARRAY)
+    if (node->lhs->ty->kind == TY_ARRAY && !node->lhs->ty->is_vector)
       error_tok(node->lhs->tok, "%s %d: not an lvalue", TYPE_C, __LINE__);
     if (node->lhs->ty->kind != TY_STRUCT && node->lhs->ty->kind != TY_UNION)
       node->rhs = new_cast(node->rhs, node->lhs->ty);
