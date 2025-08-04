@@ -1514,6 +1514,12 @@ void init_macros(void)
   define_macro("__STDC_UTF_32__", "1");
   define_macro("__STDC_VERSION__", "201112L");
   define_macro("__STDC__", "1");
+  // define_macro("__STDC_IEC_559__" , "1");
+  // define_macro("__STDC_ISO_10646__" , "201706L");
+  // define_macro("__STDC_IEC_559_COMPLEX__" , "1");
+  // define_macro("__STDC_IEC_60559_COMPLEX__" , "201404L");
+  // define_macro("__STDC_IEC_60559_BFP__" , "201404L");
+  define_macro("__GNUC_STDC_INLINE__", "1");
   define_macro("__USER_LABEL_PREFIX__", "");
   define_macro("__alignof__", "_Alignof");
   define_macro("__amd64", "1");
@@ -1547,12 +1553,6 @@ void init_macros(void)
   define_macro("HAVE_SEND", "1");
   define_macro("HAVE_SYS_IO_H", "1");  
   define_macro("__extension__", "");
-  // define_macro("HAVE_GCC__SYNC_CHAR_TAS", "1");
-  // define_macro("HAVE_GCC__SYNC_INT32_TAS", "1");
-  // define_macro("HAVE_GCC__SYNC_INT32_CAS", "1");
-  // define_macro("HAVE_GCC__SYNC_INT64_CAS", "1");
-  // define_macro("HAVE_GCC__ATOMIC_INT32_CAS", "1"); 
-  // define_macro("HAVE_GCC__ATOMIC_INT64_CAS", "1");
   define_macro("HAVE_TEST_AND_SET", "1");  
   define_macro("HAVE_LONG_LONG_INT_64", "1");
   define_macro("__ATOMIC_RELAXED", "0");

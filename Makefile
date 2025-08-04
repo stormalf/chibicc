@@ -61,7 +61,7 @@ projects: zlib util-linux nginx
 
 
 curl:
-	cd ../curl && make clean && CC=chibicc ./configure && make && make test
+	cd ../curl && make clean && CC=chibicc  CFLAGS="-std=c11" ./configure && make && make test
 
 zlib:
 	cd ../zlib && make clean && CC=chibicc CFLAGS=-fPIC ./configure && make && make test
@@ -79,7 +79,7 @@ nginx:
 	cd ../nginx && make clean && CC=chibicc CFLAGS=-fPIC ./auto/configure --with-http_ssl_module && make && make check
 
 vim:
-	cd ../vim && make clean && CC=chibicc CFLAGS=-fPIC ./configure && make && make tests
+	cd ../vim && make clean && CC=chibicc CFLAGS=-fPIC ./configure && make && make test
 
 lxc:
 	cd ../lxc && rm -rf build && CC=gcc \
@@ -93,7 +93,7 @@ memcached:
 	cd ../memcached && make clean && CC=chibicc CFLAGS="-fPIC -std=c11" ./configure && make && make test
 
 openssh-portable:
-	cd ../openssh-portable && make clean && CC=chibicc ./configure && make && make test
+	cd ../openssh-portable && make clean && CC=chibicc ./configure && make && make tests
 
 # Misc.
 

@@ -1312,52 +1312,41 @@ static void gen_expr(Node *node)
     push();
     gen_expr(node->rhs);
 
-    if (is_bitfield(node->lhs))
+    if (node->lhs->kind == ND_MEMBER && node->lhs->member->is_bitfield)
     {
-      //println("  mov %%rax, %%r8");
+      println("  mov %%rax, %%r8");
 
       // If the lhs is a bitfield, we need to read the current value
       // from memory and merge it with a new value.
       Member *mem = node->lhs->member;
-      //println("  mov %%rax, %%rdi");
-      // if (mem->bit_width >= 32)
-      // {
-      //   println("  mov $%ld, %%rdi", (1L << mem->bit_width) - 1);
-      //   println("  and %%rdi, %%rax");
-      // }
-      // else
-      // {
-      //   println("  and $%ld, %%rdi", (1L << mem->bit_width) - 1);
-      // }
-      // // println("  and $%ld, %%rdi", (1L << mem->bit_width) - 1);
-      // println("  shl $%d, %%rdi", mem->bit_offset);
-      println("  mov $%ld, %%rdi", (1L << mem->bit_width) - 1);
-      println("  and %%rdi, %%rax");
-      println("  mov %%rax, %%r8");
+      println("  mov %%rax, %%rdi");
+      if (mem->bit_width >= 32)
+      {
+        println("  mov $%ld, %%rax", (1L << mem->bit_width) - 1);
+        println("  and %%rax, %%rdi");
+      }
+      else
+      {
+        println("  and $%ld, %%rdi", (1L << mem->bit_width) - 1);
+      }
+      // println("  and $%ld, %%rdi", (1L << mem->bit_width) - 1);
+      println("  shl $%d, %%rdi", mem->bit_offset);
+
       println("  mov (%%rsp), %%rax");
-      if (!mem->ty)
-        error("%s %d: in gen_expr : ND_ASSIGN member type is null!", CODEGEN_C, __LINE__); 
       load(mem->ty);
 
       long mask = ((1L << mem->bit_width) - 1) << mem->bit_offset;
-      println("  mov $%ld, %%rdi", ~mask);
-      println("  and %%rdi, %%rax");
-      println("  mov %%r8, %%rdi");
-      println("  shl $%d, %%rdi", mem->bit_offset);
-
+      println("  mov $%ld, %%r9", ~mask);
+      println("  and %%r9, %%rax");
       println("  or %%rdi, %%rax");
-      store(node->ty);
+      store(mem->ty);
       println("  mov %%r8, %%rax");
-      if (!mem->ty->is_unsigned && mem->ty->kind != TY_BOOL) {
-        int shift = 64 - mem->bit_width - mem->bit_offset;
-        println("  shl $%d, %%rax", shift);
-        println("  sar $%d, %%rax", shift);
-      }
       return;
     }
 
     store(node->ty);
     return;
+
   case ND_STMT_EXPR:
     for (Node *n = node->body; n; n = n->next)
       gen_stmt(n);

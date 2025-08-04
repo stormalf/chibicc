@@ -270,8 +270,6 @@ List of options ignored :
     "-w"
     "--param=ssp-buffer-size=4"
     "-fno-lto"
-    "-c99"
-    "-std"
     "-fp-model"
     "-fprofile-arcs"
     "-ftest-coverage"
@@ -547,8 +545,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.22.9    Reporting fixes from 1.0.22.9_dev (like implicit function declaration, -std=c11 -std=c99...). Fixing issue with \__atomic_load_n during linking of nmap.
-
+1.0.22.9    Reporting fixes from 1.0.22.9_dev (like implicit function declaration, -std=c11 -std=c99...). Fixing issue with \__atomic_load_n during linking of nmap. Fixing issue with vim (due to a mistake in ND_ASSIGN).
 ## old release notes
 
 <https://github.com/stormalf/chibicc/blob/main/RELEASE_NOTES.md>
