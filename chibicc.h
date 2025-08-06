@@ -535,6 +535,7 @@ typedef enum
   TY_VLA, // variable-length array
   TY_STRUCT,
   TY_UNION,
+  TY_VECTOR,
 } TypeKind;
 
 struct Type
@@ -657,6 +658,7 @@ void add_type(Node *node);
 bool is_bitfield(Node *node);
 bool is_array(Type *ty);
 Type *new_qualified_type(Type *ty);
+bool is_vector(Type *ty);
 
 
 char *nodekind2str(NodeKind kind);

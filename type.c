@@ -161,7 +161,8 @@ bool is_compatible(Type *t1, Type *t2)
     (t1->kind == TY_VLA && t2->kind == TY_ARRAY) ||
     (t1->kind == TY_ARRAY && t2->kind == TY_VLA))
     return is_compatible(t1->base, t2->base);
-
+  if(t1->kind == TY_VECTOR && t2->kind == TY_VECTOR)
+    return is_compatible(t1->base, t2->base);
 
   switch (t1->kind)
   {
@@ -195,6 +196,11 @@ bool is_compatible(Type *t1, Type *t2)
       return false;
     return t1->array_len < 0 && t2->array_len < 0 &&
            t1->array_len == t2->array_len;
+  case TY_VECTOR:
+    if (!is_compatible(t1->base, t2->base))
+      return false;
+    return t1->array_len < 0 && t2->array_len < 0 &&
+           t1->array_len == t2->array_len;           
   }
   return false;
 }
@@ -216,6 +222,7 @@ Type *pointer_to(Type *base)
   ty->is_pointer = true;
   ty->pointertype = base;
   ty->is_unsigned = true;
+  ty->is_vector = base->is_vector;
   return ty;
 }
 
@@ -240,15 +247,23 @@ Type *array_of(Type *base, int len)
   ty->base = base;
   ty->array_len = len;  
   ty->has_vla = base->has_vla; 
-  ty->is_vector = base->is_vector;
   return ty;
 }
+
 
 Type *vector_of(Type *base, int len)
 {
   if (!base)
   error("%s %d: in vector_of : base is null", TYPE_C, __LINE__); 
-  Type *ty = new_type(TY_ARRAY, base->size * len, base->align);
+  Type *ty = new_type(TY_VECTOR, base->size * len, base->align);
+  // total size in bytes
+  int total_size = base->size * len;
+
+  // alignment conventionally same as total size if power-of-two, or base->align
+  int align = total_size; 
+  ty->kind = TY_VECTOR;
+  ty->size = total_size;
+  ty->align = align;
   ty->base = base;
   ty->array_len = len;  
   ty->has_vla = base->has_vla; 
@@ -337,8 +352,8 @@ static void usual_arith_conv(Node **lhs, Node **rhs)
 }
 
 
-bool is_vector_type(Type *ty) {
-  return ty && ty->is_vector;
+bool is_vector(Type *ty) {
+  return ty && ty->kind == TY_VECTOR;
 }
 
 
@@ -374,7 +389,7 @@ void add_type(Node *node)
   case ND_BITAND:
   case ND_BITOR:
   case ND_BITXOR:
-    if (is_vector_type(node->lhs->ty) && is_vector_type(node->rhs->ty)) {
+    if (is_vector(node->lhs->ty) && is_vector(node->rhs->ty)) {
           node->ty = node->lhs->ty;
     } else {
         usual_arith_conv(&node->lhs, &node->rhs);
@@ -389,7 +404,7 @@ void add_type(Node *node)
     return;
   }
   case ND_ASSIGN:
-    if (node->lhs->ty->kind == TY_ARRAY && !node->lhs->ty->is_vector)
+    if (node->lhs->ty->kind == TY_ARRAY)
       error_tok(node->lhs->tok, "%s %d: not an lvalue", TYPE_C, __LINE__);
     if (node->lhs->ty->kind != TY_STRUCT && node->lhs->ty->kind != TY_UNION)
       node->rhs = new_cast(node->rhs, node->lhs->ty);
@@ -450,12 +465,6 @@ void add_type(Node *node)
   case ND_ADDR:
   {
     Type *ty = node->lhs->ty;
-  //   if (ty->kind == TY_ARRAY )
-  //     node->ty = pointer_to(ty->base);
-  //   else
-  //     node->ty = pointer_to(ty);
-  //   return;
-  // }
   //from @fuhsnn add_type():Remove overaggressive array decaying
       node->ty = pointer_to(ty);
     return;

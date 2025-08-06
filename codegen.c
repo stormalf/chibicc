@@ -87,6 +87,20 @@ static void popf(int reg)
   depth--;
 }
 
+static void pushv(void) {
+  println("  sub $16, %%rsp");
+  println("  movaps %%xmm0, (%%rsp)");
+  depth += 2; 
+}
+
+
+static void popv(int reg) {
+  println("  movaps (%%rsp), %%xmm%d", reg);
+  println("  add $16, %%rsp");
+  depth -= 2;
+}
+
+
 // Round up `n` to the nearest multiple of `align`. For instance,
 // align_to(5, 8) returns 8 and align_to(11, 8) returns 16.
 int align_to(int n, int align)
@@ -493,6 +507,17 @@ static void load(Type *ty)
 
   switch (ty->kind)
   {
+  case TY_VECTOR: {
+    if (ty->base->kind == TY_FLOAT || ty->base->kind == TY_DOUBLE) {      
+      println("  movups (%%rax), %%xmm0");  
+    } else if (ty->base->kind == TY_INT) {
+     
+      println("  movdqu (%%rax), %%xmm0"); 
+    } else {
+      error("%s: %s:%d: error: in load : unsupported vector base type", CODEGEN_C, __FILE__, __LINE__);
+    }
+    return;
+  }
   case TY_ARRAY:
   case TY_STRUCT:
   case TY_UNION:
@@ -543,6 +568,15 @@ static void store(Type *ty)
 
   switch (ty->kind)
   {
+  case TY_VECTOR:
+    if (ty->base->kind == TY_FLOAT || ty->base->kind == TY_DOUBLE) {
+      println("  movups %%xmm0, (%%rdi)");  // store into rdi, not rax
+    } else if (ty->base->kind == TY_INT) {
+      println("  movdqu %%xmm0, (%%rdi)");
+    } else {
+      error("%s %d: in store : unsupported vector base type", CODEGEN_C, __LINE__);
+    }
+    return;
   case TY_STRUCT:
   case TY_UNION:
     gen_mem_copy("%rdi", ty->size);
@@ -764,7 +798,7 @@ static bool has_pointer(Type *ty) {
   switch (ty->kind) {
   case TY_PTR:
     return true;
-
+  case TY_VECTOR:
   case TY_ARRAY:
     return has_pointer(ty->base);
 
@@ -806,7 +840,7 @@ static bool has_flonum(Type *ty, int lo, int hi, int offset)
     return true;
   }
 
-  if (ty->kind == TY_ARRAY)
+  if (ty->kind == TY_ARRAY || ty->kind == TY_VECTOR)
   {
     for (int i = 0; i < ty->array_len; i++)
       if (!has_flonum(ty->base, lo, hi, offset + ty->base->size * i))
@@ -896,9 +930,11 @@ static void push_args2(Node *args, bool first_pass)
       return;    
     push_struct(args->ty);
     break;
+  case TY_VECTOR:
+    pushv();
+    break;
   case TY_FLOAT:
   case TY_DOUBLE:
-
     pushf();
     break;
   case TY_LDOUBLE:
@@ -967,6 +1003,14 @@ static int push_args(Node *node)
             stack += align_to(ty->size, 8) / 8;
         }
         break;  
+    case TY_VECTOR:
+      int slots = align_to(ty->size, 16) / 16;
+      if ((fp += slots) > FP_MAX) 
+      {
+          arg->pass_by_stack = true;
+          stack += slots;
+      }
+      break;
     case TY_FLOAT:
     case TY_DOUBLE:
       if (fp++ >= FP_MAX)
@@ -1184,119 +1228,115 @@ static void HandleAtomicArithmetic(Node *node, const char *op) {
   println("\tmov\t%s,%s", reg_di(node->ty->size), reg_ax(node->ty->size));
 }
 
-// static void gen_vector_op(Node *node) {
-
-// if (node->kind != ND_ADD)
-//     error_tok(node->tok, "%s: %s:%d: error: in gen_vector_op : unsupported vector operation ", CODEGEN_C, __FILE__, __LINE__);
-
-//   // get address of rhs left operand (a)
-//   gen_addr(node->lhs);
-//   println("  mov %%rax, %%rsi");  // lhs vector addr in rsi
-//   // get address of rhs right operand (b)
-//   gen_addr(node->rhs);
-//   println("  mov %%rax, %%rdx");  // rhs vector addr in rdx
-
-
-//   int len = node->lhs->ty->array_len;     // e.g., 4
-//   int sz = node->lhs->ty->base->size;     // size of base type, e.g., 4 bytes for float
-
-//   // Choose instructions according to base type
-//   char *mov_load = NULL;
-//   char *add_ins = NULL;
-//   char *mov_store = NULL;
-
-//   switch (node->lhs->ty->base->kind) {
-//     case TY_FLOAT:
-//       mov_load = "movups";
-//       add_ins = "addps";
-//       mov_store = "movups";
-//       break;
-//     case TY_DOUBLE:
-//       mov_load = "movupd";
-//       add_ins = "addpd";
-//       mov_store = "movupd";
-//       break;
-//     // For integers, it's more complicated; you might use movdqu/paddd etc.
-//     default:
-//       error_tok(node->tok, "%s: %s:%d: error: in gen_vector_op : unsupported vector base type", CODEGEN_C, __FILE__, __LINE__);
-//   }
- 
-
-//   println("  %s (%%rsi), %%xmm0", mov_load);     // load full lhs vector
-//   println("  %s (%%rdx), %%xmm1", mov_load);     // load full rhs vector
-//   println("  %s %%xmm1, %%xmm0", add_ins);       // add vectors
-//   println("  %s %%xmm0, (%%rdi)", mov_store);    // store result to destination
-//   println("  mov (%%rdi), %%rax");      
-
-// }
-static void gen_vector_op(Node *node) {
-  // Check supported kinds
-  switch (node->kind) {
-    case ND_ADD: case ND_SUB: case ND_MUL:
-      break;
-    case ND_DIV:
-      if (node->lhs->ty->base->kind == TY_INT)
-        error_tok(node->tok, "%s: %s:%d: error: in gen_vector_op : integer vector division not supported", CODEGEN_C, __FILE__, __LINE__);
-      break;
-    default:
-      error_tok(node->tok, "%s: %s:%d: error: in gen_vector_op : unsupported vector operation", CODEGEN_C, __FILE__, __LINE__);
+static void load_vector_operand(Node *operand, const char *xmm_reg) {
+  if (operand->ty->kind == TY_VECTOR) {
+    gen_addr(operand); 
+    if (operand->ty->base->kind == TY_FLOAT || operand->ty->base->kind == TY_DOUBLE) {
+      println("  movups (%%rax), %s", xmm_reg);
+    } else if (operand->ty->base->kind == TY_INT) {
+      println("  movdqu (%%rax), %s", xmm_reg);
+    } else {
+        error("%s: %s:%d: error: in load_vector_operand : unsupported vector base type", CODEGEN_C, __FILE__, __LINE__);
+    }
+  } else if (operand->ty->kind == TY_PTR && operand->ty->base->kind == TY_VECTOR) {
+    gen_expr(operand);
+    Type *vec = operand->ty->base;
+    if (vec->base->kind == TY_FLOAT || vec->base->kind == TY_DOUBLE) {
+      println("  movups (%%rax), %s", xmm_reg);
+    } else if (vec->base->kind == TY_INT) {
+      println("  movdqu (%%rax), %s", xmm_reg);
+    } else {
+      error("%s: %s:%d: error: in load_vector_operand : unsupported vector base type", CODEGEN_C, __FILE__, __LINE__);
+    }
+  } else {
+    error("%s: %s:%d: error: in load_vector_operand : invalid vector operand", CODEGEN_C, __FILE__, __LINE__);
   }
-
-  // Load destination address (lhs)
-  gen_addr(node->lhs);
-  println("  mov %%rax, %%rsi");
-
-  // Load source address (rhs)
-  gen_addr(node->rhs);
-  println("  mov %%rax, %%rdx");
-
-  char *mov_load = NULL;
-  char *mov_store = NULL;
-  char *op_inst = NULL;
-
-  switch (node->lhs->ty->base->kind) {
-    case TY_FLOAT:
-      mov_load = "movups";
-      mov_store = "movups";
-      if (node->kind == ND_ADD) op_inst = "addps";
-      else if (node->kind == ND_SUB) op_inst = "subps";
-      else if (node->kind == ND_MUL) op_inst = "mulps";
-      else if (node->kind == ND_DIV) op_inst = "divps";
-      break;
-
-    case TY_DOUBLE:
-      mov_load = "movupd";
-      mov_store = "movupd";
-      if (node->kind == ND_ADD) op_inst = "addpd";
-      else if (node->kind == ND_SUB) op_inst = "subpd";
-      else if (node->kind == ND_MUL) op_inst = "mulpd";
-      else if (node->kind == ND_DIV) op_inst = "divpd";
-      break;
-
-    case TY_INT:
-      mov_load = "movdqu";  // unaligned load/store for integers
-      mov_store = "movdqu";
-
-      if (node->kind == ND_ADD) op_inst = "paddd";
-      else if (node->kind == ND_SUB) op_inst = "psubd";
-      else if (node->kind == ND_MUL) op_inst = "pmulld";
-      else if (node->kind == ND_DIV) {
-        error_tok(node->tok, "%s: %s:%d: error: in gen_vector_op : integer vector division not supported", CODEGEN_C, __FILE__, __LINE__);
-      }
-      break;
-
-    default:
-      error_tok(node->tok, "%s: %s:%d: error: in gen_vector_op : unsupported vector base type", CODEGEN_C, __FILE__, __LINE__);
-  }
-
-  println("  %s (%%rsi), %%xmm0", mov_load);
-  println("  %s (%%rdx), %%xmm1", mov_load);
-  println("  %s %%xmm1, %%xmm0", op_inst);
-  println("  %s %%xmm0, (%%rdi)", mov_store);
-
-  // Return result in rax (load first 8 bytes scalar)
-  println("  mov (%%rdi), %%rax");
 }
+
+static void gen_vector_op(Node *node) {
+  switch (node->kind) {
+  case ND_ADD:
+  case ND_SUB:
+  case ND_MUL:
+    break;
+  case ND_DIV:
+    if (node->lhs->ty->base->kind == TY_INT)
+      error_tok(node->tok, "%s: %s:%d: error: in gen_vector_op :  integer vector division not supported", CODEGEN_C, __FILE__, __LINE__);
+    break;
+  default:
+    error_tok(node->tok, "%s: %s:%d: error: in gen_vector_op :  unsupported vector operation", CODEGEN_C, __FILE__, __LINE__);
+  }
+
+  Type *vec_ty = node->lhs->ty;
+  if (vec_ty->kind == TY_PTR && vec_ty->base->kind == TY_VECTOR)
+    vec_ty = vec_ty->base;
+
+  if (vec_ty->kind != TY_VECTOR)
+    error_tok(node->tok, "%s: %s:%d: error: in gen_vector_op : lhs is not a vector", CODEGEN_C, __FILE__, __LINE__);
+
+  load_vector_operand(node->lhs, "%xmm0");
+  load_vector_operand(node->rhs, "%xmm1");
+
+  switch (vec_ty->base->kind) {
+  case TY_FLOAT:
+    if (node->kind == ND_ADD)
+      println("  addps %%xmm1, %%xmm0");
+    else if (node->kind == ND_SUB)
+      println("  subps %%xmm1, %%xmm0");
+    else if (node->kind == ND_MUL)
+      println("  mulps %%xmm1, %%xmm0");
+    else if (node->kind == ND_DIV)
+      println("  divps %%xmm1, %%xmm0");
+    else
+      error_tok(node->tok, "%s: %s:%d: error: in gen_vector_op : unsupported float vector op", CODEGEN_C, __FILE__, __LINE__);
+    break;
+  case TY_DOUBLE:
+    if (node->kind == ND_ADD)
+      println("  addpd %%xmm1, %%xmm0");
+    else if (node->kind == ND_SUB)
+      println("  subpd %%xmm1, %%xmm0");
+    else if (node->kind == ND_MUL)
+      println("  mulpd %%xmm1, %%xmm0");
+    else if (node->kind == ND_DIV)
+      println("  divpd %%xmm1, %%xmm0");
+    else
+      error_tok(node->tok, "%s: %s:%d: error: in gen_vector_op : unsupported double vector op", CODEGEN_C, __FILE__, __LINE__);
+    break;
+  case TY_INT:
+    if (node->kind == ND_ADD)
+      println("  paddd %%xmm1, %%xmm0");
+    else if (node->kind == ND_SUB)
+      println("  psubd %%xmm1, %%xmm0");
+    else if (node->kind == ND_MUL)
+      println("  pmulld %%xmm1, %%xmm0");
+    else
+      error_tok(node->tok, "%s: %s:%d: error: in gen_vector_op : integer vector division not supported", CODEGEN_C, __FILE__, __LINE__);
+    break;
+  default:
+    error_tok(node->tok, "%s: %s:%d: error: in gen_vector_op : unsupported vector base kind", CODEGEN_C, __FILE__, __LINE__);
+  }
+
+}
+
+// static void gen_vector_op(Node *node) {
+//   switch (node->kind) {
+//   case ND_ADD:
+//     println("  addps %%xmm1, %%xmm0");  // xmm0 += xmm1
+//     return;
+//   case ND_SUB:
+//     println("  subps %%xmm1, %%xmm0");
+//     return;
+//   case ND_MUL:
+//     println("  mulps %%xmm1, %%xmm0");
+//     return;
+//   case ND_DIV:
+//     println("  divps %%xmm1, %%xmm0");
+//     return;
+//   default:
+//     error_tok(node->tok, "invalid vector operation");
+//   }
+// }
+
 
 
 // Generate code for a given node.
@@ -1424,17 +1464,10 @@ static void gen_expr(Node *node)
     gen_addr(node->lhs);
     return;
   case ND_ASSIGN:
+
     gen_addr(node->lhs);
     push();
-    if (node->lhs->ty->is_vector) {
-      println("  mov (%%rsp), %%rdi");
-    }   
     gen_expr(node->rhs);
-
-    if (node->lhs->ty->is_vector) {
-      store(node->ty);
-      return;
-    }  
 
     if (node->lhs->kind == ND_MEMBER && node->lhs->member->is_bitfield)
     {
@@ -1470,7 +1503,6 @@ static void gen_expr(Node *node)
 
     store(node->ty);
     return;
-
   case ND_STMT_EXPR:
     for (Node *n = node->body; n; n = n->next)
       gen_stmt(n);
@@ -1591,6 +1623,10 @@ static void gen_expr(Node *node)
             pop(argreg64[gp++]);
         }
         break;
+      case TY_VECTOR:
+        if (fp < FP_MAX)
+          popv(fp++);
+        break;      
       case TY_FLOAT:
       case TY_DOUBLE:
         if (fp < FP_MAX)
@@ -2224,7 +2260,7 @@ static void gen_expr(Node *node)
 
   }
 
-  if (node->lhs->ty->is_vector) {
+  if (is_vector(node->lhs->ty)) {
     gen_vector_op(node);
     return;
   }
@@ -2232,6 +2268,7 @@ static void gen_expr(Node *node)
   
   switch (node->lhs->ty->kind)
   {
+  case TY_VECTOR:
   case TY_FLOAT:
   case TY_DOUBLE:
   {
@@ -2877,6 +2914,7 @@ static void emit_text(Obj *prog)
           gp++;
             }
             continue;
+          case TY_VECTOR:
           case TY_FLOAT:
           case TY_DOUBLE:
             //if (fp < FP_MAX)
@@ -3062,6 +3100,7 @@ void assign_lvar_offsets(Obj *prog)
           continue;
         }
         break;
+      case TY_VECTOR:
       case TY_FLOAT:
       case TY_DOUBLE:
         if (fp++ < FP_MAX)
@@ -3091,7 +3130,7 @@ void assign_lvar_offsets(Obj *prog)
     for (Obj *var = fn->locals; var; var = var->next)
     {
 
-      int align = (var->ty->kind == TY_ARRAY && var->ty->size >= 16)
+      int align = ((var->ty->kind == TY_ARRAY && var->ty->size >= 16) || is_vector(var->ty))
                       ? MAX(16, var->align)
                       : var->align;
 

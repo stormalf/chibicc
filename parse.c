@@ -425,6 +425,18 @@ static Initializer *new_initializer(Type *ty, bool is_flexible)
     return init;
   }
 
+  
+  if (ty->kind == TY_VECTOR)
+  {
+
+    init->children = calloc(ty->array_len, sizeof(Initializer *));
+    if (init->children == NULL)
+      error("%s: %s:%d: error: in new_initializer : init->children is null %d %d", PARSE_C, __FILE__, __LINE__, ty->array_len, ty->size);
+    for (int i = 0; i < ty->array_len; i++)
+      init->children[i] = new_initializer(ty->base, false);
+    return init;
+  }
+
   if (ty->kind == TY_STRUCT || ty->kind == TY_UNION)
   {
     // Count the number of struct members.
@@ -534,8 +546,10 @@ static Type *find_typedef(Token *tok)
   if (tok->kind == TK_IDENT)
   {
     VarScope *sc = find_var(tok);
-    if (sc)
-      return sc->type_def;
+    if (sc) {
+      if (sc->type_def)
+        return sc->type_def;
+    }
   }
   return NULL;
 }
@@ -923,7 +937,7 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
 
     Token *name = ty2->name;
 
-    if (ty2->kind == TY_ARRAY || ty2->kind == TY_VLA)
+    if (is_array(ty2))
     {
       // "array of T" is converted to "pointer to T" only in the parameter
       // context. For example, *argv[] is converted to **argv by this.
@@ -1362,9 +1376,9 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
   Node head = {};
   Node *cur = &head;
   int i = 0;
-
   while (!equal(tok, ";"))
   {
+
     if (i++ > 0) {
       ctx->filename = PARSE_C;
       ctx->funcname = "declaration";      
@@ -1380,7 +1394,6 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
     if (!ty->name)
       error_tok(ty->name_pos, "%s %d: in declaration : variable name omitted", PARSE_C, __LINE__);    
     tok = attribute_list(tok, attr, thing_attributes);
-   
     if (attr && attr->is_static)
     {
       // static local variable
@@ -1442,14 +1455,8 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
     // }
     if (equal(tok, "=")) {
       tok = tok->next;
-
       Node *expr;
-      if (ty->is_vector && !equal(tok, "{")) {
-        expr = new_binary(ND_ASSIGN, new_var_node(var, tok), assign(&tok, tok), tok);
-      } else {
-        expr = lvar_initializer(&tok, tok, var);
-      }
-
+      expr = lvar_initializer(&tok, tok, var);
       cur = cur->next = new_unary(ND_EXPR_STMT, expr, tok);
     }
     //ISS-146
@@ -1944,15 +1951,22 @@ static void vector_initializer1(Token **rest, Token *tok, Initializer *init) {
   *rest = skip(tok, "}", ctx);
 }
 
-// static void vector_initializer2(Token **rest, Token *tok, Initializer *init, int i) {
-//   if (i >= init->ty->array_len)
-//     return;
+static void vector_initializer2(Token **rest, Token *tok, Initializer *init, int i) 
+{
+  for (; i < init->ty->array_len && !is_end(tok); i++)
+  {
+    if (i > 0) {
+      ctx->filename = PARSE_C;
+      ctx->funcname = "vector_initializer2";        
+      ctx->line_no = __LINE__ + 1;        
+      tok = skip(tok, ",", ctx);
+    }
 
-//   init->children[i] = calloc(1, sizeof(Initializer));
-//   init->children[i]->ty = init->ty->base;
-//   initializer2(&tok, tok, init->children[i]);
-//   vector_initializer2(rest, tok, init, i + 1);
-// }
+    initializer2(&tok, tok, init->children[i]);
+    *rest = tok;
+  }
+ 
+}
 
 
 // initializer = string-initializer | array-initializer
@@ -1983,13 +1997,20 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
     }
   }
 
-  if (init->ty->kind == TY_ARRAY && init->ty->is_vector) {
+  if (is_vector(init->ty)) {
     if (equal(tok, "{"))
       vector_initializer1(rest, tok, init); 
+    else
+      vector_initializer2(rest, tok, init, 0);
+    // else {
+    //   // Handle scalar assignment to vector like float4 v = 1.0;
+    //   init->expr = assign(rest, tok);
+    //   add_type(init->expr);
+    // }
     return;
   }
 
-  if (init->ty->kind == TY_ARRAY && !init->ty->is_vector) {
+  if (init->ty->kind == TY_ARRAY) {
     if (equal(tok, "{"))
       array_initializer1(rest, tok, init);
     else
@@ -2122,6 +2143,7 @@ static Node *init_desg_expr(InitDesg *desg, Token *tok)
 
 static Node *create_lvar_init(Initializer *init, Type *ty, InitDesg *desg, Token *tok)
 {
+  
   if (ty->kind == TY_ARRAY)
   {
     Node *node = new_node(ND_NULL_EXPR, tok);
@@ -2133,6 +2155,17 @@ static Node *create_lvar_init(Initializer *init, Type *ty, InitDesg *desg, Token
     }
     return node;
   }
+  if (is_vector(ty)) {
+    Node *node = new_node(ND_NULL_EXPR, tok);
+    for (int i = 0; i < ty->array_len; i++) {
+      InitDesg desg2 = {desg, i};
+      //InitDesg desg2 = { .next = desg, .idx = i, .member = NULL, .var = desg->var };
+      Node *rhs = create_lvar_init(init->children[i], ty->base, &desg2, tok);
+      node = new_binary(ND_COMMA, node, rhs, tok);
+    }
+    return node;
+  }
+
   if (init->expr) {
     Node *lhs = init_desg_expr(desg, tok);
     return new_binary(ND_ASSIGN, lhs, init->expr, tok);
@@ -2188,7 +2221,6 @@ static Node *lvar_initializer(Token **rest, Token *tok, Obj *var)
   // initializing it with user-supplied values.
   Node *lhs = new_node(ND_MEMZERO, tok);
   lhs->var = var;
-
   Node *rhs = create_lvar_init(init, var->ty, &desg, tok);
   return new_binary(ND_COMMA, lhs, rhs, tok);
 }
@@ -2232,6 +2264,16 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
 
     if (init->expr)
       error_tok(init->expr->tok, "%s %d: in write_gvar_data : array initializer must be an initializer list", PARSE_C, __LINE__);
+    int sz = ty->base->size;
+    for (int i = 0; i < ty->array_len; i++)
+      cur = write_gvar_data(cur, init->children[i], ty->base, buf, offset + sz * i);
+    return cur;
+  }
+    if (ty->kind == TY_VECTOR)
+  {
+
+    if (init->expr)
+      error_tok(init->expr->tok, "%s %d: in write_gvar_data : vector initializer must be an initializer list", PARSE_C, __LINE__);
     int sz = ty->base->size;
     for (int i = 0; i < ty->array_len; i++)
       cur = write_gvar_data(cur, init->children[i], ty->base, buf, offset + sz * i);
@@ -2474,7 +2516,7 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
       error_tok(exp->tok,
                 "%s %d: in stmt : Non-void function cannot return void type expression", PARSE_C, __LINE__);
     }
-    if (ret_ty->kind != TY_STRUCT && ret_ty->kind != TY_UNION)
+    if (ret_ty->kind != TY_STRUCT && ret_ty->kind != TY_UNION && !is_vector(ret_ty))
       exp = new_cast(exp, ret_ty);
     node->lhs = exp;
     return node;
@@ -3122,7 +3164,7 @@ static int64_t eval2(Node *node, char ***label)
   //   return eval2(node->lhs, label);
   //from @fuhsnn eval2():Evaluate ND_DEREF for TY_ARRAY
   case ND_DEREF:
-    if (node->ty->kind != TY_ARRAY)
+    if (node->ty->kind != TY_ARRAY && !is_vector(node->ty))
       error_tok(node->tok, "%s:%d: in eval2 : not a compile-time constant node->ty->kind=%d", PARSE_C, __LINE__, node->ty->kind);
     return eval2(node->lhs, label);    
   case ND_MEMBER:
@@ -3627,12 +3669,11 @@ static Node *new_add(Node *lhs, Node *rhs, Token *tok)
   add_type(rhs);
 
   // case of vectors
-  if (lhs->ty->is_vector && rhs->ty->is_vector) {
-    if (lhs->ty->array_len != rhs->ty->array_len || lhs->ty->base->kind != rhs->ty->base->kind)
+  if (is_vector(lhs->ty) && is_vector(rhs->ty)) {
+    if (lhs->ty->array_len != rhs->ty->array_len)
       error_tok(tok, "%s %d: in new_add: incompatible vector types", PARSE_C, __LINE__);
-
     Node *node = new_binary(ND_ADD, lhs, rhs, tok);
-    node->ty = lhs->ty; 
+    node->ty = lhs->ty;
     return node;
   }
 
@@ -3671,9 +3712,9 @@ static Node *new_sub(Node *lhs, Node *rhs, Token *tok)
   add_type(rhs);
 
   // case of vectors
-  if (lhs->ty->is_vector && rhs->ty->is_vector) {
+  if (is_vector(lhs->ty) && is_vector(rhs->ty)) {
     if (lhs->ty->array_len != rhs->ty->array_len || lhs->ty->base->kind != rhs->ty->base->kind)
-      error_tok(tok, "%s %d: in new_add: incompatible vector types", PARSE_C, __LINE__);
+      error_tok(tok, "%s %d: in new_sub : incompatible vector types", PARSE_C, __LINE__);
 
     Node *node = new_binary(ND_SUB, lhs, rhs, tok);
     node->ty = lhs->ty; 
@@ -5390,7 +5431,7 @@ static Node *postfix(Token **rest, Token *tok)
       node = new_unary(ND_DEREF, new_add(node, idx, start), start);
       if (is_array(ty))
         apply_cv_qualifier(node, ty);
-      continue;
+       continue;
     }
 
     if (equal(tok, "."))
@@ -5617,7 +5658,7 @@ static Node *primary(Token **rest, Token *tok)
                           expr, tok);
         add_type(expr);
         stmt->lhs = expr;
-      } else if (expr->ty->kind == TY_ARRAY || expr->ty->kind == TY_VLA) {
+      } else if (is_array(expr->ty)) {
         stmt->lhs = new_cast(expr, pointer_to(expr->ty->base));
       }
     }
@@ -6567,8 +6608,7 @@ static Node *parse_typedef(Token **rest, Token *tok, Type *basety)
       error_tok(ty->name_pos, "%s %d: in parse_typedef : typedef name omitted", PARSE_C, __LINE__);
     //from COSMOPOLITAN adding other GNUC attributes
     tok = attribute_list(tok, ty, type_attributes);      
-    //if the typedef is a vector we transform the base type into an array of type base.
-    if (ty->is_vector && !is_array(ty)) {
+    if (ty->is_vector) {
       int len = ty->vector_size / ty->size;
       Token *name = ty->name;
       ty = vector_of(ty, len);
