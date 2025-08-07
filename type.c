@@ -260,10 +260,10 @@ Type *vector_of(Type *base, int len)
   int total_size = base->size * len;
 
   // alignment conventionally same as total size if power-of-two, or base->align
-  int align = total_size; 
+  //int align = total_size; 
   ty->kind = TY_VECTOR;
   ty->size = total_size;
-  ty->align = align;
+  //ty->align = align;
   ty->base = base;
   ty->array_len = len;  
   ty->has_vla = base->has_vla; 
