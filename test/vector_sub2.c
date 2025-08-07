@@ -19,4 +19,13 @@ int main() {
     ASSERT(180, c[1]);
     ASSERT(270, c[2]);
     ASSERT(360, c[3]);
+    int4 d = sub_int_vectors(c, b);
+    for (int i = 0; i < 4; i++) {
+        printf("d[%d] = %d\n", i, d[i]);
+    }    
+    ASSERT(80, d[0]);
+    ASSERT(160, d[1]);
+    ASSERT(240, d[2]);
+    ASSERT(320, d[3]);
+    return 0;
 }

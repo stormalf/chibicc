@@ -1328,27 +1328,6 @@ static void gen_vector_op(Node *node) {
 
 }
 
-// static void gen_vector_op(Node *node) {
-//   switch (node->kind) {
-//   case ND_ADD:
-//     println("  addps %%xmm1, %%xmm0");  // xmm0 += xmm1
-//     return;
-//   case ND_SUB:
-//     println("  subps %%xmm1, %%xmm0");
-//     return;
-//   case ND_MUL:
-//     println("  mulps %%xmm1, %%xmm0");
-//     return;
-//   case ND_DIV:
-//     println("  divps %%xmm1, %%xmm0");
-//     return;
-//   default:
-//     error_tok(node->tok, "invalid vector operation");
-//   }
-// }
-
-
-
 // Generate code for a given node.
 static void gen_expr(Node *node)
 {
@@ -1473,7 +1452,7 @@ static void gen_expr(Node *node)
   case ND_ADDR:
     gen_addr(node->lhs);
     return;
-  case ND_ASSIGN:
+  case ND_ASSIGN:    
     gen_addr(node->lhs);
     push();
     gen_expr(node->rhs);

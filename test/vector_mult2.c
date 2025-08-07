@@ -11,6 +11,7 @@ int main() {
     int4 b = {10, 20, 30, 40};
     int4 c ;
     c = mul_int_vectors(a, b);
+    int4 d = mul_int_vectors(a, c);
 
     for (int i = 0; i < 4; i++) {
         printf("c[%d] = %d\n", i, c[i]);
@@ -19,4 +20,12 @@ int main() {
     ASSERT(40, c[1]);
     ASSERT(90, c[2]);
     ASSERT(160, c[3]);
+    for (int i = 0; i < 4; i++) {
+        printf("d[%d] = %d\n", i, d[i]);
+    }    
+    ASSERT(10, d[0]);
+    ASSERT(80, d[1]);
+    ASSERT(270, d[2]);
+    ASSERT(640, d[3]);    
+    return 0;
 }

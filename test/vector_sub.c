@@ -21,8 +21,7 @@ int main() {
     ASSERT(27, c[2]);
     ASSERT(36, c[3]);
 
-    float4 d;
-    d = sub_vectors(a, b);
+    float4 d = sub_vectors(a, b);
     ASSERT(9, d[0]);
     ASSERT(18, d[1]);
     ASSERT(27, d[2]);

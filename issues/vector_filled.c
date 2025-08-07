@@ -3,8 +3,8 @@
 typedef float float4 __attribute__((vector_size(16)));
 
 float4 add_all(float4 a, float4 b, float4 c, float4 d, float4 e, float4 f, float4 g, float4 h) {
-    //return a + b + c + d + e + f + g + h;
-    return a + b + c;
+    return a + b + c + d + e + f + g + h;
+    //return a + b + c;
 }
 
 int main() {

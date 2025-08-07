@@ -16,4 +16,5 @@ int main() {
     ASSERT(22, (int)c[1]);
     ASSERT(33, (int)c[2]);
     ASSERT(44, (int)c[3]);
+    return 0;
 }

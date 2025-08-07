@@ -834,14 +834,14 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     }
 
     tok = tok->next;
-    //to fix attributes after on before the identifier
-    if (attr && !attr->is_typedef)  {      
-      tok = attribute_list(tok, attr, thing_attributes);
-      tok->next = attribute_list(tok->next, attr, thing_attributes);
-    } else {      
-    tok = attribute_list(tok, ty, type_attributes);
-      tok->next = attribute_list(tok->next, ty, type_attributes);
-    }
+    //to fix attributes after or before the identifier
+    // if (attr && !attr->is_typedef)  {      
+    //   tok = attribute_list(tok, attr, thing_attributes);
+    //   tok->next = attribute_list(tok->next, attr, thing_attributes);
+    // } else {      
+    // tok = attribute_list(tok, ty, type_attributes);
+    //   tok->next = attribute_list(tok->next, ty, type_attributes);
+    // }
 
 
   }
@@ -1457,6 +1457,7 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
       tok = tok->next;
       Node *expr;
       expr = lvar_initializer(&tok, tok, var);
+      if (expr->lhs && expr->lhs->var && expr->lhs->var->name)
       cur = cur->next = new_unary(ND_EXPR_STMT, expr, tok);
     }
     //ISS-146
@@ -1951,26 +1952,6 @@ static void vector_initializer1(Token **rest, Token *tok, Initializer *init) {
   *rest = skip(tok, "}", ctx);
 }
 
-static void vector_initializer2(Token **rest, Token *tok, Initializer *init) 
-{
-  //for (; i < init->ty->array_len && !is_end(tok); i++)
-  for (int i = 0; i < init->ty->array_len && !is_end(tok); i++) 
-  {
-    if (i > 0) {
-      ctx->filename = PARSE_C;
-      ctx->funcname = "vector_initializer2";        
-      ctx->line_no = __LINE__ + 1;        
-      tok = skip(tok, ",", ctx);
-    }
-    init->children[i] = calloc(1, sizeof(Initializer));
-    init->children[i]->ty = init->ty->base;
-    initializer2(&tok, tok, init->children[i]);
-    *rest = tok;
-  }
- 
-}
-
-
 // initializer = string-initializer | array-initializer
 //             | struct-initializer | union-initializer
 //             | assign
@@ -2002,15 +1983,8 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
   if (is_vector(init->ty)) {
     if (equal(tok, "{")) {
       vector_initializer1(rest, tok, init); 
-    // else
-    //   vector_initializer2(rest, tok, init);
-    // else {
-    // //   // Handle scalar assignment to vector like float4 v = 1.0;
-    //   init->expr = assign(rest, tok);
-    //   add_type(init->expr);
-    // }
-    return;
-    }
+      return;
+    } 
   }
 
   if (init->ty->kind == TY_ARRAY) {
@@ -2158,11 +2132,16 @@ static Node *create_lvar_init(Initializer *init, Type *ty, InitDesg *desg, Token
     }
     return node;
   }
+  //case of vectors two kinds of initialization possible : direct like {1.0f, 2.0f...} or from expressions like function call
   if (is_vector(ty)) {
+    if (init->expr) {
+      Node *lhs = init_desg_expr(desg, tok);
+      return new_binary(ND_ASSIGN, lhs, init->expr, tok);
+    }
+
     Node *node = new_node(ND_NULL_EXPR, tok);
     for (int i = 0; i < ty->array_len; i++) {
       InitDesg desg2 = {desg, i};
-      //InitDesg desg2 = { .next = desg, .idx = i, .member = NULL, .var = desg->var };
       Node *rhs = create_lvar_init(init->children[i], ty->base, &desg2, tok);
       node = new_binary(ND_COMMA, node, rhs, tok);
     }
@@ -2272,15 +2251,15 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
       cur = write_gvar_data(cur, init->children[i], ty->base, buf, offset + sz * i);
     return cur;
   }
-    if (ty->kind == TY_VECTOR)
+  if (is_vector(ty))
   {
-
-    if (init->expr)
+   if (init->expr)
       error_tok(init->expr->tok, "%s %d: in write_gvar_data : vector initializer must be an initializer list", PARSE_C, __LINE__);
     int sz = ty->base->size;
     for (int i = 0; i < ty->array_len; i++)
       cur = write_gvar_data(cur, init->children[i], ty->base, buf, offset + sz * i);
     return cur;
+
   }
   if (!init->expr) {
   if (ty->kind == TY_STRUCT)
@@ -2886,12 +2865,14 @@ static Node *compound_stmt(Token **rest, Token *tok, Node **last)
   {
     VarAttr attr = {};
     tok = attribute_list(tok, &attr, thing_attributes);
+
     if (is_typename(tok) && !equal(tok->next, ":"))
     {
       //VarAttr attr = {};
       Type *basety = declspec(&tok, tok, &attr);
       if (attr.is_typedef)
       {
+  
         Node *vla_calc = parse_typedef(&tok, tok, basety);
         cur = cur->next = new_unary(ND_EXPR_STMT, vla_calc, tok);
         add_type(cur);

@@ -11,6 +11,7 @@ int main() {
     float4 b = {10.0f, 20.0f, 30.0f, 40.0f};
     float4 c;
     c = mul_vectors(a, b);
+    float4 d = mul_vectors(a, c);
 
     for (int i = 0; i < 4; i++) {
         printf("c[%d] = %f\n", i, c[i]);
@@ -19,4 +20,12 @@ int main() {
     ASSERT(40, (int)c[1]);
     ASSERT(90, (int)c[2]);
     ASSERT(160, (int)c[3]);
+    for (int i = 0; i < 4; i++) {
+        printf("d[%d] = %f\n", i, d[i]);
+    }
+    ASSERT(10, d[0]);
+    ASSERT(80, d[1]);
+    ASSERT(270, d[2]);
+    ASSERT(640, d[3]);
+    return 0;
 }

@@ -29,5 +29,13 @@ int main() {
     ASSERT(33, c[2]);
     ASSERT(44, c[3]);
     print_vector(c);
+    float4 d = add_vectors(a, c);
+    for (int i = 0; i < 4; i++) {
+        printf("d[%d] = %f\n", i, d[i]);
+    }    
+    ASSERT(12, d[0]);
+    ASSERT(24, d[1]);
+    ASSERT(36, d[2]);
+    ASSERT(48, d[3]);    
     return 0;
 }
