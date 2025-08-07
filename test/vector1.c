@@ -13,6 +13,10 @@ int main() {
     printf("vec[1]=%f\n", vec[1]);
     printf("vec[2]=%f\n", vec[2]);
     printf("vec[3]=%f\n", vec[3]);
+    ASSERT(1, vec[0]);
+    ASSERT(2, vec[1]);
+    ASSERT(3, vec[2]);
+    ASSERT(4, vec[3]);
     c = a + b;
     printf("after %f %f %f %f\n", c[0], c[1], c[2], c[3]);
     ASSERT(11, c[0]);

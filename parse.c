@@ -1951,9 +1951,10 @@ static void vector_initializer1(Token **rest, Token *tok, Initializer *init) {
   *rest = skip(tok, "}", ctx);
 }
 
-static void vector_initializer2(Token **rest, Token *tok, Initializer *init, int i) 
+static void vector_initializer2(Token **rest, Token *tok, Initializer *init) 
 {
-  for (; i < init->ty->array_len && !is_end(tok); i++)
+  //for (; i < init->ty->array_len && !is_end(tok); i++)
+  for (int i = 0; i < init->ty->array_len && !is_end(tok); i++) 
   {
     if (i > 0) {
       ctx->filename = PARSE_C;
@@ -1961,7 +1962,8 @@ static void vector_initializer2(Token **rest, Token *tok, Initializer *init, int
       ctx->line_no = __LINE__ + 1;        
       tok = skip(tok, ",", ctx);
     }
-
+    init->children[i] = calloc(1, sizeof(Initializer));
+    init->children[i]->ty = init->ty->base;
     initializer2(&tok, tok, init->children[i]);
     *rest = tok;
   }
@@ -1998,16 +2000,17 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
   }
 
   if (is_vector(init->ty)) {
-    if (equal(tok, "{"))
+    if (equal(tok, "{")) {
       vector_initializer1(rest, tok, init); 
-    else
-      vector_initializer2(rest, tok, init, 0);
+    // else
+    //   vector_initializer2(rest, tok, init);
     // else {
-    //   // Handle scalar assignment to vector like float4 v = 1.0;
+    // //   // Handle scalar assignment to vector like float4 v = 1.0;
     //   init->expr = assign(rest, tok);
     //   add_type(init->expr);
     // }
     return;
+    }
   }
 
   if (init->ty->kind == TY_ARRAY) {
@@ -2135,7 +2138,7 @@ static Node *init_desg_expr(InitDesg *desg, Token *tok)
     node->member = desg->member;
     return node;
   }
-
+  
   Node *lhs = init_desg_expr(desg->next, tok);
   Node *rhs = new_num(desg->idx, tok);
   return new_unary(ND_DEREF, new_add(lhs, rhs, tok), tok);
@@ -2166,7 +2169,7 @@ static Node *create_lvar_init(Initializer *init, Type *ty, InitDesg *desg, Token
     return node;
   }
 
-  if (init->expr) {
+  if (init->expr) {    
     Node *lhs = init_desg_expr(desg, tok);
     return new_binary(ND_ASSIGN, lhs, init->expr, tok);
   }
@@ -2516,7 +2519,7 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
       error_tok(exp->tok,
                 "%s %d: in stmt : Non-void function cannot return void type expression", PARSE_C, __LINE__);
     }
-    if (ret_ty->kind != TY_STRUCT && ret_ty->kind != TY_UNION && !is_vector(ret_ty))
+    if (ret_ty->kind != TY_STRUCT && ret_ty->kind != TY_UNION)
       exp = new_cast(exp, ret_ty);
     node->lhs = exp;
     return node;
@@ -3406,7 +3409,6 @@ static Node *to_assign(Node *binary)
 
   // Convert `A op= B` to ``tmp = &A, *tmp = *tmp op B`.
   Obj *var = new_lvar("", pointer_to(binary->lhs->ty), NULL);
-
   Node *expr1 = new_binary(ND_ASSIGN, new_var_node(var, tok),
                            new_unary(ND_ADDR, binary->lhs, tok), tok);
 
@@ -3673,7 +3675,7 @@ static Node *new_add(Node *lhs, Node *rhs, Token *tok)
     if (lhs->ty->array_len != rhs->ty->array_len)
       error_tok(tok, "%s %d: in new_add: incompatible vector types", PARSE_C, __LINE__);
     Node *node = new_binary(ND_ADD, lhs, rhs, tok);
-    node->ty = lhs->ty;
+    node->ty =  lhs->ty;
     return node;
   }
 

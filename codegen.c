@@ -431,7 +431,7 @@ static void gen_addr(Node *node)
     break;
   case ND_ASSIGN:
   case ND_COND:
-    if (node->ty->kind == TY_STRUCT || node->ty->kind == TY_UNION)
+    if (node->ty->kind == TY_STRUCT || node->ty->kind == TY_UNION )
     {
       gen_expr(node);
       return;
@@ -440,6 +440,16 @@ static void gen_addr(Node *node)
   case ND_VLA_PTR:
     println("  lea %d(%%rbp), %%rax", node->var->offset);
     return;
+  case ND_ADD: 
+  case ND_SUB:
+  case ND_MUL:
+  case ND_DIV:
+    if (is_vector(node->lhs->ty)) {
+      gen_expr(node->lhs);
+      gen_expr(node->rhs);  
+      return;
+    }
+  
   }
 
   error_tok(node->tok, "%s:%d not an lvalue %d", CODEGEN_C, __LINE__, node->kind);
@@ -1464,11 +1474,9 @@ static void gen_expr(Node *node)
     gen_addr(node->lhs);
     return;
   case ND_ASSIGN:
-
     gen_addr(node->lhs);
     push();
     gen_expr(node->rhs);
-
     if (node->lhs->kind == ND_MEMBER && node->lhs->member->is_bitfield)
     {
       println("  mov %%rax, %%r8");
@@ -2268,7 +2276,6 @@ static void gen_expr(Node *node)
   
   switch (node->lhs->ty->kind)
   {
-  case TY_VECTOR:
   case TY_FLOAT:
   case TY_DOUBLE:
   {

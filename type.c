@@ -161,7 +161,7 @@ bool is_compatible(Type *t1, Type *t2)
     (t1->kind == TY_VLA && t2->kind == TY_ARRAY) ||
     (t1->kind == TY_ARRAY && t2->kind == TY_VLA))
     return is_compatible(t1->base, t2->base);
-  if(t1->kind == TY_VECTOR && t2->kind == TY_VECTOR)
+  if(is_vector(t1) && is_vector(t2))
     return is_compatible(t1->base, t2->base);
 
   switch (t1->kind)
@@ -303,7 +303,7 @@ static Type *get_common_type(Type *ty1, Type *ty2)
   //assuming that if one is void it returns the second type that could be void also or different type.
   if (!ty2)
     return ty1;
-    
+
   if (ty1->base) {
     if (ty1->base->kind == TY_VOID)
       if (ty2->base)
@@ -466,7 +466,7 @@ void add_type(Node *node)
   {
     Type *ty = node->lhs->ty;
   //from @fuhsnn add_type():Remove overaggressive array decaying
-      node->ty = pointer_to(ty);
+    node->ty = pointer_to(ty);
     return;
   }
   case ND_DEREF:
