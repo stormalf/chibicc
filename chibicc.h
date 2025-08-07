@@ -412,6 +412,13 @@ typedef enum
   ND_BUILTIN_BSWAP32, //builtin bswap32
   ND_BUILTIN_BSWAP64, //builtin bswap64,
   ND_BUILTIN_FRAME_ADDRESS, // builtin frame address
+  ND_EMMS,
+  ND_SFENCE,
+  ND_LFENCE,
+  ND_MFENCE,
+  ND_PAUSE,
+  ND_STMXCSR,
+  ND_CVTPI2PS,
 } NodeKind;
 
 // AST node type

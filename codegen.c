@@ -2244,7 +2244,32 @@ static void gen_expr(Node *node)
   println("  fldt -10(%%rsp)");
   return;
   }
-
+  case ND_EMMS:
+    println("  emms");
+    return;
+  case ND_SFENCE:
+    println("  sfence");
+    return;
+  case ND_LFENCE:
+    println("  lfence");
+    return;
+  case ND_MFENCE:
+    println("  mfence");
+    return;
+  case ND_PAUSE:
+    println("  pause");
+    return;
+  case ND_STMXCSR:
+    gen_expr(node->lhs); 
+    println("  stmxcsr (%%rax)"); 
+    return;    
+  case ND_CVTPI2PS:    
+    gen_expr(node->rhs);
+    println("  movaps %%xmm0, %%xmm1"); 
+    gen_expr(node->lhs); 
+    println("  movq %%rax, %%mm0");
+    println("  cvtpi2ps %%mm0, %%xmm0");
+    return;   
   }
 
   if (is_vector(node->lhs->ty)) {

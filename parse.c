@@ -4170,8 +4170,6 @@ static Token *type_attributes(Token *tok, void *arg)
         if (!ty->is_aligned) ty->align = vs;
     }
     int base_size = ty->size;
-    if (!base_size || vs % base_size != 0)
-      error_tok(tok, "%s %d: in attribute_list: invalid vector_size %d", PARSE_C, __LINE__, vs);
 
     int n = vs / base_size;
     
@@ -5856,21 +5854,64 @@ static Node *primary(Token **rest, Token *tok)
 
 
   //trying to fix ===== some builtin functions linked to mmx/emms
-  if (equal(tok, "__builtin_ia32_emms") || equal(tok, "__builtin_ia32_stmxcsr") || 
+  if (equal(tok, "__builtin_ia32_emms") ||  
       equal(tok, "__builtin_ia32_sfence") || equal(tok, "__builtin_ia32_pause") ||
-      equal(tok, "__builtin_ia32_lfence") || equal(tok, "__builtin_ia32_mfence") 
-      ) {
-    Type *t1 = typename(&tok, tok);        
+      equal(tok, "__builtin_ia32_lfence") || equal(tok, "__builtin_ia32_mfence")) 
+  {
+    Node *node;
+    if (equal(tok, "__builtin_ia32_emms"))
+      node = new_node(ND_EMMS, tok);
+    else if (equal(tok, "__builtin_ia32_sfence"))
+      node = new_node(ND_SFENCE, tok);
+    else if (equal(tok, "__builtin_ia32_lfence"))
+      node = new_node(ND_LFENCE, tok);
+    else if (equal(tok, "__builtin_ia32_mfence"))
+      node = new_node(ND_MFENCE, tok);     
+    else if (equal(tok, "__builtin_ia32_pause"))
+      node = new_node(ND_PAUSE, tok);   
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";        
     ctx->line_no = __LINE__ + 1;      
     tok = skip(tok->next, "(", ctx);
-    Node *node = new_node(ND_NULL_EXPR, tok);
-    node->ty = t1;
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";        
     ctx->line_no = __LINE__ + 1;      
     *rest = skip(tok, ")", ctx);    
+    return node;
+  }
+
+  if (equal(tok, "__builtin_ia32_stmxcsr")) {
+    Node *node = new_node(ND_STMXCSR, tok);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";
+    ctx->line_no = __LINE__ + 1;    
+    tok = skip(tok->next, "(", ctx);
+    node->lhs = assign(&tok, tok); 
+    add_type(node->lhs);
+    *rest = skip(tok, ")", ctx);    
+    return node;
+  }
+
+
+  if (equal(tok, "__builtin_ia32_cvtpi2ps"))
+  {
+    Node *node = new_node(ND_CVTPI2PS, tok);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";        
+    ctx->line_no = __LINE__ + 1;      
+    tok = skip(tok->next, "(", ctx);
+    node->lhs = assign(&tok, tok);
+    add_type(node->lhs);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";        
+    ctx->line_no = __LINE__ + 1;      
+    tok = skip(tok, ",", ctx);
+    node->rhs = assign(&tok, tok);
+    add_type(node->rhs);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";        
+    ctx->line_no = __LINE__ + 1;      
+    *rest = skip(tok, ")", ctx);
     return node;
   }
 
@@ -5890,8 +5931,6 @@ static Node *primary(Token **rest, Token *tok)
       return new_num(0, start);
     if (ty->kind == TY_FLOAT || ty->kind == TY_DOUBLE)
       return new_num(1, start);
-    // if (is_flonum(ty))
-    //   return new_num(1, start);
     return new_num(2, start);
   }
 
@@ -7303,6 +7342,20 @@ char *nodekind2str(NodeKind kind)
     return "ABORT";  //builtin abort
   case ND_EXPECT:
     return "EXPECT";  //builtin expect
+  case ND_EMMS:
+    return "EMMS";
+  case ND_LFENCE:
+    return "LFENCE";
+  case ND_MFENCE:
+    return "MFENCE";
+  case ND_SFENCE:
+    return "SFENCE";
+  case ND_PAUSE:
+    return "PAUSE";
+  case ND_STMXCSR:
+    return "STMXCSR";
+  case ND_CVTPI2PS:
+    return "CVTPI2PS";    
   default:
     return "UNREACHABLE"; // Atomic e
   }

@@ -538,6 +538,11 @@ void add_type(Node *node)
     add_type(node->builtin_val);
     add_type(node->builtin_size);
     return;
+  case ND_CVTPI2PS:
+    add_type(node->rhs);
+    add_type(node->lhs);
+    node->ty = vector_of(ty_float, 4);
+    return;    
   case ND_EXPECT:
     add_type(node->rhs);
     add_type(node->lhs);
@@ -545,6 +550,7 @@ void add_type(Node *node)
     return;
   case ND_ABORT:
     return;
+  case ND_STMXCSR:
   case ND_BUILTIN_FRAME_ADDRESS:
   case ND_RETURN_ADDR:
     add_type(node->lhs);
@@ -593,6 +599,11 @@ void add_type(Node *node)
     node->rhs = new_cast(node->rhs, node->lhs->ty->base);
     node->ty = node->lhs->ty->base;
     return;
+  case ND_EMMS:
+  case ND_SFENCE:
+  case ND_LFENCE:
+  case ND_MFENCE:
+  case ND_PAUSE:
   case ND_UNREACHABLE:
     node->ty = ty_void;
     return;
