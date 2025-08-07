@@ -254,16 +254,10 @@ Type *array_of(Type *base, int len)
 Type *vector_of(Type *base, int len)
 {
   if (!base)
-  error("%s %d: in vector_of : base is null", TYPE_C, __LINE__); 
+    error("%s %d: in vector_of : base is null", TYPE_C, __LINE__); 
   Type *ty = new_type(TY_VECTOR, base->size * len, base->align);
-  // total size in bytes
   int total_size = base->size * len;
-
-  // alignment conventionally same as total size if power-of-two, or base->align
-  //int align = total_size; 
-  ty->kind = TY_VECTOR;
   ty->size = total_size;
-  //ty->align = align;
   ty->base = base;
   ty->array_len = len;  
   ty->has_vla = base->has_vla; 

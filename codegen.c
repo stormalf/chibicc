@@ -2264,11 +2264,10 @@ static void gen_expr(Node *node)
     println("  stmxcsr (%%rax)"); 
     return;    
   case ND_CVTPI2PS:    
-    gen_expr(node->rhs);
-    println("  movaps %%xmm0, %%xmm1"); 
-    gen_expr(node->lhs); 
-    println("  movq %%rax, %%mm0");
-    println("  cvtpi2ps %%mm0, %%xmm0");
+    gen_expr(node->rhs);     // generate float vector in xmm0
+    gen_expr(node->lhs);     // generate integer vector in rax
+    println("  movq %%rax, %%mm0");  // load int vector to mm0
+    println("  cvtpi2ps %%mm0, %%xmm0");  // convert mm0 int to float in xmm0
     return;   
   }
 

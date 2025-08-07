@@ -6630,7 +6630,7 @@ static Node *parse_typedef(Token **rest, Token *tok, Type *basety)
       error_tok(ty->name_pos, "%s %d: in parse_typedef : typedef name omitted", PARSE_C, __LINE__);
     //from COSMOPOLITAN adding other GNUC attributes
     tok = attribute_list(tok, ty, type_attributes);      
-    if (ty->is_vector) {
+    if (ty->is_vector  && !is_vector(ty)) {
       int len = ty->vector_size / ty->size;
       Token *name = ty->name;
       ty = vector_of(ty, len);
