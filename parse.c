@@ -5933,6 +5933,44 @@ static Node *primary(Token **rest, Token *tok)
     return node;
   }
 
+  if (equal(tok, "__builtin_ia32_clflush") || equal(tok, "_mm_clflush")) {
+    Node *node = new_node(ND_CLFLUSH, tok);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";        
+    ctx->line_no = __LINE__ + 1;  
+    tok = skip(tok->next, "(", ctx);
+    node->lhs = assign(&tok, tok);
+    add_type(node->lhs);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";        
+    ctx->line_no = __LINE__ + 1;  
+    *rest = skip(tok, ")", ctx);
+    return node;
+   }
+
+   
+  if (equal(tok, "__builtin_ia32_vec_init_v2si"))
+  {
+    Node *node = new_node(ND_VECINITV2SI, tok);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";        
+    ctx->line_no = __LINE__ + 1;      
+    tok = skip(tok->next, "(", ctx);
+    node->lhs = assign(&tok, tok);
+    add_type(node->lhs);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";        
+    ctx->line_no = __LINE__ + 1;      
+    tok = skip(tok, ",", ctx);
+    node->rhs = assign(&tok, tok);
+    add_type(node->rhs);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";        
+    ctx->line_no = __LINE__ + 1;      
+    *rest = skip(tok, ")", ctx);
+    return node;
+  }
+
 
   if (equal(tok, "__builtin_reg_class"))
   {
@@ -7377,8 +7415,10 @@ char *nodekind2str(NodeKind kind)
     return "CVTPI2PS";    
   case ND_CVTPS2PI:
     return "CVTPS2PI";
+  case ND_CLFLUSH:
+    return "CLFLUSH";
   default:
-    return "UNREACHABLE"; // Atomic e
+    return "UNREACHABLE"; 
   }
 }
 

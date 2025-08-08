@@ -532,6 +532,7 @@ void add_type(Node *node)
     add_type(node->builtin_val);
     add_type(node->builtin_size);
     return;
+  case ND_VECINITV2SI:  
   case ND_CVTPS2PI:  
     node->ty = vector_of(ty_int, 2);
     return;    
@@ -550,6 +551,7 @@ void add_type(Node *node)
   case ND_STMXCSR:
     node->ty = ty_void_ptr;
     return;
+  case ND_CLFLUSH:
   case ND_BUILTIN_FRAME_ADDRESS:
   case ND_RETURN_ADDR:
     add_type(node->lhs);

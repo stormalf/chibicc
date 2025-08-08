@@ -2336,6 +2336,19 @@ static void gen_expr(Node *node)
     println("  movq %%mm0, %%rax");
     println("  movq %%rax, %%xmm0"); 
     return;
+  case ND_CLFLUSH:
+    gen_addr(node->lhs);    
+    println("  clflush (%%rax)");
+    return;
+  case ND_VECINITV2SI:
+    gen_expr(node->lhs); 
+    println("  movl %%eax, %%edx"); 
+    gen_expr(node->rhs);            
+    println("  shl $32, %%rax");    
+    println("  or %%rdx, %%rax");  
+    println("  movq %%rax, %%xmm0"); 
+    return;
+
   }
 
   if (is_vector(node->lhs->ty)) {
