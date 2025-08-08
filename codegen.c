@@ -444,11 +444,21 @@ static void gen_addr(Node *node)
   case ND_SUB:
   case ND_MUL:
   case ND_DIV:
+  case ND_BITXOR:
+  case ND_BITAND:
+  case ND_BITOR:
     if (is_vector(node->lhs->ty)) {
       gen_expr(node->lhs);
       gen_expr(node->rhs);  
       return;
     }
+    return;
+  case ND_CAST:
+    if (is_vector(node->ty)) {
+      gen_expr(node);
+      return;
+    }
+    return;
   
   }
 
@@ -520,7 +530,7 @@ static void load(Type *ty)
   case TY_VECTOR: {
     if (ty->base->kind == TY_FLOAT || ty->base->kind == TY_DOUBLE) {      
       println("  movups (%%rax), %%xmm0");  
-    } else if (ty->base->kind == TY_INT || ty->base->kind == TY_LONG) {
+    } else if (is_integer(ty->base)) {
      
       println("  movdqu (%%rax), %%xmm0"); 
     } else {
@@ -581,7 +591,7 @@ static void store(Type *ty)
   case TY_VECTOR:
     if (ty->base->kind == TY_FLOAT || ty->base->kind == TY_DOUBLE) {
       println("  movups %%xmm0, (%%rdi)");  // store into rdi, not rax
-    } else if (ty->base->kind == TY_INT || ty->base->kind == TY_LONG) {
+    } else if (is_integer(ty->base)) {
       println("  movdqu %%xmm0, (%%rdi)");
     } else {
       error("%s %d: in store : unsupported vector base type %d", CODEGEN_C, __LINE__, ty->base->kind);
@@ -1243,17 +1253,17 @@ static void load_vector_operand(Node *operand, const char *xmm_reg) {
     gen_addr(operand); 
     if (operand->ty->base->kind == TY_FLOAT || operand->ty->base->kind == TY_DOUBLE) {
       println("  movups (%%rax), %s", xmm_reg);
-    } else if (operand->ty->base->kind == TY_INT) {
+    } else if (is_integer(operand->ty->base)) {
       println("  movdqu (%%rax), %s", xmm_reg);
     } else {
-        error("%s: %s:%d: error: in load_vector_operand : unsupported vector base type", CODEGEN_C, __FILE__, __LINE__);
+        error("%s: %s:%d: error: in load_vector_operand : unsupported vector base type %d", CODEGEN_C, __FILE__, __LINE__, operand->ty->base->kind);
     }
   } else if (operand->ty->kind == TY_PTR && operand->ty->base->kind == TY_VECTOR) {
     gen_expr(operand);
     Type *vec = operand->ty->base;
     if (vec->base->kind == TY_FLOAT || vec->base->kind == TY_DOUBLE) {
       println("  movups (%%rax), %s", xmm_reg);
-    } else if (vec->base->kind == TY_INT || vec->base->kind == TY_LONG) {
+    } else if (is_integer(vec->base)) {
       println("  movdqu (%%rax), %s", xmm_reg);
     } else {
       error("%s: %s:%d: error: in load_vector_operand : unsupported vector base type", CODEGEN_C, __FILE__, __LINE__);
@@ -1274,7 +1284,7 @@ static void gen_vector_op(Node *node) {
   case ND_BITOR:
     break;
   case ND_DIV:
-    if (node->lhs->ty->base->kind == TY_INT || node->lhs->ty->base->kind == TY_LONG)
+    if (is_integer(node->lhs->ty->base))
       error_tok(node->tok, "%s: %s:%d: error: in gen_vector_op :  integer vector division not supported", CODEGEN_C, __FILE__, __LINE__);
     break;
   default:
