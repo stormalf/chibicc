@@ -1288,7 +1288,7 @@ static void gen_vector_op(Node *node) {
       error_tok(node->tok, "%s: %s:%d: error: in gen_vector_op :  integer vector division not supported", CODEGEN_C, __FILE__, __LINE__);
     break;
   default:
-    error_tok(node->tok, "%s: %s:%d: error: in gen_vector_op :  unsupported vector operation", CODEGEN_C, __FILE__, __LINE__);
+    error_tok(node->tok, "%s: %s:%d: error: in gen_vector_op :  unsupported vector operation %d", CODEGEN_C, __FILE__, __LINE__, node->kind);
   }
 
   Type *vec_ty = node->lhs->ty;
@@ -2320,7 +2320,7 @@ static void gen_expr(Node *node)
       println("  stmxcsr (%%rax)"); 
     } else {
       println("  stmxcsr -8(%%rsp)");  
-       println("  mov -8(%%rsp), %%eax");
+      println("  mov -8(%%rsp), %%eax");
     }
     return;    
   case ND_CVTPI2PS:    
@@ -2329,7 +2329,13 @@ static void gen_expr(Node *node)
     println("  movq (%%rax), %%mm0"); 
     println("  cvtpi2ps %%mm0, %%xmm0");  
     return;  
-    
+  case ND_CVTPS2PI: 
+    gen_expr(node->lhs);        
+    println("  cvtps2pi %%xmm0, %%mm0");
+    gen_addr(node->lhs);         
+    println("  movq %%mm0, %%rax");
+    println("  movq %%rax, %%xmm0"); 
+    return;
   }
 
   if (is_vector(node->lhs->ty)) {
@@ -3041,6 +3047,15 @@ static void emit_text(Obj *prog)
         error("%s %d: in emit_text : type is null!", CODEGEN_C, __LINE__);  
       switch (ty->kind)
       {
+      case TY_VECTOR:
+        if (ty->base->kind == TY_FLOAT || ty->base->kind == TY_DOUBLE) {
+          store_fp(fp++, var->offset, ty->size);
+        } else if (is_integer(ty->base)) {
+          store_fp(fp++, var->offset, ty->size); 
+        } else {
+          error("%s %d: in emit_text : Unsupported vector base type", CODEGEN_C, __LINE__);  
+        }
+        break;
       case TY_STRUCT:
       case TY_UNION:
         assert(ty->size <= 16);

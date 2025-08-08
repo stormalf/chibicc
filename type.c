@@ -532,6 +532,9 @@ void add_type(Node *node)
     add_type(node->builtin_val);
     add_type(node->builtin_size);
     return;
+  case ND_CVTPS2PI:  
+    node->ty = vector_of(ty_int, 2);
+    return;    
   case ND_CVTPI2PS:
     add_type(node->rhs);
     add_type(node->lhs);

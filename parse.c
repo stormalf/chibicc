@@ -5917,6 +5917,23 @@ static Node *primary(Token **rest, Token *tok)
     return node;
   }
 
+  if (equal(tok, "__builtin_ia32_cvtps2pi"))
+  {
+    Node *node = new_node(ND_CVTPS2PI, tok);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";        
+    ctx->line_no = __LINE__ + 1;  
+    tok = skip(tok->next, "(", ctx);
+    node->lhs = assign(&tok, tok);
+    add_type(node->lhs);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";        
+    ctx->line_no = __LINE__ + 1;  
+    *rest = skip(tok, ")", ctx);
+    return node;
+  }
+
+
   if (equal(tok, "__builtin_reg_class"))
   {
     ctx->filename = PARSE_C;
@@ -7358,6 +7375,8 @@ char *nodekind2str(NodeKind kind)
     return "STMXCSR";
   case ND_CVTPI2PS:
     return "CVTPI2PS";    
+  case ND_CVTPS2PI:
+    return "CVTPS2PI";
   default:
     return "UNREACHABLE"; // Atomic e
   }

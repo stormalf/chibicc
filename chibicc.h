@@ -419,6 +419,7 @@ typedef enum
   ND_PAUSE,
   ND_STMXCSR,
   ND_CVTPI2PS,
+  ND_CVTPS2PI,
 } NodeKind;
 
 // AST node type
