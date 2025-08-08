@@ -422,6 +422,7 @@ typedef enum
   ND_CVTPS2PI,
   ND_CLFLUSH,
   ND_VECINITV2SI,
+  ND_VECEXTV2SI,
 } NodeKind;
 
 // AST node type

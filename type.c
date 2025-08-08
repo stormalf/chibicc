@@ -627,5 +627,8 @@ void add_type(Node *node)
   case ND_BUILTIN_HUGE_VALL:
     node->ty = ty_ldouble;
     return;      
+  case ND_VECEXTV2SI:
+    node->ty = ty_int;
+    return;
   }
 }
