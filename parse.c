@@ -5886,8 +5886,10 @@ static Node *primary(Token **rest, Token *tok)
     ctx->funcname = "primary";
     ctx->line_no = __LINE__ + 1;    
     tok = skip(tok->next, "(", ctx);
-    node->lhs = assign(&tok, tok); 
-    add_type(node->lhs);
+    if (!equal(tok, ")")) {
+      node->lhs = assign(&tok, tok); 
+      add_type(node->lhs);
+    }
     *rest = skip(tok, ")", ctx);    
     return node;
   }

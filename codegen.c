@@ -520,11 +520,11 @@ static void load(Type *ty)
   case TY_VECTOR: {
     if (ty->base->kind == TY_FLOAT || ty->base->kind == TY_DOUBLE) {      
       println("  movups (%%rax), %%xmm0");  
-    } else if (ty->base->kind == TY_INT) {
+    } else if (ty->base->kind == TY_INT || ty->base->kind == TY_LONG) {
      
       println("  movdqu (%%rax), %%xmm0"); 
     } else {
-      error("%s: %s:%d: error: in load : unsupported vector base type", CODEGEN_C, __FILE__, __LINE__);
+      error("%s: %s:%d: error: in load : unsupported vector base type %d", CODEGEN_C, __FILE__, __LINE__, ty->base->kind);
     }
     return;
   }
@@ -581,10 +581,10 @@ static void store(Type *ty)
   case TY_VECTOR:
     if (ty->base->kind == TY_FLOAT || ty->base->kind == TY_DOUBLE) {
       println("  movups %%xmm0, (%%rdi)");  // store into rdi, not rax
-    } else if (ty->base->kind == TY_INT) {
+    } else if (ty->base->kind == TY_INT || ty->base->kind == TY_LONG) {
       println("  movdqu %%xmm0, (%%rdi)");
     } else {
-      error("%s %d: in store : unsupported vector base type", CODEGEN_C, __LINE__);
+      error("%s %d: in store : unsupported vector base type %d", CODEGEN_C, __LINE__, ty->base->kind);
     }
     return;
   case TY_STRUCT:
@@ -1253,7 +1253,7 @@ static void load_vector_operand(Node *operand, const char *xmm_reg) {
     Type *vec = operand->ty->base;
     if (vec->base->kind == TY_FLOAT || vec->base->kind == TY_DOUBLE) {
       println("  movups (%%rax), %s", xmm_reg);
-    } else if (vec->base->kind == TY_INT) {
+    } else if (vec->base->kind == TY_INT || vec->base->kind == TY_LONG) {
       println("  movdqu (%%rax), %s", xmm_reg);
     } else {
       error("%s: %s:%d: error: in load_vector_operand : unsupported vector base type", CODEGEN_C, __FILE__, __LINE__);
@@ -1269,8 +1269,12 @@ static void gen_vector_op(Node *node) {
   case ND_SUB:
   case ND_MUL:
     break;
+  case ND_BITXOR:
+  case ND_BITAND:
+  case ND_BITOR:
+    break;
   case ND_DIV:
-    if (node->lhs->ty->base->kind == TY_INT)
+    if (node->lhs->ty->base->kind == TY_INT || node->lhs->ty->base->kind == TY_LONG)
       error_tok(node->tok, "%s: %s:%d: error: in gen_vector_op :  integer vector division not supported", CODEGEN_C, __FILE__, __LINE__);
     break;
   default:
@@ -1288,44 +1292,85 @@ static void gen_vector_op(Node *node) {
   load_vector_operand(node->rhs, "%xmm1");
 
   switch (vec_ty->base->kind) {
-  case TY_FLOAT:
-    if (node->kind == ND_ADD)
-      println("  addps %%xmm1, %%xmm0");
-    else if (node->kind == ND_SUB)
-      println("  subps %%xmm1, %%xmm0");
-    else if (node->kind == ND_MUL)
-      println("  mulps %%xmm1, %%xmm0");
-    else if (node->kind == ND_DIV)
-      println("  divps %%xmm1, %%xmm0");
-    else
-      error_tok(node->tok, "%s: %s:%d: error: in gen_vector_op : unsupported float vector op", CODEGEN_C, __FILE__, __LINE__);
-    break;
+    case TY_FLOAT:
+      switch (node->kind) {
+      case ND_ADD:
+        println("  addps %%xmm1, %%xmm0");
+        break;
+      case ND_SUB:
+        println("  subps %%xmm1, %%xmm0");
+        break;
+      case ND_MUL:
+        println("  mulps %%xmm1, %%xmm0");
+        break;
+      case ND_DIV:
+        println("  divps %%xmm1, %%xmm0");
+        break;
+      case ND_BITXOR:
+        println("  pxor %%xmm1, %%xmm0");
+        break;
+      case ND_BITAND:
+        println("  pand %%xmm1, %%xmm0");
+        break;
+      case ND_BITOR:
+        println("  por %%xmm1, %%xmm0");
+        break;
+      default:
+        error_tok(node->tok, "%s: %s:%d: error: unsupported float vector operation", CODEGEN_C, __FILE__, __LINE__);
+      }
+      break;
   case TY_DOUBLE:
-    if (node->kind == ND_ADD)
+    switch (node->kind) {
+    case ND_ADD:
       println("  addpd %%xmm1, %%xmm0");
-    else if (node->kind == ND_SUB)
+      break;
+    case ND_SUB:
       println("  subpd %%xmm1, %%xmm0");
-    else if (node->kind == ND_MUL)
+      break;
+    case ND_MUL:
       println("  mulpd %%xmm1, %%xmm0");
-    else if (node->kind == ND_DIV)
+      break;
+    case ND_DIV:
       println("  divpd %%xmm1, %%xmm0");
-    else
-      error_tok(node->tok, "%s: %s:%d: error: in gen_vector_op : unsupported double vector op", CODEGEN_C, __FILE__, __LINE__);
+      break;
+    case ND_BITXOR:
+      println("  pxor %%xmm1, %%xmm0");
+      break;
+    case ND_BITAND:
+      println("  pand %%xmm1, %%xmm0");
+      break;
+    case ND_BITOR:
+      println("  por %%xmm1, %%xmm0");
+      break;
+    default:
+      error_tok(node->tok, "%s: %s:%d: error: unsupported double vector operation", CODEGEN_C, __FILE__, __LINE__);
+    }
     break;
   case TY_INT:
-    if (node->kind == ND_ADD)
+    switch (node->kind) {
+    case ND_ADD:
       println("  paddd %%xmm1, %%xmm0");
-    else if (node->kind == ND_SUB)
+      break;
+    case ND_SUB:
       println("  psubd %%xmm1, %%xmm0");
-    else if (node->kind == ND_MUL)
+      break;
+    case ND_MUL:
       println("  pmulld %%xmm1, %%xmm0");
-    else
-      error_tok(node->tok, "%s: %s:%d: error: in gen_vector_op : integer vector division not supported", CODEGEN_C, __FILE__, __LINE__);
+      break;
+    case ND_BITXOR:
+      println("  pxor %%xmm1, %%xmm0");
+      break;
+    case ND_BITAND:
+      println("  pand %%xmm1, %%xmm0");
+      break;
+    case ND_BITOR:
+      println("  por %%xmm1, %%xmm0");
+      break;
+    default:
+      error_tok(node->tok, "%s: %s:%d: error: integer vector operation not supported", CODEGEN_C, __FILE__, __LINE__);
+    }
     break;
-  default:
-    error_tok(node->tok, "%s: %s:%d: error: in gen_vector_op : unsupported vector base kind", CODEGEN_C, __FILE__, __LINE__);
   }
-
 }
 
 // Generate code for a given node.
@@ -2260,8 +2305,13 @@ static void gen_expr(Node *node)
     println("  pause");
     return;
   case ND_STMXCSR:
-    gen_expr(node->lhs); 
-    println("  stmxcsr (%%rax)"); 
+    if (node->lhs) {
+      gen_expr(node->lhs); 
+      println("  stmxcsr (%%rax)"); 
+    } else {
+      println("  stmxcsr -8(%%rsp)");  
+       println("  mov -8(%%rsp), %%eax");
+    }
     return;    
   case ND_CVTPI2PS:    
     gen_expr(node->lhs);    

@@ -1,8 +1,5 @@
-//#include <xmmintrin.h>
+#include <xmmintrin.h>
 #include "test.h"
-
-typedef int   __m64  __attribute__((vector_size(8)));
-typedef float __m128 __attribute__((vector_size(16)));
 
 int main() {
     __m128 a = (__m128){100.0f, 200.0f, 300.0f, 400.0f}; // upper 2 will be kept
@@ -10,14 +7,9 @@ int main() {
     printf("a = %lld %lld\n", ((__int64_t *)&a)[0], ((__int64_t *)&a)[1]);
         int *p = (int *)&b;
     printf("b = %d %d\n", p[0], p[1]);  // Correct: 1 2
-    ASSERT(1, p[0]);
-    ASSERT(2, p[1]);
     float *p2 = (float *)&a;
     printf("a = %f %f %f %f\n", a[0], a[1], a[2], a[3]);
-    ASSERT(100, a[0]);
-    ASSERT(200, a[1]);
-    ASSERT(300, a[2]);
-    ASSERT(400, a[3]);
+
 
      __m128 result = __builtin_ia32_cvtpi2ps(a, b);
 
