@@ -545,7 +545,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.22.9    Reporting fixes from 1.0.22.9_dev (like implicit function declaration, -std=c11 -std=c99...). Fixing issue with \__atomic_load_n during linking of nmap. Fixing issue with vim (due to a mistake in ND_ASSIGN). Adding vector implementation (with TY_VECTOR type) in progress (basic operations seems to work fine issues with mixed non-vectors/vectors or multiple vectors parameters). Adding some builtin_ia32_xxxx (like builtin_ia32_emms...).
+1.0.22.9    Reporting fixes from 1.0.22.9_dev (like implicit function declaration, -std=c11 -std=c99...). Fixing issue with \__atomic_load_n during linking of nmap. Fixing issue with vim (due to a mistake in ND_ASSIGN). Adding vector implementation (with TY_VECTOR type) in progress (basic operations seems to work fine issues with mixed non-vectors/vectors or multiple vectors parameters). Adding some builtin_ia32_xxxx (like builtin_ia32_emms...). Fixing issue with cvtpi2ps.
 
 
 ## old release notes

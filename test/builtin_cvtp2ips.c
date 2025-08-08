@@ -18,6 +18,9 @@ int main() {
 
     float *f = (float *)&result;
     printf("%f %f %f %f\n", f[0], f[1], f[2], f[3]);
-
+    ASSERT(1, f[0]);
+    ASSERT(2, f[1]);
+    ASSERT(300, f[2]);
+    ASSERT(400, f[3]);
     return 0;
 }
