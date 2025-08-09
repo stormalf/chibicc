@@ -5993,6 +5993,27 @@ static Node *primary(Token **rest, Token *tok)
   }
 
 
+  if (equal(tok, "__builtin_ia32_packsswb")) {
+    Node *node = new_node(ND_PACKSSWB, tok);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";
+    ctx->line_no = __LINE__ + 1;
+    tok = skip(tok->next, "(", ctx);
+    node->lhs = new_cast(cast(&tok, tok), vector_of(ty_int, 2));
+    add_type(node->lhs);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";
+    ctx->line_no = __LINE__ + 1;
+    tok = skip(tok, ",", ctx);
+    node->rhs = assign(&tok, tok);
+    add_type(node->rhs);
+    ctx->filename = PARSE_C;
+    ctx->funcname = "primary";
+    ctx->line_no = __LINE__ + 1;
+    *rest = skip(tok, ")", ctx);
+    return node;
+  }
+
   if (equal(tok, "__builtin_reg_class"))
   {
     ctx->filename = PARSE_C;
@@ -7442,6 +7463,8 @@ char *nodekind2str(NodeKind kind)
     return "VEC_INIT_V2SI";
   case ND_VECEXTV2SI:
     return "VEC_EXT_V2SI";
+  case ND_PACKSSWB:
+    return "PACKSSWB";
   default:
     return "UNREACHABLE"; 
   }

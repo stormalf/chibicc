@@ -423,6 +423,7 @@ typedef enum
   ND_CLFLUSH,
   ND_VECINITV2SI,
   ND_VECEXTV2SI,
+  ND_PACKSSWB,
 } NodeKind;
 
 // AST node type

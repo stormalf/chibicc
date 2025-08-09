@@ -1,4 +1,4 @@
-#include <stdio.h>
+#include "test.h"
 
 // Define a 2-element int vector type (like __v2si)
 typedef int v2si __attribute__((vector_size(8)));
@@ -16,6 +16,8 @@ int main(void) {
 
     printf("elem0 = %d\n", elem0);
     printf("elem1 = %d\n", elem1);
+    ASSERT(123456, elem0);
+    ASSERT(789012, elem1);
 
     return 0;
 }

@@ -2351,20 +2351,28 @@ static void gen_expr(Node *node)
   case ND_VECEXTV2SI:
     gen_expr(node->lhs);  
     gen_expr(node->rhs);  
-    println("    mov %%eax, %%ebx");
-    println("    movd %%xmm0, %%eax");
+    println("  mov %%eax, %%ebx");
+    println("  movd %%xmm0, %%eax");
     static int label_id = 0;
     int lbl_zero = label_id++;
     int lbl_done = label_id++;
-    println("    cmpl $0, %%ebx");
-    println("    je .Lvec_ext_zero_%d", lbl_zero);
-    println("    psrldq $4, %%xmm0");
-    println("    movd %%xmm0, %%eax");
-    println("    jmp .Lvec_ext_done_%d", lbl_done);
+    println("  cmpl $0, %%ebx");
+    println("  je .Lvec_ext_zero_%d", lbl_zero);
+    println("  psrldq $4, %%xmm0");
+    println("  movd %%xmm0, %%eax");
+    println("  jmp .Lvec_ext_done_%d", lbl_done);
     println(".Lvec_ext_zero_%d:", lbl_zero);
     println(".Lvec_ext_done_%d:", lbl_done);
     return;
-  
+case ND_PACKSSWB:
+    gen_expr(node->lhs);  
+    println("  movq (%%rax), %%mm0"); 
+    gen_expr(node->rhs);   
+    println("  movq (%%rax), %%mm1"); 
+    println("    packsswb %%mm1, %%mm0");
+    println("  movq %%mm0, %%rax");
+    println("  movq %%rax, %%xmm0"); 
+    return;
 
   }
 
