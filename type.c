@@ -640,6 +640,7 @@ void add_type(Node *node)
     return;
   case ND_PADDW:
   case ND_PADDSW:
+  case ND_PADDUSW:
   case ND_PUNPCKLWD:
   case ND_PUNPCKHWD:    
   case ND_PACKSSDW:

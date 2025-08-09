@@ -6003,6 +6003,7 @@ static Node *primary(Token **rest, Token *tok)
      equal(tok, "__builtin_ia32_paddw") || equal(tok, "__builtin_ia32_paddd") ||
      equal(tok, "__builtin_ia32_paddq") || equal(tok, "__builtin_ia32_paddsb") ||
      equal(tok, "__builtin_ia32_paddsw") || equal(tok, "__builtin_ia32_paddusb") ||
+     equal(tok, "__builtin_ia32_paddusw") ||
     equal(tok, "__builtin_ia32_punpckhbw") || equal(tok, "__builtin_ia32_packuswb")) {
     if (!opt_mmx)
         error_tok(tok, "%s %d: in primary : option -mmmx required for builtin_ia32", PARSE_C, __LINE__);
@@ -6055,7 +6056,10 @@ static Node *primary(Token **rest, Token *tok)
     } 
     else if (equal(tok, "__builtin_ia32_paddusb")) {
       node = new_node(ND_PADDUSB, tok);   
-    }                                    
+    }    
+    else if (equal(tok, "__builtin_ia32_paddusw")) {
+      node = new_node(ND_PADDUSW, tok);   
+    }                                        
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";
     ctx->line_no = __LINE__ + 1;
@@ -7550,7 +7554,9 @@ char *nodekind2str(NodeKind kind)
   case ND_PADDSW:
     return "PADDSW";   
   case ND_PADDUSB:
-    return "PADDUSB";                      
+    return "PADDUSB"; 
+  case ND_PADDUSW:
+    return "PADDUSW";                          
   default:
     return "UNREACHABLE"; 
   }
