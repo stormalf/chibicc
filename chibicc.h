@@ -445,6 +445,7 @@ typedef enum
   ND_PSUBW,
   ND_PSUBD,
   ND_PSUBQ,
+  ND_PSUBSB,
 } NodeKind;
 
 // AST node type
