@@ -646,6 +646,7 @@ void add_type(Node *node)
     node->ty = vector_of(ty_short, 4);
     return;
   case ND_PACKUSWB:
+  case ND_PADDUSB:
     node->ty = vector_of(ty_uchar, 8);
     return;  
   case ND_PADDB:
