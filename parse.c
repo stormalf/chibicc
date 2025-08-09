@@ -5703,6 +5703,7 @@ static Node *primary(Token **rest, Token *tok)
      equal(tok, "__builtin_ia32_pmulhw") || equal(tok, "__builtin_ia32_pmullw") ||
      equal(tok, "__builtin_ia32_psllw") || equal(tok, "__builtin_ia32_psllwi") || 
      equal(tok, "__builtin_ia32_pslld") || equal(tok, "__builtin_ia32_pslldi") || 
+     equal(tok, "__builtin_ia32_psllq") ||
     equal(tok, "__builtin_ia32_punpckhbw") || equal(tok, "__builtin_ia32_packuswb")) {
     if (!opt_mmx)
         error_tok(tok, "%s %d: in primary : option -mmmx required for builtin_ia32", PARSE_C, __LINE__);
@@ -5803,7 +5804,10 @@ static Node *primary(Token **rest, Token *tok)
     }      
     else if (equal(tok, "__builtin_ia32_pslldi")) {
       node = new_node(ND_PSLLDI, tok);   
-    }                      
+    }  
+    else if (equal(tok, "__builtin_ia32_psllq")) {
+      node = new_node(ND_PSLLQ, tok);   
+    }                          
     SET_CTX(ctx); 
     tok = skip(tok->next, "(", ctx);
     node->lhs = assign(&tok, tok);

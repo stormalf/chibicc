@@ -532,6 +532,7 @@ void add_type(Node *node)
     add_type(node->builtin_val);
     add_type(node->builtin_size);
     return;
+  case ND_PSLLQ:
   case ND_PSUBQ:
   case ND_PADDQ:
     node->ty = vector_of(ty_long, 1);
