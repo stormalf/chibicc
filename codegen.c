@@ -2690,7 +2690,20 @@ case ND_PSRAW:
     println("  psraw %%mm1, %%mm0");
     println("  movq %%mm0, %%rax");
     println("  movq %%rax, %%xmm0"); 
-    return;                                                                                                  
+    return;   
+case ND_PSRAWI:
+    gen_expr(node->lhs);  
+    println("  movq (%%rax), %%mm0");  
+    if (node->rhs->kind == ND_NUM)
+      println("  psraw $%ld, %%mm0", node->rhs->val);
+    else {
+    gen_expr(node->rhs);   
+    println("  movq %%rax, %%mm1"); 
+    println("  psraw %%mm1, %%mm0");
+    }
+    println("  movq %%mm0, %%rax");
+    println("  movq %%rax, %%xmm0"); 
+    return;                                                                                                      
   }
 
   if (is_vector(node->lhs->ty)) {
