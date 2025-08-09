@@ -2624,7 +2624,15 @@ case ND_PSLLW:
     println("  psllw %%mm1, %%mm0");
     println("  movq %%mm0, %%rax");
     println("  movq %%rax, %%xmm0"); 
-    return;                                                                                                         
+    return;  
+case ND_PSLLWI:
+    gen_expr(node->lhs);  
+    println("  movq (%%rax), %%mm0");    
+    println("  psllw $%ld, %%mm0", node->rhs->val);
+    println("  movq %%mm0, %%rax");
+    println("  movq %%rax, %%xmm0"); 
+    return;
+                                                                                                         
   }
 
   if (is_vector(node->lhs->ty)) {
