@@ -2561,7 +2561,16 @@ case ND_PSUBSB:
     println("  psubsb %%mm1, %%mm0");
     println("  movq %%mm0, %%rax");
     println("  movq %%rax, %%xmm0"); 
-    return;                                                                             
+    return; 
+case ND_PSUBSW:
+    gen_expr(node->lhs);  
+    println("  movq (%%rax), %%mm0"); 
+    gen_expr(node->rhs);   
+    println("  movq (%%rax), %%mm1"); 
+    println("  psubsw %%mm1, %%mm0");
+    println("  movq %%mm0, %%rax");
+    println("  movq %%rax, %%xmm0"); 
+    return;                                                                                 
   }
 
   if (is_vector(node->lhs->ty)) {

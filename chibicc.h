@@ -23,6 +23,13 @@
 #include <stdatomic.h>
 #include <limits.h>
 
+#define SET_CTX(ctx) \
+    do { \
+        (ctx)->filename = __FILE__; \
+        (ctx)->funcname = __func__; \
+        (ctx)->line_no  = __LINE__; \
+    } while (0)
+
 
 
 #define ROUNDUP(X, K)   (((X) + (K) - 1) & -(K))
@@ -446,6 +453,7 @@ typedef enum
   ND_PSUBD,
   ND_PSUBQ,
   ND_PSUBSB,
+  ND_PSUBSW,
 } NodeKind;
 
 // AST node type

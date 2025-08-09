@@ -6006,6 +6006,7 @@ static Node *primary(Token **rest, Token *tok)
      equal(tok, "__builtin_ia32_paddusw") || equal(tok, "__builtin_ia32_psubb") || 
      equal(tok, "__builtin_ia32_psubw") || equal(tok, "__builtin_ia32_psubd") ||
      equal(tok, "__builtin_ia32_psubq") || equal(tok, "__builtin_ia32_psubsb") ||
+     equal(tok, "__builtin_ia32_psubsw") ||
     equal(tok, "__builtin_ia32_punpckhbw") || equal(tok, "__builtin_ia32_packuswb")) {
     if (!opt_mmx)
         error_tok(tok, "%s %d: in primary : option -mmmx required for builtin_ia32", PARSE_C, __LINE__);
@@ -6076,7 +6077,10 @@ static Node *primary(Token **rest, Token *tok)
     }     
     else if (equal(tok, "__builtin_ia32_psubsb")) {
       node = new_node(ND_PSUBSB, tok);   
-    }                                                    
+    }  
+    else if (equal(tok, "__builtin_ia32_psubsw")) {
+      node = new_node(ND_PSUBSW, tok);   
+    }                                                        
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";
     ctx->line_no = __LINE__ + 1;
@@ -7583,7 +7587,9 @@ char *nodekind2str(NodeKind kind)
   case ND_PSUBQ:
     return "PSUBQ";  
   case ND_PSUBSB:
-    return "PSUBSB";                                              
+    return "PSUBSB";   
+  case ND_PSUBSW:
+    return "PSUBSW";                                                  
   default:
     return "UNREACHABLE"; 
   }
