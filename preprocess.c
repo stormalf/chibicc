@@ -336,9 +336,7 @@ static Token *read_const_expr(Token **rest, Token *tok)
       tok = tok->next;
 
       if (has_paren) {
-        ctx->filename = PREPROCESS_C;
-        ctx->funcname = "read_const_expr";        
-        ctx->line_no = __LINE__ + 1;           
+        SET_CTX(ctx); 
         tok = skip(tok, ")", ctx);
       } 
 
@@ -375,8 +373,10 @@ static Token *read_const_expr(Token **rest, Token *tok)
     tok = tok->next;  // consume '>'
   }
 
-  if (has_paren)
+  if (has_paren) {
+    SET_CTX(ctx); 
     tok = skip(tok, ")", ctx);
+  }
 
   bool found = file_exists_in_include_path(filename);
   cur = cur->next = new_num_token(found ? 1 : 0, start);
@@ -473,18 +473,14 @@ static MacroParam *read_macro_params(Token **rest, Token *tok, char **va_args_na
   while (!equal(tok, ")"))
   {
     if (cur != &head) {
-      ctx->filename = PREPROCESS_C;
-      ctx->funcname = "read_macro_params";        
-      ctx->line_no = __LINE__ + 1;         
+      SET_CTX(ctx);          
       tok = skip(tok, ",", ctx);
     }
 
     if (equal(tok, "..."))
     {
       *va_args_name = "__VA_ARGS__";
-      ctx->filename = PREPROCESS_C;
-      ctx->funcname = "read_macro_params";        
-      ctx->line_no = __LINE__ + 1;          
+      SET_CTX(ctx);        
       *rest = skip(tok->next, ")", ctx);
       return head.next;
     }
@@ -495,9 +491,7 @@ static MacroParam *read_macro_params(Token **rest, Token *tok, char **va_args_na
     if (equal(tok->next, "..."))
     {
       *va_args_name = strndup(tok->loc, tok->len);
-      ctx->filename = PREPROCESS_C;
-      ctx->funcname = "read_macro_params";        
-      ctx->line_no = __LINE__ + 1;          
+      SET_CTX(ctx);         
       *rest = skip(tok->next->next, ")", ctx);
       return head.next;
     }
@@ -633,9 +627,7 @@ read_macro_args(Token **rest, Token *tok, MacroParam *params, char *va_args_name
   for (; pp; pp = pp->next)
   {
     if (cur != &head) {
-      ctx->filename = PREPROCESS_C;
-      ctx->funcname = "read_macro_args";        
-      ctx->line_no = __LINE__ + 1;          
+      SET_CTX(ctx);        
       tok = skip(tok, ",", ctx);
     }
     cur = cur->next = read_macro_arg_one(&tok, tok, false);
@@ -656,9 +648,7 @@ read_macro_args(Token **rest, Token *tok, MacroParam *params, char *va_args_name
     else
     {
       if (pp != params) {
-        ctx->filename = PREPROCESS_C;
-        ctx->funcname = "read_macro_args";        
-        ctx->line_no = __LINE__ + 1;           
+        SET_CTX(ctx);         
         tok = skip(tok, ",", ctx);
       }
       arg = read_macro_arg_one(&tok, tok, true);
@@ -673,9 +663,7 @@ read_macro_args(Token **rest, Token *tok, MacroParam *params, char *va_args_name
     error_tok(start, "%s: in read_macro_args : too many arguments", PREPROCESS_C);
   }
 
-  ctx->filename = PREPROCESS_C;
-  ctx->funcname = "read_macro_args";        
-  ctx->line_no = __LINE__ + 1;   
+  SET_CTX(ctx); 
   skip(tok, ")",ctx);
   *rest = tok;
   return head.next;
@@ -859,9 +847,7 @@ static Token *subst(Macro *m, MacroArg *args)
       if (has_varargs(args))
         for (Token *t = arg->tok; t->kind != TK_EOF; t = t->next)
           cur = cur->next = t;
-      ctx->filename = PREPROCESS_C;
-      ctx->funcname = "subst";        
-      ctx->line_no = __LINE__ + 1;             
+      SET_CTX(ctx);            
       tok = skip(tok, ")", ctx);
       continue;
     }

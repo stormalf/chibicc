@@ -27,7 +27,7 @@
     do { \
         (ctx)->filename = __FILE__; \
         (ctx)->funcname = __func__; \
-        (ctx)->line_no  = __LINE__; \
+        (ctx)->line_no  = __LINE__ + 1; \
     } while (0)
 
 
@@ -131,8 +131,8 @@ typedef struct Hideset Hideset;
 
 typedef struct
 {
-  char *filename;
-  char *funcname;
+  const char *filename;
+  const char *funcname;
   int line_no;
 } Context;
 

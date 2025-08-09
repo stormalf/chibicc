@@ -166,8 +166,6 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
     hasOutput = false;
     char *template = tok->str;
     char *asm_str = calloc(1, sizeof(char) * 10000);
-    ctx->filename = EXTASM_C;
-    ctx->funcname = "extended_asm";
     //case __asm__ volatile ("" ::: "memory")
     //case __asm__ __volatile__ ("rep; nop" ::: "memory");  
     //we generate a nop operation for each memory border defined
@@ -177,7 +175,7 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             tok = tok->next;
         }
         *rest = tok->next;
-        ctx->line_no = __LINE__ + 1;
+        SET_CTX(ctx);
         *rest = skip(tok->next, ")", ctx);
         tok = *rest;
         asm_str = "\nnop;\n";
@@ -465,7 +463,6 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
 void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
 {
     VarScope *sc;
-    ctx->funcname = "output_asm";
     while (!equal(tok->next, ":") && !equal(tok->next, ";"))
     {
         //case of operand named
@@ -671,7 +668,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 }                            
                 else {
                 tok = tok->next;
-                ctx->line_no = __LINE__ + 1;
+                SET_CTX(ctx);
                 *rest = skip(tok, ")", ctx);
                 return;
                 }
@@ -740,7 +737,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 }                            
                 else {
                 tok = tok->next;
-                ctx->line_no = __LINE__ + 1;
+                SET_CTX(ctx);
                 *rest = skip(tok, ")", ctx);
                 return;
                 }
@@ -797,13 +794,13 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
         }
         // skip the comma
         else if (equal(tok, ",")) {
-            ctx->line_no = __LINE__ + 1;
+            SET_CTX(ctx);
             tok = skip(tok, ",", ctx);
         }
         // manage the variable inside parenthesis
         else if (equal(tok, "("))
         {
-            ctx->line_no = __LINE__ + 1;
+            SET_CTX(ctx);
             tok = skip(tok, "(", ctx);
             // check if the variable is defined
             if (tok->kind == TK_IDENT)
@@ -835,7 +832,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
 
                 //managing specific case of arrays
                 if (sc->var->ty->kind == TY_ARRAY) {
-                    ctx->line_no = __LINE__ + 1;
+                    SET_CTX(ctx);
                     tok = skip(tok->next, "[", ctx);
                     asmExt->output[nbOutput]->isArray = true;
                     asmExt->output[nbOutput]->isAddress = false;
@@ -848,15 +845,15 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->output[nbOutput]->offset = (sc->var->offset ) + (asmExt->output[nbOutput]->indexArray * asmExt->output[nbOutput]->size);
                     asmExt->output[nbOutput]->offsetArray = sc->var->offset; 
                     tok = tok->next;
-                    ctx->line_no = __LINE__ + 1;
+                    SET_CTX(ctx);
                     tok = skip(tok, "]", ctx);
-                    ctx->line_no = __LINE__ + 1;
+                    SET_CTX(ctx);
                     *rest = skip(tok, ")", ctx);
                     return;
                 }                
                 //special case of array pointer it means that the parameter received is an address.
                 if (sc->var->ty->kind == TY_PTR && equal(tok->next, "[")) {
-                    ctx->line_no = __LINE__ + 1;
+                    SET_CTX(ctx);
                     tok = skip(tok->next, "[", ctx);
                     asmExt->output[nbOutput]->isArray = true;
                     asmExt->output[nbOutput]->isAddress = true;
@@ -869,9 +866,9 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->output[nbOutput]->offset = (asmExt->output[nbOutput]->indexArray * asmExt->output[nbOutput]->size);
                     asmExt->output[nbOutput]->offsetArray = sc->var->offset; 
                     tok = tok->next;
-                    ctx->line_no = __LINE__ + 1;
+                    SET_CTX(ctx);
                     tok = skip(tok, "]", ctx);
-                    ctx->line_no = __LINE__ + 1;
+                    SET_CTX(ctx);
                     *rest = skip(tok, ")", ctx);
                     return;
                 }
@@ -880,8 +877,8 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 if (sc->var->ty->kind == TY_PTR && equal(tok->next, "->")) {
                     if (!sc->var->ty->base)
                         error_tok(tok, "%s %d: in output_asm function : expecting struct base but base is null!", EXTASM_C, __LINE__);
-                    ctx->line_no = __LINE__ + 1;
                     asmExt->output[nbOutput]->output = tok;
+                    SET_CTX(ctx);
                     tok = skip(tok->next, "->", ctx);
                     Token * tokmbr = tok;
                     // retrieve the size of the variable to determine the register to use here we use RAX variation
@@ -917,17 +914,17 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                         }
                     }
                     tok = tok->next;
-                    ctx->line_no = __LINE__ + 1;
+                    SET_CTX(ctx);
                     *rest = skip(tok, ")", ctx);
                     return;
                 }
 
                 // skip the variable to go to next token that should be a ")"
                 // tok = tok->next;
-                tok = tok->next;
-                ctx->line_no = __LINE__ + 1;
+                tok = tok->next;                
                 if (!equal(tok, ")"))
                     error_tok(tok, "%s %d: in output_asm function : extended assembly not managed yet", EXTASM_C, __LINE__);
+                SET_CTX(ctx);
                 *rest = skip(tok, ")", ctx);
                 return;
             }
@@ -962,8 +959,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
                     tok = tok->next;
 
-                    ctx->funcname = "output_asm";
-                    ctx->line_no = __LINE__ + 1 ;
+                    SET_CTX(ctx);
                     *rest = skip(tok, ")", ctx);
                     return;
                 } else if (equal(tok, "(") && equal(tok->next, "(")) {
@@ -1020,8 +1016,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                             tok = tok->next; //first parenthesis
                             
 
-                            ctx->funcname = "output_asm";
-                            ctx->line_no = __LINE__ + 1;
+                            SET_CTX(ctx);
                             *rest = skip(tok, ")", ctx);
                             return;
                         }
@@ -1042,7 +1037,6 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
 
 void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
 {
-    ctx->funcname = "input_asm";
     VarScope *sc;
     char *input_value = calloc(1, sizeof(char) * 300);
     asmExt->input[nbInput]->offset = 0;
@@ -1396,7 +1390,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
 
         else if (equal(tok, "("))
         {
-            ctx->line_no = __LINE__ + 1;
+            SET_CTX(ctx);
             tok = skip(tok, "(", ctx);
             // check if the variable is defined
             if (equal(tok, "-")) 
@@ -1429,7 +1423,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
 
                 //managing specific case of arrays
                 if (sc->var->ty->kind == TY_ARRAY) {
-                    ctx->line_no = __LINE__ + 1;
+                    SET_CTX(ctx);
                     tok = skip(tok->next, "[", ctx);
                     asmExt->input[nbInput]->isArray = true;
                     asmExt->input[nbInput]->indexArray = tok->val;
@@ -1442,14 +1436,14 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->input[nbInput]->offset = (sc->var->offset ) + (asmExt->input[nbInput]->indexArray * asmExt->input[nbInput]->size);
                     asmExt->input[nbInput]->offsetArray = sc->var->offset; 
                     tok = tok->next;
-                    ctx->line_no = __LINE__ + 1;
+                    SET_CTX(ctx);
                     tok = skip(tok, "]", ctx);
-                    ctx->line_no = __LINE__ + 1;
+                    SET_CTX(ctx);
                     *rest = skip(tok, ")", ctx);
                     return;
                 }        
                 else if (sc->var->ty->kind == TY_PTR && equal(tok->next, "[")) {
-                    ctx->line_no = __LINE__ + 1;
+                    SET_CTX(ctx);
                     tok = skip(tok->next, "[", ctx);
                     asmExt->input[nbInput]->isArray = true;
                     asmExt->input[nbInput]->isAddress = true;
@@ -1462,9 +1456,9 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->input[nbInput]->offset = (asmExt->input[nbInput]->indexArray * asmExt->input[nbInput]->size);
                     asmExt->input[nbInput]->offsetArray = sc->var->offset; 
                     tok = tok->next;
-                    ctx->line_no = __LINE__ + 1;
+                    SET_CTX(ctx);
                     tok = skip(tok, "]", ctx);
-                    ctx->line_no = __LINE__ + 1;
+                    SET_CTX(ctx);
                     *rest = skip(tok, ")", ctx);
                     return;                    
                 }
@@ -1472,8 +1466,8 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 else if (sc->var->ty->kind == TY_PTR && equal(tok->next, "->")) {
                     if (!sc->var->ty->base)
                         error_tok(tok, "%s %d: in input_asm function : expecting struct base but base is null!", EXTASM_C, __LINE__);
-                    ctx->line_no = __LINE__ + 1;
                     asmExt->input[nbInput]->input = tok;
+                    SET_CTX(ctx);
                     tok = skip(tok->next, "->", ctx);
                     Token * tokmbr = tok;
                     // retrieve the size of the variable to determine the register to use here we use RAX variation
@@ -1508,13 +1502,13 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                         }
                     }
                     tok = tok->next;
-                    ctx->line_no = __LINE__ + 1;
+                    SET_CTX(ctx);
                     *rest = skip(tok, ")", ctx);
                     return;
                 }
 
                 tok = tok->next;
-                ctx->line_no = __LINE__ + 1;
+                SET_CTX(ctx);
                 *rest = skip(tok, ")", ctx);
                 return;
             } // immediate value
@@ -1533,7 +1527,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 asmExt->input[nbInput]->size = tok->ty->size;
                 asmExt->input[nbInput]->reg = update_register_size(asmExt->input[nbInput]->reg, asmExt->input[nbInput]->size);                                
                 tok = tok->next;
-                ctx->line_no = __LINE__ + 1;
+                SET_CTX(ctx);
                 *rest = skip(tok, ")", ctx);
                 return;
             } // pointer
@@ -1559,7 +1553,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                         error("%s : %s:%d: error: in input_asm function input_asm :reg is null!", EXTASM_C, __FILE__, __LINE__);
                     asmExt->input[nbInput]->reg = update_register_size(asmExt->input[nbInput]->reg, asmExt->input[nbInput]->size);
                     tok = tok->next;
-                    ctx->line_no = __LINE__ + 1;
+                    SET_CTX(ctx);
                     *rest = skip(tok, ")", ctx);
                     return;
                        // Handle casted input like *((void **)ptr)
@@ -1617,14 +1611,14 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                         tok = tok->next; 
                         
 
-                        ctx->line_no = __LINE__ + 1;
+                        SET_CTX(ctx);
                         *rest = skip(tok, ")", ctx);
                         return;
                     }
             }
         }
         else if (equal(tok, ",")) {
-            ctx->line_no = __LINE__ + 1;
+            SET_CTX(ctx);
             tok = skip(tok, ",", ctx);
         }
         // else
