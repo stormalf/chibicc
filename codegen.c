@@ -2471,7 +2471,16 @@ case ND_PADDD:
     println("  paddd %%mm1, %%mm0");
     println("  movq %%mm0, %%rax");
     println("  movq %%rax, %%xmm0"); 
-    return;                               
+    return;  
+case ND_PADDQ:
+    gen_expr(node->lhs);  
+    println("  movq (%%rax), %%mm0"); 
+    gen_expr(node->rhs);   
+    println("  movq (%%rax), %%mm1"); 
+    println("  paddq %%mm1, %%mm0");
+    println("  movq %%mm0, %%rax");
+    println("  movq %%rax, %%xmm0"); 
+    return;                                   
   }
 
   if (is_vector(node->lhs->ty)) {
