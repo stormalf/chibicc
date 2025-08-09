@@ -112,6 +112,7 @@ this " PRODUCT " contains only some differences for now like new parameters\n"
 -nostdinc Do not use the standard system header files when compiling \n \
 -std=c99 generates an error on implicit function declaration (without -std only a warning is emitted) \n \
 -std=c11 generates an error on implicit function declaration (without -std only a warning is emitted) \n \
+-mmmx to allow mmx instructions and builtin functions linked to mmx like __builtin_packuswb... \n \
 chibicc [ -o <path> ] <file>\n"
 
 typedef struct Type Type;
@@ -426,6 +427,7 @@ typedef enum
   ND_PACKSSWB,
   ND_PACKSSDW,
   ND_PACKUSWB,
+  ND_PUNPCKHBW,
 } NodeKind;
 
 // AST node type
@@ -784,6 +786,7 @@ extern char *extract_path(char *tmpl);
 extern bool opt_sse2;
 extern bool opt_sse3;
 extern bool opt_sse4;
+extern bool opt_mmx;
 extern bool opt_g;
 extern FILE *open_file(char *path);
 extern FILE *ofile;

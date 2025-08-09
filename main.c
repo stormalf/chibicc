@@ -21,6 +21,7 @@ bool opt_shared;
 bool opt_sse2;
 bool opt_sse3;
 bool opt_sse4;
+bool opt_mmx;
 bool opt_g;
 bool opt_c99;
 bool opt_c11;
@@ -318,6 +319,7 @@ static void parse_args(int argc, char **argv)
       continue;
     }
 
+
     if (!strcmp(argv[i], "-msse3")) {
       opt_sse3 = true;
       continue;
@@ -327,6 +329,12 @@ static void parse_args(int argc, char **argv)
       opt_sse4 = true;
       continue;
     }
+
+    if (!strcmp(argv[i], "-mmmx")) {
+      opt_mmx = true;
+      continue;
+    }    
+
 
     if (startsWith(argv[i], "-flto"))
     {

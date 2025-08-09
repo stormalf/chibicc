@@ -76,6 +76,7 @@ or
         -nostdinc Do not use the standard system header files when compiling 
         -std=c99 generates an error on implicit function declaration (without -std only a warning is emitted)
         -std=c11 generates an error on implicit function declaration (without -std only a warning is emitted)
+        -mmmx to allow mmx instructions and builtin functions linked to mmx like __builtin_packuswb... 
         chibicc [ -o <path> ] <file>
 
 ## compile

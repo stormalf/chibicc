@@ -5897,6 +5897,8 @@ static Node *primary(Token **rest, Token *tok)
 
   if (equal(tok, "__builtin_ia32_cvtpi2ps"))
   {
+    if (!opt_mmx)
+      error_tok(tok, "%s %d: in primary : option -mmmx required for __builtin_ia32_cvtpi2ps", PARSE_C, __LINE__);
     Node *node = new_node(ND_CVTPI2PS, tok);
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";        
@@ -5919,6 +5921,8 @@ static Node *primary(Token **rest, Token *tok)
 
   if (equal(tok, "__builtin_ia32_cvtps2pi"))
   {
+    if (!opt_mmx)
+      error_tok(tok, "%s %d: in primary : option -mmmx required for __builtin_ia32_cvtps2pi", PARSE_C, __LINE__);
     Node *node = new_node(ND_CVTPS2PI, tok);
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";        
@@ -5992,14 +5996,29 @@ static Node *primary(Token **rest, Token *tok)
     return node;
   }
 
-  if (equal(tok, "__builtin_ia32_packssdw") || equal(tok, "__builtin_ia32_packsswb") || equal(tok, "__builtin_ia32_packuswb") ) {
+  if (equal(tok, "__builtin_ia32_packssdw") || equal(tok, "__builtin_ia32_packsswb") ||
+    equal(tok, "__builtin_ia32_punpckhbw") || equal(tok, "__builtin_ia32_packuswb")) {
     Node *node;
-    if (equal(tok, "__builtin_ia32_packssdw"))
+    if (equal(tok, "__builtin_ia32_packssdw")) {
+      if (!opt_mmx)
+        error_tok(tok, "%s %d: in primary : option -mmmx required for __builtin_ia32_packssdw", PARSE_C, __LINE__);
       node = new_node(ND_PACKSSDW, tok);
-    if (equal(tok, "__builtin_ia32_packsswb"))
+    }
+    if (equal(tok, "__builtin_ia32_packsswb")) {
+      if (!opt_mmx)
+        error_tok(tok, "%s %d: in primary : option -mmmx required for __builtin_ia32_packsswb", PARSE_C, __LINE__);      
       node = new_node(ND_PACKSSWB, tok);
-    if (equal(tok, "__builtin_ia32_packuswb"))
+    }
+    if (equal(tok, "__builtin_ia32_packuswb")) {
+      if (!opt_mmx)
+        error_tok(tok, "%s %d: in primary : option -mmmx required for __builtin_ia32_packuswb", PARSE_C, __LINE__);         
       node = new_node(ND_PACKUSWB, tok);      
+    }
+    if (equal(tok, "__builtin_ia32_punpckhbw")) {
+      if (!opt_mmx)
+        error_tok(tok, "%s %d: in primary : option -mmmx required for __builtin_ia32_punpckhbw", PARSE_C, __LINE__);         
+      node = new_node(ND_PUNPCKHBW, tok);   
+    }
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";
     ctx->line_no = __LINE__ + 1;
@@ -7469,6 +7488,8 @@ char *nodekind2str(NodeKind kind)
     return "PACKSSDW";
   case ND_PACKUSWB:
     return "PACKUSWB";
+  case ND_PUNPCKHBW:
+    return "PUNPCKHBW";
   default:
     return "UNREACHABLE"; 
   }
