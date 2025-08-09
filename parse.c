@@ -5992,12 +5992,14 @@ static Node *primary(Token **rest, Token *tok)
     return node;
   }
 
-  if (equal(tok, "__builtin_ia32_packssdw") || equal(tok, "__builtin_ia32_packsswb") ) {
+  if (equal(tok, "__builtin_ia32_packssdw") || equal(tok, "__builtin_ia32_packsswb") || equal(tok, "__builtin_ia32_packuswb") ) {
     Node *node;
     if (equal(tok, "__builtin_ia32_packssdw"))
       node = new_node(ND_PACKSSDW, tok);
     if (equal(tok, "__builtin_ia32_packsswb"))
       node = new_node(ND_PACKSSWB, tok);
+    if (equal(tok, "__builtin_ia32_packuswb"))
+      node = new_node(ND_PACKUSWB, tok);      
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";
     ctx->line_no = __LINE__ + 1;
@@ -7465,6 +7467,8 @@ char *nodekind2str(NodeKind kind)
     return "PACKSSWB";
   case ND_PACKSSDW:
     return "PACKSSDW";
+  case ND_PACKUSWB:
+    return "PACKUSWB";
   default:
     return "UNREACHABLE"; 
   }
