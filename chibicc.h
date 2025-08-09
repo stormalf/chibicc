@@ -443,6 +443,7 @@ typedef enum
   ND_PADDUSW,
   ND_PSUBB,
   ND_PSUBW,
+  ND_PSUBD,
 } NodeKind;
 
 // AST node type
