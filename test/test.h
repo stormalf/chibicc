@@ -3,8 +3,10 @@
 #define ASSERT(x, y) assert(x, y, #y)
 #define DASSERT(x) static_assert(x); ASSERT(1, x)
 #define EASSERT(x,y) static_assert((x) == (y)); ASSERT(x, y)
+#define LASSERT(x, y) assert64(x, y, #y)
 
 void assert(int expected, int actual, char *code);
+void assert64(long long expected, long long actual, char *code);
 
 int printf(char *fmt, ...);
 int sprintf(char *buf, char *fmt, ...);

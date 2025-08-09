@@ -11,6 +11,14 @@ void assert(int expected, int actual, char *code) {
   }
 }
 
+void assert64(long long expected, long long actual, char *code) {
+  if (expected == actual) {
+    printf("%s => %lld\n", code, actual);
+  } else {
+    printf("%s => %lld expected but got %lld\n", code, expected, actual);
+    exit(1);
+  }
+}
 
 static int static_fn() { return 5; }
 int ext1 = 5;
