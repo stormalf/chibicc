@@ -5701,6 +5701,7 @@ static Node *primary(Token **rest, Token *tok)
      equal(tok, "__builtin_ia32_psubsw") || equal(tok, "__builtin_ia32_psubusb") ||
      equal(tok, "__builtin_ia32_psubusw") || equal(tok, "__builtin_ia32_pmaddwd") ||
      equal(tok, "__builtin_ia32_pmulhw") || equal(tok, "__builtin_ia32_pmullw") ||
+     equal(tok, "__builtin_ia32_psllw") ||
     equal(tok, "__builtin_ia32_punpckhbw") || equal(tok, "__builtin_ia32_packuswb")) {
     if (!opt_mmx)
         error_tok(tok, "%s %d: in primary : option -mmmx required for builtin_ia32", PARSE_C, __LINE__);
@@ -5789,7 +5790,10 @@ static Node *primary(Token **rest, Token *tok)
     } 
     else if (equal(tok, "__builtin_ia32_pmullw")) {
       node = new_node(ND_PMULLW, tok);   
-    }                                                                        
+    }   
+    else if (equal(tok, "__builtin_ia32_psllw")) {
+      node = new_node(ND_PSLLW, tok);   
+    }                                                                            
     SET_CTX(ctx); 
     tok = skip(tok->next, "(", ctx);
     node->lhs = assign(&tok, tok);
@@ -7189,7 +7193,9 @@ char *nodekind2str(NodeKind kind)
   case ND_PMULHW:
     return "PMULHW";   
   case ND_PMULLW:
-    return "PMULLW";                                                                      
+    return "PMULLW";  
+  case ND_PSLLW:
+    return "PSLLW";                                                                          
   default:
     return "UNREACHABLE"; 
   }
