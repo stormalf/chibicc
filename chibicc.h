@@ -433,6 +433,7 @@ typedef enum
   ND_PUNPCKLBW,
   ND_PUNPCKLWD,
   ND_PUNPCKLDQ,
+  ND_PADDB,
 } NodeKind;
 
 // AST node type
