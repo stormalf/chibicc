@@ -5998,6 +5998,7 @@ static Node *primary(Token **rest, Token *tok)
 
   if (equal(tok, "__builtin_ia32_packssdw") || equal(tok, "__builtin_ia32_packsswb") ||
      equal(tok, "__builtin_ia32_punpckhwd") || equal(tok, "__builtin_ia32_punpckhdq") ||
+     equal(tok, "__builtin_ia32_punpcklbw") ||
     equal(tok, "__builtin_ia32_punpckhbw") || equal(tok, "__builtin_ia32_packuswb")) {
     Node *node;
     if (equal(tok, "__builtin_ia32_packssdw")) {
@@ -6029,7 +6030,12 @@ static Node *primary(Token **rest, Token *tok)
       if (!opt_mmx)
         error_tok(tok, "%s %d: in primary : option -mmmx required for __builtin_ia32_punpckhdq", PARSE_C, __LINE__);         
       node = new_node(ND_PUNPCKHDQ, tok);   
-    }        
+    } 
+    if (equal(tok, "__builtin_ia32_punpcklbw")) {
+      if (!opt_mmx)
+        error_tok(tok, "%s %d: in primary : option -mmmx required for __builtin_ia32_punpcklbw", PARSE_C, __LINE__);         
+      node = new_node(ND_PUNPCKLBW, tok);   
+    }            
     ctx->filename = PARSE_C;
     ctx->funcname = "primary";
     ctx->line_no = __LINE__ + 1;
@@ -7504,7 +7510,9 @@ char *nodekind2str(NodeKind kind)
   case ND_PUNPCKHWD:
     return "PUNPCKHWD";   
   case ND_PUNPCKHDQ:
-    return "PUNPCKHDQ";        
+    return "PUNPCKHDQ";   
+  case ND_PUNPCKLBW:
+    return "PUNPCKLBW";     
   default:
     return "UNREACHABLE"; 
   }
