@@ -664,5 +664,8 @@ void add_type(Node *node)
   case ND_PACKSSWB:
     node->ty = vector_of(ty_char, 8);
     return;
+  case ND_PSUBUSW:
+    node->ty = vector_of(ty_ushort, 4);
+    return;
   }
 }
