@@ -429,6 +429,7 @@ typedef enum
   ND_PACKUSWB,
   ND_PUNPCKHBW,
   ND_PUNPCKHWD,
+  ND_PUNPCKHDQ,
 } NodeKind;
 
 // AST node type
