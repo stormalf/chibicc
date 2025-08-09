@@ -532,6 +532,7 @@ void add_type(Node *node)
     add_type(node->builtin_val);
     add_type(node->builtin_size);
     return;
+  case ND_PUNPCKLDQ:
   case ND_PUNPCKHDQ:
   case ND_VECINITV2SI:  
   case ND_CVTPS2PI:  
