@@ -29,6 +29,14 @@ int main(void) {
     ASSERT(4, result[1]);
     ASSERT(6, result[2]);
     ASSERT(8, result[3]);
+
+    int count = 1;
+    result = (v4hi)__builtin_ia32_psllwi(a, count);
+    ASSERT(2, result[0]);
+    ASSERT(4, result[1]);
+    ASSERT(6, result[2]);
+    ASSERT(8, result[3]);    
+
     printf("OK\n");
 
     return 0;

@@ -18,6 +18,11 @@ int main() {
 
     ASSERT(2, result[0]);
     ASSERT(4, result[1]);
+
+    int count = 1;
+    result = __builtin_ia32_pslldi(a, count);
+    ASSERT(2, result[0]);
+    ASSERT(4, result[1]);
     printf("OK\n");
 
     return 0;

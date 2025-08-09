@@ -464,6 +464,7 @@ typedef enum
   ND_PSLLD,
   ND_PSLLDI,
   ND_PSLLQ,
+  ND_PSLLQI,
 } NodeKind;
 
 // AST node type
