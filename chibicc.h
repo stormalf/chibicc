@@ -424,6 +424,7 @@ typedef enum
   ND_VECINITV2SI,
   ND_VECEXTV2SI,
   ND_PACKSSWB,
+  ND_PACKSSDW,
 } NodeKind;
 
 // AST node type

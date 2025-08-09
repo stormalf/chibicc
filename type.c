@@ -630,6 +630,9 @@ void add_type(Node *node)
   case ND_VECEXTV2SI:
     node->ty = ty_int;
     return;
+  case ND_PACKSSDW:
+     node->ty = vector_of(ty_short, 4);
+     return;
   case ND_PACKSSWB:
      node->ty = vector_of(ty_char, 8);
      return;
