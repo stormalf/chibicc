@@ -1405,12 +1405,6 @@ static void gen_sse_binop3(Node *node, const char *insn, bool rhs_is_imm) {
   println("  %s %%xmm1, %%xmm0", insn);
 }
 
-static void gen_sse_binop4(Node *node, const char *insn, bool rhs_is_imm) {
-  gen_expr(node->lhs);
-  println("  movaps %%xmm0, %%xmm1"); 
-  gen_expr(node->rhs);
-  println("  %s %%xmm1, %%xmm0", insn);
-}
 
 // Helper to emit MMX two-operand instruction
 static void gen_mmx_binop(Node *node, const char *insn, bool rhs_is_imm) {
@@ -2524,9 +2518,9 @@ static void gen_expr(Node *node)
   case ND_CMPGTPS: gen_sse_binop3(node, "cmpps $0x6,", false);  return; 
   case ND_CMPGEPS: gen_sse_binop3(node, "cmpps $0xD,", false);  return; 
   case ND_CMPNEQPS: gen_sse_binop3(node, "cmpps $4,", false);  return; 
-  case ND_CMPNLTPS: gen_sse_binop4(node, "cmpps $2,", false);  return; 
+  case ND_CMPNLTPS: gen_sse_binop3(node, "cmpps $5,", false);  return; 
+  case ND_CMPNLEPS: gen_sse_binop3(node, "cmpps $6,", false);  return; 
   
-
 }
 
   
