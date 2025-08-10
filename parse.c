@@ -5714,6 +5714,7 @@ static Node *primary(Token **rest, Token *tok)
       equal(tok, "__builtin_ia32_cmpneqss") || equal(tok, "__builtin_ia32_cmpnltss") ||
       equal(tok, "__builtin_ia32_cmpnless") || equal(tok, "__builtin_ia32_cmpordss") ||
       equal(tok, "__builtin_ia32_cmpunordss") || equal(tok, "__builtin_ia32_cmpeqps") || 
+      equal(tok, "__builtin_ia32_cmpltps") || 
       equal(tok, "__builtin_ia32_maxss") || equal(tok, "__builtin_ia32_minss"))
   {
     int builtin = builtin_enum(tok);
@@ -7323,7 +7324,9 @@ char *nodekind2str(NodeKind kind)
   case ND_CMPUNORDSS:
     return "CMPUNORDSS";    
   case ND_CMPEQPS:
-    return "CMPEQPS";                                                                                                                                                                                                                                                         
+    return "CMPEQPS";  
+  case ND_CMPLTPS:
+    return "CMPLTPS";                                                                                                                                                                                                                                                             
   default:
     return "UNREACHABLE"; 
   }
@@ -7745,6 +7748,7 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_cmpordss", ND_CMPORDSS },  
     { "__builtin_ia32_cmpunordss", ND_CMPUNORDSS },  
     { "__builtin_ia32_cmpeqps", ND_CMPEQPS },
+    { "__builtin_ia32_cmpltps", ND_CMPLTPS },
         
 };
 
