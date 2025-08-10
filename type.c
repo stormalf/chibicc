@@ -538,6 +538,8 @@ void add_type(Node *node)
   case ND_PADDQ:
     node->ty = vector_of(ty_long, 1);
     return;
+  case ND_PSRADI:
+  case ND_PSRAD:
   case ND_PSLLDI:
   case ND_PSLLD:
   case ND_PSUBD:

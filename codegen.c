@@ -2703,7 +2703,29 @@ case ND_PSRAWI:
     }
     println("  movq %%mm0, %%rax");
     println("  movq %%rax, %%xmm0"); 
-    return;                                                                                                      
+    return;   
+case ND_PSRAD:
+    gen_expr(node->lhs);  
+    println("  movq (%%rax), %%mm0");  
+    gen_expr(node->rhs);   
+    println("  movq (%%rax), %%mm1"); 
+    println("  psrad %%mm1, %%mm0");
+    println("  movq %%mm0, %%rax");
+    println("  movq %%rax, %%xmm0"); 
+    return;  
+case ND_PSRADI:
+    gen_expr(node->lhs);  
+    println("  movq (%%rax), %%mm0");  
+    if (node->rhs->kind == ND_NUM)
+      println("  psrad $%ld, %%mm0", node->rhs->val);
+    else {
+    gen_expr(node->rhs);   
+    println("  movq %%rax, %%mm1"); 
+    println("  psraw %%mm1, %%mm0");
+    }
+    println("  movq %%mm0, %%rax");
+    println("  movq %%rax, %%xmm0"); 
+    return;                                                                                                              
   }
 
   if (is_vector(node->lhs->ty)) {
