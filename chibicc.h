@@ -494,6 +494,7 @@ typedef enum
   ND_SQRTSS,
   ND_RCPSS,
   ND_RSQRTSS,
+  ND_SQRTPS,
   ND_MINSS,
   ND_MAXSS,
 } NodeKind;

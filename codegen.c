@@ -2509,7 +2509,11 @@ static void gen_expr(Node *node)
     println("  movss %%xmm0, %%xmm1"); 
     gen_expr(node->lhs);
     println("  maxss %%xmm1, %%xmm0");     
-    return;                   
+    return; 
+  case ND_SQRTPS:
+    gen_expr(node->lhs);
+    println("  sqrtps %%xmm0, %%xmm0");   
+    return;                       
   }
 
   
