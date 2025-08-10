@@ -5707,7 +5707,7 @@ static Node *primary(Token **rest, Token *tok)
    
   if (equal(tok, "__builtin_ia32_vec_init_v2si") || equal(tok, "__builtin_ia32_vec_ext_v2si") ||
       equal(tok, "__builtin_ia32_minps") || equal(tok, "__builtin_ia32_maxps") ||
-      equal(tok, "__builtin_ia32_andps") ||
+      equal(tok, "__builtin_ia32_andps") || equal(tok, "__builtin_ia32_andnps") ||
       equal(tok, "__builtin_ia32_maxss") || equal(tok, "__builtin_ia32_minss"))
   {
     int builtin = builtin_enum(tok);
@@ -7291,7 +7291,9 @@ char *nodekind2str(NodeKind kind)
   case ND_MAXSS:
     return "MAXSS"; 
   case ND_ANDPS:
-    return "ANDPS";                                                                                                                                                                                                      
+    return "ANDPS";       
+  case ND_ANDNPS:
+    return "ANDNPS";                                                                                                                                                                                                          
   default:
     return "UNREACHABLE"; 
   }
@@ -7699,7 +7701,8 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_maxss", ND_MAXSS },  
     { "__builtin_ia32_maxps", ND_MAXPS },       
     { "__builtin_ia32_rcpps", ND_RCPPS },     
-    { "__builtin_ia32_andps", ND_ANDPS },           
+    { "__builtin_ia32_andps", ND_ANDPS },      
+    { "__builtin_ia32_andnps", ND_ANDNPS },           
         
 };
 
