@@ -5706,6 +5706,7 @@ static Node *primary(Token **rest, Token *tok)
      equal(tok, "__builtin_ia32_psllq") ||  equal(tok, "__builtin_ia32_psllqi") ||
      equal(tok, "__builtin_ia32_psraw") || equal(tok, "__builtin_ia32_psrawi") ||
      equal(tok, "__builtin_ia32_psrad") || equal(tok, "__builtin_ia32_psradi") || 
+     equal(tok, "__builtin_ia32_psrlw") || equal(tok, "__builtin_ia32_psrlwi") ||
     equal(tok, "__builtin_ia32_punpckhbw") || equal(tok, "__builtin_ia32_packuswb")) {
     if (!opt_mmx)
         error_tok(tok, "%s %d: in primary : option -mmmx required for builtin_ia32", PARSE_C, __LINE__);
@@ -5824,7 +5825,13 @@ static Node *primary(Token **rest, Token *tok)
     } 
     else if (equal(tok, "__builtin_ia32_psradi")) {
       node = new_node(ND_PSRADI, tok);   
-    }                                              
+    }  
+    else if (equal(tok, "__builtin_ia32_psrlw")) {
+      node = new_node(ND_PSRLW, tok);   
+    }   
+    else if (equal(tok, "__builtin_ia32_psrlwi")) {
+      node = new_node(ND_PSRLWI, tok);   
+    }                                                      
     SET_CTX(ctx); 
     tok = skip(tok->next, "(", ctx);
     node->lhs = assign(&tok, tok);
@@ -7244,7 +7251,11 @@ char *nodekind2str(NodeKind kind)
   case ND_PSRAD:
     return "PSRAD";  
   case ND_PSRADI:
-    return "PSRADI";                                                                                                                  
+    return "PSRADI";
+  case ND_PSRLW:
+    return "PSRLW";      
+  case ND_PSRLWI:
+    return "PSRLWI";                                                                                                                           
   default:
     return "UNREACHABLE"; 
   }

@@ -469,6 +469,8 @@ typedef enum
   ND_PSRAWI,
   ND_PSRAD,
   ND_PSRADI,
+  ND_PSRLW,
+  ND_PSRLWI,
 } NodeKind;
 
 // AST node type
