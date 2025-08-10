@@ -98,6 +98,13 @@ struct InitDesg
   Obj *var;
 };
 
+
+typedef struct {
+    const char *name;
+    int node_kind;
+} BuiltinEntry;
+
+
 static int nbFunc = 0;
 static Type* ArrayType[50][50];
 static Token* ArrayToken[50][50];
@@ -216,6 +223,7 @@ static bool is_const_var(Obj *var) ;
 static bool is_str_tok(Token **rest, Token *tok, Token **str_tok);
 
 static Node *compound_stmt2(Token **rest, Token *tok);
+static int builtin_enum(Token *tok);
 
 static int align_down(int n, int align)
 {
@@ -5688,157 +5696,15 @@ static Node *primary(Token **rest, Token *tok)
     return node;
   }
 
-  if (equal(tok, "__builtin_ia32_packssdw") || equal(tok, "__builtin_ia32_packsswb") ||
-     equal(tok, "__builtin_ia32_punpckhwd") || equal(tok, "__builtin_ia32_punpckhdq") ||
-     equal(tok, "__builtin_ia32_punpcklbw") || equal(tok, "__builtin_ia32_punpcklwd") ||
-     equal(tok, "__builtin_ia32_punpckldq") || equal(tok, "__builtin_ia32_paddb") ||
-     equal(tok, "__builtin_ia32_paddw") || equal(tok, "__builtin_ia32_paddd") ||
-     equal(tok, "__builtin_ia32_paddq") || equal(tok, "__builtin_ia32_paddsb") ||
-     equal(tok, "__builtin_ia32_paddsw") || equal(tok, "__builtin_ia32_paddusb") ||
-     equal(tok, "__builtin_ia32_paddusw") || equal(tok, "__builtin_ia32_psubb") || 
-     equal(tok, "__builtin_ia32_psubw") || equal(tok, "__builtin_ia32_psubd") ||
-     equal(tok, "__builtin_ia32_psubq") || equal(tok, "__builtin_ia32_psubsb") ||
-     equal(tok, "__builtin_ia32_psubsw") || equal(tok, "__builtin_ia32_psubusb") ||
-     equal(tok, "__builtin_ia32_psubusw") || equal(tok, "__builtin_ia32_pmaddwd") ||
-     equal(tok, "__builtin_ia32_pmulhw") || equal(tok, "__builtin_ia32_pmullw") ||
-     equal(tok, "__builtin_ia32_psllw") || equal(tok, "__builtin_ia32_psllwi") || 
-     equal(tok, "__builtin_ia32_pslld") || equal(tok, "__builtin_ia32_pslldi") || 
-     equal(tok, "__builtin_ia32_psllq") ||  equal(tok, "__builtin_ia32_psllqi") ||
-     equal(tok, "__builtin_ia32_psraw") || equal(tok, "__builtin_ia32_psrawi") ||
-     equal(tok, "__builtin_ia32_psrad") || equal(tok, "__builtin_ia32_psradi") || 
-     equal(tok, "__builtin_ia32_psrlw") || equal(tok, "__builtin_ia32_psrlwi") ||
-     equal(tok, "__builtin_ia32_psrld") || equal(tok, "__builtin_ia32_psrldi") ||
-    equal(tok, "__builtin_ia32_punpckhbw") || equal(tok, "__builtin_ia32_packuswb")) {
+  //managing lots of  builtin_ia32 that needs two args
+  // defined in builtin_table[]
+  int builtin = builtin_enum(tok);
+  if (builtin != -1) {
+  
     if (!opt_mmx)
         error_tok(tok, "%s %d: in primary : option -mmmx required for builtin_ia32", PARSE_C, __LINE__);
 
-    Node *node;
-    if (equal(tok, "__builtin_ia32_packssdw")) {
-      node = new_node(ND_PACKSSDW, tok);
-    }
-    else if (equal(tok, "__builtin_ia32_packsswb")) {
-      node = new_node(ND_PACKSSWB, tok);
-    }
-    else if (equal(tok, "__builtin_ia32_packuswb")) {
-      node = new_node(ND_PACKUSWB, tok);      
-    }
-    else if (equal(tok, "__builtin_ia32_punpckhbw")) {
-      node = new_node(ND_PUNPCKHBW, tok);   
-    }
-    else if (equal(tok, "__builtin_ia32_punpckhwd")) {
-      node = new_node(ND_PUNPCKHWD, tok);   
-    }  
-    else if (equal(tok, "__builtin_ia32_punpckhdq")) {
-      node = new_node(ND_PUNPCKHDQ, tok);   
-    } 
-    else if (equal(tok, "__builtin_ia32_punpcklbw")) {
-      node = new_node(ND_PUNPCKLBW, tok);   
-    }       
-    else if (equal(tok, "__builtin_ia32_punpcklwd")) {
-      node = new_node(ND_PUNPCKLWD, tok);   
-    }  
-    else if (equal(tok, "__builtin_ia32_punpckldq")) {
-      node = new_node(ND_PUNPCKLDQ, tok);   
-    }     
-    else if (equal(tok, "__builtin_ia32_paddb")) {
-      node = new_node(ND_PADDB, tok);   
-    }      
-    else if (equal(tok, "__builtin_ia32_paddw")) {
-      node = new_node(ND_PADDW, tok);   
-    } 
-    else if (equal(tok, "__builtin_ia32_paddd")) {
-      node = new_node(ND_PADDD, tok);   
-    }  
-    else if (equal(tok, "__builtin_ia32_paddq")) {
-      node = new_node(ND_PADDQ, tok);   
-    }      
-    else if (equal(tok, "__builtin_ia32_paddsb")) {
-      node = new_node(ND_PADDSB, tok);   
-    }       
-    else if (equal(tok, "__builtin_ia32_paddsw")) {
-      node = new_node(ND_PADDSW, tok);   
-    } 
-    else if (equal(tok, "__builtin_ia32_paddusb")) {
-      node = new_node(ND_PADDUSB, tok);   
-    }    
-    else if (equal(tok, "__builtin_ia32_paddusw")) {
-      node = new_node(ND_PADDUSW, tok);   
-    }      
-    else if (equal(tok, "__builtin_ia32_psubb")) {
-      node = new_node(ND_PSUBB, tok);   
-    }  
-    else if (equal(tok, "__builtin_ia32_psubw")) {
-      node = new_node(ND_PSUBW, tok);   
-    }  
-    else if (equal(tok, "__builtin_ia32_psubd")) {
-      node = new_node(ND_PSUBD, tok);   
-    } 
-    else if (equal(tok, "__builtin_ia32_psubq")) {
-      node = new_node(ND_PSUBQ, tok);   
-    }     
-    else if (equal(tok, "__builtin_ia32_psubsb")) {
-      node = new_node(ND_PSUBSB, tok);   
-    }  
-    else if (equal(tok, "__builtin_ia32_psubsw")) {
-      node = new_node(ND_PSUBSW, tok);   
-    }   
-    else if (equal(tok, "__builtin_ia32_psubusb")) {
-      node = new_node(ND_PSUBUSB, tok);   
-    }  
-    else if (equal(tok, "__builtin_ia32_psubusw")) {
-      node = new_node(ND_PSUBUSW, tok);   
-    }   
-    else if (equal(tok, "__builtin_ia32_pmaddwd")) {
-      node = new_node(ND_PMADDWD, tok);   
-    }  
-    else if (equal(tok, "__builtin_ia32_pmulhw")) {
-      node = new_node(ND_PMULHW, tok);   
-    } 
-    else if (equal(tok, "__builtin_ia32_pmullw")) {
-      node = new_node(ND_PMULLW, tok);   
-    }   
-    else if (equal(tok, "__builtin_ia32_psllw")) {
-      node = new_node(ND_PSLLW, tok);   
-    }              
-    else if (equal(tok, "__builtin_ia32_psllwi")) {
-      node = new_node(ND_PSLLWI, tok);   
-    }  
-    else if (equal(tok, "__builtin_ia32_pslld")) {
-      node = new_node(ND_PSLLD, tok);   
-    }      
-    else if (equal(tok, "__builtin_ia32_pslldi")) {
-      node = new_node(ND_PSLLDI, tok);   
-    }  
-    else if (equal(tok, "__builtin_ia32_psllq")) {
-      node = new_node(ND_PSLLQ, tok);   
-    }   
-    else if (equal(tok, "__builtin_ia32_psllqi")) {
-      node = new_node(ND_PSLLQI, tok);   
-    }    
-    else if (equal(tok, "__builtin_ia32_psraw")) {
-      node = new_node(ND_PSRAW, tok);   
-    }   
-    else if (equal(tok, "__builtin_ia32_psrawi")) {
-      node = new_node(ND_PSRAWI, tok);   
-    } 
-    else if (equal(tok, "__builtin_ia32_psrad")) {
-      node = new_node(ND_PSRAD, tok);   
-    } 
-    else if (equal(tok, "__builtin_ia32_psradi")) {
-      node = new_node(ND_PSRADI, tok);   
-    }  
-    else if (equal(tok, "__builtin_ia32_psrlw")) {
-      node = new_node(ND_PSRLW, tok);   
-    }   
-    else if (equal(tok, "__builtin_ia32_psrlwi")) {
-      node = new_node(ND_PSRLWI, tok);   
-    }  
-    else if (equal(tok, "__builtin_ia32_psrld")) {
-      node = new_node(ND_PSRLD, tok);   
-    }   
-    else if (equal(tok, "__builtin_ia32_psrldi")) {
-      node = new_node(ND_PSRLDI, tok);   
-    }                                                          
+    Node *node = new_node(builtin, tok);
     SET_CTX(ctx); 
     tok = skip(tok->next, "(", ctx);
     node->lhs = assign(&tok, tok);
@@ -7593,4 +7459,56 @@ static bool is_str_tok(Token **rest, Token *tok, Token **str_tok) {
   return false;
 }
 
+static BuiltinEntry builtin_table[] = {
+    { "__builtin_ia32_packssdw", ND_PACKSSDW },
+    { "__builtin_ia32_packsswb", ND_PACKSSWB },
+    { "__builtin_ia32_packuswb", ND_PACKUSWB },
+    { "__builtin_ia32_punpckhbw", ND_PUNPCKHBW },
+    { "__builtin_ia32_punpckhwd", ND_PUNPCKHWD },
+    { "__builtin_ia32_punpckhdq", ND_PUNPCKHDQ },
+    { "__builtin_ia32_punpcklbw", ND_PUNPCKLBW },
+    { "__builtin_ia32_punpcklwd", ND_PUNPCKLWD },
+    { "__builtin_ia32_punpckldq", ND_PUNPCKLDQ },
+    { "__builtin_ia32_paddb", ND_PADDB },
+    { "__builtin_ia32_paddw", ND_PADDW },
+    { "__builtin_ia32_paddd", ND_PADDD },
+    { "__builtin_ia32_paddq", ND_PADDQ },
+    { "__builtin_ia32_paddsb", ND_PADDSB },
+    { "__builtin_ia32_paddsw", ND_PADDSW },
+    { "__builtin_ia32_paddusb", ND_PADDUSB },
+    { "__builtin_ia32_paddusw", ND_PADDUSW },
+    { "__builtin_ia32_psubb", ND_PSUBB },
+    { "__builtin_ia32_psubw", ND_PSUBW },
+    { "__builtin_ia32_psubd", ND_PSUBD },
+    { "__builtin_ia32_psubq", ND_PSUBQ },
+    { "__builtin_ia32_psubsb", ND_PSUBSB },
+    { "__builtin_ia32_psubsw", ND_PSUBSW },
+    { "__builtin_ia32_psubusb", ND_PSUBUSB },
+    { "__builtin_ia32_psubusw", ND_PSUBUSW },
+    { "__builtin_ia32_pmaddwd", ND_PMADDWD },
+    { "__builtin_ia32_pmulhw", ND_PMULHW },
+    { "__builtin_ia32_pmullw", ND_PMULLW },
+    { "__builtin_ia32_psllw", ND_PSLLW },
+    { "__builtin_ia32_psllwi", ND_PSLLWI },
+    { "__builtin_ia32_pslld", ND_PSLLD },
+    { "__builtin_ia32_pslldi", ND_PSLLDI },
+    { "__builtin_ia32_psllq", ND_PSLLQ },
+    { "__builtin_ia32_psllqi", ND_PSLLQI },
+    { "__builtin_ia32_psraw", ND_PSRAW },
+    { "__builtin_ia32_psrawi", ND_PSRAWI },
+    { "__builtin_ia32_psrad", ND_PSRAD },
+    { "__builtin_ia32_psradi", ND_PSRADI },
+    { "__builtin_ia32_psrlw", ND_PSRLW },
+    { "__builtin_ia32_psrlwi", ND_PSRLWI },
+    { "__builtin_ia32_psrld", ND_PSRLD },
+    { "__builtin_ia32_psrldi", ND_PSRLDI },
+};
+
+static int builtin_enum(Token *tok) {
+    for (size_t i = 0; i < sizeof(builtin_table) / sizeof(builtin_table[0]); i++) {
+        if (equal(tok, builtin_table[i].name))
+            return builtin_table[i].node_kind;
+    }
+    return -1; // not found
+}
 
