@@ -2497,7 +2497,13 @@ static void gen_expr(Node *node)
   case ND_RSQRTSS:
     gen_expr(node->lhs);
     println("  rsqrtss %%xmm0, %%xmm0");   
-    return;           
+    return; 
+  case ND_MINSS:
+    gen_expr(node->rhs);
+    println("  movss %%xmm0, %%xmm1"); 
+    gen_expr(node->lhs);
+    println("  minss %%xmm1, %%xmm0");     
+    return;               
   }
 
   

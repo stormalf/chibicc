@@ -5703,7 +5703,7 @@ static Node *primary(Token **rest, Token *tok)
    }
 
    
-  if (equal(tok, "__builtin_ia32_vec_init_v2si") || equal(tok, "__builtin_ia32_vec_ext_v2si") )
+  if (equal(tok, "__builtin_ia32_vec_init_v2si") || equal(tok, "__builtin_ia32_vec_ext_v2si")  || equal(tok, "__builtin_ia32_minss"))
   {
     int builtin = builtin_enum(tok);
     if (builtin != -1) {
@@ -7270,7 +7270,9 @@ char *nodekind2str(NodeKind kind)
   case ND_RSQRTSS:
     return "RSQRTSS";     
   case ND_RCPSS:
-    return "RCPSS";                                                                                                                                                                                          
+    return "RCPSS";  
+  case ND_MINSS:
+    return "MINSS";                                                                                                                                                                                              
   default:
     return "UNREACHABLE"; 
   }
@@ -7670,7 +7672,8 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_divss", ND_DIVSS },     
     { "__builtin_ia32_sqrtss", ND_SQRTSS },   
     { "__builtin_ia32_rcpss", ND_RCPSS },     
-    { "__builtin_ia32_rsqrtss", ND_RSQRTSS },        
+    { "__builtin_ia32_rsqrtss", ND_RSQRTSS },
+    { "__builtin_ia32_minss", ND_MINSS },           
         
 };
 
