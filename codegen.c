@@ -2443,49 +2443,53 @@ static void gen_expr(Node *node)
   case ND_PCMPEQD:    gen_mmx_binop(node, "pcmpeqd", false);  return;     
   case ND_PCMPGTD:    gen_mmx_binop(node, "pcmpgtd", false);  return;           
   case ND_VECINITV4HI:
-      for (int i = 0; i < node->builtin_nargs; i++) {
-        gen_expr(node->builtin_args[i]);  // result in %eax
-        if (i == 0) {
-            println("  movd %%eax, %%xmm0");
-        } else {
-            println("  pinsrw $%d, %%eax, %%xmm0", i);
-        }
+    for (int i = 0; i < node->builtin_nargs; i++) {
+      gen_expr(node->builtin_args[i]);  // result in %eax
+      if (i == 0) {
+          println("  movd %%eax, %%xmm0");
+      } else {
+          println("  pinsrw $%d, %%eax, %%xmm0", i);
+      }
     }
     return;
   case ND_VECINITV8QI:
-      for (int i = 0; i < node->builtin_nargs; i++) {
-        gen_expr(node->builtin_args[i]);  // result in %eax
-        if (i == 0) {
-            println("  movd %%eax, %%xmm0");
-        } else {
-            println("  pinsrb $%d, %%eax, %%xmm0", i);
-        }
-    }
-    return;   
+    for (int i = 0; i < node->builtin_nargs; i++) {
+      gen_expr(node->builtin_args[i]);  // result in %eax
+      if (i == 0) {
+          println("  movd %%eax, %%xmm0");
+      } else {
+          println("  pinsrb $%d, %%eax, %%xmm0", i);
+      }
+  }
+  return;   
   case ND_ADDSS:
-      gen_expr(node->rhs);
-      println("  movss %%xmm0, %%xmm1"); 
-      gen_expr(node->lhs);
-      println("  addss %%xmm1, %%xmm0");     
-      return; 
+    gen_expr(node->rhs);
+    println("  movss %%xmm0, %%xmm1"); 
+    gen_expr(node->lhs);
+    println("  addss %%xmm1, %%xmm0");     
+    return; 
   case ND_SUBSS:
-      gen_expr(node->rhs);
-      println("  movss %%xmm0, %%xmm1"); 
-      gen_expr(node->lhs);
-      println("  subss %%xmm1, %%xmm0");     
-      return; 
+    gen_expr(node->rhs);
+    println("  movss %%xmm0, %%xmm1"); 
+    gen_expr(node->lhs);
+    println("  subss %%xmm1, %%xmm0");     
+    return; 
   case ND_MULSS:
-      gen_expr(node->rhs);
-      println("  movss %%xmm0, %%xmm1"); 
-      gen_expr(node->lhs);
-      println("  mulss %%xmm1, %%xmm0");     
-      return;       
-    case ND_DIVSS:
-      gen_expr(node->rhs);
-      println("  movss %%xmm0, %%xmm1"); 
-      gen_expr(node->lhs);
-      println("  divss %%xmm1, %%xmm0");     
-      return; 
+    gen_expr(node->rhs);
+    println("  movss %%xmm0, %%xmm1"); 
+    gen_expr(node->lhs);
+    println("  mulss %%xmm1, %%xmm0");     
+    return;       
+  case ND_DIVSS:
+    gen_expr(node->rhs);
+    println("  movss %%xmm0, %%xmm1"); 
+    gen_expr(node->lhs);
+    println("  divss %%xmm1, %%xmm0");     
+    return; 
+  case ND_SQRTSS:
+    gen_expr(node->lhs);
+    println("  sqrtss %%xmm0, %%xmm0");   
+    return;   
   }
 
   

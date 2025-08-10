@@ -5688,6 +5688,20 @@ static Node *primary(Token **rest, Token *tok)
     return node;
    }
 
+  if (equal(tok, "__builtin_ia32_sqrtss")) {
+    int builtin = builtin_enum(tok);
+    if (builtin != -1) {
+      Node *node = new_node(builtin, tok);
+      SET_CTX(ctx); 
+      tok = skip(tok->next, "(", ctx);
+      node->lhs = assign(&tok, tok);
+      add_type(node->lhs);
+      SET_CTX(ctx); 
+      *rest = skip(tok, ")", ctx);
+      return node;
+    }
+   }
+
    
   if (equal(tok, "__builtin_ia32_vec_init_v2si") || equal(tok, "__builtin_ia32_vec_ext_v2si") )
   {
@@ -7250,7 +7264,9 @@ char *nodekind2str(NodeKind kind)
   case ND_MULSS:
     return "MULSS";  
   case ND_DIVSS:
-    return "DIVSS";                                                                                                                                                                                  
+    return "DIVSS";  
+  case ND_SQRTSS:
+    return "SQRTSS";                                                                                                                                                                                      
   default:
     return "UNREACHABLE"; 
   }
@@ -7647,7 +7663,8 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_addss", ND_ADDSS },        
     { "__builtin_ia32_subss", ND_SUBSS },        
     { "__builtin_ia32_mulss", ND_MULSS },   
-    { "__builtin_ia32_divss", ND_DIVSS },        
+    { "__builtin_ia32_divss", ND_DIVSS },     
+    { "__builtin_ia32_sqrtss", ND_SQRTSS },        
         
 };
 

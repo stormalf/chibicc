@@ -491,6 +491,7 @@ typedef enum
   ND_SUBSS,
   ND_MULSS,
   ND_DIVSS,
+  ND_SQRTSS,
 } NodeKind;
 
 // AST node type
