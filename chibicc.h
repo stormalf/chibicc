@@ -489,6 +489,7 @@ typedef enum
   ND_VECINITV8QI,
   ND_ADDSS,
   ND_SUBSS,
+  ND_MULSS,
 } NodeKind;
 
 // AST node type
