@@ -2438,7 +2438,8 @@ static void gen_expr(Node *node)
   case ND_PXOR:       gen_mmx_binop(node, "pxor", false);  return;  
   case ND_PCMPEQB:    gen_mmx_binop(node, "pcmpeqb", false);  return;      
   case ND_PCMPGTB:    gen_mmx_binop(node, "pcmpgtb", false);  return;     
-  case ND_PCMPEQW:    gen_mmx_binop(node, "pcmpeqw", false);  return;                                                                                                                                             
+  case ND_PCMPEQW:    gen_mmx_binop(node, "pcmpeqw", false);  return;     
+  case ND_PCMPGTW:    gen_mmx_binop(node, "pcmpgtw", false);  return;                                                                                                                                             
   }
 
   if (is_vector(node->lhs->ty)) {
