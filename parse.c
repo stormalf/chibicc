@@ -5589,35 +5589,31 @@ static Node *primary(Token **rest, Token *tok)
       equal(tok, "__builtin_ia32_sfence") || equal(tok, "__builtin_ia32_pause") ||
       equal(tok, "__builtin_ia32_lfence") || equal(tok, "__builtin_ia32_mfence")) 
   {
-    Node *node;
-    if (equal(tok, "__builtin_ia32_emms"))
-      node = new_node(ND_EMMS, tok);
-    else if (equal(tok, "__builtin_ia32_sfence"))
-      node = new_node(ND_SFENCE, tok);
-    else if (equal(tok, "__builtin_ia32_lfence"))
-      node = new_node(ND_LFENCE, tok);
-    else if (equal(tok, "__builtin_ia32_mfence"))
-      node = new_node(ND_MFENCE, tok);     
-    else if (equal(tok, "__builtin_ia32_pause"))
-      node = new_node(ND_PAUSE, tok);   
-    SET_CTX(ctx);      
-    tok = skip(tok->next, "(", ctx);
-    SET_CTX(ctx); 
-    *rest = skip(tok, ")", ctx);    
-    return node;
+    int builtin = builtin_enum(tok);
+    if (builtin != -1) {
+      Node *node = new_node(builtin, tok);
+      SET_CTX(ctx);      
+      tok = skip(tok->next, "(", ctx);
+      SET_CTX(ctx); 
+      *rest = skip(tok, ")", ctx);    
+      return node;
+    }
   }
 
   if (equal(tok, "__builtin_ia32_stmxcsr")) {
-    Node *node = new_node(ND_STMXCSR, tok);
-    SET_CTX(ctx); 
-    tok = skip(tok->next, "(", ctx);
-    if (!equal(tok, ")")) {
-      node->lhs = assign(&tok, tok); 
-      add_type(node->lhs);
+    int builtin = builtin_enum(tok);
+    if (builtin != -1) {
+      Node *node = new_node(builtin, tok);    
+      SET_CTX(ctx); 
+      tok = skip(tok->next, "(", ctx);
+      if (!equal(tok, ")")) {
+        node->lhs = assign(&tok, tok); 
+        add_type(node->lhs);
+      }
+      SET_CTX(ctx); 
+      *rest = skip(tok, ")", ctx);    
+      return node;
     }
-    SET_CTX(ctx); 
-    *rest = skip(tok, ")", ctx);    
-    return node;
   }
 
 
@@ -5625,32 +5621,38 @@ static Node *primary(Token **rest, Token *tok)
   {
     if (!opt_mmx)
       error_tok(tok, "%s %d: in primary : option -mmmx required for __builtin_ia32_cvtpi2ps", PARSE_C, __LINE__);
-    Node *node = new_node(ND_CVTPI2PS, tok);
-    SET_CTX(ctx); 
-    tok = skip(tok->next, "(", ctx);
-    node->lhs = assign(&tok, tok);
-    add_type(node->lhs);
-    SET_CTX(ctx);     
-    tok = skip(tok, ",", ctx);
-    node->rhs = assign(&tok, tok);
-    add_type(node->rhs);
-    SET_CTX(ctx);      
-    *rest = skip(tok, ")", ctx);
-    return node;
+    int builtin = builtin_enum(tok);
+    if (builtin != -1) {
+      Node *node = new_node(builtin, tok);    
+      SET_CTX(ctx); 
+      tok = skip(tok->next, "(", ctx);
+      node->lhs = assign(&tok, tok);
+      add_type(node->lhs);
+      SET_CTX(ctx);     
+      tok = skip(tok, ",", ctx);
+      node->rhs = assign(&tok, tok);
+      add_type(node->rhs);
+      SET_CTX(ctx);      
+      *rest = skip(tok, ")", ctx);
+      return node;
+    }
   }
 
   if (equal(tok, "__builtin_ia32_cvtps2pi"))
   {
     if (!opt_mmx)
       error_tok(tok, "%s %d: in primary : option -mmmx required for __builtin_ia32_cvtps2pi", PARSE_C, __LINE__);
-    Node *node = new_node(ND_CVTPS2PI, tok);
-    SET_CTX(ctx); 
-    tok = skip(tok->next, "(", ctx);
-    node->lhs = assign(&tok, tok);
-    add_type(node->lhs);
-    SET_CTX(ctx); 
-    *rest = skip(tok, ")", ctx);
-    return node;
+    int builtin = builtin_enum(tok);
+    if (builtin != -1) {
+      Node *node = new_node(builtin, tok);    
+      SET_CTX(ctx); 
+      tok = skip(tok->next, "(", ctx);
+      node->lhs = assign(&tok, tok);
+      add_type(node->lhs);
+      SET_CTX(ctx); 
+      *rest = skip(tok, ")", ctx);
+      return node;
+    }
   }
 
   if (equal(tok, "__builtin_ia32_clflush") || equal(tok, "_mm_clflush")) {
@@ -5665,35 +5667,23 @@ static Node *primary(Token **rest, Token *tok)
    }
 
    
-  if (equal(tok, "__builtin_ia32_vec_init_v2si"))
+  if (equal(tok, "__builtin_ia32_vec_init_v2si") || equal(tok, "__builtin_ia32_vec_ext_v2si") )
   {
-    Node *node = new_node(ND_VECINITV2SI, tok);
-    SET_CTX(ctx); 
-    tok = skip(tok->next, "(", ctx);
-    node->lhs = assign(&tok, tok);
-    add_type(node->lhs);
-    SET_CTX(ctx);     
-    tok = skip(tok, ",", ctx);
-    node->rhs = assign(&tok, tok);
-    add_type(node->rhs);
-    SET_CTX(ctx);       
-    *rest = skip(tok, ")", ctx);
-    return node;
-  }
-
-  if (equal(tok, "__builtin_ia32_vec_ext_v2si")) {
-    Node *node = new_node(ND_VECEXTV2SI, tok);
-    SET_CTX(ctx); 
-    tok = skip(tok->next, "(", ctx);
-    node->lhs = assign(&tok, tok);
-    add_type(node->lhs);
-    SET_CTX(ctx); 
-    tok = skip(tok, ",", ctx);
-    node->rhs = assign(&tok, tok);
-    add_type(node->rhs);
-    SET_CTX(ctx); 
-    *rest = skip(tok, ")", ctx);
-    return node;
+    int builtin = builtin_enum(tok);
+    if (builtin != -1) {
+      Node *node = new_node(builtin, tok);
+      SET_CTX(ctx); 
+      tok = skip(tok->next, "(", ctx);
+      node->lhs = assign(&tok, tok);
+      add_type(node->lhs);
+      SET_CTX(ctx);     
+      tok = skip(tok, ",", ctx);
+      node->rhs = assign(&tok, tok);
+      add_type(node->rhs);
+      SET_CTX(ctx);       
+      *rest = skip(tok, ")", ctx);
+      return node;
+    }
   }
 
    
@@ -7614,6 +7604,18 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_pcmpgtd", ND_PCMPGTD },  
     { "__builtin_ia32_vec_init_v4hi", ND_VECINITV4HI },  
     { "__builtin_ia32_vec_init_v8qi", ND_VECINITV8QI },    
+    { "__builtin_ia32_vec_init_v2si", ND_VECINITV2SI },   
+    { "__builtin_ia32_vec_ext_v2si", ND_VECEXTV2SI },       
+    { "__builtin_ia32_emms", ND_EMMS },       
+    { "__builtin_ia32_sfence", ND_SFENCE },       
+    { "__builtin_ia32_lfence", ND_LFENCE },     
+    { "__builtin_ia32_mfence", ND_MFENCE },       
+    { "__builtin_ia32_pause", ND_PAUSE },     
+    { "__builtin_ia32_stmxcsr", ND_STMXCSR },     
+    { "__builtin_ia32_cvtpi2ps", ND_CVTPI2PS },    
+    { "__builtin_ia32_cvtps2pi", ND_CVTPS2PI },    
+    
+    
 };
 
 static int builtin_enum(Token *tok) {
