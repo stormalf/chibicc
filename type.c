@@ -532,6 +532,8 @@ void add_type(Node *node)
     add_type(node->builtin_val);
     add_type(node->builtin_size);
     return;
+  case ND_PSRLQ:
+  case ND_PSRLQI:
   case ND_PSLLQI:
   case ND_PSLLQ:
   case ND_PSUBQ:
