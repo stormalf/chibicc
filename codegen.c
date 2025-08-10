@@ -2523,6 +2523,7 @@ static void gen_expr(Node *node)
   case ND_CMPNGTPS:  gen_sse_binop3(node, "cmpps $2,", false);  return; 
   case ND_CMPNGEPS:  gen_sse_binop3(node, "cmpps $1,", false);  return;
   case ND_CMPORDPS: gen_sse_binop3(node, "cmpordps", false);  return;  
+  case ND_CMPUNORDPS: gen_sse_binop3(node, "cmpunordps", false);  return;  
   
 }
 
