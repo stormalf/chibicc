@@ -478,6 +478,7 @@ typedef enum
   ND_PAND,
   ND_PANDN,
   ND_POR,
+  ND_PXOR,
 } NodeKind;
 
 // AST node type
