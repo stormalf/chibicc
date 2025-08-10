@@ -533,6 +533,7 @@ void add_type(Node *node)
     add_type(node->builtin_size);
     return;
   case ND_PAND:
+  case ND_PANDN:
   case ND_PSRLQ:
   case ND_PSRLQI:
   case ND_PSLLQI:

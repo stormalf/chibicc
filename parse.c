@@ -7138,7 +7138,9 @@ char *nodekind2str(NodeKind kind)
   case ND_PSRLQI:
     return "PSRLQI"; 
   case ND_PAND:
-    return "PAND";                                                                                                                                      
+    return "PAND";  
+  case ND_PANDN:
+    return "PANDN";                                                                                                                                          
   default:
     return "UNREACHABLE"; 
   }
@@ -7511,6 +7513,7 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_psrlq", ND_PSRLQ },
     { "__builtin_ia32_psrlqi", ND_PSRLQI },
     { "__builtin_ia32_pand", ND_PAND },
+    { "__builtin_ia32_pandn", ND_PANDN },
 };
 
 static int builtin_enum(Token *tok) {
