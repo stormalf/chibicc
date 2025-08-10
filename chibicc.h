@@ -504,6 +504,7 @@ typedef enum
   ND_ANDPS,
   ND_ANDNPS,
   ND_ORPS,
+  ND_XORPS,
 } NodeKind;
 
 // AST node type

@@ -1383,6 +1383,28 @@ static void gen_vector_op(Node *node) {
   }
 }
 
+
+
+// Helper to emit MMX two-operand instruction
+static void gen_sse_binop1(Node *node, const char *insn, bool rhs_is_imm) {
+  gen_expr(node->rhs);
+  println("  movss %%xmm0, %%xmm1"); 
+  gen_expr(node->lhs);
+  println("  %s %%xmm1, %%xmm0", insn);
+}
+
+static void gen_sse_binop2(Node *node, const char *insn, bool rhs_is_imm) {
+    gen_expr(node->lhs);
+    println("  %s %%xmm0, %%xmm0", insn);  
+}
+
+static void gen_sse_binop3(Node *node, const char *insn, bool rhs_is_imm) {
+  gen_expr(node->rhs);
+  println("  movaps %%xmm0, %%xmm1"); 
+  gen_expr(node->lhs);
+  println("  %s %%xmm1, %%xmm0", insn);
+}
+
 // Helper to emit MMX two-operand instruction
 static void gen_mmx_binop(Node *node, const char *insn, bool rhs_is_imm) {
   gen_expr(node->lhs);
@@ -2462,97 +2484,26 @@ static void gen_expr(Node *node)
       }
   }
   return;   
-  case ND_ADDSS:
-    gen_expr(node->rhs);
-    println("  movss %%xmm0, %%xmm1"); 
-    gen_expr(node->lhs);
-    println("  addss %%xmm1, %%xmm0");     
-    return; 
-  case ND_SUBSS:
-    gen_expr(node->rhs);
-    println("  movss %%xmm0, %%xmm1"); 
-    gen_expr(node->lhs);
-    println("  subss %%xmm1, %%xmm0");     
-    return; 
-  case ND_MULSS:
-    gen_expr(node->rhs);
-    println("  movss %%xmm0, %%xmm1"); 
-    gen_expr(node->lhs);
-    println("  mulss %%xmm1, %%xmm0");     
-    return;       
-  case ND_DIVSS:
-    gen_expr(node->rhs);
-    println("  movss %%xmm0, %%xmm1"); 
-    gen_expr(node->lhs);
-    println("  divss %%xmm1, %%xmm0");     
-    return; 
-  case ND_SQRTSS:
-    gen_expr(node->lhs);
-    println("  sqrtss %%xmm0, %%xmm0");   
-    return; 
-  case ND_RCPSS:
-    gen_expr(node->lhs);
-    println("  rcpss %%xmm0, %%xmm0");   
-    return; 
-  case ND_RSQRTSS:
-    gen_expr(node->lhs);
-    println("  rsqrtss %%xmm0, %%xmm0");   
-    return; 
-  case ND_MINSS:
-    gen_expr(node->rhs);
-    println("  movss %%xmm0, %%xmm1"); 
-    gen_expr(node->lhs);
-    println("  minss %%xmm1, %%xmm0");     
-    return;    
-  case ND_MAXSS:
-    gen_expr(node->rhs);
-    println("  movss %%xmm0, %%xmm1"); 
-    gen_expr(node->lhs);
-    println("  maxss %%xmm1, %%xmm0");     
-    return; 
-  case ND_SQRTPS:
-    gen_expr(node->lhs);
-    println("  sqrtps %%xmm0, %%xmm0");   
-    return; 
-  case ND_RCPPS:
-    gen_expr(node->lhs);
-    println("  rcpps %%xmm0, %%xmm0");   
-    return;
-  case ND_RSQRTPS:
-    gen_expr(node->lhs);
-    println("  rsqrtps %%xmm0, %%xmm0");   
-    return;
-  case ND_MINPS:
-    gen_expr(node->rhs);
-    println("  movaps %%xmm0, %%xmm1"); 
-    gen_expr(node->lhs);
-    println("  minps %%xmm1, %%xmm0");     
-    return;       
-  case ND_MAXPS:
-    gen_expr(node->rhs);
-    println("  movaps %%xmm0, %%xmm1"); 
-    gen_expr(node->lhs);
-    println("  maxps %%xmm1, %%xmm0");     
-    return;     
-  case ND_ANDPS:
-    gen_expr(node->rhs);
-    println("  movaps %%xmm0, %%xmm1"); 
-    gen_expr(node->lhs);
-    println("  andps %%xmm1, %%xmm0");     
-    return; 
-  case ND_ANDNPS:
-    gen_expr(node->rhs);
-    println("  movaps %%xmm0, %%xmm1"); 
-    gen_expr(node->lhs);
-    println("  andnps %%xmm1, %%xmm0");     
-    return;   
-  case ND_ORPS:
-    gen_expr(node->rhs);
-    println("  movaps %%xmm0, %%xmm1"); 
-    gen_expr(node->lhs);
-    println("  orps %%xmm1, %%xmm0");     
-    return;                                                   
-  }
+  case ND_ADDSS: gen_sse_binop1(node, "addss", false);  return;    
+  case ND_SUBSS: gen_sse_binop1(node, "subss", false);  return;    
+  case ND_MULSS: gen_sse_binop1(node, "mulss", false);  return;    
+  case ND_DIVSS: gen_sse_binop1(node, "divss", false);  return;    
+  case ND_SQRTSS: gen_sse_binop2(node, "sqrtss", false);  return;   
+  case ND_RCPSS: gen_sse_binop2(node, "rcpss", false);  return;   
+  case ND_RSQRTSS: gen_sse_binop2(node, "rsqrtss", false);  return;   
+  case ND_MINSS: gen_sse_binop1(node, "minss", false);  return; 
+  case ND_MAXSS: gen_sse_binop1(node, "maxss", false);  return; 
+  case ND_SQRTPS: gen_sse_binop2(node, "sqrtps", false);  return;  
+  case ND_RCPPS: gen_sse_binop2(node, "rcpps", false);  return;  
+  case ND_RSQRTPS: gen_sse_binop2(node, "rsqrtps", false);  return;  
+  case ND_MINPS: gen_sse_binop3(node, "minps", false);  return; 
+  case ND_MAXPS: gen_sse_binop3(node, "maxps", false);  return; 
+  case ND_ANDPS: gen_sse_binop3(node, "andps", false);  return; 
+  case ND_ANDNPS:  gen_sse_binop3(node, "andnps", false);  return; 
+  case ND_ORPS:  gen_sse_binop3(node, "orps", false);  return; 
+  case ND_XORPS:  gen_sse_binop3(node, "xorps", false);  return; 
+
+}
 
   
   if (is_vector(node->lhs->ty)) {
