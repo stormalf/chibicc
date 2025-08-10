@@ -5655,7 +5655,8 @@ static Node *primary(Token **rest, Token *tok)
     }
   }
 
-  if (equal(tok, "__builtin_ia32_addss") || equal(tok, "__builtin_ia32_subss") || equal(tok, "__builtin_ia32_mulss"))
+  if (equal(tok, "__builtin_ia32_addss") || equal(tok, "__builtin_ia32_subss") ||
+      equal(tok, "__builtin_ia32_divss") || equal(tok, "__builtin_ia32_mulss"))
   {
     int builtin = builtin_enum(tok);
     if (builtin != -1) {
@@ -7247,7 +7248,9 @@ char *nodekind2str(NodeKind kind)
   case ND_SUBSS:
     return "SUBSS";   
   case ND_MULSS:
-    return "MULSS";                                                                                                                                                                              
+    return "MULSS";  
+  case ND_DIVSS:
+    return "DIVSS";                                                                                                                                                                                  
   default:
     return "UNREACHABLE"; 
   }
@@ -7643,7 +7646,8 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_cvtps2pi", ND_CVTPS2PI },    
     { "__builtin_ia32_addss", ND_ADDSS },        
     { "__builtin_ia32_subss", ND_SUBSS },        
-    { "__builtin_ia32_mulss", ND_MULSS },        
+    { "__builtin_ia32_mulss", ND_MULSS },   
+    { "__builtin_ia32_divss", ND_DIVSS },        
         
 };
 

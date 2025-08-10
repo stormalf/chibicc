@@ -490,6 +490,7 @@ typedef enum
   ND_ADDSS,
   ND_SUBSS,
   ND_MULSS,
+  ND_DIVSS,
 } NodeKind;
 
 // AST node type

@@ -2480,7 +2480,12 @@ static void gen_expr(Node *node)
       gen_expr(node->lhs);
       println("  mulss %%xmm1, %%xmm0");     
       return;       
-  
+    case ND_DIVSS:
+      gen_expr(node->rhs);
+      println("  movss %%xmm0, %%xmm1"); 
+      gen_expr(node->lhs);
+      println("  divss %%xmm1, %%xmm0");     
+      return; 
   }
 
   
