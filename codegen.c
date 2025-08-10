@@ -2503,7 +2503,13 @@ static void gen_expr(Node *node)
     println("  movss %%xmm0, %%xmm1"); 
     gen_expr(node->lhs);
     println("  minss %%xmm1, %%xmm0");     
-    return;               
+    return;    
+  case ND_MAXSS:
+    gen_expr(node->rhs);
+    println("  movss %%xmm0, %%xmm1"); 
+    gen_expr(node->lhs);
+    println("  maxss %%xmm1, %%xmm0");     
+    return;                   
   }
 
   

@@ -558,6 +558,7 @@ void add_type(Node *node)
   case ND_CVTPS2PI:  
     node->ty = vector_of(ty_int, 2);
     return;   
+  case ND_MAXSS:
   case ND_MINSS:
   case ND_RSQRTSS:
   case ND_RCPSS:
