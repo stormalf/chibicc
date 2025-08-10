@@ -5696,6 +5696,32 @@ static Node *primary(Token **rest, Token *tok)
     return node;
   }
 
+   
+  if (equal(tok, "__builtin_ia32_vec_init_v4hi"))
+  {
+    Node *node = new_node(ND_VECINITV4HI, tok);
+    SET_CTX(ctx); 
+    tok = skip(tok->next, "(", ctx);
+    node->builtin_args[0] = assign(&tok, tok);
+    add_type(node->builtin_args[0]);
+    SET_CTX(ctx); 
+    tok = skip(tok, ",", ctx);
+    node->builtin_args[1] = assign(&tok, tok);
+    add_type(node->builtin_args[1]);
+    SET_CTX(ctx); 
+    tok = skip(tok, ",", ctx);
+    node->builtin_args[2] = assign(&tok, tok);
+    add_type(node->builtin_args[2]);
+    SET_CTX(ctx); 
+    tok = skip(tok, ",", ctx);
+    node->builtin_args[3] = assign(&tok, tok);
+    add_type(node->builtin_args[3]);
+    node->builtin_nargs = 4;
+    SET_CTX(ctx);       
+    *rest = skip(tok, ")", ctx);
+    return node;
+  }
+
   //managing lots of  builtin_ia32 that needs two args
   // defined in builtin_table[]
   int builtin = builtin_enum(tok);
@@ -7049,6 +7075,8 @@ char *nodekind2str(NodeKind kind)
     return "VEC_INIT_V2SI";
   case ND_VECEXTV2SI:
     return "VEC_EXT_V2SI";
+  case ND_VECINITV4HI:
+    return "VEC_INIT_V4HI";    
   case ND_PACKSSWB:
     return "PACKSSWB";
   case ND_PACKSSDW:

@@ -50,7 +50,7 @@
 #define VERSION "1.0.22.9"
 #define MAXLEN 501
 #define DEFAULT_TARGET_MACHINE "x86_64-linux-gnu"
-
+#define MAX_BUILTIN_ARGS 8
 
 #define STR_HELPER(x) #x
 #define STR(x) STR_HELPER(x)
@@ -485,6 +485,7 @@ typedef enum
   ND_PCMPGTW,
   ND_PCMPEQD,
   ND_PCMPGTD,
+  ND_VECINITV4HI,
 } NodeKind;
 
 // AST node type
@@ -548,7 +549,8 @@ Node
   Node *builtin_src;
   Node *builtin_size;
   Node *builtin_val;
-
+  Node *builtin_args[MAX_BUILTIN_ARGS];
+  int  builtin_nargs;
   // Atomic op= operators
   Obj *atomic_addr;
   Node *atomic_expr;
