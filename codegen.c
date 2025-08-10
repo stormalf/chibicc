@@ -2521,7 +2521,8 @@ static void gen_expr(Node *node)
   case ND_CMPNLTPS: gen_sse_binop3(node, "cmpps $5,", false);  return; 
   case ND_CMPNLEPS: gen_sse_binop3(node, "cmpps $6,", false);  return; 
   case ND_CMPNGTPS:  gen_sse_binop3(node, "cmpps $2,", false);  return; 
-  case ND_CMPNGEPS:  gen_sse_binop3(node, "cmpps $1,", false);  return; 
+  case ND_CMPNGEPS:  gen_sse_binop3(node, "cmpps $1,", false);  return;
+  case ND_CMPORDPS: gen_sse_binop3(node, "cmpordps", false);  return;  
   
 }
 
