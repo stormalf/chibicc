@@ -7150,7 +7150,9 @@ char *nodekind2str(NodeKind kind)
   case ND_PCMPGTB:
     return "PCMPGTB";  
   case ND_PCMPEQW:
-    return "PCMPEQW";    
+    return "PCMPEQW";  
+  case ND_PCMPEQD:
+    return "PCMPEQD";        
   case ND_PCMPGTW:
     return "PCMPGTW";                                                                                                                                                              
   default:
@@ -7531,7 +7533,8 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_pcmpeqb", ND_PCMPEQB },
     { "__builtin_ia32_pcmpgtb", ND_PCMPGTB },
     { "__builtin_ia32_pcmpeqw", ND_PCMPEQW },
-    { "__builtin_ia32_pcmpgtw", ND_PCMPGTW },    
+    { "__builtin_ia32_pcmpgtw", ND_PCMPGTW },
+    { "__builtin_ia32_pcmpeqd", ND_PCMPEQD },    
 };
 
 static int builtin_enum(Token *tok) {

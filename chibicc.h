@@ -483,6 +483,7 @@ typedef enum
   ND_PCMPGTB,
   ND_PCMPEQW,
   ND_PCMPGTW,
+  ND_PCMPEQD,
 } NodeKind;
 
 // AST node type
