@@ -493,6 +493,7 @@ typedef enum
   ND_DIVSS,
   ND_SQRTSS,
   ND_RCPSS,
+  ND_RSQRTSS,
 } NodeKind;
 
 // AST node type
