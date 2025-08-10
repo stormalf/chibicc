@@ -650,6 +650,7 @@ void add_type(Node *node)
   case ND_VECEXTV2SI:
     node->ty = ty_int;
     return;
+  case ND_PCMPEQW:
   case ND_PSRLDI:
   case ND_PSRLD:       
   case ND_PSRLWI:

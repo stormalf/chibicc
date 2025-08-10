@@ -7148,7 +7148,9 @@ char *nodekind2str(NodeKind kind)
   case ND_PCMPEQB:
     return "PCMPEQB";     
   case ND_PCMPGTB:
-    return "PCMPGTB";                                                                                                                                                          
+    return "PCMPGTB";  
+  case ND_PCMPEQW:
+    return "PCMPEQW";                                                                                                                                                          
   default:
     return "UNREACHABLE"; 
   }
@@ -7526,6 +7528,7 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_pxor", ND_PXOR },
     { "__builtin_ia32_pcmpeqb", ND_PCMPEQB },
     { "__builtin_ia32_pcmpgtb", ND_PCMPGTB },
+    { "__builtin_ia32_pcmpeqw", ND_PCMPEQW },
 };
 
 static int builtin_enum(Token *tok) {
