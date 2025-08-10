@@ -523,6 +523,7 @@ typedef enum
   ND_CMPNLTPS,
   ND_CMPNLEPS,
   ND_CMPNGTPS,
+  ND_CMPNGEPS,
 } NodeKind;
 
 // AST node type
