@@ -1383,6 +1383,30 @@ static void gen_vector_op(Node *node) {
   }
 }
 
+// Helper to emit MMX two-operand instruction
+static void gen_mmx_binop(Node *node, const char *insn, bool rhs_is_imm) {
+  gen_expr(node->lhs);
+  println("  movq (%%rax), %%mm0");
+
+  if (rhs_is_imm) {
+    if (node->rhs->kind == ND_NUM) {
+      println("  %s $%ld, %%mm0", insn, node->rhs->val);
+    } else {
+      gen_expr(node->rhs);
+      println("  movq %%rax, %%mm1");
+      println("  %s %%mm1, %%mm0", insn);
+    }
+  } else {
+    gen_expr(node->rhs);
+    println("  movq (%%rax), %%mm1");
+    println("  %s %%mm1, %%mm0", insn);
+  }
+
+  println("  movq %%mm0, %%rax");
+  println("  movq %%rax, %%xmm0");
+}
+
+
 // Generate code for a given node.
 static void gen_expr(Node *node)
 {
@@ -2364,470 +2388,54 @@ static void gen_expr(Node *node)
     println(".Lvec_ext_zero_%d:", lbl_zero);
     println(".Lvec_ext_done_%d:", lbl_done);
     return;
-case ND_PACKSSWB:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0"); 
-    gen_expr(node->rhs);   
-    println("  movq (%%rax), %%mm1"); 
-    println("  packsswb %%mm1, %%mm0");
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return;
-case ND_PACKSSDW:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0"); 
-    gen_expr(node->rhs);   
-    println("  movq (%%rax), %%mm1"); 
-    println("  packssdw %%mm1, %%mm0");
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return;
-case ND_PACKUSWB:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0"); 
-    gen_expr(node->rhs);   
-    println("  movq (%%rax), %%mm1"); 
-    println("  packuswb %%mm1, %%mm0");
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return;  
-case ND_PUNPCKHBW:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0"); 
-    gen_expr(node->rhs);   
-    println("  movq (%%rax), %%mm1"); 
-    println("  punpckhbw %%mm1, %%mm0");
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return; 
-case ND_PUNPCKHWD:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0"); 
-    gen_expr(node->rhs);   
-    println("  movq (%%rax), %%mm1"); 
-    println("  punpckhwd %%mm1, %%mm0");
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return;     
-case ND_PUNPCKHDQ:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0"); 
-    gen_expr(node->rhs);   
-    println("  movq (%%rax), %%mm1"); 
-    println("  punpckhdq %%mm1, %%mm0");
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return; 
-case ND_PUNPCKLBW:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0"); 
-    gen_expr(node->rhs);   
-    println("  movq (%%rax), %%mm1"); 
-    println("  punpcklbw %%mm1, %%mm0");
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return; 
-case ND_PUNPCKLWD:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0"); 
-    gen_expr(node->rhs);   
-    println("  movq (%%rax), %%mm1"); 
-    println("  punpcklwd %%mm1, %%mm0");
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return;  
-case ND_PUNPCKLDQ:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0"); 
-    gen_expr(node->rhs);   
-    println("  movq (%%rax), %%mm1"); 
-    println("  punpckldq %%mm1, %%mm0");
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return;   
-case ND_PADDB:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0"); 
-    gen_expr(node->rhs);   
-    println("  movq (%%rax), %%mm1"); 
-    println("  paddb %%mm1, %%mm0");
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return;   
-case ND_PADDW:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0"); 
-    gen_expr(node->rhs);   
-    println("  movq (%%rax), %%mm1"); 
-    println("  paddw %%mm1, %%mm0");
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return;   
-case ND_PADDD:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0"); 
-    gen_expr(node->rhs);   
-    println("  movq (%%rax), %%mm1"); 
-    println("  paddd %%mm1, %%mm0");
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return;  
-case ND_PADDQ:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0"); 
-    gen_expr(node->rhs);   
-    println("  movq (%%rax), %%mm1"); 
-    println("  paddq %%mm1, %%mm0");
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return; 
-case ND_PADDSB:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0"); 
-    gen_expr(node->rhs);   
-    println("  movq (%%rax), %%mm1"); 
-    println("  paddsb %%mm1, %%mm0");
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return;    
-case ND_PADDSW:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0"); 
-    gen_expr(node->rhs);   
-    println("  movq (%%rax), %%mm1"); 
-    println("  paddsw %%mm1, %%mm0");
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return;       
-case ND_PADDUSB:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0"); 
-    gen_expr(node->rhs);   
-    println("  movq (%%rax), %%mm1"); 
-    println("  paddusb %%mm1, %%mm0");
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return; 
-case ND_PADDUSW:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0"); 
-    gen_expr(node->rhs);   
-    println("  movq (%%rax), %%mm1"); 
-    println("  paddusw %%mm1, %%mm0");
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return; 
-case ND_PSUBB:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0"); 
-    gen_expr(node->rhs);   
-    println("  movq (%%rax), %%mm1"); 
-    println("  psubb %%mm1, %%mm0");
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return; 
-case ND_PSUBW:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0"); 
-    gen_expr(node->rhs);   
-    println("  movq (%%rax), %%mm1"); 
-    println("  psubw %%mm1, %%mm0");
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return;     
-case ND_PSUBD:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0"); 
-    gen_expr(node->rhs);   
-    println("  movq (%%rax), %%mm1"); 
-    println("  psubd %%mm1, %%mm0");
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return;  
-case ND_PSUBQ:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0"); 
-    gen_expr(node->rhs);   
-    println("  movq (%%rax), %%mm1"); 
-    println("  psubq %%mm1, %%mm0");
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return;   
-case ND_PSUBSB:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0"); 
-    gen_expr(node->rhs);   
-    println("  movq (%%rax), %%mm1"); 
-    println("  psubsb %%mm1, %%mm0");
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return; 
-case ND_PSUBSW:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0"); 
-    gen_expr(node->rhs);   
-    println("  movq (%%rax), %%mm1"); 
-    println("  psubsw %%mm1, %%mm0");
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return;   
-case ND_PSUBUSB:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0"); 
-    gen_expr(node->rhs);   
-    println("  movq (%%rax), %%mm1"); 
-    println("  psubusb %%mm1, %%mm0");
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return;
-case ND_PSUBUSW:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0"); 
-    gen_expr(node->rhs);   
-    println("  movq (%%rax), %%mm1"); 
-    println("  psubusw %%mm1, %%mm0");
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return; 
-case ND_PMADDWD:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0"); 
-    gen_expr(node->rhs);   
-    println("  movq (%%rax), %%mm1"); 
-    println("  pmaddwd %%mm1, %%mm0");
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return; 
-case ND_PMULHW:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0"); 
-    gen_expr(node->rhs);   
-    println("  movq (%%rax), %%mm1"); 
-    println("  pmulhw %%mm1, %%mm0");
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return;     
-case ND_PMULLW:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0"); 
-    gen_expr(node->rhs);   
-    println("  movq (%%rax), %%mm1"); 
-    println("  pmullw %%mm1, %%mm0");
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return; 
-case ND_PSLLW:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0"); 
-    gen_expr(node->rhs);   
-    println("  movq (%%rax), %%mm1"); 
-    println("  psllw %%mm1, %%mm0");
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return;  
-case ND_PSLLWI:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0");
-    if (node->rhs->kind == ND_NUM) 
-      println("  psllw $%ld, %%mm0", node->rhs->val);
-    else {
-      gen_expr(node->rhs);   
-      println("  movq %%rax, %%mm1"); 
-      println("  psllw %%mm1, %%mm0");
-    }
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return;
-case ND_PSLLD:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0"); 
-    gen_expr(node->rhs);   
-    println("  movq (%%rax), %%mm1"); 
-    println("  pslld %%mm1, %%mm0");
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return;
-case ND_PSLLDI:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0");  
-    if (node->rhs->kind == ND_NUM)
-      println("  pslld $%ld, %%mm0", node->rhs->val);
-    else {
-      gen_expr(node->rhs);   
-      println("  movq %%rax, %%mm1"); 
-      println("  pslld %%mm1, %%mm0");
-    }
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return;
-case ND_PSLLQ:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0"); 
-    gen_expr(node->rhs);   
-    println("  movq (%%rax), %%mm1"); 
-    println("  psllq %%mm1, %%mm0");
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return;                         
-case ND_PSLLQI:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0");  
-    if (node->rhs->kind == ND_NUM) {
-      println("  psllq $%ld, %%mm0", node->rhs->val);
-    } else {
-      gen_expr(node->rhs);   
-      println("  movq %%rax, %%mm1"); 
-      println("  psllq %%mm1, %%mm0");
-    }
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return;      
-case ND_PSRAW:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0");  
-    gen_expr(node->rhs);   
-    println("  movq (%%rax), %%mm1"); 
-    println("  psraw %%mm1, %%mm0");
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return;   
-case ND_PSRAWI:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0");  
-    if (node->rhs->kind == ND_NUM)
-      println("  psraw $%ld, %%mm0", node->rhs->val);
-    else {
-    gen_expr(node->rhs);   
-    println("  movq %%rax, %%mm1"); 
-    println("  psraw %%mm1, %%mm0");
-    }
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return;   
-case ND_PSRAD:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0");  
-    gen_expr(node->rhs);   
-    println("  movq (%%rax), %%mm1"); 
-    println("  psrad %%mm1, %%mm0");
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return;  
-case ND_PSRADI:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0");  
-    if (node->rhs->kind == ND_NUM)
-      println("  psrad $%ld, %%mm0", node->rhs->val);
-    else {
-    gen_expr(node->rhs);   
-    println("  movq %%rax, %%mm1"); 
-    println("  psraw %%mm1, %%mm0");
-    }
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return; 
-case ND_PSRLW:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0");  
-    gen_expr(node->rhs);   
-    println("  movq (%%rax), %%mm1"); 
-    println("  psrlw %%mm1, %%mm0");
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return; 
-case ND_PSRLWI:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0");  
-    if (node->rhs->kind == ND_NUM)
-      println("  psrlw $%ld, %%mm0", node->rhs->val);
-    else {
-    gen_expr(node->rhs);   
-    println("  movq %%rax, %%mm1"); 
-    println("  psrlw %%mm1, %%mm0");
-    }
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return;   
-case ND_PSRLD:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0");  
-    gen_expr(node->rhs);   
-    println("  movq (%%rax), %%mm1"); 
-    println("  psrld %%mm1, %%mm0");
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return; 
-case ND_PSRLDI:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0");  
-    if (node->rhs->kind == ND_NUM)
-      println("  psrld $%ld, %%mm0", node->rhs->val);
-    else {
-    gen_expr(node->rhs);   
-    println("  movq %%rax, %%mm1"); 
-    println("  psrld %%mm1, %%mm0");
-    }
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return; 
-case ND_PSRLQ:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0");  
-    gen_expr(node->rhs);   
-    println("  movq (%%rax), %%mm1"); 
-    println("  psrlq %%mm1, %%mm0");
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return; 
-case ND_PSRLQI:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0");  
-    if (node->rhs->kind == ND_NUM)
-      println("  psrlq $%ld, %%mm0", node->rhs->val);
-    else {
-    gen_expr(node->rhs);   
-    println("  movq %%rax, %%mm1"); 
-    println("  psrlq %%mm1, %%mm0");
-    }
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return; 
-case ND_PAND:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0");  
-    gen_expr(node->rhs);   
-    println("  movq (%%rax), %%mm1"); 
-    println("  pand %%mm1, %%mm0");
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return;  
-case ND_PANDN:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0");  
-    gen_expr(node->rhs);   
-    println("  movq (%%rax), %%mm1"); 
-    println("  pandn %%mm1, %%mm0");
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return;  
-case ND_POR:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0");  
-    gen_expr(node->rhs);   
-    println("  movq (%%rax), %%mm1"); 
-    println("  por %%mm1, %%mm0");
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return;   
-case ND_PXOR:
-    gen_expr(node->lhs);  
-    println("  movq (%%rax), %%mm0");  
-    gen_expr(node->rhs);   
-    println("  movq (%%rax), %%mm1"); 
-    println("  pxor %%mm1, %%mm0");
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return;                                                                                                                                             
+  case ND_PACKSSWB:   gen_mmx_binop(node, "packsswb", false); return;
+  case ND_PACKSSDW:   gen_mmx_binop(node, "packssdw", false); return;
+  case ND_PACKUSWB:   gen_mmx_binop(node, "packuswb", false); return;
+  case ND_PUNPCKHBW:  gen_mmx_binop(node, "punpckhbw", false); return;
+  case ND_PUNPCKHWD:  gen_mmx_binop(node, "punpckhwd", false); return;
+  case ND_PUNPCKHDQ:  gen_mmx_binop(node, "punpckhdq", false); return;
+  case ND_PUNPCKLBW:  gen_mmx_binop(node, "punpcklbw", false); return;
+  case ND_PUNPCKLWD:  gen_mmx_binop(node, "punpcklwd", false); return;
+  case ND_PUNPCKLDQ:  gen_mmx_binop(node, "punpckldq", false); return;
+  case ND_PADDB:      gen_mmx_binop(node, "paddb", false); return;
+  case ND_PADDW:      gen_mmx_binop(node, "paddw", false); return;
+  case ND_PADDD:      gen_mmx_binop(node, "paddd", false); return;
+  case ND_PADDQ:      gen_mmx_binop(node, "paddq", false); return;
+  case ND_PADDSB:     gen_mmx_binop(node, "paddsb", false); return;
+  case ND_PADDSW:     gen_mmx_binop(node, "paddsw", false); return;
+  case ND_PADDUSB:    gen_mmx_binop(node, "paddusb", false); return;
+  case ND_PADDUSW:    gen_mmx_binop(node, "paddusw", false); return;
+  case ND_PSUBB:      gen_mmx_binop(node, "psubb", false); return;
+  case ND_PSUBW:      gen_mmx_binop(node, "psubw", false); return;
+  case ND_PSUBD:      gen_mmx_binop(node, "psubd", false); return;
+  case ND_PSUBQ:      gen_mmx_binop(node, "psubq", false); return;
+  case ND_PSUBSB:     gen_mmx_binop(node, "psubsb", false); return;
+  case ND_PSUBSW:     gen_mmx_binop(node, "psubsw", false); return;
+  case ND_PSUBUSB:    gen_mmx_binop(node, "psubusb", false); return;
+  case ND_PSUBUSW:    gen_mmx_binop(node, "psubusw", false); return;
+  case ND_PMADDWD:    gen_mmx_binop(node, "pmaddwd", false); return;
+  case ND_PMULHW:     gen_mmx_binop(node, "pmulhw", false); return;
+  case ND_PMULLW:     gen_mmx_binop(node, "pmullw", false); return;
+  case ND_PSLLW:      gen_mmx_binop(node, "psllw", false); return;
+  case ND_PSLLWI:     gen_mmx_binop(node, "psllw", true);  return;
+  case ND_PSLLD:      gen_mmx_binop(node, "pslld", false); return;
+  case ND_PSLLDI:     gen_mmx_binop(node, "pslld", true);  return;
+  case ND_PSLLQ:      gen_mmx_binop(node, "psllq", false); return;
+  case ND_PSLLQI:     gen_mmx_binop(node, "psllq", true);  return;
+  case ND_PSRAW:      gen_mmx_binop(node, "psraw", false); return;
+  case ND_PSRAWI:     gen_mmx_binop(node, "psraw", true);  return;
+  case ND_PSRAD:      gen_mmx_binop(node, "psrad", false); return;
+  case ND_PSRADI:     gen_mmx_binop(node, "psrad", true);  return;
+  case ND_PSRLW:      gen_mmx_binop(node, "psrlw", false); return;
+  case ND_PSRLWI:     gen_mmx_binop(node, "psrlw", true);  return;
+  case ND_PSRLD:      gen_mmx_binop(node, "psrld", false); return;
+  case ND_PSRLDI:     gen_mmx_binop(node, "psrld", true);  return;
+  case ND_PSRLQ:      gen_mmx_binop(node, "psrlq", false); return;
+  case ND_PSRLQI:     gen_mmx_binop(node, "psrlq", true);  return;
+  case ND_PAND:       gen_mmx_binop(node, "pand", false);  return;
+  case ND_PANDN:      gen_mmx_binop(node, "pandn", false); return;
+  case ND_POR:        gen_mmx_binop(node, "por", false);   return;
+  case ND_PXOR:       gen_mmx_binop(node, "pxor", false);  return;                                                                                                                                             
   }
 
   if (is_vector(node->lhs->ty)) {
