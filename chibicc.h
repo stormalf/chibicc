@@ -501,6 +501,7 @@ typedef enum
   ND_RSQRTPS,
   ND_MINPS,
   ND_MAXPS,
+  ND_ANDPS,
 } NodeKind;
 
 // AST node type
