@@ -2527,7 +2527,13 @@ static void gen_expr(Node *node)
     println("  movaps %%xmm0, %%xmm1"); 
     gen_expr(node->lhs);
     println("  minps %%xmm1, %%xmm0");     
-    return;                                   
+    return;       
+  case ND_MAXPS:
+    gen_expr(node->rhs);
+    println("  movaps %%xmm0, %%xmm1"); 
+    gen_expr(node->lhs);
+    println("  maxps %%xmm1, %%xmm0");     
+    return;                                       
   }
 
   
