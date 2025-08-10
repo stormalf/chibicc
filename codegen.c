@@ -2517,7 +2517,11 @@ static void gen_expr(Node *node)
   case ND_RCPPS:
     gen_expr(node->lhs);
     println("  rcpps %%xmm0, %%xmm0");   
-    return;                           
+    return;
+  case ND_RSQRTPS:
+    gen_expr(node->lhs);
+    println("  rsqrtps %%xmm0, %%xmm0");   
+    return;                               
   }
 
   

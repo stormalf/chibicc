@@ -5688,7 +5688,8 @@ static Node *primary(Token **rest, Token *tok)
     return node;
    }
 
-  if (equal(tok, "__builtin_ia32_sqrtss") || equal(tok, "__builtin_ia32_rcpss") || equal(tok, "__builtin_ia32_rcpps") ||
+  if (equal(tok, "__builtin_ia32_sqrtss") || equal(tok, "__builtin_ia32_rcpss") || 
+      equal(tok, "__builtin_ia32_rcpps") || equal(tok, "__builtin_ia32_rsqrtps") ||
       equal(tok, "__builtin_ia32_sqrtps") || equal(tok, "__builtin_ia32_rsqrtss")) {
     int builtin = builtin_enum(tok);
     if (builtin != -1) {
@@ -7272,7 +7273,9 @@ char *nodekind2str(NodeKind kind)
   case ND_SQRTPS:
     return "SQRTPS";     
   case ND_RSQRTSS:
-    return "RSQRTSS";     
+    return "RSQRTSS";  
+  case ND_RSQRTPS:
+    return "RSQRTPS";         
   case ND_RCPSS:
     return "RCPSS"; 
   case ND_RCPPS:
@@ -7682,6 +7685,7 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_sqrtps", ND_SQRTPS },   
     { "__builtin_ia32_rcpss", ND_RCPSS },     
     { "__builtin_ia32_rsqrtss", ND_RSQRTSS },
+    { "__builtin_ia32_rsqrtps", ND_RSQRTPS },
     { "__builtin_ia32_minss", ND_MINSS },           
     { "__builtin_ia32_maxss", ND_MAXSS },  
     { "__builtin_ia32_rcpps", ND_RCPPS },           
