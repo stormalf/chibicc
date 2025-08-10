@@ -508,6 +508,7 @@ typedef enum
   ND_CMPEQSS,
   ND_CMPLTSS,
   ND_CMPLESS,
+  ND_MOVSS,
 } NodeKind;
 
 // AST node type
