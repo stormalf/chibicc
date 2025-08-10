@@ -5655,6 +5655,27 @@ static Node *primary(Token **rest, Token *tok)
     }
   }
 
+  if (equal(tok, "__builtin_ia32_addss"))
+  {
+    int builtin = builtin_enum(tok);
+    if (builtin != -1) {
+      Node *node = new_node(builtin, tok);    
+      SET_CTX(ctx); 
+      tok = skip(tok->next, "(", ctx);
+      node->lhs = assign(&tok, tok);
+      add_type(node->lhs);
+      SET_CTX(ctx);     
+      tok = skip(tok, ",", ctx);
+      node->rhs = assign(&tok, tok);
+      add_type(node->rhs);
+      SET_CTX(ctx);      
+      *rest = skip(tok, ")", ctx);
+      return node;
+
+    }
+  }
+
+
   if (equal(tok, "__builtin_ia32_clflush") || equal(tok, "_mm_clflush")) {
     Node *node = new_node(ND_CLFLUSH, tok);
     SET_CTX(ctx); 
@@ -7220,7 +7241,9 @@ char *nodekind2str(NodeKind kind)
   case ND_PCMPGTW:
     return "PCMPGTW";  
   case ND_PCMPGTD:
-    return "PCMPGTD";                                                                                                                                                                  
+    return "PCMPGTD";  
+  case ND_ADDSS:
+    return "ADDSS";                                                                                                                                                                      
   default:
     return "UNREACHABLE"; 
   }
@@ -7614,8 +7637,8 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_stmxcsr", ND_STMXCSR },     
     { "__builtin_ia32_cvtpi2ps", ND_CVTPI2PS },    
     { "__builtin_ia32_cvtps2pi", ND_CVTPS2PI },    
-    
-    
+    { "__builtin_ia32_addss", ND_ADDSS },        
+        
 };
 
 static int builtin_enum(Token *tok) {

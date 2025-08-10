@@ -2452,17 +2452,22 @@ static void gen_expr(Node *node)
         }
     }
     return;
-  case ND_VECINITV8QI:
-    for (int i = 0; i < node->builtin_nargs; i++) {
-      gen_expr(node->builtin_args[i]);  // result in %eax
-      if (i == 0) {
-          println("  movd %%eax, %%xmm0");
-      } else {
-          println("  pinsrb $%d, %%eax, %%xmm0", i);
-      }
-  }
-  return;   
- 
+    case ND_VECINITV8QI:
+      for (int i = 0; i < node->builtin_nargs; i++) {
+        gen_expr(node->builtin_args[i]);  // result in %eax
+        if (i == 0) {
+            println("  movd %%eax, %%xmm0");
+        } else {
+            println("  pinsrb $%d, %%eax, %%xmm0", i);
+        }
+    }
+    return;   
+case ND_ADDSS:
+    gen_expr(node->rhs);
+    println("  movss %%xmm0, %%xmm1"); 
+    gen_expr(node->lhs);
+    println("  addss %%xmm1, %%xmm0");     
+    return; 
   }
 
   if (is_vector(node->lhs->ty)) {

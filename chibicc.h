@@ -487,6 +487,7 @@ typedef enum
   ND_PCMPGTD,
   ND_VECINITV4HI,
   ND_VECINITV8QI,
+  ND_ADDSS,
 } NodeKind;
 
 // AST node type
