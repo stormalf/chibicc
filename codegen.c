@@ -2510,6 +2510,7 @@ static void gen_expr(Node *node)
   case ND_CMPNLTSS: gen_sse_binop3(node, "cmpnltss", false);  return; 
   case ND_CMPNLESS: gen_sse_binop3(node, "cmpnless", false);  return; 
   case ND_CMPORDSS: gen_sse_binop3(node, "cmpordss", false);  return; 
+  case ND_CMPUNORDSS: gen_sse_binop3(node, "cmpunordss", false);  return; 
 
 }
 
