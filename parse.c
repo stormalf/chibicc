@@ -5619,7 +5619,7 @@ static Node *primary(Token **rest, Token *tok)
   }
 
 
-  if (equal(tok, "__builtin_ia32_cvtpi2ps") || equal(tok, "__builtin_ia32_cvtsi2ss"))
+  if (equal(tok, "__builtin_ia32_cvtpi2ps") || equal(tok, "__builtin_ia32_cvtsi2ss") || equal(tok, "__builtin_ia32_cvtsi642ss"))
   {
     if (!opt_mmx)
       error_tok(tok, "%s %d: in primary : option -mmmx required", PARSE_C, __LINE__);
@@ -7413,7 +7413,9 @@ char *nodekind2str(NodeKind kind)
   case ND_CVTTPS2PI:
     return "CVTTPS2PI";   
   case ND_CVTSI2SS:
-    return "CVTSI2SS";                          
+    return "CVTSI2SS";   
+  case ND_CVTSI642SS:
+    return "CVTSI642SS";                              
   default:
     return "UNREACHABLE"; 
   }
@@ -7864,6 +7866,7 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_cvttss2si64", ND_CVTTSS2SI64 },
     { "__builtin_ia32_cvttps2pi", ND_CVTTPS2PI },      
     { "__builtin_ia32_cvtsi2ss", ND_CVTSI2SS },      
+    { "__builtin_ia32_cvtsi642ss", ND_CVTSI642SS },      
         
 };
 

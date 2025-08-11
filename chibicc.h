@@ -544,6 +544,7 @@ typedef enum
   ND_CVTTSS2SI64,
   ND_CVTTPS2PI,
   ND_CVTSI2SS,
+  ND_CVTSI642SS,
 } NodeKind;
 
 // AST node type
