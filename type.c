@@ -693,6 +693,7 @@ void add_type(Node *node)
     node->ty = ty_int;
     return;
   case ND_CVTSS2SI64:
+  case ND_CVTTSS2SI64:
     node->ty = ty_long;
     return;
   case ND_VECINITV4HI:

@@ -2430,14 +2430,8 @@ static void gen_expr(Node *node)
     println("  cvtss2si %%xmm0, %%eax");
     return;
   case ND_CVTSS2SI64: gen_cvt_binop(node, "cvtss2siq"); return;
-    // gen_addr(node->lhs);    
-    // if (node->lhs->kind == ND_VAR || node->lhs->kind == ND_MEMBER) {
-    //     println("  cvtss2siq (%%rax), %%rax");   
-    // } else {
-    //     println("  cvtss2siq %%xmm0, %%rax");   
-    // }
-    // return;  
   case ND_CVTTSS2SI: gen_cvt_binop(node, "cvttss2si"); return;
+  case ND_CVTTSS2SI64: gen_cvt_binop(node, "cvttss2siq"); return;
   case ND_CLFLUSH:
     gen_addr(node->lhs);    
     println("  clflush (%%rax)");
