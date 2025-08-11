@@ -1463,6 +1463,15 @@ static void gen_single_binop(const char *insn) {
   println("  %s", insn);
 }
 
+static void gen_cvt_binop(Node *node, const char *insn) {
+  gen_addr(node->lhs);    
+  if (node->lhs->kind == ND_VAR || node->lhs->kind == ND_MEMBER) {
+      println("  %s (%%rax), %%rax", insn);   
+  } else {
+      println("  %s %%xmm0, %%rax", insn);   
+  }
+}
+
 // Generate code for a given node.
 static void gen_expr(Node *node)
 {
@@ -2420,14 +2429,15 @@ static void gen_expr(Node *node)
     gen_expr(node->lhs);
     println("  cvtss2si %%xmm0, %%eax");
     return;
-  case ND_CVTSS2SI64: 
-    gen_addr(node->lhs);    
-    if (node->lhs->kind == ND_VAR || node->lhs->kind == ND_MEMBER) {
-        println("  cvtss2siq (%%rax), %%rax");   
-    } else {
-        println("  cvtss2siq %%xmm0, %%rax");   
-    }
-    return;  
+  case ND_CVTSS2SI64: gen_cvt_binop(node, "cvtss2siq"); return;
+    // gen_addr(node->lhs);    
+    // if (node->lhs->kind == ND_VAR || node->lhs->kind == ND_MEMBER) {
+    //     println("  cvtss2siq (%%rax), %%rax");   
+    // } else {
+    //     println("  cvtss2siq %%xmm0, %%rax");   
+    // }
+    // return;  
+  case ND_CVTTSS2SI: gen_cvt_binop(node, "cvttss2si"); return;
   case ND_CLFLUSH:
     gen_addr(node->lhs);    
     println("  clflush (%%rax)");

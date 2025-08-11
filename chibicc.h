@@ -540,6 +540,7 @@ typedef enum
   ND_UCOMINEQ,
   ND_CVTSS2SI,
   ND_CVTSS2SI64,
+  ND_CVTTSS2SI,
 } NodeKind;
 
 // AST node type
