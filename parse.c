@@ -5675,6 +5675,7 @@ static Node *primary(Token **rest, Token *tok)
   }
   
   if (equal(tok, "__builtin_ia32_addss") || equal(tok, "__builtin_ia32_subss") ||
+      equal(tok, "__builtin_ia32_movlhps") ||
       equal(tok, "__builtin_ia32_divss") || equal(tok, "__builtin_ia32_mulss"))
   {
     int builtin = builtin_enum(tok);
@@ -5691,7 +5692,6 @@ static Node *primary(Token **rest, Token *tok)
       SET_CTX(ctx);      
       *rest = skip(tok, ")", ctx);
       return node;
-
     }
   }
 
@@ -7415,7 +7415,9 @@ char *nodekind2str(NodeKind kind)
   case ND_CVTSI2SS:
     return "CVTSI2SS";   
   case ND_CVTSI642SS:
-    return "CVTSI642SS";                              
+    return "CVTSI642SS";  
+  case ND_MOVLHPS:
+    return "MOVLHPS";                                  
   default:
     return "UNREACHABLE"; 
   }
@@ -7866,7 +7868,8 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_cvttss2si64", ND_CVTTSS2SI64 },
     { "__builtin_ia32_cvttps2pi", ND_CVTTPS2PI },      
     { "__builtin_ia32_cvtsi2ss", ND_CVTSI2SS },      
-    { "__builtin_ia32_cvtsi642ss", ND_CVTSI642SS },      
+    { "__builtin_ia32_cvtsi642ss", ND_CVTSI642SS },
+    { "__builtin_ia32_movlhps", ND_MOVLHPS },         
         
 };
 
