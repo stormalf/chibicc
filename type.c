@@ -735,6 +735,7 @@ void add_type(Node *node)
   case ND_PSUBUSW:
     node->ty = vector_of(ty_ushort, 4);
     return;
+  case ND_COMILT:
   case ND_COMIEQ:
     node->ty = ty_int;
   }

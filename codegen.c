@@ -1405,12 +1405,12 @@ static void gen_sse_binop3(Node *node, const char *insn, bool rhs_is_imm) {
   println("  %s %%xmm1, %%xmm0", insn);
 }
 
-static void gen_sse_binop4(Node *node, const char *insn, bool rhs_is_imm) {
+static void gen_sse_binop4(Node *node, const char *insn, const char *insn2) {
     gen_expr(node->lhs);
     println("  movaps %%xmm0, %%xmm1");
     gen_expr(node->rhs);
     println("  %s %%xmm0, %%xmm1", insn); 
-    println("  sete %%al");
+    println("  %s %%al", insn2);
     println("  movzb %%al, %%eax");
 }
 
@@ -2532,7 +2532,8 @@ static void gen_expr(Node *node)
   case ND_CMPNGEPS:  gen_sse_binop3(node, "cmpps $1,", false);  return;
   case ND_CMPORDPS: gen_sse_binop3(node, "cmpordps", false);  return;  
   case ND_CMPUNORDPS: gen_sse_binop3(node, "cmpunordps", false);  return;  
-  case ND_COMIEQ: gen_sse_binop4(node, "comiss", false);  return;  
+  case ND_COMIEQ: gen_sse_binop4(node, "comiss", "sete");  return;  
+  case ND_COMILT: gen_sse_binop4(node, "comiss", "setb");  return;  
   
 }
 
