@@ -5720,7 +5720,7 @@ static Node *primary(Token **rest, Token *tok)
       equal(tok, "__builtin_ia32_cmpnleps") || equal(tok, "__builtin_ia32_cmpngtps") || 
       equal(tok, "__builtin_ia32_cmpngeps") || equal(tok, "__builtin_ia32_cmpordps") ||
       equal(tok, "__builtin_ia32_cmpunordps") || equal(tok, "__builtin_ia32_comieq") || 
-      equal(tok, "__builtin_ia32_comilt") || 
+      equal(tok, "__builtin_ia32_comilt") || equal(tok, "__builtin_ia32_comile") || 
       equal(tok, "__builtin_ia32_maxss") || equal(tok, "__builtin_ia32_minss"))
   {
     int builtin = builtin_enum(tok);
@@ -7356,7 +7356,9 @@ char *nodekind2str(NodeKind kind)
   case ND_COMIEQ:
     return "COMIEQ";  
   case ND_COMILT:
-    return "COMILT";                                                                                                                                                                                                                                                                                                             
+    return "COMILT";     
+  case ND_COMILE:
+    return "COMILE";                                                                                                                                                                                                                                                                                                                 
   default:
     return "UNREACHABLE"; 
   }
@@ -7791,6 +7793,7 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_cmpunordps", ND_CMPUNORDPS },  
     { "__builtin_ia32_comieq", ND_COMIEQ },  
     { "__builtin_ia32_comilt", ND_COMILT },  
+    { "__builtin_ia32_comile", ND_COMILE },  
         
 };
 

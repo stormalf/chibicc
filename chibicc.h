@@ -528,6 +528,7 @@ typedef enum
   ND_CMPUNORDPS,
   ND_COMIEQ,
   ND_COMILT,
+  ND_COMILE,
 } NodeKind;
 
 // AST node type
