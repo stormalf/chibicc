@@ -2451,6 +2451,7 @@ static void gen_expr(Node *node)
   case ND_CVTSI2SS: gen_cvt_mmx_binop2(node, "cvtsi2ss", "eax"); return;
   case ND_CVTSI642SS: gen_cvt_mmx_binop2(node, "cvtsi2ss", "rax"); return;
   case ND_MOVLHPS: gen_sse_binop3(node, "movlhps", false);  return; 
+  case ND_MOVHLPS: gen_sse_binop3(node, "movhlps", false);  return; 
   case ND_CLFLUSH:
     gen_addr(node->lhs);    
     println("  clflush (%%rax)");
