@@ -1414,6 +1414,15 @@ static void gen_sse_binop4(Node *node, const char *insn, const char *insn2, cons
     println("  %s %%al, %%eax", insn3);
 }
 
+static void gen_sse_binop5(Node *node, const char *insn, const char *insn2, const char *insn3) {
+    gen_expr(node->lhs);
+    println("  movaps %%xmm0, %%xmm1");
+    gen_expr(node->rhs);
+    println("  %s %%xmm1, %%xmm0", insn); 
+    println("  %s %%al", insn2);
+    println("  %s %%al, %%eax", insn3);
+}
+
 // Helper to emit MMX two-operand instruction
 static void gen_mmx_binop(Node *node, const char *insn, bool rhs_is_imm) {
   gen_expr(node->lhs);
@@ -2535,6 +2544,8 @@ static void gen_expr(Node *node)
   case ND_COMIEQ: gen_sse_binop4(node, "comiss", "sete", "movzb");  return;  
   case ND_COMILT: gen_sse_binop4(node, "comiss", "setb", "movzx");  return;  
   case ND_COMILE: gen_sse_binop4(node, "comiss", "setnb", "movzx");  return;  
+  case ND_COMIGT: gen_sse_binop5(node, "comiss", "seta", "movzx");  return;  
+  case ND_COMIGE: gen_sse_binop5(node, "comiss", "setna", "movzx");  return;  
   
 }
 
