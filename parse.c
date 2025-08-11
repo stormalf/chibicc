@@ -5722,7 +5722,11 @@ static Node *primary(Token **rest, Token *tok)
       equal(tok, "__builtin_ia32_cmpunordps") || equal(tok, "__builtin_ia32_comieq") || 
       equal(tok, "__builtin_ia32_comilt") || equal(tok, "__builtin_ia32_comile") || 
       equal(tok, "__builtin_ia32_comige") || equal(tok, "__builtin_ia32_comigt") || 
-      equal(tok, "__builtin_ia32_comineq") || 
+      equal(tok, "__builtin_ia32_comineq") || equal(tok, "__builtin_ia32_ucomieq") || 
+      equal(tok, "__builtin_ia32_ucomilt") || equal(tok, "__builtin_ia32_ucomile") || 
+      equal(tok, "__builtin_ia32_ucomige") || equal(tok, "__builtin_ia32_ucomigt") || 
+      equal(tok, "__builtin_ia32_ucomineq") || equal(tok, "__builtin_ia32_ucomine") ||
+      equal(tok, "__builtin_ia32_comine") || 
       equal(tok, "__builtin_ia32_maxss") || equal(tok, "__builtin_ia32_minss"))
   {
     int builtin = builtin_enum(tok);
@@ -7367,6 +7371,18 @@ char *nodekind2str(NodeKind kind)
     return "COMIGE";     
   case ND_COMINEQ:
     return "COMINEQ";                                                                                                                                                                                                                                                                                                                             
+  case ND_UCOMIEQ:
+    return "UCOMIEQ";  
+  case ND_UCOMILT:
+    return "UCOMILT";     
+  case ND_UCOMILE:
+    return "UCOMILE"; 
+  case ND_UCOMIGT:
+    return "UCOMIGT"; 
+  case ND_UCOMIGE:
+    return "UCOMIGE";     
+  case ND_UCOMINEQ:
+    return "UCOMINEQ";
   default:
     return "UNREACHABLE"; 
   }
@@ -7805,6 +7821,12 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_comigt", ND_COMIGT },  
     { "__builtin_ia32_comige", ND_COMIGE },  
     { "__builtin_ia32_comineq", ND_COMINEQ },  
+    { "__builtin_ia32_ucomieq", ND_UCOMIEQ },  
+    { "__builtin_ia32_ucomilt", ND_UCOMILT },  
+    { "__builtin_ia32_ucomile", ND_UCOMILE },  
+    { "__builtin_ia32_ucomigt", ND_UCOMIGT },  
+    { "__builtin_ia32_ucomige", ND_UCOMIGE },  
+    { "__builtin_ia32_ucomineq", ND_UCOMINEQ },   
         
 };
 
