@@ -531,6 +531,7 @@ typedef enum
   ND_COMILE,
   ND_COMIGT,
   ND_COMIGE,
+  ND_COMINEQ,
 } NodeKind;
 
 // AST node type

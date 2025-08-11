@@ -2546,6 +2546,7 @@ static void gen_expr(Node *node)
   case ND_COMILE: gen_sse_binop4(node, "comiss", "setnb", "movzx");  return;  
   case ND_COMIGT: gen_sse_binop5(node, "comiss", "seta", "movzx");  return;  
   case ND_COMIGE: gen_sse_binop5(node, "comiss", "setna", "movzx");  return;  
+  case ND_COMINEQ: gen_sse_binop4(node, "comiss", "setne", "movzx");  return;  
   
 }
 
