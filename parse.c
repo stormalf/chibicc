@@ -4041,7 +4041,9 @@ static Token *type_attributes(Token *tok, void *arg)
         if (!ty->is_aligned) ty->align = vs;
     }
     int base_size = ty->size;
-
+    if (base_size == 0) {
+        error_tok(tok, "%s %d: in types_attributes: incorrect base size %d;", PARSE_C, __LINE__, base_size);
+    }  
     int n = vs / base_size;
     
     ty->is_vector = true;
@@ -5641,7 +5643,7 @@ static Node *primary(Token **rest, Token *tok)
   if (equal(tok, "__builtin_ia32_cvtps2pi"))
   {
     if (!opt_mmx)
-      error_tok(tok, "%s %d: in primary : option -mmmx required for __builtin_ia32_cvtps2pi", PARSE_C, __LINE__);
+      error_tok(tok, "%s %d: in primary : option -mmmx required", PARSE_C, __LINE__);
     int builtin = builtin_enum(tok);
     if (builtin != -1) {
       Node *node = new_node(builtin, tok);    
@@ -5655,6 +5657,21 @@ static Node *primary(Token **rest, Token *tok)
     }
   }
 
+  if (equal(tok, "__builtin_ia32_cvtss2si")) {
+    int builtin = builtin_enum(tok);
+    if (builtin != -1) {
+      Node *node = new_node(builtin, tok);    
+      SET_CTX(ctx); 
+      tok = skip(tok->next, "(", ctx);
+      node->lhs = assign(&tok, tok);
+      add_type(node->lhs);
+      SET_CTX(ctx); 
+      *rest = skip(tok, ")", ctx);
+      return node;
+    }
+
+  }
+  
   if (equal(tok, "__builtin_ia32_addss") || equal(tok, "__builtin_ia32_subss") ||
       equal(tok, "__builtin_ia32_divss") || equal(tok, "__builtin_ia32_mulss"))
   {
@@ -7383,6 +7400,8 @@ char *nodekind2str(NodeKind kind)
     return "UCOMIGE";     
   case ND_UCOMINEQ:
     return "UCOMINEQ";
+  case ND_CVTSS2SI:
+    return "CVTSS2SI";    
   default:
     return "UNREACHABLE"; 
   }
@@ -7827,6 +7846,7 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_ucomigt", ND_UCOMIGT },  
     { "__builtin_ia32_ucomige", ND_UCOMIGE },  
     { "__builtin_ia32_ucomineq", ND_UCOMINEQ },   
+    { "__builtin_ia32_cvtss2si", ND_CVTSS2SI },   
         
 };
 

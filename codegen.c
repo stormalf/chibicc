@@ -1459,6 +1459,9 @@ static void gen_mmx_binop(Node *node, const char *insn, bool rhs_is_imm) {
   println("  movq %%rax, %%xmm0");
 }
 
+static void gen_single_binop(const char *insn) {
+  println("  %s", insn);
+}
 
 // Generate code for a given node.
 static void gen_expr(Node *node)
@@ -2376,21 +2379,21 @@ static void gen_expr(Node *node)
   println("  fldt -10(%%rsp)");
   return;
   }
-  case ND_EMMS:
-    println("  emms");
-    return;
-  case ND_SFENCE:
-    println("  sfence");
-    return;
-  case ND_LFENCE:
-    println("  lfence");
-    return;
-  case ND_MFENCE:
-    println("  mfence");
-    return;
-  case ND_PAUSE:
-    println("  pause");
-    return;
+  case ND_EMMS: gen_single_binop("emms"); return;
+    // println("  emms");
+    // return;
+  case ND_SFENCE: gen_single_binop("sfence"); return;
+    // println("  sfence");
+    // return;
+  case ND_LFENCE: gen_single_binop("lfence"); return;
+    // println("  lfence");
+    // return;
+  case ND_MFENCE: gen_single_binop("mfence"); return;
+    // println("  mfence");
+    // return;
+  case ND_PAUSE: gen_single_binop("pause"); return;
+    // println("  pause");
+    // return;
   case ND_STMXCSR:
     if (node->lhs) {
       gen_expr(node->lhs); 
@@ -2412,6 +2415,10 @@ static void gen_expr(Node *node)
     gen_addr(node->lhs);         
     println("  movq %%mm0, %%rax");
     println("  movq %%rax, %%xmm0"); 
+    return;
+  case ND_CVTSS2SI: 
+    gen_expr(node->lhs);
+    println("  cvtss2si %%xmm0, %%eax");
     return;
   case ND_CLFLUSH:
     gen_addr(node->lhs);    
