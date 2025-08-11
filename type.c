@@ -599,6 +599,7 @@ void add_type(Node *node)
   case ND_SUBSS:
   case ND_ADDSS:
   case ND_CVTPI2PS:
+  case ND_CVTSI2SS:
     add_type(node->rhs);
     add_type(node->lhs);
     node->ty = vector_of(ty_float, 4);

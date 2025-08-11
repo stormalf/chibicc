@@ -5619,10 +5619,10 @@ static Node *primary(Token **rest, Token *tok)
   }
 
 
-  if (equal(tok, "__builtin_ia32_cvtpi2ps"))
+  if (equal(tok, "__builtin_ia32_cvtpi2ps") || equal(tok, "__builtin_ia32_cvtsi2ss"))
   {
     if (!opt_mmx)
-      error_tok(tok, "%s %d: in primary : option -mmmx required for __builtin_ia32_cvtpi2ps", PARSE_C, __LINE__);
+      error_tok(tok, "%s %d: in primary : option -mmmx required", PARSE_C, __LINE__);
     int builtin = builtin_enum(tok);
     if (builtin != -1) {
       Node *node = new_node(builtin, tok);    
@@ -7411,7 +7411,9 @@ char *nodekind2str(NodeKind kind)
   case ND_CVTTSS2SI64:
     return "CVTTSS2SI64";
   case ND_CVTTPS2PI:
-    return "CVTTPS2PI";                      
+    return "CVTTPS2PI";   
+  case ND_CVTSI2SS:
+    return "CVTSI2SS";                          
   default:
     return "UNREACHABLE"; 
   }
@@ -7861,6 +7863,7 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_cvttss2si", ND_CVTTSS2SI },   
     { "__builtin_ia32_cvttss2si64", ND_CVTTSS2SI64 },
     { "__builtin_ia32_cvttps2pi", ND_CVTTPS2PI },      
+    { "__builtin_ia32_cvtsi2ss", ND_CVTSI2SS },      
         
 };
 
