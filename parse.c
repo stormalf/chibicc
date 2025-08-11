@@ -5657,7 +5657,7 @@ static Node *primary(Token **rest, Token *tok)
     }
   }
 
-  if (equal(tok, "__builtin_ia32_cvtss2si")) {
+  if (equal(tok, "__builtin_ia32_cvtss2si") || equal(tok, "__builtin_ia32_cvtss2si64")) {
     int builtin = builtin_enum(tok);
     if (builtin != -1) {
       Node *node = new_node(builtin, tok);    
@@ -7402,6 +7402,8 @@ char *nodekind2str(NodeKind kind)
     return "UCOMINEQ";
   case ND_CVTSS2SI:
     return "CVTSS2SI";    
+  case ND_CVTSS2SI64:
+    return "CVTSS2SI64";        
   default:
     return "UNREACHABLE"; 
   }
@@ -7847,6 +7849,7 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_ucomige", ND_UCOMIGE },  
     { "__builtin_ia32_ucomineq", ND_UCOMINEQ },   
     { "__builtin_ia32_cvtss2si", ND_CVTSS2SI },   
+    { "__builtin_ia32_cvtss2si64", ND_CVTSS2SI64 },   
         
 };
 
