@@ -1436,6 +1436,14 @@ static void gen_sse_binop6(Node *node, const char *insn, const char *insn2) {
 }
 
 
+static void gen_cvt_mmx_binop(Node *node, const char *insn) {
+  gen_addr(node->lhs);   
+  println("  movups (%%rax), %%xmm0"); 
+  println("  %s %%xmm0, %%mm0", insn);  
+  println("  movq %%mm0, %%rax");
+  println("  movq %%rax, %%xmm0");
+  }
+
 // Helper to emit MMX two-operand instruction
 static void gen_mmx_binop(Node *node, const char *insn, bool rhs_is_imm) {
   gen_expr(node->lhs);
@@ -2432,6 +2440,7 @@ static void gen_expr(Node *node)
   case ND_CVTSS2SI64: gen_cvt_binop(node, "cvtss2siq"); return;
   case ND_CVTTSS2SI: gen_cvt_binop(node, "cvttss2si"); return;
   case ND_CVTTSS2SI64: gen_cvt_binop(node, "cvttss2siq"); return;
+  case ND_CVTTPS2PI: gen_cvt_mmx_binop(node, "cvttps2pi"); return;
   case ND_CLFLUSH:
     gen_addr(node->lhs);    
     println("  clflush (%%rax)");

@@ -556,6 +556,7 @@ void add_type(Node *node)
   case ND_PUNPCKHDQ:
   case ND_VECINITV2SI:  
   case ND_CVTPS2PI:  
+  case ND_CVTTPS2PI:
     node->ty = vector_of(ty_int, 2);
     return;
   case ND_CMPUNORDPS:
