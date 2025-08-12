@@ -553,6 +553,7 @@ typedef enum
   ND_STOREHPS,
   ND_LOADLPS,
   ND_STORELPS,
+  ND_MOVMSKPS,
 } NodeKind;
 
 // AST node type

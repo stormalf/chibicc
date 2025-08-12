@@ -1459,9 +1459,9 @@ static void gen_sse_binop1(Node *node, const char *insn, bool rhs_is_imm) {
   println("  %s %%xmm1, %%xmm0", insn);
 }
 
-static void gen_sse_binop2(Node *node, const char *insn, bool rhs_is_imm) {
+static void gen_sse_binop2(Node *node, const char *insn, const char *reg, bool rhs_is_imm) {
     gen_expr(node->lhs);
-    println("  %s %%xmm0, %%xmm0", insn);  
+    println("  %s %%xmm0, %%%s", insn, reg);  
 }
 
 static void gen_sse_binop3(Node *node, const char *insn, bool rhs_is_imm) {
@@ -2514,6 +2514,7 @@ static void gen_expr(Node *node)
   case ND_STOREHPS: gen_storehps(node); return; 
   case ND_LOADLPS: gen_loadlps(node); return; 
   case ND_STORELPS: gen_storelps(node); return;   
+  case ND_MOVMSKPS: gen_sse_binop2(node, "movmskps", "eax", false);  return;   
   case ND_CLFLUSH: gen_clflush(node); return;
   case ND_VECINITV2SI: gen_vec_init_v2si(node); return;
   case ND_VECEXTV2SI: gen_vec_ext_v2si(node); return;
@@ -2577,14 +2578,14 @@ static void gen_expr(Node *node)
   case ND_SUBSS: gen_sse_binop1(node, "subss", false);  return;    
   case ND_MULSS: gen_sse_binop1(node, "mulss", false);  return;    
   case ND_DIVSS: gen_sse_binop1(node, "divss", false);  return;    
-  case ND_SQRTSS: gen_sse_binop2(node, "sqrtss", false);  return;   
-  case ND_RCPSS: gen_sse_binop2(node, "rcpss", false);  return;   
-  case ND_RSQRTSS: gen_sse_binop2(node, "rsqrtss", false);  return;   
+  case ND_SQRTSS: gen_sse_binop2(node, "sqrtss", "xmm0", false);  return;   
+  case ND_RCPSS: gen_sse_binop2(node, "rcpss", "xmm0", false);  return;   
+  case ND_RSQRTSS: gen_sse_binop2(node, "rsqrtss", "xmm0", false);  return;   
   case ND_MINSS: gen_sse_binop1(node, "minss", false);  return; 
   case ND_MAXSS: gen_sse_binop1(node, "maxss", false);  return; 
-  case ND_SQRTPS: gen_sse_binop2(node, "sqrtps", false);  return;  
-  case ND_RCPPS: gen_sse_binop2(node, "rcpps", false);  return;  
-  case ND_RSQRTPS: gen_sse_binop2(node, "rsqrtps", false);  return;  
+  case ND_SQRTPS: gen_sse_binop2(node, "sqrtps", "xmm0", false);  return;  
+  case ND_RCPPS: gen_sse_binop2(node, "rcpps", "xmm0", false);  return;  
+  case ND_RSQRTPS: gen_sse_binop2(node, "rsqrtps", "xmm0", false);  return;  
   case ND_MINPS: gen_sse_binop3(node, "minps", false);  return; 
   case ND_MAXPS: gen_sse_binop3(node, "maxps", false);  return; 
   case ND_ANDPS: gen_sse_binop3(node, "andps", false);  return; 

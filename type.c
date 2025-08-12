@@ -763,6 +763,7 @@ void add_type(Node *node)
   case ND_COMILE:
   case ND_COMILT:
   case ND_COMIEQ:
+  case ND_MOVMSKPS:
     node->ty = ty_int;
   }
 }
