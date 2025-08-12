@@ -5681,19 +5681,10 @@ static Node *primary(Token **rest, Token *tok)
   }
 
 
-  if (equal(tok, "__builtin_ia32_clflush") || equal(tok, "_mm_clflush")) {
-    Node *node = new_node(ND_CLFLUSH, tok);
-    SET_CTX(ctx); 
-    tok = skip(tok->next, "(", ctx);
-    node->lhs = assign(&tok, tok);
-    add_type(node->lhs);
-    SET_CTX(ctx); 
-    *rest = skip(tok, ")", ctx);
-    return node;
-   }
-
   if (equal(tok, "__builtin_ia32_sqrtss") || equal(tok, "__builtin_ia32_rcpss") || 
       equal(tok, "__builtin_ia32_rcpps") || equal(tok, "__builtin_ia32_rsqrtps") ||
+      equal(tok, "__builtin_ia32_clflush") || equal(tok, "_mm_clflush") ||
+      equal(tok, "__builtin_ia32_pmovmskb") || 
       equal(tok, "__builtin_ia32_sqrtps") || equal(tok, "__builtin_ia32_rsqrtss")) {
     int builtin = builtin_enum(tok);
     if (builtin != -1) {
@@ -7252,7 +7243,8 @@ char *nodekind2str(NodeKind kind)
   case ND_PMAXSW: return "PMAXSW";     
   case ND_PMAXUB: return "PMAXUB";   
   case ND_PMINSW: return "PMINSW"; 
-  case ND_PMINUB: return "PMINUB";                                                              
+  case ND_PMINUB: return "PMINUB";        
+  case ND_PMOVMSKB: return "PMOVMSKB";                                                              
   default: return "UNREACHABLE"; 
   }
 }
@@ -7719,6 +7711,10 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_pmaxub", ND_PMAXUB },   
     { "__builtin_ia32_pminsw", ND_PMINSW },   
     { "__builtin_ia32_pminub", ND_PMINUB },          
+    { "__builtin_ia32_clflush", ND_CLFLUSH },          
+    { "_mm_clflush", ND_CLFLUSH },          
+    { "__builtin_ia32_pmovmskb", ND_PMOVMSKB },   
+    
 };
 
 static int builtin_enum(Token *tok) {

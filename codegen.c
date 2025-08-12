@@ -1656,9 +1656,16 @@ static void gen_sse_binop1(Node *node, const char *insn, bool rhs_is_imm) {
 }
 
 static void gen_sse_binop2(Node *node, const char *insn, const char *reg, bool rhs_is_imm) {
-    gen_expr(node->lhs);
-    println("  %s %%xmm0, %%%s", insn, reg);  
+  gen_expr(node->lhs);
+  println("  %s %%xmm0, %%%s", insn, reg);  
 }
+
+static void gen_sse_binop8(Node *node, const char *insn, const char *reg) {
+  gen_expr(node->lhs);
+  println("  movq (%%rax), %%xmm0");
+  println("  %s %%xmm0, %%%s", insn, reg);  
+}
+
 
 static void gen_sse_binop3(Node *node, const char *insn, bool rhs_is_imm) {
   gen_expr(node->rhs);
@@ -1668,33 +1675,33 @@ static void gen_sse_binop3(Node *node, const char *insn, bool rhs_is_imm) {
 }
 
 static void gen_sse_binop4(Node *node, const char *insn, const char *insn2) {
-    gen_expr(node->lhs);
-    println("  movaps %%xmm0, %%xmm1");
-    gen_expr(node->rhs);
-    println("  %s %%xmm0, %%xmm1", insn); 
-    println("  %s %%al", insn2);
-    println("  movzx %%al, %%eax");
+  gen_expr(node->lhs);
+  println("  movaps %%xmm0, %%xmm1");
+  gen_expr(node->rhs);
+  println("  %s %%xmm0, %%xmm1", insn); 
+  println("  %s %%al", insn2);
+  println("  movzx %%al, %%eax");
 }
 
 
 static void gen_sse_binop5(Node *node, const char *insn, const char *insn2) {
-    gen_expr(node->lhs);
-    println("  movaps %%xmm0, %%xmm1");
-    gen_expr(node->rhs);
-    println("  %s %%xmm1, %%xmm0", insn); 
-    println("  %s %%al", insn2);
-    println("  movzx %%al, %%eax");
+  gen_expr(node->lhs);
+  println("  movaps %%xmm0, %%xmm1");
+  gen_expr(node->rhs);
+  println("  %s %%xmm1, %%xmm0", insn); 
+  println("  %s %%al", insn2);
+  println("  movzx %%al, %%eax");
 }
 
 static void gen_sse_binop6(Node *node, const char *insn, const char *insn2) {
-    gen_expr(node->lhs);
-    println("  movaps %%xmm0, %%xmm1");
-    gen_expr(node->rhs);
-    println("  %s %%xmm0, %%xmm1", insn); 
-    println("  setnp %%dl");
-    println("  %s %%al", insn2);
-    println("  and %%al, %%dl");
-    println("  movzx %%dl, %%eax");
+  gen_expr(node->lhs);
+  println("  movaps %%xmm0, %%xmm1");
+  gen_expr(node->rhs);
+  println("  %s %%xmm0, %%xmm1", insn); 
+  println("  setnp %%dl");
+  println("  %s %%al", insn2);
+  println("  and %%al, %%dl");
+  println("  movzx %%dl, %%eax");
 }
 
 
@@ -2770,6 +2777,7 @@ static void gen_expr(Node *node)
   case ND_PMAXUB: gen_sse_binop7(node, "pmaxub"); return;
   case ND_PMINSW: gen_sse_binop7(node, "pminsw"); return;
   case ND_PMINUB: gen_sse_binop7(node, "pminub"); return;
+  case ND_PMOVMSKB: gen_sse_binop8(node, "pmovmskb", "eax"); return;
 }
 
   
