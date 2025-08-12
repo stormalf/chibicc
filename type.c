@@ -607,7 +607,9 @@ void add_type(Node *node)
   case ND_UNPCKLPS:
   case ND_LOADHPS:
     node->ty = vector_of(ty_float, 4);
-    return;    
+    return;  
+  case ND_STOREHPS:
+    node->ty = ty_void_ptr; 
   case ND_EXPECT:
     add_type(node->rhs);
     add_type(node->lhs);

@@ -550,6 +550,7 @@ typedef enum
   ND_UNPCKHPS,
   ND_UNPCKLPS,
   ND_LOADHPS,
+  ND_STOREHPS,
 } NodeKind;
 
 // AST node type
