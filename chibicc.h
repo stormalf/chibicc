@@ -554,6 +554,7 @@ typedef enum
   ND_LOADLPS,
   ND_STORELPS,
   ND_MOVMSKPS,
+  ND_LDMXCSR,
 } NodeKind;
 
 // AST node type

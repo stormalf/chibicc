@@ -1446,9 +1446,19 @@ static void gen_storelps(Node *node) {
   println("  movlps %%xmm0, (%%rax)"); 
 }
 
-static void gen_clflush(Node *node){
+static void gen_stmxcsr(Node *node) {
+  if (node->lhs) {
+    gen_expr(node->lhs); 
+    println("  stmxcsr (%%rax)"); 
+  } else {
+    println("  stmxcsr -8(%%rsp)");  
+    println("  mov -8(%%rsp), %%eax");
+  }
+} 
+
+static void gen_single_addr_binop(Node *node, const char *insn){
   gen_addr(node->lhs);    
-  println("  clflush (%%rax)");
+  println("  %s (%%rax)", insn);
 }
 
 // Helper to emit MMX two-operand instruction
@@ -2474,15 +2484,16 @@ static void gen_expr(Node *node)
   case ND_LFENCE: gen_single_binop("lfence"); return;
   case ND_MFENCE: gen_single_binop("mfence"); return;
   case ND_PAUSE: gen_single_binop("pause"); return;
-  case ND_STMXCSR:
-    if (node->lhs) {
-      gen_expr(node->lhs); 
-      println("  stmxcsr (%%rax)"); 
-    } else {
-      println("  stmxcsr -8(%%rsp)");  
-      println("  mov -8(%%rsp), %%eax");
-    }
-    return;    
+  case ND_STMXCSR: gen_stmxcsr(node); return;
+    // if (node->lhs) {
+    //   gen_expr(node->lhs); 
+    //   println("  stmxcsr (%%rax)"); 
+    // } else {
+    //   println("  stmxcsr -8(%%rsp)");  
+    //   println("  mov -8(%%rsp), %%eax");
+    // }
+    // return;    
+  case ND_LDMXCSR: gen_single_addr_binop(node, "ldmxcsr"); return;
   case ND_CVTPI2PS:    
     gen_expr(node->lhs);    
     gen_addr(node->rhs);    
@@ -2515,7 +2526,7 @@ static void gen_expr(Node *node)
   case ND_LOADLPS: gen_loadlps(node); return; 
   case ND_STORELPS: gen_storelps(node); return;   
   case ND_MOVMSKPS: gen_sse_binop2(node, "movmskps", "eax", false);  return;   
-  case ND_CLFLUSH: gen_clflush(node); return;
+  case ND_CLFLUSH: gen_single_addr_binop(node, "clflush"); return;
   case ND_VECINITV2SI: gen_vec_init_v2si(node); return;
   case ND_VECEXTV2SI: gen_vec_ext_v2si(node); return;
   case ND_PACKSSWB:   gen_mmx_binop(node, "packsswb", false); return;

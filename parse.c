@@ -5659,6 +5659,7 @@ static Node *primary(Token **rest, Token *tok)
 
   if (equal(tok, "__builtin_ia32_cvtss2si") || equal(tok, "__builtin_ia32_cvttss2si") ||
     equal(tok, "__builtin_ia32_cvttss2si64") || equal(tok, "__builtin_ia32_movmskps") ||
+    equal(tok, "__builtin_ia32_ldmxcsr") ||
     equal(tok, "__builtin_ia32_cvtss2si64")) {
     int builtin = builtin_enum(tok);
     if (builtin != -1) {
@@ -7181,6 +7182,8 @@ char *nodekind2str(NodeKind kind)
     return "PAUSE";
   case ND_STMXCSR:
     return "STMXCSR";
+  case ND_LDMXCSR:
+    return "LDMXCSR";    
   case ND_CVTPI2PS:
     return "CVTPI2PS";    
   case ND_CVTPS2PI:
@@ -7827,7 +7830,8 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_lfence", ND_LFENCE },     
     { "__builtin_ia32_mfence", ND_MFENCE },       
     { "__builtin_ia32_pause", ND_PAUSE },     
-    { "__builtin_ia32_stmxcsr", ND_STMXCSR },     
+    { "__builtin_ia32_stmxcsr", ND_STMXCSR },   
+    { "__builtin_ia32_ldmxcsr", ND_LDMXCSR },     
     { "__builtin_ia32_cvtpi2ps", ND_CVTPI2PS },    
     { "__builtin_ia32_cvtps2pi", ND_CVTPS2PI },    
     { "__builtin_ia32_addss", ND_ADDSS },        

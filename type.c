@@ -619,6 +619,7 @@ void add_type(Node *node)
     return;
   case ND_ABORT:
     return;
+  case ND_LDMXCSR:
   case ND_STMXCSR:
     node->ty = ty_void_ptr;
     return;
