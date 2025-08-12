@@ -1427,10 +1427,121 @@ static void gen_shufps(Node *node, const char *insn) {
   println("  %s $%ld, %%xmm1, %%xmm0", insn, node->rhs->val);
 }
 
+// Walk node to find a numeric constant. Works for ND_ASSIGN, ND_COMMA, ND_CAST etc.
+static int get_const_int_from_node(Node *node) {
+  if (!node)
+    error_tok(NULL, "expected constant node");
+  while (true) {
+    if (node->kind == ND_NUM) return node->val;
+    if (node->kind == ND_CAST) { node = node->lhs; continue; }
+    if (node->kind == ND_COMMA) { node = node->rhs; continue; }
+    if (node->kind == ND_ASSIGN) { node = node->rhs; continue; }
+    break;
+  }
+
+  error_tok(node->tok, "not a compile-time integer constant");
+  return 0;
+}
+
+// Fill vals[] with mask_node->var->ty->array_len ints (expect 4).
+static void get_mask_values(Node *mask_node, int *vals, int expected_len) {
+  if (!mask_node->var || !mask_node->var->init)
+    error_tok(mask_node->tok, "shuffle mask must be a constant vector initializer");
+
+  Initializer *init = mask_node->var->init;
+  int len = mask_node->var->ty->array_len;
+  if (len != expected_len)
+    error_tok(mask_node->tok, "shuffle mask must have %d elements (got %d)", expected_len, len);
+
+  for (int i = 0; i < len; i++) {
+    Initializer *elem = init->children[i];
+    vals[i] = get_const_int_from_node(elem->expr);
+  }
+}
+
+
+// Try to find imm1/imm2 (two shufps immediates) that produce mask[0..3].
+// Returns true on success.
+static bool decompose_shuffle_mask_from_vals(int mask[4], int *out_imm1, int *out_imm2) {
+  // mask entries must be 0..7
+  for (int i = 0; i < 4; i++) if (mask[i] < 0 || mask[i] > 7) return false;
+
+  for (int comb = 0; comb < (1 << 4); comb++) {
+    int idx[4];
+    int ia[2] = {-1,-1}, ib[2] = {-1,-1};
+    bool ok = true;
+
+    for (int j = 0; j < 4; j++) {
+      int bit = (comb >> j) & 1;
+      if (mask[j] < 4) idx[j] = bit;        // from a -> index 0/1 in intermediate
+      else idx[j] = 2 + bit;               // from b -> index 2/3 in intermediate
+
+      if (idx[j] < 2) {
+        if (ia[idx[j]] == -1) ia[idx[j]] = mask[j];
+        else if (ia[idx[j]] != mask[j]) { ok = false; break; }
+      } else {
+        int k = idx[j] - 2;
+        if (ib[k] == -1) ib[k] = mask[j] - 4;
+        else if (ib[k] != mask[j] - 4) { ok = false; break; }
+      }
+    }
+    if (!ok) continue;
+
+    for (int t = 0; t < 2; t++) { if (ia[t] == -1) ia[t] = 0; if (ib[t] == -1) ib[t] = 0; }
+
+    int imm1 = (ia[0] & 3) | ((ia[1] & 3) << 2) | ((ib[0] & 3) << 4) | ((ib[1] & 3) << 6);
+    int imm2 = (idx[0] & 3) | ((idx[1] & 3) << 2) | ((idx[2] & 3) << 4) | ((idx[3] & 3) << 6);
+
+    // simulate
+    int intermediate[4];
+    intermediate[0] = ia[0];            // reference a indices 0..3 treated as 0..3
+    intermediate[1] = ia[1];
+    intermediate[2] = ib[0] + 4;       // convert back to 4..7
+    intermediate[3] = ib[1] + 4;
+
+    int final[4];
+    for (int j = 0; j < 4; j++) final[j] = intermediate[(imm2 >> (2*j)) & 3];
+
+    bool match = true;
+    for (int j = 0; j < 4; j++) if (final[j] != mask[j]) { match = false; break; }
+    if (!match) continue;
+
+    *out_imm1 = imm1;
+    *out_imm2 = imm2;
+    return true;
+  }
+  return false;
+}
 
 static void gen_shuffle(Node *node, const char *insn) {
-  error_tok(node->tok, "%s: %s:%d: error: shuffle not supported", CODEGEN_C, __FILE__, __LINE__);
+  assert(node->builtin_nargs == 3);
+  // Evaluate args so %xmm0 ends with lhs and %xmm1 ends with rhs as before:
+  gen_expr(node->builtin_args[0]);        // leaves a in %xmm0
+  println("  movaps %%xmm0, %%xmm2");     // save a in xmm2
+  gen_expr(node->builtin_args[1]);        // leaves b in %xmm0
+  println("  movaps %%xmm0, %%xmm1");     // save b in xmm1
+  println("  movaps %%xmm2, %%xmm0");     // restore a into xmm0 (dest)
+  // read the 4 mask values
+  int mask[4];
+  get_mask_values(node->builtin_args[2], mask, 4);
+  // try to decompose into two shufps immediates
+  int imm1, imm2;
+  if (decompose_shuffle_mask_from_vals(mask, &imm1, &imm2)) {
+    // emit exactly what GCC emits
+    println("  %s $%d, %%xmm1, %%xmm0", insn, imm1); // shufps imm1, xmm1, xmm0
+    println("  %s $%d, %%xmm0, %%xmm0", insn, imm2); // shufps imm2, xmm0, xmm0
+  } else {
+    // fallback: try a single shufps immediate (simple encode) or emit more general sequence
+    // Build single-byte immediate where bits are (lane3<<6)|(lane2<<4)|(lane1<<2)|lane0
+    int single = ((mask[3] & 3) << 6) | ((mask[2] & 3) << 4) | ((mask[1] & 3) << 2) | (mask[0] & 3);
+    println("  %s $%d, %%xmm1, %%xmm0", insn, single);
+  }
 }
+
+
+// static void gen_shuffle(Node *node, const char *insn) {
+//   error_tok(node->tok, "%s: %s:%d: error: shuffle not supported", CODEGEN_C, __FILE__, __LINE__);
+// }
 
 
 static void gen_cvtpi2ps(Node *node) {

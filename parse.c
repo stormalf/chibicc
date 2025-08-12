@@ -1414,8 +1414,9 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
       tok = tok->next;
       Node *expr;
       expr = lvar_initializer(&tok, tok, var);
-      if (expr->lhs && expr->lhs->var && expr->lhs->var->name)
-      cur = cur->next = new_unary(ND_EXPR_STMT, expr, tok);
+      if (expr->lhs && expr->lhs->var && expr->lhs->var->name) {
+        cur = cur->next = new_unary(ND_EXPR_STMT, expr, tok);
+      }
     }
     //ISS-146
     if (var->ty->size < 0)
@@ -2069,7 +2070,6 @@ static Node *create_lvar_init(Initializer *init, Type *ty, InitDesg *desg, Token
       Node *rhs = create_lvar_init(init->children[i], ty->base, &desg2, tok);
       node = new_binary(ND_COMMA, node, rhs, tok);
     }
-    ty->init = init;
     return node;
   }
 
@@ -2128,6 +2128,7 @@ static Node *lvar_initializer(Token **rest, Token *tok, Obj *var)
   // initializing it with user-supplied values.
   Node *lhs = new_node(ND_MEMZERO, tok);
   lhs->var = var;
+  lhs->var->init = init;
   Node *rhs = create_lvar_init(init, var->ty, &desg, tok);
   return new_binary(ND_COMMA, lhs, rhs, tok);
 }

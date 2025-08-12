@@ -236,6 +236,30 @@ void print_all_macros(void);
 //
 // parse.c
 //
+// This struct represents a variable initializer. Since initializers
+// can be nested (e.g. `int x[2][2] = {{1, 2}, {3, 4}}`), this struct
+// is a tree data structure.
+typedef struct Initializer Initializer;
+struct Initializer
+{
+  Initializer *next;
+  Type *ty;
+  Token *tok;
+  bool is_flexible;
+
+  // If it's not an aggregate type and has an initializer,
+  // `expr` has an initialization expression.
+  Node *expr;
+
+  // If it's an initializer for an aggregate type (e.g. array or struct),
+  // `children` has initializers for its children.
+  Initializer **children;
+
+  // Only one member can be initialized for a union.
+  // `mem` is used to clarify which member is initialized.
+  Member *mem;
+};
+
 
 // Variable or function
 typedef struct Obj Obj;
@@ -307,7 +331,7 @@ struct Obj
   int file_no; // Index or number to identify the source file
   int line_no; // Line number where the variable or function is defined
   bool is_prototyped; // Whether the function is prototyped or not
-
+  Initializer *init;
 };
 
 // Global variable can be initialized either by a constant expression
@@ -684,29 +708,6 @@ typedef enum
   TY_VECTOR,
 } TypeKind;
 
-// This struct represents a variable initializer. Since initializers
-// can be nested (e.g. `int x[2][2] = {{1, 2}, {3, 4}}`), this struct
-// is a tree data structure.
-typedef struct Initializer Initializer;
-struct Initializer
-{
-  Initializer *next;
-  Type *ty;
-  Token *tok;
-  bool is_flexible;
-
-  // If it's not an aggregate type and has an initializer,
-  // `expr` has an initialization expression.
-  Node *expr;
-
-  // If it's an initializer for an aggregate type (e.g. array or struct),
-  // `children` has initializers for its children.
-  Initializer **children;
-
-  // Only one member can be initialized for a union.
-  // `mem` is used to clarify which member is initialized.
-  Member *mem;
-};
 
 
 struct Type
@@ -776,7 +777,7 @@ struct Type
   int destructor_priority;
   int constructor_priority;
   bool is_vector;
-  Initializer *init;
+
 };
 
 // Struct member
