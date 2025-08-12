@@ -1420,6 +1420,19 @@ static void gen_vec_init_binop(Node *node, const char *insn) {
   } 
 }
 
+static void gen_loadhps(Node *node) {
+  gen_expr(node->lhs);
+  println("  movaps (%%rax), %%xmm0");  
+  gen_expr(node->rhs);
+  println("  movq (%%rax), %%xmm1");   
+  println("  movlhps %%xmm1, %%xmm0"); 
+}
+
+static void gen_clflush(Node *node){
+  gen_addr(node->lhs);    
+  println("  clflush (%%rax)");
+}
+
 // Helper to emit MMX two-operand instruction
 static void gen_sse_binop1(Node *node, const char *insn, bool rhs_is_imm) {
   gen_expr(node->rhs);
@@ -2479,10 +2492,8 @@ static void gen_expr(Node *node)
   case ND_MOVHLPS: gen_sse_binop3(node, "movhlps", false);  return; 
   case ND_UNPCKHPS: gen_sse_binop3(node, "unpckhps", false);  return; 
   case ND_UNPCKLPS: gen_sse_binop3(node, "unpcklps", false);  return; 
-  case ND_CLFLUSH:
-    gen_addr(node->lhs);    
-    println("  clflush (%%rax)");
-    return;
+  case ND_LOADHPS: gen_loadhps(node); return; 
+  case ND_CLFLUSH: gen_clflush(node); return;
   case ND_VECINITV2SI: gen_vec_init_v2si(node); return;
   case ND_VECEXTV2SI: gen_vec_ext_v2si(node); return;
   case ND_PACKSSWB:   gen_mmx_binop(node, "packsswb", false); return;
