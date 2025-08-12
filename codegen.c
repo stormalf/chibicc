@@ -1427,6 +1427,12 @@ static void gen_shufps(Node *node, const char *insn) {
   println("  %s $%ld, %%xmm1, %%xmm0", insn, node->rhs->val);
 }
 
+
+static void gen_shuffle(Node *node, const char *insn) {
+  error_tok(node->tok, "%s: %s:%d: error: shuffle not supported", CODEGEN_C, __FILE__, __LINE__);
+}
+
+
 static void gen_cvtpi2ps(Node *node) {
   gen_expr(node->lhs);    
   gen_addr(node->rhs);    
@@ -2513,6 +2519,7 @@ static void gen_expr(Node *node)
   case ND_STMXCSR: gen_stmxcsr(node); return;
   case ND_LDMXCSR: gen_single_addr_binop(node, "ldmxcsr"); return;
   case ND_SHUFPS: gen_shufps(node, "shufps"); return;
+  case ND_SHUFFLE: gen_shuffle(node, "shufps"); return;
   case ND_CVTPI2PS: gen_cvtpi2ps(node); return;   
   case ND_CVTPS2PI:  gen_cvtps2pi(node); return;
   case ND_CVTSS2SI: gen_sse_binop2(node, "cvtss2si", "eax", false); return;

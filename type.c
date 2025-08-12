@@ -608,6 +608,7 @@ void add_type(Node *node)
   case ND_LOADHPS:
   case ND_LOADLPS:
   case ND_SHUFPS:
+  case ND_SHUFFLE:
     node->ty = vector_of(ty_float, 4);
     return;  
   case ND_STORELPS:

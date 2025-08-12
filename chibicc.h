@@ -556,6 +556,7 @@ typedef enum
   ND_MOVMSKPS,
   ND_LDMXCSR,
   ND_SHUFPS,
+  ND_SHUFFLE,
 } NodeKind;
 
 // AST node type
@@ -683,6 +684,31 @@ typedef enum
   TY_VECTOR,
 } TypeKind;
 
+// This struct represents a variable initializer. Since initializers
+// can be nested (e.g. `int x[2][2] = {{1, 2}, {3, 4}}`), this struct
+// is a tree data structure.
+typedef struct Initializer Initializer;
+struct Initializer
+{
+  Initializer *next;
+  Type *ty;
+  Token *tok;
+  bool is_flexible;
+
+  // If it's not an aggregate type and has an initializer,
+  // `expr` has an initialization expression.
+  Node *expr;
+
+  // If it's an initializer for an aggregate type (e.g. array or struct),
+  // `children` has initializers for its children.
+  Initializer **children;
+
+  // Only one member can be initialized for a union.
+  // `mem` is used to clarify which member is initialized.
+  Member *mem;
+};
+
+
 struct Type
 {
   TypeKind kind;
@@ -750,6 +776,7 @@ struct Type
   int destructor_priority;
   int constructor_priority;
   bool is_vector;
+  Initializer *init;
 };
 
 // Struct member

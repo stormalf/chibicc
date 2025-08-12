@@ -64,29 +64,6 @@ struct VarAttr
   bool is_packed;
 };
 
-// This struct represents a variable initializer. Since initializers
-// can be nested (e.g. `int x[2][2] = {{1, 2}, {3, 4}}`), this struct
-// is a tree data structure.
-typedef struct Initializer Initializer;
-struct Initializer
-{
-  Initializer *next;
-  Type *ty;
-  Token *tok;
-  bool is_flexible;
-
-  // If it's not an aggregate type and has an initializer,
-  // `expr` has an initialization expression.
-  Node *expr;
-
-  // If it's an initializer for an aggregate type (e.g. array or struct),
-  // `children` has initializers for its children.
-  Initializer **children;
-
-  // Only one member can be initialized for a union.
-  // `mem` is used to clarify which member is initialized.
-  Member *mem;
-};
 
 // For local variable initializer.
 typedef struct InitDesg InitDesg;
@@ -2092,6 +2069,7 @@ static Node *create_lvar_init(Initializer *init, Type *ty, InitDesg *desg, Token
       Node *rhs = create_lvar_init(init->children[i], ty->base, &desg2, tok);
       node = new_binary(ND_COMMA, node, rhs, tok);
     }
+    ty->init = init;
     return node;
   }
 
@@ -3062,6 +3040,8 @@ static int64_t eval2(Node *node, char ***label)
     }
     return eval_rval(node->lhs, label) + node->member->offset;
   case ND_VAR:
+    if (is_vector(node->var->ty))
+      return 0;
     if (!label) {
       error_tok(node->tok, "%s %d : in eval2 : not a compile-time constant", PARSE_C, __LINE__);
     }
@@ -3069,7 +3049,7 @@ static int64_t eval2(Node *node, char ***label)
     if (node->var->ty->kind != TY_ARRAY && node->var->ty->kind != TY_FUNC && node->var->ty->kind != TY_INT) {
       error_tok(node->tok, "%s %d: in eval2 : invalid initializer2 %d", PARSE_C, __LINE__, node->var->ty->kind);
     }
-      //trying to fix ======ISS-145 compiling util-linux failed with invalid initalizer2 
+    //trying to fix ======ISS-145 compiling util-linux failed with invalid initalizer2 
     if (node->var->ty->kind == TY_INT)
       return 0;
     *label = &node->var->name;
@@ -5770,6 +5750,31 @@ static Node *primary(Token **rest, Token *tok)
   }
 
    
+  if (equal(tok, "__builtin_shuffle"))
+  {
+    int builtin = builtin_enum(tok);
+    if (builtin != -1) {
+      Node *node = new_node(builtin, tok);
+      SET_CTX(ctx); 
+      tok = skip(tok->next, "(", ctx);
+      node->builtin_args[0] = assign(&tok, tok);
+      add_type(node->builtin_args[0]);
+      SET_CTX(ctx); 
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[1] = assign(&tok, tok);
+      add_type(node->builtin_args[1]);
+      SET_CTX(ctx); 
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[2] = assign(&tok, tok);
+      add_type(node->builtin_args[2]);
+      node->builtin_nargs = 3;
+      SET_CTX(ctx);       
+      *rest = skip(tok, ")", ctx);
+    return node;
+    }
+  }
+
+   
   if (equal(tok, "__builtin_ia32_vec_init_v4hi"))
   {
     int builtin = builtin_enum(tok);
@@ -7239,7 +7244,8 @@ char *nodekind2str(NodeKind kind)
   case ND_LOADLPS: return "LOADLPS";        
   case ND_STORELPS: return "STORELPS"; 
   case ND_MOVMSKPS: return "MOVMSKPS";    
-  case ND_SHUFPS: return "SHUFPS";                                                              
+  case ND_SHUFPS: return "SHUFPS";       
+  case ND_SHUFFLE: return "SHUFFLE";                                                              
   default: return "UNREACHABLE"; 
   }
 }
@@ -7700,7 +7706,8 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_loadlps", ND_LOADLPS },   
     { "__builtin_ia32_storelps", ND_STORELPS },   
     { "__builtin_ia32_movmskps", ND_MOVMSKPS },  
-    { "__builtin_ia32_shufps", ND_SHUFPS },               
+    { "__builtin_ia32_shufps", ND_SHUFPS },         
+    { "__builtin_shuffle", ND_SHUFFLE },               
         
 };
 
