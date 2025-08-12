@@ -582,6 +582,7 @@ typedef enum
   ND_SHUFPS,
   ND_SHUFFLE,
   ND_PMAXSW,
+  ND_PMAXUB,
 } NodeKind;
 
 // AST node type

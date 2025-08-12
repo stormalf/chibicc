@@ -1543,11 +1543,11 @@ static void gen_shuffle(Node *node, const char *insn) {
 //   error_tok(node->tok, "%s: %s:%d: error: shuffle not supported", CODEGEN_C, __FILE__, __LINE__);
 // }
 
-static void gen_pmaxsw(Node *node) {
+static void gen_sse_binop7(Node *node, const char *insn) {
   gen_expr(node->lhs);
   println("  movdqa %%xmm0, %%xmm1");  
   gen_expr(node->rhs);
-  println("  pmaxsw %%xmm0, %%xmm1");  
+  println("  %s %%xmm0, %%xmm1", insn);  
   println("  movdqa %%xmm1, %%xmm0");  
 }
 
@@ -2766,7 +2766,8 @@ static void gen_expr(Node *node)
   case ND_UCOMIGT: gen_sse_binop5(node, "ucomiss", "seta");  return;  
   case ND_UCOMIGE: gen_sse_binop5(node, "ucomiss", "setae");  return;  
   case ND_UCOMINEQ: gen_sse_binop4(node, "ucomiss", "setne");  return;  
-  case ND_PMAXSW: gen_pmaxsw(node); return;
+  case ND_PMAXSW: gen_sse_binop7(node, "pmaxsw"); return;
+  case ND_PMAXUB: gen_sse_binop7(node, "pmaxub"); return;
 }
 
   
