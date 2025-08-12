@@ -547,6 +547,7 @@ typedef enum
   ND_CVTSI642SS,
   ND_MOVLHPS,
   ND_MOVHLPS,
+  ND_UNPCKHPS,
 } NodeKind;
 
 // AST node type

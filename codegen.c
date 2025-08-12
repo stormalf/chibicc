@@ -1383,7 +1383,22 @@ static void gen_vector_op(Node *node) {
   }
 }
 
-
+static void gen_vec_ext_v2si(Node *node) {
+  gen_expr(node->lhs);  
+  gen_expr(node->rhs);  
+  println("  mov %%eax, %%ebx");
+  println("  movd %%xmm0, %%eax");
+  static int label_id = 0;
+  int lbl_zero = label_id++;
+  int lbl_done = label_id++;
+  println("  cmpl $0, %%ebx");
+  println("  je .Lvec_ext_zero_%d", lbl_zero);
+  println("  psrldq $4, %%xmm0");
+  println("  movd %%xmm0, %%eax");
+  println("  jmp .Lvec_ext_done_%d", lbl_done);
+  println(".Lvec_ext_zero_%d:", lbl_zero);
+  println(".Lvec_ext_done_%d:", lbl_done);
+}
 
 // Helper to emit MMX two-operand instruction
 static void gen_sse_binop1(Node *node, const char *insn, bool rhs_is_imm) {
@@ -2404,20 +2419,10 @@ static void gen_expr(Node *node)
   return;
   }
   case ND_EMMS: gen_single_binop("emms"); return;
-    // println("  emms");
-    // return;
   case ND_SFENCE: gen_single_binop("sfence"); return;
-    // println("  sfence");
-    // return;
   case ND_LFENCE: gen_single_binop("lfence"); return;
-    // println("  lfence");
-    // return;
   case ND_MFENCE: gen_single_binop("mfence"); return;
-    // println("  mfence");
-    // return;
   case ND_PAUSE: gen_single_binop("pause"); return;
-    // println("  pause");
-    // return;
   case ND_STMXCSR:
     if (node->lhs) {
       gen_expr(node->lhs); 
@@ -2452,6 +2457,7 @@ static void gen_expr(Node *node)
   case ND_CVTSI642SS: gen_cvt_mmx_binop2(node, "cvtsi2ss", "rax"); return;
   case ND_MOVLHPS: gen_sse_binop3(node, "movlhps", false);  return; 
   case ND_MOVHLPS: gen_sse_binop3(node, "movhlps", false);  return; 
+  case ND_UNPCKHPS: gen_sse_binop3(node, "unpckhps", false);  return; 
   case ND_CLFLUSH:
     gen_addr(node->lhs);    
     println("  clflush (%%rax)");
@@ -2464,22 +2470,7 @@ static void gen_expr(Node *node)
     println("  or %%rdx, %%rax");  
     println("  movq %%rax, %%xmm0"); 
     return;
-  case ND_VECEXTV2SI:
-    gen_expr(node->lhs);  
-    gen_expr(node->rhs);  
-    println("  mov %%eax, %%ebx");
-    println("  movd %%xmm0, %%eax");
-    static int label_id = 0;
-    int lbl_zero = label_id++;
-    int lbl_done = label_id++;
-    println("  cmpl $0, %%ebx");
-    println("  je .Lvec_ext_zero_%d", lbl_zero);
-    println("  psrldq $4, %%xmm0");
-    println("  movd %%xmm0, %%eax");
-    println("  jmp .Lvec_ext_done_%d", lbl_done);
-    println(".Lvec_ext_zero_%d:", lbl_zero);
-    println(".Lvec_ext_done_%d:", lbl_done);
-    return;
+  case ND_VECEXTV2SI: gen_vec_ext_v2si(node); return;
   case ND_PACKSSWB:   gen_mmx_binop(node, "packsswb", false); return;
   case ND_PACKSSDW:   gen_mmx_binop(node, "packssdw", false); return;
   case ND_PACKUSWB:   gen_mmx_binop(node, "packuswb", false); return;
