@@ -5678,6 +5678,7 @@ static Node *primary(Token **rest, Token *tok)
       equal(tok, "__builtin_ia32_movlhps") || equal(tok, "__builtin_ia32_movhlps") ||
       equal(tok, "__builtin_ia32_unpckhps") || equal(tok, "__builtin_ia32_unpcklps") ||
       equal(tok, "__builtin_ia32_loadhps") || equal(tok, "__builtin_ia32_storehps") ||
+      equal(tok, "__builtin_ia32_loadlps") || equal(tok, "__builtin_ia32_storelps") ||
       equal(tok, "__builtin_ia32_divss") || equal(tok, "__builtin_ia32_mulss"))
   {
     int builtin = builtin_enum(tok);
@@ -7429,7 +7430,11 @@ char *nodekind2str(NodeKind kind)
   case ND_LOADHPS:
     return "LOADHPS";        
   case ND_STOREHPS:
-    return "STOREHPS";                                                      
+    return "STOREHPS"; 
+  case ND_LOADLPS:
+    return "LOADLPS";        
+  case ND_STORELPS:
+    return "STORELPS";                                                          
   default:
     return "UNREACHABLE"; 
   }
@@ -7886,7 +7891,9 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_unpckhps", ND_UNPCKHPS },    
     { "__builtin_ia32_unpcklps", ND_UNPCKLPS },         
     { "__builtin_ia32_loadhps", ND_LOADHPS },   
-    { "__builtin_ia32_storehps", ND_STOREHPS },         
+    { "__builtin_ia32_storehps", ND_STOREHPS },        
+    { "__builtin_ia32_loadlps", ND_LOADLPS },   
+    { "__builtin_ia32_storelps", ND_STORELPS },         
         
 };
 

@@ -1434,6 +1434,17 @@ static void gen_storehps(Node *node) {
   println("  movhps %%xmm0, (%%rax)"); 
 }
 
+static void gen_loadlps(Node *node) {
+  gen_expr(node->lhs);  
+  gen_expr(node->rhs);  
+  println("  movlps (%%rax), %%xmm0");
+}
+
+static void gen_storelps(Node *node) {
+  gen_expr(node->rhs);
+  gen_expr(node->lhs);
+  println("  movlps %%xmm0, (%%rax)"); 
+}
 
 static void gen_clflush(Node *node){
   gen_addr(node->lhs);    
@@ -2501,6 +2512,8 @@ static void gen_expr(Node *node)
   case ND_UNPCKLPS: gen_sse_binop3(node, "unpcklps", false);  return; 
   case ND_LOADHPS: gen_loadhps(node); return; 
   case ND_STOREHPS: gen_storehps(node); return; 
+  case ND_LOADLPS: gen_loadlps(node); return; 
+  case ND_STORELPS: gen_storelps(node); return;   
   case ND_CLFLUSH: gen_clflush(node); return;
   case ND_VECINITV2SI: gen_vec_init_v2si(node); return;
   case ND_VECEXTV2SI: gen_vec_ext_v2si(node); return;
