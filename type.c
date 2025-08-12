@@ -604,6 +604,7 @@ void add_type(Node *node)
   case ND_MOVLHPS:
   case ND_MOVHLPS:
   case ND_UNPCKHPS:
+  case ND_UNPCKLPS:
     node->ty = vector_of(ty_float, 4);
     return;    
   case ND_EXPECT:

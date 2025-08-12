@@ -5676,7 +5676,7 @@ static Node *primary(Token **rest, Token *tok)
   
   if (equal(tok, "__builtin_ia32_addss") || equal(tok, "__builtin_ia32_subss") ||
       equal(tok, "__builtin_ia32_movlhps") || equal(tok, "__builtin_ia32_movhlps") ||
-      equal(tok, "__builtin_ia32_unpckhps") ||
+      equal(tok, "__builtin_ia32_unpckhps") || equal(tok, "__builtin_ia32_unpcklps") ||
       equal(tok, "__builtin_ia32_divss") || equal(tok, "__builtin_ia32_mulss"))
   {
     int builtin = builtin_enum(tok);
@@ -7422,7 +7422,9 @@ char *nodekind2str(NodeKind kind)
   case ND_MOVHLPS:
     return "MOVHLPS"; 
   case ND_UNPCKHPS:
-    return "UNPCKHPS";                                          
+    return "UNPCKHPS";  
+  case ND_UNPCKLPS:
+    return "UNPCKLPS";                                              
   default:
     return "UNREACHABLE"; 
   }
@@ -7876,7 +7878,8 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_cvtsi642ss", ND_CVTSI642SS },
     { "__builtin_ia32_movlhps", ND_MOVLHPS },         
     { "__builtin_ia32_movhlps", ND_MOVHLPS },         
-    { "__builtin_ia32_unpckhps", ND_UNPCKHPS },         
+    { "__builtin_ia32_unpckhps", ND_UNPCKHPS },    
+    { "__builtin_ia32_unpcklps", ND_UNPCKLPS },         
         
 };
 

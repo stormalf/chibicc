@@ -548,6 +548,7 @@ typedef enum
   ND_MOVLHPS,
   ND_MOVHLPS,
   ND_UNPCKHPS,
+  ND_UNPCKLPS,
 } NodeKind;
 
 // AST node type

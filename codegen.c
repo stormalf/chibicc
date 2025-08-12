@@ -1383,6 +1383,15 @@ static void gen_vector_op(Node *node) {
   }
 }
 
+static void gen_vec_init_v2si(Node *node) {
+  gen_expr(node->lhs); 
+  println("  movl %%eax, %%edx"); 
+  gen_expr(node->rhs);            
+  println("  shl $32, %%rax");    
+  println("  or %%rdx, %%rax");  
+  println("  movq %%rax, %%xmm0");
+}
+
 static void gen_vec_ext_v2si(Node *node) {
   gen_expr(node->lhs);  
   gen_expr(node->rhs);  
@@ -1398,6 +1407,17 @@ static void gen_vec_ext_v2si(Node *node) {
   println("  jmp .Lvec_ext_done_%d", lbl_done);
   println(".Lvec_ext_zero_%d:", lbl_zero);
   println(".Lvec_ext_done_%d:", lbl_done);
+}
+
+static void gen_vec_init_binop(Node *node, const char *insn) {
+  for (int i = 0; i < node->builtin_nargs; i++) {
+    gen_expr(node->builtin_args[i]);  // result in %eax
+    if (i == 0) {
+        println("  movd %%eax, %%xmm0");
+    } else {
+        println("  %s $%d, %%eax, %%xmm0", insn, i);
+    }
+  } 
 }
 
 // Helper to emit MMX two-operand instruction
@@ -2458,18 +2478,12 @@ static void gen_expr(Node *node)
   case ND_MOVLHPS: gen_sse_binop3(node, "movlhps", false);  return; 
   case ND_MOVHLPS: gen_sse_binop3(node, "movhlps", false);  return; 
   case ND_UNPCKHPS: gen_sse_binop3(node, "unpckhps", false);  return; 
+  case ND_UNPCKLPS: gen_sse_binop3(node, "unpcklps", false);  return; 
   case ND_CLFLUSH:
     gen_addr(node->lhs);    
     println("  clflush (%%rax)");
     return;
-  case ND_VECINITV2SI:
-    gen_expr(node->lhs); 
-    println("  movl %%eax, %%edx"); 
-    gen_expr(node->rhs);            
-    println("  shl $32, %%rax");    
-    println("  or %%rdx, %%rax");  
-    println("  movq %%rax, %%xmm0"); 
-    return;
+  case ND_VECINITV2SI: gen_vec_init_v2si(node); return;
   case ND_VECEXTV2SI: gen_vec_ext_v2si(node); return;
   case ND_PACKSSWB:   gen_mmx_binop(node, "packsswb", false); return;
   case ND_PACKSSDW:   gen_mmx_binop(node, "packssdw", false); return;
@@ -2525,26 +2539,8 @@ static void gen_expr(Node *node)
   case ND_PCMPGTW:    gen_mmx_binop(node, "pcmpgtw", false);  return;    
   case ND_PCMPEQD:    gen_mmx_binop(node, "pcmpeqd", false);  return;     
   case ND_PCMPGTD:    gen_mmx_binop(node, "pcmpgtd", false);  return;           
-  case ND_VECINITV4HI:
-    for (int i = 0; i < node->builtin_nargs; i++) {
-      gen_expr(node->builtin_args[i]);  // result in %eax
-      if (i == 0) {
-          println("  movd %%eax, %%xmm0");
-      } else {
-          println("  pinsrw $%d, %%eax, %%xmm0", i);
-      }
-    }
-    return;
-  case ND_VECINITV8QI:
-    for (int i = 0; i < node->builtin_nargs; i++) {
-      gen_expr(node->builtin_args[i]);  // result in %eax
-      if (i == 0) {
-          println("  movd %%eax, %%xmm0");
-      } else {
-          println("  pinsrb $%d, %%eax, %%xmm0", i);
-      }
-  }
-  return;   
+  case ND_VECINITV4HI: gen_vec_init_binop(node, "pinsrw"); return;
+  case ND_VECINITV8QI: gen_vec_init_binop(node, "pinsrb"); return;
   case ND_ADDSS: gen_sse_binop1(node, "addss", false);  return;    
   case ND_SUBSS: gen_sse_binop1(node, "subss", false);  return;    
   case ND_MULSS: gen_sse_binop1(node, "mulss", false);  return;    
