@@ -2769,6 +2769,7 @@ static void gen_expr(Node *node)
   case ND_PMAXSW: gen_sse_binop7(node, "pmaxsw"); return;
   case ND_PMAXUB: gen_sse_binop7(node, "pmaxub"); return;
   case ND_PMINSW: gen_sse_binop7(node, "pminsw"); return;
+  case ND_PMINUB: gen_sse_binop7(node, "pminub"); return;
 }
 
   
