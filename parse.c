@@ -5731,7 +5731,7 @@ static Node *primary(Token **rest, Token *tok)
       equal(tok, "__builtin_ia32_ucomige") || equal(tok, "__builtin_ia32_ucomigt") || 
       equal(tok, "__builtin_ia32_ucomineq") || equal(tok, "__builtin_ia32_ucomine") ||
       equal(tok, "__builtin_ia32_comine") || equal(tok, "__builtin_ia32_pmaxsw") || 
-      equal(tok, "__builtin_ia32_pmaxub") || 
+      equal(tok, "__builtin_ia32_pmaxub") || equal(tok, "__builtin_ia32_pminsw") || 
       equal(tok, "__builtin_ia32_maxss") || equal(tok, "__builtin_ia32_minss"))
   {
     int builtin = builtin_enum(tok);
@@ -7248,7 +7248,9 @@ char *nodekind2str(NodeKind kind)
   case ND_MOVMSKPS: return "MOVMSKPS";    
   case ND_SHUFPS: return "SHUFPS";       
   case ND_SHUFFLE: return "SHUFFLE";     
-  case ND_PMAXSW: return "PMAXSW";                                                              
+  case ND_PMAXSW: return "PMAXSW";     
+  case ND_PMAXUB: return "PMAXUB";   
+  case ND_PMINSW: return "PMINSW";                                                              
   default: return "UNREACHABLE"; 
   }
 }
@@ -7712,7 +7714,8 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_shufps", ND_SHUFPS },         
     { "__builtin_shuffle", ND_SHUFFLE },       
     { "__builtin_ia32_pmaxsw", ND_PMAXSW },     
-    { "__builtin_ia32_pmaxub", ND_PMAXUB },          
+    { "__builtin_ia32_pmaxub", ND_PMAXUB },   
+    { "__builtin_ia32_pminsw", ND_PMINSW },          
 };
 
 static int builtin_enum(Token *tok) {

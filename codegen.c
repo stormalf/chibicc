@@ -2768,6 +2768,7 @@ static void gen_expr(Node *node)
   case ND_UCOMINEQ: gen_sse_binop4(node, "ucomiss", "setne");  return;  
   case ND_PMAXSW: gen_sse_binop7(node, "pmaxsw"); return;
   case ND_PMAXUB: gen_sse_binop7(node, "pmaxub"); return;
+  case ND_PMINSW: gen_sse_binop7(node, "pminsw"); return;
 }
 
   
