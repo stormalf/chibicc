@@ -1420,6 +1420,28 @@ static void gen_vec_init_binop(Node *node, const char *insn) {
   } 
 }
 
+static void gen_shufps(Node *node, const char *insn) {
+  gen_expr(node->rhs);
+  println("  movaps %%xmm0, %%xmm1");      
+  gen_expr(node->lhs);
+  println("  %s $%ld, %%xmm1, %%xmm0", insn, node->rhs->val);
+}
+
+static void gen_cvtpi2ps(Node *node) {
+  gen_expr(node->lhs);    
+  gen_addr(node->rhs);    
+  println("  movq (%%rax), %%mm0"); 
+  println("  cvtpi2ps %%mm0, %%xmm0");  
+} 
+
+static void gen_cvtps2pi(Node *node) {
+  gen_expr(node->lhs);        
+  println("  cvtps2pi %%xmm0, %%mm0");
+  gen_addr(node->lhs);         
+  println("  movq %%mm0, %%rax");
+  println("  movq %%rax, %%xmm0"); 
+}
+
 static void gen_loadhps(Node *node) {
   gen_expr(node->lhs);
   println("  movaps (%%rax), %%xmm0");  
@@ -1428,22 +1450,62 @@ static void gen_loadhps(Node *node) {
   println("  movlhps %%xmm1, %%xmm0"); 
 }
 
-static void gen_storehps(Node *node) {
+static void gen_alloc(Node *node) {
+  gen_expr(node->lhs); // Assume size to allocate is in RAX
+  println("  mov %%rax, %%rdi"); // Move size to RDI (or appropriate register)
+  println("  sub %%rdi, %%rsp"); // Allocate space on the stack
+  println("  mov %%rsp, %%rax"); // Store the new stack pointer (allocated memory address) in RAX
+}
+
+static void gen_release(Node *node) {
+  gen_expr(node->lhs);
+  push();
+  pop("%rdi");
+  println("  xor %%eax, %%eax");
+  println("  mov %s, (%%rdi)", reg_ax(node->ty->size));
+}
+
+
+static void gen_subfetch(Node *node) {
+  gen_expr(node->lhs);
+  push();
+  gen_expr(node->rhs);
+  pop("%rdi");
+  push();
+  println("  neg %s", reg_ax(node->ty->size));
+  println("  xadd %s, (%%rdi)", reg_ax(node->ty->size));
+  pop("%rdi");
+  println("  sub %s, %s", reg_di(node->ty->size), reg_ax(node->ty->size));
+}
+
+static void gen_fetchadd(Node *node) {
+  gen_expr(node->lhs);
+  push();
+  gen_expr(node->rhs);
+  pop("%rdi");
+  println("  xadd %s, (%%rdi)", reg_ax(node->ty->size));
+}
+
+
+static void gen_fetchsub(Node *node) {
+  gen_expr(node->lhs);
+  push();
+  gen_expr(node->rhs);
+  pop("%rdi");
+  println("  neg %s", reg_ax(node->ty->size));
+  println("  xadd %s, (%%rdi)", reg_ax(node->ty->size));
+}
+
+static void gen_store_binop(Node *node, const char *insn) {
   gen_expr(node->rhs);
   gen_expr(node->lhs);
-  println("  movhps %%xmm0, (%%rax)"); 
+  println("  %s %%xmm0, (%%rax)", insn); 
 }
 
 static void gen_loadlps(Node *node) {
   gen_expr(node->lhs);  
   gen_expr(node->rhs);  
   println("  movlps (%%rax), %%xmm0");
-}
-
-static void gen_storelps(Node *node) {
-  gen_expr(node->rhs);
-  gen_expr(node->lhs);
-  println("  movlps %%xmm0, (%%rax)"); 
 }
 
 static void gen_stmxcsr(Node *node) {
@@ -2391,21 +2453,8 @@ static void gen_expr(Node *node)
       println("\tmfence");
     }
     return;
-  case ND_FETCHADD:
-    gen_expr(node->lhs);
-    push();
-    gen_expr(node->rhs);
-    pop("%rdi");
-    println("\txadd\t%s,(%%rdi)", reg_ax(node->ty->size));
-    return;
-  case ND_FETCHSUB:
-    gen_expr(node->lhs);
-    push();
-    gen_expr(node->rhs);
-    pop("%rdi");
-    println("\tneg\t%s", reg_ax(node->ty->size));
-    println("\txadd\t%s,(%%rdi)", reg_ax(node->ty->size));
-    return;
+  case ND_FETCHADD: gen_fetchadd(node); return;
+  case ND_FETCHSUB: gen_fetchsub(node); return;
   case ND_FETCHXOR:
     HandleAtomicArithmetic(node, "xor");
     return;
@@ -2415,32 +2464,9 @@ static void gen_expr(Node *node)
   case ND_FETCHOR:
     HandleAtomicArithmetic(node, "or");
     return;
-  case ND_SUBFETCH:
-    gen_expr(node->lhs);
-    push();
-    gen_expr(node->rhs);
-    pop("%rdi");
-    push();
-    println("\tneg\t%s", reg_ax(node->ty->size));
-    println("\txadd\t%s,(%%rdi)", reg_ax(node->ty->size));
-    pop("%rdi");
-    println("\tsub\t%s,%s", reg_di(node->ty->size), reg_ax(node->ty->size));
-    return;
-  case ND_RELEASE:
-    gen_expr(node->lhs);
-    push();
-    pop("%rdi");
-    println("\txor\t%%eax,%%eax");
-    println("\tmov\t%s,(%%rdi)", reg_ax(node->ty->size));
-    return;
-  case ND_ALLOC:
-    // Evaluate the size expression and store the result in RAX
-    gen_expr(node->lhs); // Assume size to allocate is in RAX
-    // Allocate space on the stack
-    println("  mov %%rax, %%rdi"); // Move size to RDI (or appropriate register)
-    println("  sub %%rdi, %%rsp"); // Allocate space on the stack
-    println("  mov %%rsp, %%rax"); // Store the new stack pointer (allocated memory address) in RAX
-    return;
+  case ND_SUBFETCH: gen_subfetch(node); return;
+  case ND_RELEASE: gen_release(node); return;
+  case ND_ALLOC: gen_alloc(node); return;
   case ND_BUILTIN_NANF:  
   case ND_BUILTIN_HUGE_VALF:
   case ND_BUILTIN_INFF: {
@@ -2485,32 +2511,11 @@ static void gen_expr(Node *node)
   case ND_MFENCE: gen_single_binop("mfence"); return;
   case ND_PAUSE: gen_single_binop("pause"); return;
   case ND_STMXCSR: gen_stmxcsr(node); return;
-    // if (node->lhs) {
-    //   gen_expr(node->lhs); 
-    //   println("  stmxcsr (%%rax)"); 
-    // } else {
-    //   println("  stmxcsr -8(%%rsp)");  
-    //   println("  mov -8(%%rsp), %%eax");
-    // }
-    // return;    
   case ND_LDMXCSR: gen_single_addr_binop(node, "ldmxcsr"); return;
-  case ND_CVTPI2PS:    
-    gen_expr(node->lhs);    
-    gen_addr(node->rhs);    
-    println("  movq (%%rax), %%mm0"); 
-    println("  cvtpi2ps %%mm0, %%xmm0");  
-    return;  
-  case ND_CVTPS2PI: 
-    gen_expr(node->lhs);        
-    println("  cvtps2pi %%xmm0, %%mm0");
-    gen_addr(node->lhs);         
-    println("  movq %%mm0, %%rax");
-    println("  movq %%rax, %%xmm0"); 
-    return;
-  case ND_CVTSS2SI: 
-    gen_expr(node->lhs);
-    println("  cvtss2si %%xmm0, %%eax");
-    return;
+  case ND_SHUFPS: gen_shufps(node, "shufps"); return;
+  case ND_CVTPI2PS: gen_cvtpi2ps(node); return;   
+  case ND_CVTPS2PI:  gen_cvtps2pi(node); return;
+  case ND_CVTSS2SI: gen_sse_binop2(node, "cvtss2si", "eax", false); return;
   case ND_CVTSS2SI64: gen_cvt_binop(node, "cvtss2siq"); return;
   case ND_CVTTSS2SI: gen_cvt_binop(node, "cvttss2si"); return;
   case ND_CVTTSS2SI64: gen_cvt_binop(node, "cvttss2siq"); return;
@@ -2522,9 +2527,9 @@ static void gen_expr(Node *node)
   case ND_UNPCKHPS: gen_sse_binop3(node, "unpckhps", false);  return; 
   case ND_UNPCKLPS: gen_sse_binop3(node, "unpcklps", false);  return; 
   case ND_LOADHPS: gen_loadhps(node); return; 
-  case ND_STOREHPS: gen_storehps(node); return; 
+  case ND_STOREHPS: gen_store_binop(node, "movhps"); return; 
   case ND_LOADLPS: gen_loadlps(node); return; 
-  case ND_STORELPS: gen_storelps(node); return;   
+  case ND_STORELPS: gen_store_binop(node, "movlps"); return;   
   case ND_MOVMSKPS: gen_sse_binop2(node, "movmskps", "eax", false);  return;   
   case ND_CLFLUSH: gen_single_addr_binop(node, "clflush"); return;
   case ND_VECINITV2SI: gen_vec_init_v2si(node); return;

@@ -5798,6 +5798,29 @@ static Node *primary(Token **rest, Token *tok)
     }
   }
 
+     
+  if (equal(tok, "__builtin_ia32_shufps"))
+  {
+    int builtin = builtin_enum(tok);
+    if (builtin != -1) {
+      Node *node = new_node(builtin, tok);
+      SET_CTX(ctx); 
+      tok = skip(tok->next, "(", ctx);
+      node->lhs = assign(&tok, tok);
+      add_type(node->lhs);
+      SET_CTX(ctx); 
+      tok = skip(tok, ",", ctx);
+      node->rhs = assign(&tok, tok);
+      add_type(node->rhs);
+      SET_CTX(ctx); 
+      tok = skip(tok, ",", ctx);
+      node->rhs->val = const_expr(&tok, tok);
+      SET_CTX(ctx);       
+      *rest = skip(tok, ")", ctx);
+    return node;
+    }
+  }
+
   if (equal(tok, "__builtin_ia32_vec_init_v8qi"))
   {
     int builtin = builtin_enum(tok);
@@ -6987,461 +7010,237 @@ char *nodekind2str(NodeKind kind)
 {
   switch (kind)
   {
-  case ND_NULL_EXPR:
-    return "NULL_EXPR";
-  case ND_ADD:
-    return "ADD";
-  case ND_SUB:
-    return "SUB";
-  case ND_MUL: // *
-    return "MUL";
-  case ND_DIV: // /
-    return "DIV";
-  case ND_NEG: // unary -
-    return "NEG";
-  case ND_MOD: // %
-    return "MOD";
-  case ND_BITAND: // &
-    return "BITAND";
-  case ND_BITOR: // |
-    return "BITOR";
-  case ND_BITXOR: // ^
-    return "BITXOR";
-  case ND_SHL: // <<
-    return "SHL";
-  case ND_SHR: // >>
-    return "SHR";
-  case ND_EQ: // ==
-    return "EQ";
-  case ND_NE: // !=
-    return "NE";
-  case ND_LT: // <
-    return "LT";
-  case ND_LE: // <=
-    return "LE";
-  case ND_ASSIGN: // =
-    return "ASSIGN";
-  case ND_COND:
-    return "COND"; // ?:
-  case ND_COMMA:
-    return "COMMA"; // ,
-  case ND_MEMBER:
-    return "MEMBER"; // . (struct member access)
-  case ND_ADDR:
-    return "ADDR"; // unary &
-  case ND_DEREF:
-    return "DEREF"; // unary *
-  case ND_NOT:
-    return "NOT"; // !
-  case ND_BITNOT:
-    return "BITNOT"; // ~
-  case ND_LOGAND:
-    return "LOGAND"; // &&
-  case ND_LOGOR:
-    return "LOGOR"; // ||
-  case ND_RETURN:
-    return "RETURN"; // "return"
-  case ND_IF:
-    return "IF"; // "if"
-  case ND_FOR:
-    return "FOR"; // "for" or "while"
-  case ND_DO:
-    return "DO"; // "do"
-  case ND_SWITCH:
-    return "SWITCH"; // "switch"
-  case ND_CASE:
-    return "CASE"; // "case"
-  case ND_BLOCK:
-    return "BLOCK"; // { ... }
-  case ND_GOTO:
-    return "GOTO"; // "goto"
-  case ND_GOTO_EXPR:
-    return "GOTO_EXPR"; // "goto" labels-as-values
-  case ND_LABEL:
-    return "LABEL"; // Labeled statement
-  case ND_LABEL_VAL:
-    return "LABEL_VAL"; // [GNU] Labels-as-values
-  case ND_FUNCALL:
-    return "FUNCCALL";
-  case ND_EXPR_STMT:
-    return "EXPRSTMR"; // Expression statement
-  case ND_STMT_EXPR:
-    return "STMTEXPR"; // Statement expression
-  case ND_VAR:
-    return "VAR"; // Variable
-  case ND_VLA_PTR:
-    return "VLAPTR"; // VLA designator
-  case ND_NUM:
-    return "NUM"; // Integer
-  case ND_CAST:
-    return "CAST"; // Type cast
-  case ND_MEMZERO:
-    return "MEMZERO"; // Zero-clear a stack variable
-  case ND_ASM:
-    return "ASM"; //"asm"
+  case ND_NULL_EXPR: return "NULL_EXPR";
+  case ND_ADD: return "ADD";
+  case ND_SUB: return "SUB";
+  case ND_MUL: return "MUL";
+  case ND_DIV: return "DIV";
+  case ND_NEG: return "NEG";
+  case ND_MOD: return "MOD";
+  case ND_BITAND: return "BITAND";
+  case ND_BITOR: return "BITOR";
+  case ND_BITXOR: return "BITXOR";
+  case ND_SHL: return "SHL";
+  case ND_SHR: return "SHR";
+  case ND_EQ: return "EQ";
+  case ND_NE: return "NE";
+  case ND_LT: return "LT";
+  case ND_LE: return "LE";
+  case ND_ASSIGN: return "ASSIGN";
+  case ND_COND: return "COND"; 
+  case ND_COMMA: return "COMMA";
+  case ND_MEMBER: return "MEMBER"; 
+  case ND_ADDR: return "ADDR";
+  case ND_DEREF: return "DEREF";
+  case ND_NOT: return "NOT";
+  case ND_BITNOT: return "BITNOT"; 
+  case ND_LOGAND: return "LOGAND"; 
+  case ND_LOGOR: return "LOGOR"; 
+  case ND_RETURN: return "RETURN";
+  case ND_IF: return "IF";
+  case ND_FOR: return "FOR"; 
+  case ND_DO: return "DO"; 
+  case ND_SWITCH: return "SWITCH"; 
+  case ND_CASE: return "CASE"; 
+  case ND_BLOCK: return "BLOCK"; 
+  case ND_GOTO: return "GOTO"; 
+  case ND_GOTO_EXPR: return "GOTO_EXPR"; 
+  case ND_LABEL: return "LABEL"; 
+  case ND_LABEL_VAL: return "LABEL_VAL";
+  case ND_FUNCALL: return "FUNCCALL";
+  case ND_EXPR_STMT: return "EXPRSTMR";
+  case ND_STMT_EXPR: return "STMTEXPR"; 
+  case ND_VAR: return "VAR"; 
+  case ND_VLA_PTR: return "VLAPTR"; 
+  case ND_NUM: return "NUM";
+  case ND_CAST: return "CAST";
+  case ND_MEMZERO: return "MEMZERO"; 
+  case ND_ASM: return "ASM";
   case ND_CAS:
-  case ND_CAS_N:
-    return "CAS"; // Atomic compare-and-swap
+  case ND_CAS_N: return "CAS";
   case ND_EXCH:
-  case ND_EXCH_N:
-    return "EXCH";
+  case ND_EXCH_N: return "EXCH";
   case ND_LOAD:
-  case ND_LOAD_N:
-    return "LOAD"; // Atomic load
+  case ND_LOAD_N: return "LOAD";
   case ND_STORE:
-  case ND_STORE_N:
-    return "STORE"; // Atomic store
+  case ND_STORE_N: return "STORE"; 
   case ND_TESTANDSET:
-  case ND_TESTANDSETA:
-    return "TESTANDSET"; // Atomic test and set
-  case ND_CLEAR:
-    return "CLEAR"; //atomic clear
-  case ND_RELEASE:
-    return "RELEASE"; //atomic release
-  case  ND_FETCHADD:
-    return "FETCHADD";  // Atomic fetch and add
-  case ND_FETCHSUB:
-    return "FETCHSUB";     // Atomic fetch and sub
-  case ND_FETCHXOR:
-    return "FETCHXOR";     // Atomic fetch and xor
-  case ND_FETCHAND:
-    return "FETCHAND";     // Atomic fetch and and
-  case ND_FETCHOR:
-    return "FETCHOR";      // Atomic fetch and or
-  case ND_SUBFETCH:
-    return "SUBFETCH";     // Atomic sub and fetch
-  case ND_SYNC:
-    return "SYNC";    //atomic synchronize
-  case ND_BUILTIN_MEMCPY:
-    return "MEMCPY";  //builtin memcpy
-  case ND_BUILTIN_MEMSET:
-    return "MEMSET";  //builtin memset
-  case ND_BUILTIN_CLZ:
-    return "CLZ";   //builtin clz
-  case ND_BUILTIN_CLZL:
-    return "CLZL";   //builtin clzl
-  case ND_BUILTIN_CLZLL:
-    return "CLZLL";   //builtin clzll
-  case ND_BUILTIN_CTZ:
-    return "CTZ";   //builtin ctz
-  case ND_BUILTIN_CTZL:
-    return "CTZL";   //builtin ctzl
-  case ND_BUILTIN_CTZLL:
-    return "CTZLL";   //builtin ctzll
-  case ND_BUILTIN_INFF:
-    return "INFF";   //builtin inff
-  case ND_BUILTIN_INF:
-    return "INFF";   //builtin inf    
-  case ND_BUILTIN_NAN:
-    return "NAN";   //builtin nan    
-  case ND_BUILTIN_NANF:
-    return "NANF";   //builtin nanf   
-  case ND_BUILTIN_NANL:
-    return "NANL";   //builtin nanl       
-  case ND_BUILTIN_ISNAN:
-    return "ISNAN"; //builtin isnan
-  case ND_BUILTIN_HUGE_VAL:
-    return "ISNAN"; //builtin huge val
-  case ND_BUILTIN_HUGE_VALF:
-    return "ISNAN"; //builtin huge valf
-  case ND_BUILTIN_HUGE_VALL:
-    return "ISNAN"; //builtin huge vall
-  case ND_POPCOUNT:
-    return "POPCOUNT"; //builtin popcount
-  case ND_RETURN_ADDR:
-    return "RETURN_ADDRESS";  //builtin return address
-  case ND_BUILTIN_FRAME_ADDRESS:
-    return "FRAME_ADDRESS"; //builtin frame address
-  case ND_BUILTIN_ADD_OVERFLOW:
-    return "ADD_OVERFLOW";    //builtin add overflow
-  case ND_BUILTIN_SUB_OVERFLOW:
-    return "SUB_OVERFLOW";    //builtin sub overflow
-  case ND_BUILTIN_MUL_OVERFLOW:
-    return "MUL_OVERFLOW";    //builtin mul overflow
-  case ND_BUILTIN_BSWAP16:
-    return "BSWAP16";    //builtin bswap16
-  case ND_BUILTIN_BSWAP32:
-    return "BSWAP32";    //builtin bswap32
-  case ND_BUILTIN_BSWAP64:
-    return "BSWAP64";    //builtin bswap64          
-  case ND_ALLOC:
-    return "ALLOCA";  //builtin alloca
-  case ND_ABORT:
-    return "ABORT";  //builtin abort
-  case ND_EXPECT:
-    return "EXPECT";  //builtin expect
-  case ND_EMMS:
-    return "EMMS";
-  case ND_LFENCE:
-    return "LFENCE";
-  case ND_MFENCE:
-    return "MFENCE";
-  case ND_SFENCE:
-    return "SFENCE";
-  case ND_PAUSE:
-    return "PAUSE";
-  case ND_STMXCSR:
-    return "STMXCSR";
-  case ND_LDMXCSR:
-    return "LDMXCSR";    
-  case ND_CVTPI2PS:
-    return "CVTPI2PS";    
-  case ND_CVTPS2PI:
-    return "CVTPS2PI";
-  case ND_CLFLUSH:
-    return "CLFLUSH";
-  case ND_VECINITV2SI:
-    return "VEC_INIT_V2SI";
-  case ND_VECEXTV2SI:
-    return "VEC_EXT_V2SI";
-  case ND_VECINITV8QI:
-    return "VEC_INIT_V8QI";   
-  case ND_VECINITV4HI:
-    return "VEC_INIT_V4HI";        
-  case ND_PACKSSWB:
-    return "PACKSSWB";
-  case ND_PACKSSDW:
-    return "PACKSSDW";
-  case ND_PACKUSWB:
-    return "PACKUSWB";
-  case ND_PUNPCKHBW:
-    return "PUNPCKHBW";
-  case ND_PUNPCKHWD:
-    return "PUNPCKHWD";   
-  case ND_PUNPCKHDQ:
-    return "PUNPCKHDQ";   
-  case ND_PUNPCKLBW:
-    return "PUNPCKLBW";  
-  case ND_PUNPCKLWD:
-    return "PUNPCKLWD";   
-  case ND_PUNPCKLDQ:
-    return "PUNPCKLDQ";   
-  case ND_PADDB:
-    return "PADDB";   
-  case ND_PADDW:
-    return "PADDW";  
-  case ND_PADDD:
-    return "PADDD";
-  case ND_PADDQ:
-    return "PADDQ";   
-  case ND_PADDSB:
-    return "PADDSB";  
-  case ND_PADDSW:
-    return "PADDSW";   
-  case ND_PADDUSB:
-    return "PADDUSB"; 
-  case ND_PADDUSW:
-    return "PADDUSW";   
-  case ND_PSUBB:
-    return "PSUBB";    
-  case ND_PSUBW:
-    return "PSUBW";   
-  case ND_PSUBD:
-    return "PSUBD";     
-  case ND_PSUBQ:
-    return "PSUBQ";  
-  case ND_PSUBSB:
-    return "PSUBSB";   
-  case ND_PSUBSW:
-    return "PSUBSW"; 
-  case ND_PSUBUSB:
-    return "PSUBUSB"; 
-  case ND_PSUBUSW:
-    return "PSUBUSW";     
-  case ND_PMADDWD:
-    return "PMADDWD";    
-  case ND_PMULHW:
-    return "PMULHW";   
-  case ND_PMULLW:
-    return "PMULLW";  
-  case ND_PSLLW:
-    return "PSLLW";   
-  case ND_PSLLWI:
-    return "PSLLWI"; 
-  case ND_PSLLD:
-    return "PSLLD";      
-  case ND_PSLLDI:
-    return "PSLLDI";   
-  case ND_PSLLQ:
-    return "PSLLQ";
-  case ND_PSLLQI:
-    return "PSLLQI";  
-  case ND_PSRAW:
-    return "PSRAW";   
-  case ND_PSRAWI:
-    return "PSRAWI";
-  case ND_PSRAD:
-    return "PSRAD";  
-  case ND_PSRADI:
-    return "PSRADI";
-  case ND_PSRLW:
-    return "PSRLW";      
-  case ND_PSRLWI:
-    return "PSRLWI";   
-  case ND_PSRLD:
-    return "PSRLD";      
-  case ND_PSRLDI:
-    return "PSRLDI";  
-  case ND_PSRLQ:
-    return "PSRLQ";      
-  case ND_PSRLQI:
-    return "PSRLQI"; 
-  case ND_PAND:
-    return "PAND";  
-  case ND_PANDN:
-    return "PANDN";    
-  case ND_POR:
-    return "POR";
-  case ND_PXOR:
-    return "PXOR";    
-  case ND_PCMPEQB:
-    return "PCMPEQB";     
-  case ND_PCMPGTB:
-    return "PCMPGTB";  
-  case ND_PCMPEQW:
-    return "PCMPEQW";  
-  case ND_PCMPEQD:
-    return "PCMPEQD";        
-  case ND_PCMPGTW:
-    return "PCMPGTW";  
-  case ND_PCMPGTD:
-    return "PCMPGTD";  
-  case ND_ADDSS:
-    return "ADDSS";  
-  case ND_SUBSS:
-    return "SUBSS";   
-  case ND_MULSS:
-    return "MULSS";  
-  case ND_DIVSS:
-    return "DIVSS";  
-  case ND_SQRTSS:
-    return "SQRTSS"; 
-  case ND_SQRTPS:
-    return "SQRTPS";     
-  case ND_RSQRTSS:
-    return "RSQRTSS";  
-  case ND_RSQRTPS:
-    return "RSQRTPS";         
-  case ND_RCPSS:
-    return "RCPSS"; 
-  case ND_RCPPS:
-    return "RCPPS";      
-  case ND_MINSS:
-    return "MINSS";
-  case ND_MINPS:
-    return "MINPS"; 
-  case ND_MAXPS:
-    return "MAXPS";        
-  case ND_MAXSS:
-    return "MAXSS"; 
-  case ND_ANDPS:
-    return "ANDPS";       
-  case ND_ANDNPS:
-    return "ANDNPS";   
-  case ND_ORPS:
-    return "ORPS";  
-  case ND_XORPS:
-    return "XORPS";   
-  case ND_CMPEQSS:
-    return "CMPEQSS";    
-  case ND_CMPLTSS:
-    return "CMPLTSS";  
-  case ND_CMPLESS:
-    return "CMPLESS";    
-  case ND_MOVSS:
-    return "MOVSS";   
-  case ND_CMPNEQSS:
-    return "CMPNEQSS"; 
-  case ND_CMPNLTSS:
-    return "CMPNLTSS"; 
-  case ND_CMPNLESS:
-    return "CMPNLESS"; 
-  case ND_CMPORDSS:
-    return "CMPORDSS"; 
-  case ND_CMPUNORDSS:
-    return "CMPUNORDSS";    
-  case ND_CMPEQPS:
-    return "CMPEQPS";  
-  case ND_CMPLTPS:
-    return "CMPLTPS";     
-  case ND_CMPLEPS:
-    return "CMPLEPS";  
-  case ND_CMPGTPS:
-    return "CMPGTPS";     
-  case ND_CMPGEPS:
-    return "CMPGEPS"; 
-  case ND_CMPNEQPS:
-    return "CMPNEQPS";  
-  case ND_CMPNLTPS:
-    return "CMPNLTPS";         
-  case ND_CMPNLEPS:
-    return "CMPNLEPS"; 
-  case ND_CMPNGTPS:
-    return "CMPNGTPS";     
-  case ND_CMPNGEPS:
-    return "CMPNGEPS"; 
-  case ND_CMPORDPS:
-    return "CMPORDPS";   
-  case ND_CMPUNORDPS:
-    return "CMPUNORDPS";  
-  case ND_COMIEQ:
-    return "COMIEQ";  
-  case ND_COMILT:
-    return "COMILT";     
-  case ND_COMILE:
-    return "COMILE"; 
-  case ND_COMIGT:
-    return "COMIGT"; 
-  case ND_COMIGE:
-    return "COMIGE";     
-  case ND_COMINEQ:
-    return "COMINEQ";                                                                                                                                                                                                                                                                                                                             
-  case ND_UCOMIEQ:
-    return "UCOMIEQ";  
-  case ND_UCOMILT:
-    return "UCOMILT";     
-  case ND_UCOMILE:
-    return "UCOMILE"; 
-  case ND_UCOMIGT:
-    return "UCOMIGT"; 
-  case ND_UCOMIGE:
-    return "UCOMIGE";     
-  case ND_UCOMINEQ:
-    return "UCOMINEQ";
-  case ND_CVTSS2SI:
-    return "CVTSS2SI";    
-  case ND_CVTSS2SI64:
-    return "CVTSS2SI64";   
-  case ND_CVTTSS2SI:
-    return "CVTTSS2SI";  
-  case ND_CVTTSS2SI64:
-    return "CVTTSS2SI64";
-  case ND_CVTTPS2PI:
-    return "CVTTPS2PI";   
-  case ND_CVTSI2SS:
-    return "CVTSI2SS";   
-  case ND_CVTSI642SS:
-    return "CVTSI642SS";  
-  case ND_MOVLHPS:
-    return "MOVLHPS";    
-  case ND_MOVHLPS:
-    return "MOVHLPS"; 
-  case ND_UNPCKHPS:
-    return "UNPCKHPS";  
-  case ND_UNPCKLPS:
-    return "UNPCKLPS";  
-  case ND_LOADHPS:
-    return "LOADHPS";        
-  case ND_STOREHPS:
-    return "STOREHPS"; 
-  case ND_LOADLPS:
-    return "LOADLPS";        
-  case ND_STORELPS:
-    return "STORELPS"; 
-  case ND_MOVMSKPS:
-    return "MOVMSKPS";                                                              
-  default:
-    return "UNREACHABLE"; 
+  case ND_TESTANDSETA: return "TESTANDSET";
+  case ND_CLEAR: return "CLEAR"; 
+  case ND_RELEASE: return "RELEASE"; 
+  case  ND_FETCHADD: return "FETCHADD";
+  case ND_FETCHSUB: return "FETCHSUB";
+  case ND_FETCHXOR: return "FETCHXOR";
+  case ND_FETCHAND: return "FETCHAND";    
+  case ND_FETCHOR: return "FETCHOR";
+  case ND_SUBFETCH: return "SUBFETCH";
+  case ND_SYNC: return "SYNC";    
+  case ND_BUILTIN_MEMCPY: return "MEMCPY";  
+  case ND_BUILTIN_MEMSET: return "MEMSET";  
+  case ND_BUILTIN_CLZ: return "CLZ";   
+  case ND_BUILTIN_CLZL: return "CLZL";   
+  case ND_BUILTIN_CLZLL: return "CLZLL";  
+  case ND_BUILTIN_CTZ: return "CTZ";   
+  case ND_BUILTIN_CTZL: return "CTZL";  
+  case ND_BUILTIN_CTZLL: return "CTZLL";  
+  case ND_BUILTIN_INFF: return "INFF";   
+  case ND_BUILTIN_INF: return "INFF";  
+  case ND_BUILTIN_NAN: return "NAN";   
+  case ND_BUILTIN_NANF: return "NANF";   
+  case ND_BUILTIN_NANL: return "NANL";   
+  case ND_BUILTIN_ISNAN: return "ISNAN"; 
+  case ND_BUILTIN_HUGE_VAL: return "ISNAN"; 
+  case ND_BUILTIN_HUGE_VALF: return "ISNAN"; 
+  case ND_BUILTIN_HUGE_VALL: return "ISNAN";
+  case ND_POPCOUNT: return "POPCOUNT";
+  case ND_RETURN_ADDR: return "RETURN_ADDRESS";  
+  case ND_BUILTIN_FRAME_ADDRESS: return "FRAME_ADDRESS"; 
+  case ND_BUILTIN_ADD_OVERFLOW: return "ADD_OVERFLOW";    
+  case ND_BUILTIN_SUB_OVERFLOW: return "SUB_OVERFLOW";    
+  case ND_BUILTIN_MUL_OVERFLOW: return "MUL_OVERFLOW"; 
+  case ND_BUILTIN_BSWAP16:  return "BSWAP16";   
+  case ND_BUILTIN_BSWAP32: return "BSWAP32";    
+  case ND_BUILTIN_BSWAP64: return "BSWAP64"; 
+  case ND_ALLOC: return "ALLOCA";
+  case ND_ABORT: return "ABORT";
+  case ND_EXPECT: return "EXPECT";
+  case ND_EMMS: return "EMMS";
+  case ND_LFENCE: return "LFENCE";
+  case ND_MFENCE: return "MFENCE";
+  case ND_SFENCE: return "SFENCE";
+  case ND_PAUSE: return "PAUSE";
+  case ND_STMXCSR: return "STMXCSR";
+  case ND_LDMXCSR: return "LDMXCSR";    
+  case ND_CVTPI2PS: return "CVTPI2PS";    
+  case ND_CVTPS2PI: return "CVTPS2PI";
+  case ND_CLFLUSH: return "CLFLUSH"; 
+  case ND_VECINITV2SI: return "VEC_INIT_V2SI";
+  case ND_VECEXTV2SI: return "VEC_EXT_V2SI";
+  case ND_VECINITV8QI: return "VEC_INIT_V8QI";   
+  case ND_VECINITV4HI: return "VEC_INIT_V4HI";        
+  case ND_PACKSSWB: return "PACKSSWB";
+  case ND_PACKSSDW: return "PACKSSDW";
+  case ND_PACKUSWB: return "PACKUSWB";
+  case ND_PUNPCKHBW: return "PUNPCKHBW";
+  case ND_PUNPCKHWD: return "PUNPCKHWD";   
+  case ND_PUNPCKHDQ: return "PUNPCKHDQ";   
+  case ND_PUNPCKLBW: return "PUNPCKLBW";  
+  case ND_PUNPCKLWD: return "PUNPCKLWD";   
+  case ND_PUNPCKLDQ: return "PUNPCKLDQ";   
+  case ND_PADDB: return "PADDB";   
+  case ND_PADDW: return "PADDW";  
+  case ND_PADDD: return "PADDD";
+  case ND_PADDQ: return "PADDQ";   
+  case ND_PADDSB: return "PADDSB";  
+  case ND_PADDSW: return "PADDSW";   
+  case ND_PADDUSB: return "PADDUSB"; 
+  case ND_PADDUSW: return "PADDUSW";   
+  case ND_PSUBB: return "PSUBB";    
+  case ND_PSUBW: return "PSUBW";   
+  case ND_PSUBD: return "PSUBD";     
+  case ND_PSUBQ: return "PSUBQ";  
+  case ND_PSUBSB: return "PSUBSB";   
+  case ND_PSUBSW: return "PSUBSW"; 
+  case ND_PSUBUSB: return "PSUBUSB"; 
+  case ND_PSUBUSW: return "PSUBUSW";     
+  case ND_PMADDWD: return "PMADDWD";    
+  case ND_PMULHW: return "PMULHW";   
+  case ND_PMULLW: return "PMULLW";  
+  case ND_PSLLW: return "PSLLW";   
+  case ND_PSLLWI: return "PSLLWI"; 
+  case ND_PSLLD: return "PSLLD";      
+  case ND_PSLLDI: return "PSLLDI";   
+  case ND_PSLLQ: return "PSLLQ";
+  case ND_PSLLQI: return "PSLLQI";  
+  case ND_PSRAW: return "PSRAW";   
+  case ND_PSRAWI: return "PSRAWI";
+  case ND_PSRAD: return "PSRAD";  
+  case ND_PSRADI: return "PSRADI";
+  case ND_PSRLW: return "PSRLW";      
+  case ND_PSRLWI: return "PSRLWI";   
+  case ND_PSRLD: return "PSRLD";      
+  case ND_PSRLDI: return "PSRLDI";  
+  case ND_PSRLQ: return "PSRLQ";      
+  case ND_PSRLQI: return "PSRLQI"; 
+  case ND_PAND: return "PAND";  
+  case ND_PANDN: return "PANDN";    
+  case ND_POR: return "POR";
+  case ND_PXOR: return "PXOR";    
+  case ND_PCMPEQB: return "PCMPEQB";     
+  case ND_PCMPGTB: return "PCMPGTB";  
+  case ND_PCMPEQW: return "PCMPEQW";  
+  case ND_PCMPEQD: return "PCMPEQD";        
+  case ND_PCMPGTW: return "PCMPGTW";  
+  case ND_PCMPGTD: return "PCMPGTD";  
+  case ND_ADDSS: return "ADDSS";  
+  case ND_SUBSS: return "SUBSS";   
+  case ND_MULSS: return "MULSS";  
+  case ND_DIVSS: return "DIVSS";  
+  case ND_SQRTSS: return "SQRTSS"; 
+  case ND_SQRTPS: return "SQRTPS";     
+  case ND_RSQRTSS: return "RSQRTSS";  
+  case ND_RSQRTPS: return "RSQRTPS";         
+  case ND_RCPSS: return "RCPSS"; 
+  case ND_RCPPS: return "RCPPS";      
+  case ND_MINSS: return "MINSS";
+  case ND_MINPS: return "MINPS"; 
+  case ND_MAXPS: return "MAXPS";        
+  case ND_MAXSS: return "MAXSS"; 
+  case ND_ANDPS: return "ANDPS";       
+  case ND_ANDNPS: return "ANDNPS";   
+  case ND_ORPS: return "ORPS";  
+  case ND_XORPS: return "XORPS";   
+  case ND_CMPEQSS: return "CMPEQSS";    
+  case ND_CMPLTSS: return "CMPLTSS";  
+  case ND_CMPLESS: return "CMPLESS";    
+  case ND_MOVSS: return "MOVSS";   
+  case ND_CMPNEQSS: return "CMPNEQSS"; 
+  case ND_CMPNLTSS: return "CMPNLTSS"; 
+  case ND_CMPNLESS: return "CMPNLESS"; 
+  case ND_CMPORDSS: return "CMPORDSS"; 
+  case ND_CMPUNORDSS: return "CMPUNORDSS";    
+  case ND_CMPEQPS: return "CMPEQPS";  
+  case ND_CMPLTPS: return "CMPLTPS";     
+  case ND_CMPLEPS: return "CMPLEPS";  
+  case ND_CMPGTPS: return "CMPGTPS";     
+  case ND_CMPGEPS: return "CMPGEPS"; 
+  case ND_CMPNEQPS: return "CMPNEQPS";  
+  case ND_CMPNLTPS: return "CMPNLTPS";         
+  case ND_CMPNLEPS: return "CMPNLEPS"; 
+  case ND_CMPNGTPS: return "CMPNGTPS";     
+  case ND_CMPNGEPS: return "CMPNGEPS"; 
+  case ND_CMPORDPS: return "CMPORDPS";   
+  case ND_CMPUNORDPS: return "CMPUNORDPS";  
+  case ND_COMIEQ: return "COMIEQ";  
+  case ND_COMILT: return "COMILT";     
+  case ND_COMILE: return "COMILE"; 
+  case ND_COMIGT: return "COMIGT"; 
+  case ND_COMIGE: return "COMIGE";     
+  case ND_COMINEQ: return "COMINEQ";                                                                                                                                                                                                                                                                                                                             
+  case ND_UCOMIEQ: return "UCOMIEQ";  
+  case ND_UCOMILT: return "UCOMILT";     
+  case ND_UCOMILE: return "UCOMILE"; 
+  case ND_UCOMIGT: return "UCOMIGT"; 
+  case ND_UCOMIGE: return "UCOMIGE";     
+  case ND_UCOMINEQ: return "UCOMINEQ";
+  case ND_CVTSS2SI: return "CVTSS2SI";    
+  case ND_CVTSS2SI64: return "CVTSS2SI64";   
+  case ND_CVTTSS2SI: return "CVTTSS2SI";  
+  case ND_CVTTSS2SI64: return "CVTTSS2SI64";
+  case ND_CVTTPS2PI: return "CVTTPS2PI";   
+  case ND_CVTSI2SS: return "CVTSI2SS";   
+  case ND_CVTSI642SS: return "CVTSI642SS";  
+  case ND_MOVLHPS: return "MOVLHPS";    
+  case ND_MOVHLPS: return "MOVHLPS"; 
+  case ND_UNPCKHPS: return "UNPCKHPS";  
+  case ND_UNPCKLPS: return "UNPCKLPS";  
+  case ND_LOADHPS: return "LOADHPS";        
+  case ND_STOREHPS: return "STOREHPS"; 
+  case ND_LOADLPS: return "LOADLPS";        
+  case ND_STORELPS: return "STORELPS"; 
+  case ND_MOVMSKPS: return "MOVMSKPS";    
+  case ND_SHUFPS: return "SHUFPS";                                                              
+  default: return "UNREACHABLE"; 
   }
 }
 
@@ -7900,7 +7699,8 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_storehps", ND_STOREHPS },        
     { "__builtin_ia32_loadlps", ND_LOADLPS },   
     { "__builtin_ia32_storelps", ND_STORELPS },   
-    { "__builtin_ia32_movmskps", ND_MOVMSKPS },         
+    { "__builtin_ia32_movmskps", ND_MOVMSKPS },  
+    { "__builtin_ia32_shufps", ND_SHUFPS },               
         
 };
 
