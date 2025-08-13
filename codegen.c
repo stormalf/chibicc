@@ -2819,7 +2819,7 @@ static void gen_expr(Node *node)
   case ND_COMIEQ: gen_sse_binop4(node, "comiss", "sete");  return;  
   case ND_COMILT: gen_sse_binop4(node, "comiss", "setb");  return;  
   case ND_COMILE: gen_sse_binop4(node, "comiss", "setbe");  return;  
-  case ND_COMIGT: gen_sse_binop5(node, "comiss", "seta");  return;  
+  case ND_COMIGT: gen_sse_binop4(node, "comiss", "seta");  return;  
   case ND_COMIGE: gen_sse_binop5(node, "comiss", "setae");  return;  
   case ND_COMINEQ: gen_sse_binop4(node, "comiss", "setne");  return;  
   case ND_UCOMIEQ: gen_sse_binop6(node, "comiss", "sete");  return;  
@@ -2878,7 +2878,15 @@ static void gen_expr(Node *node)
   case ND_COMISDEQ: gen_sse_binop4(node, "comisd", "sete");  return;  
   case ND_COMISDLT: gen_sse_binop4(node, "comisd", "setb");  return;  
   case ND_COMISDLE: gen_sse_binop4(node, "comisd", "setbe");  return; 
-  case ND_COMISDGT: gen_sse_binop4(node, "comisd", "seta");  return;   
+  case ND_COMISDGT: gen_sse_binop4(node, "comisd", "seta");  return;
+  case ND_COMISDGE: gen_sse_binop4(node, "comisd", "setae");  return;    
+  case ND_COMISDNEQ: gen_sse_binop4(node, "comisd", "setne");  return;   
+  case ND_UCOMISDEQ: gen_sse_binop4(node, "ucomisd", "sete");  return;  
+  case ND_UCOMISDLT: gen_sse_binop4(node, "ucomisd", "setb");  return;  
+  case ND_UCOMISDLE: gen_sse_binop4(node, "ucomisd", "setbe");  return; 
+  case ND_UCOMISDGT: gen_sse_binop4(node, "ucomisd", "seta");  return;
+  case ND_UCOMISDGE: gen_sse_binop4(node, "ucomisd", "setae");  return;    
+  case ND_UCOMISDNEQ: gen_sse_binop4(node, "ucomisd", "setne");  return;     
 }
 
   

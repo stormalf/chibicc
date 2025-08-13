@@ -10,7 +10,7 @@ int main() {
     int res = __builtin_ia32_comigt(a, b);
 
     printf("Result: %d\n", res); 
-    ASSERT(1, res);
+    ASSERT(0, res);
     printf("OK\n");
     return 0;
 }

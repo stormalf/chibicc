@@ -5746,6 +5746,10 @@ static Node *primary(Token **rest, Token *tok)
       equal(tok, "__builtin_ia32_cmpordsd") || equal(tok, "__builtin_ia32_cmpunordsd") ||
       equal(tok, "__builtin_ia32_comisdeq") || equal(tok, "__builtin_ia32_comisdlt") ||
       equal(tok, "__builtin_ia32_comisdle") || equal(tok, "__builtin_ia32_comisdgt") ||
+      equal(tok, "__builtin_ia32_comisdge") || equal(tok, "__builtin_ia32_comisdneq") ||
+      equal(tok, "__builtin_ia32_ucomisdeq") || equal(tok, "__builtin_ia32_ucomisdlt") ||
+      equal(tok, "__builtin_ia32_ucomisdle") || equal(tok, "__builtin_ia32_ucomisdgt") ||
+      equal(tok, "__builtin_ia32_ucomisdge") || equal(tok, "__builtin_ia32_ucomisdneq") ||    
       equal(tok, "__builtin_ia32_maxss") || equal(tok, "__builtin_ia32_minss"))
   {
     int builtin = builtin_enum(tok);
@@ -7343,6 +7347,14 @@ char *nodekind2str(NodeKind kind)
   case ND_COMISDLT: return "COMISDLT"; 
   case ND_COMISDLE: return "COMISDLE"; 
   case ND_COMISDGT: return "COMISDGT"; 
+  case ND_COMISDGE: return "COMISDGE"; 
+  case ND_COMISDNEQ: return "COMISDNEQ"; 
+  case ND_UCOMISDEQ: return "UCOMISDEQ"; 
+  case ND_UCOMISDLT: return "UCOMISDLT"; 
+  case ND_UCOMISDLE: return "UCOMISDLE"; 
+  case ND_UCOMISDGT: return "UCOMISDGT"; 
+  case ND_UCOMISDGE: return "UCOMISDGE"; 
+  case ND_UCOMISDNEQ: return "UCOMISDNEQ"; 
   default: return "UNREACHABLE"; 
   }
 }
@@ -7859,7 +7871,16 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_comisdeq", ND_COMISDEQ },     
     { "__builtin_ia32_comisdlt", ND_COMISDLT},   
     { "__builtin_ia32_comisdle", ND_COMISDLE},   
-    { "__builtin_ia32_comisdgt", ND_COMISDGT},     
+    { "__builtin_ia32_comisdgt", ND_COMISDGT},   
+    { "__builtin_ia32_comisdge", ND_COMISDGE},    
+    { "__builtin_ia32_comisdneq", ND_COMISDNEQ},  
+    { "__builtin_ia32_ucomisdeq", ND_UCOMISDEQ },     
+    { "__builtin_ia32_ucomisdlt", ND_UCOMISDLT},   
+    { "__builtin_ia32_ucomisdle", ND_UCOMISDLE},   
+    { "__builtin_ia32_ucomisdgt", ND_UCOMISDGT},   
+    { "__builtin_ia32_ucomisdge", ND_UCOMISDGE},    
+    { "__builtin_ia32_ucomisdneq", ND_UCOMISDNEQ},     
+
 };
 
 static int builtin_enum(Token *tok) {

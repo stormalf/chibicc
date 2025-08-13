@@ -823,6 +823,14 @@ void add_type(Node *node)
   case ND_COMISDLT:
   case ND_COMISDLE:
   case ND_COMISDGT:
+  case ND_COMISDGE:
+  case ND_COMISDNEQ:
+  case ND_UCOMISDEQ:
+  case ND_UCOMISDLT:
+  case ND_UCOMISDLE:
+  case ND_UCOMISDGT:
+  case ND_UCOMISDGE:
+  case ND_UCOMISDNEQ:  
     node->ty = ty_int;
 
   }
