@@ -5702,6 +5702,7 @@ static Node *primary(Token **rest, Token *tok)
 
    
   if (equal(tok, "__builtin_ia32_vec_init_v2si") || equal(tok, "__builtin_ia32_vec_ext_v2si") ||
+      equal(tok, "__builtin_ia32_vec_ext_v4si") ||
       equal(tok, "__builtin_ia32_minps") || equal(tok, "__builtin_ia32_maxps") ||
       equal(tok, "__builtin_ia32_andps") || equal(tok, "__builtin_ia32_andnps") ||
       equal(tok, "__builtin_ia32_orps") || equal(tok, "__builtin_ia32_xorps") ||
@@ -7144,6 +7145,7 @@ char *nodekind2str(NodeKind kind)
   case ND_CLFLUSH: return "CLFLUSH"; 
   case ND_VECINITV2SI: return "VEC_INIT_V2SI";
   case ND_VECEXTV2SI: return "VEC_EXT_V2SI";
+  case ND_VECEXTV4SI: return "VEC_EXT_V4SI";
   case ND_VECINITV8QI: return "VEC_INIT_V8QI";   
   case ND_VECINITV4HI: return "VEC_INIT_V4HI";        
   case ND_PACKSSWB: return "PACKSSWB";
@@ -7666,6 +7668,7 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_vec_init_v8qi", ND_VECINITV8QI },    
     { "__builtin_ia32_vec_init_v2si", ND_VECINITV2SI },   
     { "__builtin_ia32_vec_ext_v2si", ND_VECEXTV2SI },       
+    { "__builtin_ia32_vec_ext_v4si", ND_VECEXTV4SI },       
     { "__builtin_ia32_emms", ND_EMMS },       
     { "__builtin_ia32_sfence", ND_SFENCE },       
     { "__builtin_ia32_lfence", ND_LFENCE },     

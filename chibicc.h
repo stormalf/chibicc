@@ -594,6 +594,7 @@ typedef enum
   ND_MOVNTQ,
   ND_MOVNTPS,
   ND_SHUFPD,
+  ND_VECEXTV4SI,
 } NodeKind;
 
 // AST node type

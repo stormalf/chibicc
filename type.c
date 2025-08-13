@@ -711,6 +711,7 @@ void add_type(Node *node)
     return;
   case ND_CVTTSS2SI:      
   case ND_VECEXTV2SI:
+  case ND_VECEXTV4SI:
     node->ty = ty_int;
     return;
   case ND_CVTSS2SI64:

@@ -1392,21 +1392,40 @@ static void gen_vec_init_v2si(Node *node) {
   println("  movq %%rax, %%xmm0");
 }
 
-static void gen_vec_ext_v2si(Node *node) {
-  gen_expr(node->lhs);  
-  gen_expr(node->rhs);  
-  println("  mov %%eax, %%ebx");
-  println("  movd %%xmm0, %%eax");
-  static int label_id = 0;
-  int lbl_zero = label_id++;
-  int lbl_done = label_id++;
-  println("  cmpl $0, %%ebx");
-  println("  je .Lvec_ext_zero_%d", lbl_zero);
-  println("  psrldq $4, %%xmm0");
-  println("  movd %%xmm0, %%eax");
-  println("  jmp .Lvec_ext_done_%d", lbl_done);
-  println(".Lvec_ext_zero_%d:", lbl_zero);
-  println(".Lvec_ext_done_%d:", lbl_done);
+// static void gen_vec_ext_v2si(Node *node) {
+//   gen_expr(node->lhs);  
+//   gen_expr(node->rhs);  
+//   println("  mov %%eax, %%ebx");
+//   println("  movd %%xmm0, %%eax");
+//   static int label_id = 0;
+//   int lbl_zero = label_id++;
+//   int lbl_done = label_id++;
+//   println("  cmpl $0, %%ebx");
+//   println("  je .Lvec_ext_zero_%d", lbl_zero);
+//   println("  psrldq $%d, %%xmm0", 4);
+//   println("  movd %%xmm0, %%eax");
+//   println("  jmp .Lvec_ext_done_%d", lbl_done);
+//   println(".Lvec_ext_zero_%d:", lbl_zero);
+//   println(".Lvec_ext_done_%d:", lbl_done);
+// }
+
+static void gen_vec_ext(Node *node) {
+    gen_expr(node->lhs); 
+    gen_expr(node->rhs); 
+    println("  mov %%eax, %%ebx");  
+    static int idx = 0;
+    static int label_id = 0;
+    int lbl_zero = label_id++;
+    int lbl_done = label_id++;
+    println("  cmpl $0, %%ebx");
+    println("  je .Lvec_ext_zero_%d", lbl_zero);
+    println("  psrldq $%d, %%xmm0", 4 * idx); 
+    idx++; 
+    println("  movd %%xmm0, %%eax");
+    println("  jmp .Lvec_ext_done_%d", lbl_done);
+    println(".Lvec_ext_zero_%d:", lbl_zero);
+    println("  movd %%xmm0, %%eax");   
+    println(".Lvec_ext_done_%d:", lbl_done);
 }
 
 static void gen_vec_init_binop(Node *node, const char *insn) {
@@ -2700,7 +2719,8 @@ static void gen_expr(Node *node)
   case ND_MOVMSKPS: gen_sse_binop2(node, "movmskps", "eax", false);  return;   
   case ND_CLFLUSH: gen_single_addr_binop(node, "clflush"); return;
   case ND_VECINITV2SI: gen_vec_init_v2si(node); return;
-  case ND_VECEXTV2SI: gen_vec_ext_v2si(node); return;
+  case ND_VECEXTV2SI: gen_vec_ext(node); return;
+  case ND_VECEXTV4SI: gen_vec_ext(node); return;
   case ND_PACKSSWB:   gen_mmx_binop(node, "packsswb", false); return;
   case ND_PACKSSDW:   gen_mmx_binop(node, "packssdw", false); return;
   case ND_PACKUSWB:   gen_mmx_binop(node, "packuswb", false); return;
