@@ -741,6 +741,7 @@ void add_type(Node *node)
   case ND_PADDUSB:
   case ND_PMAXUB:
   case ND_PMINUB:
+  case ND_PAVGB:
     node->ty = vector_of(ty_uchar, 8);
     return;  
   case ND_VECINITV8QI:    

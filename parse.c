@@ -7274,7 +7274,8 @@ char *nodekind2str(NodeKind kind)
   case ND_PMINUB: return "PMINUB";        
   case ND_PMOVMSKB: return "PMOVMSKB";
   case ND_PMULHUW: return "PMULHUW";   
-  case ND_MASKMOVQ: return "MASKMOVQ";                                                                 
+  case ND_MASKMOVQ: return "MASKMOVQ";   
+  case ND_PAVGB: return "PAVGB";                                                                 
   default: return "UNREACHABLE"; 
   }
 }
@@ -7745,7 +7746,8 @@ static BuiltinEntry builtin_table[] = {
     { "_mm_clflush", ND_CLFLUSH },          
     { "__builtin_ia32_pmovmskb", ND_PMOVMSKB },   
     { "__builtin_ia32_pmulhuw", ND_PMULHUW },
-    { "__builtin_ia32_maskmovq", ND_MASKMOVQ },
+    { "__builtin_ia32_maskmovq", ND_MASKMOVQ },    
+    { "__builtin_ia32_pavgb", ND_PAVGB },
     
 };
 
