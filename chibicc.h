@@ -630,6 +630,7 @@ typedef enum
   ND_CMPNLESD,
   ND_CMPORDSD,
   ND_CMPUNORDSD,
+  ND_COMISDEQ,
 } NodeKind;
 
 // AST node type

@@ -1756,7 +1756,6 @@ static void gen_sse_binop10(Node *node, const char *insn, const char *reg) {
   println("  %s %%%s, (%%rdi)", insn, reg);    
 }
 
-
 static void gen_cvt_mmx_binop(Node *node, const char *insn) {
   gen_addr(node->lhs);   
   println("  movups (%%rax), %%xmm0"); 
@@ -2876,6 +2875,7 @@ static void gen_expr(Node *node)
   case ND_CMPNLESD: gen_sse_binop3(node, "cmpnlesd", false);  return;   
   case ND_CMPORDSD: gen_sse_binop3(node, "cmpordsd", false);  return;   
   case ND_CMPUNORDSD: gen_sse_binop3(node, "cmpunordsd", false);  return;  
+  case ND_COMISDEQ: gen_sse_binop4(node, "comisd", "sete");  return;  
 }
 
   
