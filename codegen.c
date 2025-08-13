@@ -2808,6 +2808,7 @@ static void gen_expr(Node *node)
   case ND_PMULHUW: gen_sse_binop9(node, "pmulhuw"); return;
   case ND_MASKMOVQ: gen_maskmovq(node); return;
   case ND_PAVGB: gen_mmx_binop(node, "pavgb", false);  return;      
+  case ND_PAVGW: gen_mmx_binop(node, "pavgw", false);  return;      
 }
 
   
