@@ -592,6 +592,7 @@ typedef enum
   ND_PAVGW,
   ND_PSADBW,
   ND_MOVNTQ,
+  ND_MOVNTPS,
 } NodeKind;
 
 // AST node type

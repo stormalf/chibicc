@@ -1555,13 +1555,6 @@ static void gen_maskmovq(Node *node) {
   println("  emms");
 }
 
-static void gen_movntq(Node *node) {
-  gen_expr(node->lhs); 
-  println("  movq %%rax, %%rdi");    
-  gen_expr(node->rhs);  
-  println("  movnti %%rax, (%%rdi)");    
-}
-
 
 static void gen_cvtpi2ps(Node *node) {
   gen_expr(node->lhs);    
@@ -1735,7 +1728,12 @@ static void gen_sse_binop9(Node *node, const char *insn) {
   println("  %s %%xmm1, %%xmm0", insn);
 }
 
-
+static void gen_sse_binop10(Node *node, const char *insn, const char *reg) {
+  gen_expr(node->lhs); 
+  println("  movq %%rax, %%rdi");    
+  gen_expr(node->rhs);  
+  println("  %s %%%s, (%%rdi)", insn, reg);    
+}
 
 static void gen_cvt_mmx_binop(Node *node, const char *insn) {
   gen_addr(node->lhs);   
@@ -2817,7 +2815,8 @@ static void gen_expr(Node *node)
   case ND_PAVGB: gen_mmx_binop(node, "pavgb", false);  return;      
   case ND_PAVGW: gen_mmx_binop(node, "pavgw", false);  return;      
   case ND_PSADBW: gen_mmx_binop(node, "psadbw", false);  return;   
-  case ND_MOVNTQ: gen_movntq(node); return;   
+  case ND_MOVNTQ: gen_sse_binop10(node, "movnti", "rax"); return;   
+  case ND_MOVNTPS: gen_sse_binop10(node, "movups", "xmm0"); return;   
 }
 
   
