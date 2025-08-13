@@ -5734,7 +5734,7 @@ static Node *primary(Token **rest, Token *tok)
       equal(tok, "__builtin_ia32_maxpd") || equal(tok, "__builtin_ia32_maxsd") || 
       equal(tok, "__builtin_ia32_andpd") || equal(tok, "__builtin_ia32_andnpd") || 
       equal(tok, "__builtin_ia32_orpd") || equal(tok, "__builtin_ia32_xorpd") || 
-      equal(tok, "__builtin_ia32_cmpeqpd") || 
+      equal(tok, "__builtin_ia32_cmpeqpd") || equal(tok, "__builtin_ia32_cmpltpd") || 
       equal(tok, "__builtin_ia32_maxss") || equal(tok, "__builtin_ia32_minss"))
   {
     int builtin = builtin_enum(tok);
@@ -7308,7 +7308,8 @@ char *nodekind2str(NodeKind kind)
   case ND_ANDNPD: return "ANDNPD";  
   case ND_ORPD: return "ORPD";         
   case ND_XORPD: return "XORPD";      
-  case ND_CMPEQPD: return "CMPEQPD";                                                                 
+  case ND_CMPEQPD: return "CMPEQPD";    
+  case ND_CMPLTPD: return "CMPLTPD";                                                                 
   default: return "UNREACHABLE"; 
   }
 }
@@ -7802,7 +7803,8 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_andnpd", ND_ANDNPD },
     { "__builtin_ia32_orpd", ND_ORPD },      
     { "__builtin_ia32_xorpd", ND_XORPD },   
-    { "__builtin_ia32_cmpeqpd", ND_CMPEQPD },         
+    { "__builtin_ia32_cmpeqpd", ND_CMPEQPD },  
+    { "__builtin_ia32_cmpltpd", ND_CMPLTPD },         
 };
 
 static int builtin_enum(Token *tok) {

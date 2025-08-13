@@ -2855,7 +2855,8 @@ static void gen_expr(Node *node)
   case ND_ANDNPD: gen_sse_binop3(node, "andnpd", false);  return;
   case ND_ORPD: gen_sse_binop3(node, "orpd", false);  return;     
   case ND_XORPD: gen_sse_binop3(node, "xorpd", false);  return;     
-  case ND_CMPEQPD: gen_sse_binop3(node, "cmpeqpd", false);  return;     
+  case ND_CMPEQPD: gen_sse_binop3(node, "cmpeqpd", false);  return;   
+  case ND_CMPLTPD: gen_sse_binop3(node, "cmpltpd", false);  return;   
 }
 
   
