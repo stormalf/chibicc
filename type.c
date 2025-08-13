@@ -820,6 +820,9 @@ void add_type(Node *node)
   case ND_MOVMSKPS:
   case ND_PMOVMSKB:
   case ND_COMISDEQ:
+  case ND_COMISDLT:
+  case ND_COMISDLE:
+  case ND_COMISDGT:
     node->ty = ty_int;
 
   }

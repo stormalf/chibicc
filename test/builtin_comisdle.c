@@ -9,21 +9,20 @@ int main(void) {
     __m128d v3 = {4.0, 2.0};    // [4.0, 2.0]
     __m128d vnan = {9.0, 0.0/0.0}; // NaN in low element
 
-    int result = __builtin_ia32_comisdeq(v1, v2);
+    int result = __builtin_ia32_comisdle(v1, v2);
     printf("result = %d\n", result);
-    ASSERT(0, result);
+    ASSERT(1, result);
 
-    result =  __builtin_ia32_comisdeq(v1, v3);
+    result =  __builtin_ia32_comisdle(v1, v3);
+    printf("result = %d\n", result);
+    ASSERT(1, result);
+    result =  __builtin_ia32_comisdle(vnan, v1);
     printf("result = %d\n", result);
     ASSERT(0, result);
-
-    result =  __builtin_ia32_comisdeq(vnan, v1);
+    result =  __builtin_ia32_comisdle(v1, vnan);
     printf("result = %d\n", result);
-    ASSERT(0, result);
-    result =  __builtin_ia32_comisdeq(v1, vnan);
-    printf("result = %d\n", result);
-    ASSERT(0, result);
-    result =  __builtin_ia32_comisdeq(vnan, vnan);
+    ASSERT(1, result);
+    result =  __builtin_ia32_comisdle(vnan, vnan);
     printf("result = %d\n", result);
     ASSERT(1, result);
     // Only low element (index 0) is compared!

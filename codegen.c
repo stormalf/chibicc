@@ -2876,6 +2876,9 @@ static void gen_expr(Node *node)
   case ND_CMPORDSD: gen_sse_binop3(node, "cmpordsd", false);  return;   
   case ND_CMPUNORDSD: gen_sse_binop3(node, "cmpunordsd", false);  return;  
   case ND_COMISDEQ: gen_sse_binop4(node, "comisd", "sete");  return;  
+  case ND_COMISDLT: gen_sse_binop4(node, "comisd", "setb");  return;  
+  case ND_COMISDLE: gen_sse_binop4(node, "comisd", "setbe");  return; 
+  case ND_COMISDGT: gen_sse_binop4(node, "comisd", "seta");  return;   
 }
 
   
