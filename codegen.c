@@ -1420,12 +1420,14 @@ static void gen_vec_init_binop(Node *node, const char *insn) {
   } 
 }
 
-static void gen_shufps(Node *node, const char *insn) {
+static void gen_shuf_binop(Node *node, const char *insn) {
   gen_expr(node->rhs);
   println("  movaps %%xmm0, %%xmm1");      
   gen_expr(node->lhs);
   println("  %s $%ld, %%xmm1, %%xmm0", insn, node->rhs->val);
 }
+
+
 
 // Walk node to find a numeric constant. Works for ND_ASSIGN, ND_COMMA, ND_CAST etc.
 static int get_const_int_from_node(Node *node) {
@@ -2675,7 +2677,8 @@ static void gen_expr(Node *node)
   case ND_PAUSE: gen_single_binop("pause"); return;
   case ND_STMXCSR: gen_stmxcsr(node); return;
   case ND_LDMXCSR: gen_single_addr_binop(node, "ldmxcsr"); return;
-  case ND_SHUFPS: gen_shufps(node, "shufps"); return;
+  case ND_SHUFPS: gen_shuf_binop(node, "shufps"); return;
+  case ND_SHUFPD: gen_shuf_binop(node, "shufpd"); return;
   case ND_SHUFFLE: gen_shuffle(node, "shufps"); return;
   case ND_CVTPI2PS: gen_cvtpi2ps(node); return;   
   case ND_CVTPS2PI:  gen_cvtps2pi(node); return;

@@ -5827,7 +5827,7 @@ static Node *primary(Token **rest, Token *tok)
   }
 
      
-  if (equal(tok, "__builtin_ia32_shufps"))
+  if (equal(tok, "__builtin_ia32_shufps") || equal(tok, "__builtin_ia32_shufpd"))
   {
     int builtin = builtin_enum(tok);
     if (builtin != -1) {
@@ -7280,7 +7280,8 @@ char *nodekind2str(NodeKind kind)
   case ND_PAVGW: return "PAVGW"; 
   case ND_PSADBW: return "PSADBW";    
   case ND_MOVNTQ: return "MOVNTQ";    
-  case ND_MOVNTPS: return "MOVNTPS";                                                                 
+  case ND_MOVNTPS: return "MOVNTPS";         
+  case ND_SHUFPD: return "SHUFPD";                                                                 
   default: return "UNREACHABLE"; 
   }
 }
@@ -7757,7 +7758,7 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_psadbw", ND_PSADBW },
     { "__builtin_ia32_movntq", ND_MOVNTQ },
     { "__builtin_ia32_movntps", ND_MOVNTPS },
-    
+    { "__builtin_ia32_shufpd", ND_SHUFPD },      
 };
 
 static int builtin_enum(Token *tok) {

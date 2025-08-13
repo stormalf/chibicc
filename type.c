@@ -614,6 +614,7 @@ void add_type(Node *node)
   case ND_SHUFFLE:
   case ND_PMAXSW:
   case ND_PMINSW:
+  case ND_SHUFPD:
     node->ty = vector_of(ty_float, 4);
     return;  
   case ND_EXPECT:
