@@ -2867,7 +2867,15 @@ static void gen_expr(Node *node)
   case ND_CMPNGTPD: gen_sse_binop3(node, "cmplepd", false);  return;   
   case ND_CMPNGEPD: gen_sse_binop3(node, "cmpltpd", false);  return;   
   case ND_CMPORDPD: gen_sse_binop3(node, "cmpordpd", false);  return;   
-  case ND_CMPUNORDPD: gen_sse_binop3(node, "cmpunordpd", false);  return;   
+  case ND_CMPUNORDPD: gen_sse_binop3(node, "cmpunordpd", false);  return;  
+  case ND_CMPEQSD: gen_sse_binop3(node, "cmpeqsd", false);  return;   
+  case ND_CMPLTSD: gen_sse_binop3(node, "cmpltsd", false);  return;   
+  case ND_CMPLESD: gen_sse_binop3(node, "cmplesd", false);  return;   
+  case ND_CMPNEQSD: gen_sse_binop3(node, "cmpneqsd", false);  return;  
+  case ND_CMPNLTSD: gen_sse_binop3(node, "cmpnltsd", false);  return;   
+  case ND_CMPNLESD: gen_sse_binop3(node, "cmpnlesd", false);  return;   
+  case ND_CMPORDSD: gen_sse_binop3(node, "cmpordsd", false);  return;   
+  case ND_CMPUNORDSD: gen_sse_binop3(node, "cmpunordsd", false);  return;  
 }
 
   

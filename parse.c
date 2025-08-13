@@ -5740,6 +5740,10 @@ static Node *primary(Token **rest, Token *tok)
       equal(tok, "__builtin_ia32_cmpnltpd") || equal(tok, "__builtin_ia32_cmpnlepd") || 
       equal(tok, "__builtin_ia32_cmpngtpd") || equal(tok, "__builtin_ia32_cmpngepd") ||
       equal(tok, "__builtin_ia32_cmpordpd") || equal(tok, "__builtin_ia32_cmpunordpd") ||
+      equal(tok, "__builtin_ia32_cmpeqsd") || equal(tok, "__builtin_ia32_cmpltsd") ||
+      equal(tok, "__builtin_ia32_cmplesd") || equal(tok, "__builtin_ia32_cmpneqsd") ||
+      equal(tok, "__builtin_ia32_cmpnltsd") || equal(tok, "__builtin_ia32_cmpnlesd") ||
+      equal(tok, "__builtin_ia32_cmpordsd") || equal(tok, "__builtin_ia32_cmpunordsd") ||
       equal(tok, "__builtin_ia32_maxss") || equal(tok, "__builtin_ia32_minss"))
   {
     int builtin = builtin_enum(tok);
@@ -7324,7 +7328,15 @@ char *nodekind2str(NodeKind kind)
   case ND_CMPNGTPD: return "CMPNGTPD";   
   case ND_CMPNGEPD: return "CMPNGEPD";   
   case ND_CMPORDPD: return "CMPORDPD";   
-  case ND_CMPUNORDPD: return "CMPUNORDPD";     
+  case ND_CMPUNORDPD: return "CMPUNORDPD";
+  case ND_CMPEQSD: return "CMPEQSD";   
+  case ND_CMPLTSD: return "CMPLTSD";    
+  case ND_CMPLESD: return "CMPLESD";    
+  case ND_CMPNEQSD: return "CMPNEQSD";   
+  case ND_CMPNLTSD: return "CMPNLTSD";     
+  case ND_CMPNLESD: return "CMPNLESD";  
+  case ND_CMPORDSD: return "CMPORDSD";    
+  case ND_CMPUNORDSD: return "CMPUNORDSD"; 
   default: return "UNREACHABLE"; 
   }
 }
@@ -7829,7 +7841,15 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_cmpngtpd", ND_CMPNGTPD },  
     { "__builtin_ia32_cmpngepd", ND_CMPNGEPD },    
     { "__builtin_ia32_cmpordpd", ND_CMPORDPD },       
-    { "__builtin_ia32_cmpunordpd", ND_CMPUNORDPD },         
+    { "__builtin_ia32_cmpunordpd", ND_CMPUNORDPD },   
+    { "__builtin_ia32_cmpeqsd", ND_CMPEQSD },         
+    { "__builtin_ia32_cmpltsd", ND_CMPLTSD },       
+    { "__builtin_ia32_cmplesd", ND_CMPLESD }, 
+    { "__builtin_ia32_cmpneqsd", ND_CMPNEQSD },     
+    { "__builtin_ia32_cmpnltsd", ND_CMPNLTSD },    
+    { "__builtin_ia32_cmpnlesd", ND_CMPNLESD },   
+    { "__builtin_ia32_cmpordsd", ND_CMPORDSD },       
+    { "__builtin_ia32_cmpunordsd", ND_CMPUNORDSD },     
 };
 
 static int builtin_enum(Token *tok) {

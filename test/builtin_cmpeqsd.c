@@ -1,0 +1,21 @@
+#include "test.h"
+typedef double v2df __attribute__((vector_size(16)));
+
+v2df my_cmpeqsd(v2df a, v2df b) {
+    return __builtin_ia32_cmpeqsd(a, b);
+}
+
+int main() {
+    v2df a = {1.0, 99.0};
+    v2df b = {1.0, 77.0};
+
+    v2df r = my_cmpeqsd(a, b);
+    printf("Result: [%llx, %llx]\n",
+           ((unsigned long long*)&r)[0],
+           ((unsigned long long*)&r)[1]);
+
+    ASSERT(-2147483648, r[0]);
+    ASSERT(99, r[1]);
+    printf("OK\n");
+    return 0;
+}
