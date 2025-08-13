@@ -603,6 +603,7 @@ typedef enum
   ND_MOVSD,
   ND_SQRTSD,
   ND_MINPD,
+  ND_MINSD,
 } NodeKind;
 
 // AST node type
