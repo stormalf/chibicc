@@ -768,6 +768,7 @@ void add_type(Node *node)
     node->ty = vector_of(ty_ushort, 4);
     return;
   case ND_ADDSD:
+  case ND_SUBSD:
     node->ty = vector_of(ty_double, 2);
     return;
   case ND_CVTSS2SI:
