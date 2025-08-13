@@ -755,6 +755,7 @@ void add_type(Node *node)
     node->ty = vector_of(ty_char, 8);
     return;
   case ND_PSUBUSW:
+  case ND_PMULHUW:
     node->ty = vector_of(ty_ushort, 4);
     return;
   case ND_CVTSS2SI:
@@ -773,5 +774,6 @@ void add_type(Node *node)
   case ND_MOVMSKPS:
   case ND_PMOVMSKB:
     node->ty = ty_int;
+
   }
 }

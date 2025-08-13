@@ -1543,13 +1543,6 @@ static void gen_shuffle(Node *node, const char *insn) {
 //   error_tok(node->tok, "%s: %s:%d: error: shuffle not supported", CODEGEN_C, __FILE__, __LINE__);
 // }
 
-static void gen_sse_binop7(Node *node, const char *insn) {
-  gen_expr(node->lhs);
-  println("  movdqa %%xmm0, %%xmm1");  
-  gen_expr(node->rhs);
-  println("  %s %%xmm0, %%xmm1", insn);  
-  println("  movdqa %%xmm1, %%xmm0");  
-}
 
 static void gen_cvtpi2ps(Node *node) {
   gen_expr(node->lhs);    
@@ -1660,12 +1653,6 @@ static void gen_sse_binop2(Node *node, const char *insn, const char *reg, bool r
   println("  %s %%xmm0, %%%s", insn, reg);  
 }
 
-static void gen_sse_binop8(Node *node, const char *insn, const char *reg) {
-  gen_expr(node->lhs);
-  println("  movq (%%rax), %%xmm0");
-  println("  %s %%xmm0, %%%s", insn, reg);  
-}
-
 
 static void gen_sse_binop3(Node *node, const char *insn, bool rhs_is_imm) {
   gen_expr(node->rhs);
@@ -1673,6 +1660,7 @@ static void gen_sse_binop3(Node *node, const char *insn, bool rhs_is_imm) {
   gen_expr(node->lhs);
   println("  %s %%xmm1, %%xmm0", insn);
 }
+
 
 static void gen_sse_binop4(Node *node, const char *insn, const char *insn2) {
   gen_expr(node->lhs);
@@ -1703,6 +1691,29 @@ static void gen_sse_binop6(Node *node, const char *insn, const char *insn2) {
   println("  and %%al, %%dl");
   println("  movzx %%dl, %%eax");
 }
+
+static void gen_sse_binop7(Node *node, const char *insn) {
+  gen_expr(node->lhs);
+  println("  movdqa %%xmm0, %%xmm1");  
+  gen_expr(node->rhs);
+  println("  %s %%xmm0, %%xmm1", insn);  
+  println("  movdqa %%xmm1, %%xmm0");  
+}
+
+static void gen_sse_binop8(Node *node, const char *insn, const char *reg) {
+  gen_expr(node->lhs);
+  println("  movq (%%rax), %%xmm0");
+  println("  %s %%xmm0, %%%s", insn, reg);  
+}
+
+
+static void gen_sse_binop9(Node *node, const char *insn) {
+  gen_expr(node->lhs);  
+  println("  movaps %%xmm0, %%xmm1");
+  gen_expr(node->rhs); 
+  println("  %s %%xmm1, %%xmm0", insn);
+}
+
 
 
 static void gen_cvt_mmx_binop(Node *node, const char *insn) {
@@ -2778,6 +2789,7 @@ static void gen_expr(Node *node)
   case ND_PMINSW: gen_sse_binop7(node, "pminsw"); return;
   case ND_PMINUB: gen_sse_binop7(node, "pminub"); return;
   case ND_PMOVMSKB: gen_sse_binop8(node, "pmovmskb", "eax"); return;
+  case ND_PMULHUW: gen_sse_binop9(node, "pmulhuw"); return;
 }
 
   

@@ -5723,7 +5723,7 @@ static Node *primary(Token **rest, Token *tok)
       equal(tok, "__builtin_ia32_ucomineq") || equal(tok, "__builtin_ia32_ucomine") ||
       equal(tok, "__builtin_ia32_comine") || equal(tok, "__builtin_ia32_pmaxsw") || 
       equal(tok, "__builtin_ia32_pmaxub") || equal(tok, "__builtin_ia32_pminsw") || 
-      equal(tok, "__builtin_ia32_pminub") || 
+      equal(tok, "__builtin_ia32_pminub") || equal(tok, "__builtin_ia32_pmulhuw") || 
       equal(tok, "__builtin_ia32_maxss") || equal(tok, "__builtin_ia32_minss"))
   {
     int builtin = builtin_enum(tok);
@@ -7244,7 +7244,8 @@ char *nodekind2str(NodeKind kind)
   case ND_PMAXUB: return "PMAXUB";   
   case ND_PMINSW: return "PMINSW"; 
   case ND_PMINUB: return "PMINUB";        
-  case ND_PMOVMSKB: return "PMOVMSKB";                                                              
+  case ND_PMOVMSKB: return "PMOVMSKB";
+  case ND_PMULHUW: return "PMULHUW";                                                                 
   default: return "UNREACHABLE"; 
   }
 }
@@ -7714,6 +7715,7 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_clflush", ND_CLFLUSH },          
     { "_mm_clflush", ND_CLFLUSH },          
     { "__builtin_ia32_pmovmskb", ND_PMOVMSKB },   
+    { "__builtin_ia32_pmulhuw", ND_PMULHUW },
     
 };
 
