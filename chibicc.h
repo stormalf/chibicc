@@ -604,6 +604,7 @@ typedef enum
   ND_SQRTSD,
   ND_MINPD,
   ND_MINSD,
+  ND_MAXPD,
 } NodeKind;
 
 // AST node type
