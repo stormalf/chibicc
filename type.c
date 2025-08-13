@@ -779,6 +779,7 @@ void add_type(Node *node)
   case ND_MAXPD:
   case ND_MAXSD:
   case ND_ANDPD:
+  case ND_ANDNPD:
     node->ty = vector_of(ty_double, 2);
     return;
   case ND_CVTSS2SI:
