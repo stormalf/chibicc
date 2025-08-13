@@ -2847,6 +2847,7 @@ static void gen_expr(Node *node)
   case ND_SQRTPD: gen_sse_binop2(node, "sqrtpd", "xmm0", false);  return;  
   case ND_MOVSD: gen_sse_binop3(node, "movsd", false);  return;   
   case ND_SQRTSD: gen_sse_binop2(node, "sqrtsd", "xmm0", false);  return;  
+  case ND_MINPD: gen_sse_binop3(node, "minpd", false);  return;   
 }
 
   

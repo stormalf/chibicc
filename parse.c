@@ -5730,6 +5730,7 @@ static Node *primary(Token **rest, Token *tok)
       equal(tok, "__builtin_ia32_comine") || equal(tok, "__builtin_ia32_pmaxsw") || 
       equal(tok, "__builtin_ia32_pmaxub") || equal(tok, "__builtin_ia32_pminsw") || 
       equal(tok, "__builtin_ia32_pminub") || equal(tok, "__builtin_ia32_pmulhuw") || 
+       equal(tok, "__builtin_ia32_minpd") ||
       equal(tok, "__builtin_ia32_maxss") || equal(tok, "__builtin_ia32_minss"))
   {
     int builtin = builtin_enum(tok);
@@ -7294,7 +7295,8 @@ char *nodekind2str(NodeKind kind)
   case ND_DIVSD: return "DIVSD";    
   case ND_SQRTPD: return "SQRTPD"; 
   case ND_SQRTSD: return "SQRTSD"; 
-  case ND_MOVSD: return "MOVSD";                                                               
+  case ND_MOVSD: return "MOVSD";        
+  case ND_MINPD: return "MINPD";                                                               
   default: return "UNREACHABLE"; 
   }
 }
@@ -7779,7 +7781,8 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_divsd", ND_DIVSD }, 
     { "__builtin_ia32_sqrtpd", ND_SQRTPD },
     { "__builtin_ia32_movsd", ND_MOVSD },  
-    { "__builtin_ia32_sqrtsd", ND_SQRTSD },      
+    { "__builtin_ia32_sqrtsd", ND_SQRTSD },
+    { "__builtin_ia32_minpd", ND_MINPD },        
 };
 
 static int builtin_enum(Token *tok) {
