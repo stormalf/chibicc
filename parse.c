@@ -7276,7 +7276,8 @@ char *nodekind2str(NodeKind kind)
   case ND_PMULHUW: return "PMULHUW";   
   case ND_MASKMOVQ: return "MASKMOVQ";   
   case ND_PAVGB: return "PAVGB";            
-  case ND_PAVGW: return "PAVGW";                                                                 
+  case ND_PAVGW: return "PAVGW"; 
+  case ND_PSADBW: return "PSADBW";                                                                 
   default: return "UNREACHABLE"; 
   }
 }
@@ -7750,6 +7751,7 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_maskmovq", ND_MASKMOVQ },    
     { "__builtin_ia32_pavgb", ND_PAVGB },
     { "__builtin_ia32_pavgw", ND_PAVGW },
+    { "__builtin_ia32_psadbw", ND_PSADBW },
     
 };
 
