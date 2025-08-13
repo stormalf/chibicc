@@ -610,6 +610,7 @@ typedef enum
   ND_ANDNPD,
   ND_ORPD,
   ND_XORPD,
+  ND_CMPEQPD,
 } NodeKind;
 
 // AST node type
