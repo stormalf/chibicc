@@ -2849,7 +2849,8 @@ static void gen_expr(Node *node)
   case ND_SQRTSD: gen_sse_binop2(node, "sqrtsd", "xmm0", false);  return;  
   case ND_MINPD: gen_sse_binop3(node, "minpd", false);  return;   
   case ND_MINSD: gen_sse_binop3(node, "minsd", false);  return;   
-  case ND_MAXPD: gen_sse_binop3(node, "maxpd", false);  return;   
+  case ND_MAXPD: gen_sse_binop3(node, "maxpd", false);  return;  
+  case ND_MAXSD: gen_sse_binop3(node, "maxsd", false);  return;   
 }
 
   
