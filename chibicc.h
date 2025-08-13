@@ -600,6 +600,7 @@ typedef enum
   ND_MULSD,
   ND_DIVSD,
   ND_SQRTPD,
+  ND_MOVSD,
 } NodeKind;
 
 // AST node type

@@ -2845,6 +2845,7 @@ static void gen_expr(Node *node)
   case ND_MULSD: gen_sse_binop3(node, "mulsd", false);  return;    
   case ND_DIVSD: gen_sse_binop3(node, "divsd", false);  return;   
   case ND_SQRTPD: gen_sse_binop2(node, "sqrtpd", "xmm0", false);  return;  
+  case ND_MOVSD: gen_sse_binop3(node, "movsd", false);  return;   
 }
 
   
