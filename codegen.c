@@ -2843,7 +2843,8 @@ static void gen_expr(Node *node)
   case ND_ADDSD: gen_sse_binop3(node, "addsd", false);  return;    
   case ND_SUBSD: gen_sse_binop3(node, "subsd", false);  return;  
   case ND_MULSD: gen_sse_binop3(node, "mulsd", false);  return;    
-  case ND_DIVSD: gen_sse_binop3(node, "divsd", false);  return;    
+  case ND_DIVSD: gen_sse_binop3(node, "divsd", false);  return;   
+  case ND_SQRTPD: gen_sse_binop2(node, "sqrtpd", "xmm0", false);  return;  
 }
 
   
