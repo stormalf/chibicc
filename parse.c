@@ -5768,7 +5768,35 @@ static Node *primary(Token **rest, Token *tok)
     }
   }
 
-   
+  
+  if (equal(tok, "__builtin_ia32_maskmovq"))
+  {
+    if (!opt_mmx)
+      error_tok(tok, "%s %d: in primary : option -mmmx required", PARSE_C, __LINE__);
+    int builtin = builtin_enum(tok);
+    if (builtin != -1) {
+      Node *node = new_node(builtin, tok);
+      SET_CTX(ctx); 
+      tok = skip(tok->next, "(", ctx);
+      node->builtin_args[0] = assign(&tok, tok);
+      add_type(node->builtin_args[0]);
+      SET_CTX(ctx); 
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[1] = assign(&tok, tok);
+      add_type(node->builtin_args[1]);
+      SET_CTX(ctx); 
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[2] = assign(&tok, tok);
+      add_type(node->builtin_args[2]);
+      node->builtin_nargs = 3;
+      SET_CTX(ctx);       
+      *rest = skip(tok, ")", ctx);
+    return node;
+    }
+  }
+
+    
+
   if (equal(tok, "__builtin_ia32_vec_init_v4hi"))
   {
     int builtin = builtin_enum(tok);
@@ -7245,7 +7273,8 @@ char *nodekind2str(NodeKind kind)
   case ND_PMINSW: return "PMINSW"; 
   case ND_PMINUB: return "PMINUB";        
   case ND_PMOVMSKB: return "PMOVMSKB";
-  case ND_PMULHUW: return "PMULHUW";                                                                 
+  case ND_PMULHUW: return "PMULHUW";   
+  case ND_MASKMOVQ: return "MASKMOVQ";                                                                 
   default: return "UNREACHABLE"; 
   }
 }
@@ -7716,6 +7745,7 @@ static BuiltinEntry builtin_table[] = {
     { "_mm_clflush", ND_CLFLUSH },          
     { "__builtin_ia32_pmovmskb", ND_PMOVMSKB },   
     { "__builtin_ia32_pmulhuw", ND_PMULHUW },
+    { "__builtin_ia32_maskmovq", ND_MASKMOVQ },
     
 };
 

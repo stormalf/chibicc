@@ -613,9 +613,6 @@ void add_type(Node *node)
   case ND_PMINSW:
     node->ty = vector_of(ty_float, 4);
     return;  
-  case ND_STORELPS:
-  case ND_STOREHPS:
-    node->ty = ty_void_ptr; 
   case ND_EXPECT:
     add_type(node->rhs);
     add_type(node->lhs);
@@ -623,8 +620,11 @@ void add_type(Node *node)
     return;
   case ND_ABORT:
     return;
+  case ND_STORELPS:
+  case ND_STOREHPS:    
   case ND_LDMXCSR:
   case ND_STMXCSR:
+  case ND_MASKMOVQ:
     node->ty = ty_void_ptr;
     return;
   case ND_CLFLUSH:

@@ -1543,12 +1543,25 @@ static void gen_shuffle(Node *node, const char *insn) {
 //   error_tok(node->tok, "%s: %s:%d: error: shuffle not supported", CODEGEN_C, __FILE__, __LINE__);
 // }
 
+static void gen_maskmovq(Node *node) {
+  assert(node->builtin_nargs == 3);
+  gen_expr(node->builtin_args[1]); 
+  println("  movq (%%rax), %%mm1"); 
+  gen_expr(node->builtin_args[0]);  
+  println("  movq (%%rax), %%mm0");       
+  gen_addr(node->builtin_args[2]); 
+  println("  movq %%rax, %%rdi"); 
+  println("  maskmovq %%mm1, %%mm0");
+  println("  emms");
+}
+
 
 static void gen_cvtpi2ps(Node *node) {
   gen_expr(node->lhs);    
   gen_addr(node->rhs);    
   println("  movq (%%rax), %%mm0"); 
   println("  cvtpi2ps %%mm0, %%xmm0");  
+  println("  emms");
 } 
 
 static void gen_cvtps2pi(Node *node) {
@@ -1557,6 +1570,7 @@ static void gen_cvtps2pi(Node *node) {
   gen_addr(node->lhs);         
   println("  movq %%mm0, %%rax");
   println("  movq %%rax, %%xmm0"); 
+  println("  emms");
 }
 
 static void gen_loadhps(Node *node) {
@@ -1722,6 +1736,7 @@ static void gen_cvt_mmx_binop(Node *node, const char *insn) {
   println("  %s %%xmm0, %%mm0", insn);  
   println("  movq %%mm0, %%rax");
   println("  movq %%rax, %%xmm0");
+  println("  emms");
   }
 
 static void gen_cvt_mmx_binop2(Node *node, const char *insn, const char *reg) {  
@@ -1752,6 +1767,7 @@ static void gen_mmx_binop(Node *node, const char *insn, bool rhs_is_imm) {
 
   println("  movq %%mm0, %%rax");
   println("  movq %%rax, %%xmm0");
+  println("  emms");
 }
 
 static void gen_single_binop(const char *insn) {
@@ -2790,6 +2806,7 @@ static void gen_expr(Node *node)
   case ND_PMINUB: gen_sse_binop7(node, "pminub"); return;
   case ND_PMOVMSKB: gen_sse_binop8(node, "pmovmskb", "eax"); return;
   case ND_PMULHUW: gen_sse_binop9(node, "pmulhuw"); return;
+  case ND_MASKMOVQ: gen_maskmovq(node); return;
 }
 
   

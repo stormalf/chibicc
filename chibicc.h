@@ -587,6 +587,7 @@ typedef enum
   ND_PMINUB,
   ND_PMOVMSKB,
   ND_PMULHUW,
+  ND_MASKMOVQ,
 } NodeKind;
 
 // AST node type
