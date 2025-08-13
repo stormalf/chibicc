@@ -5732,6 +5732,7 @@ static Node *primary(Token **rest, Token *tok)
       equal(tok, "__builtin_ia32_pminub") || equal(tok, "__builtin_ia32_pmulhuw") || 
       equal(tok, "__builtin_ia32_minpd") || equal(tok, "__builtin_ia32_minsd") ||
       equal(tok, "__builtin_ia32_maxpd") || equal(tok, "__builtin_ia32_maxsd") || 
+      equal(tok, "__builtin_ia32_andpd") || 
       equal(tok, "__builtin_ia32_maxss") || equal(tok, "__builtin_ia32_minss"))
   {
     int builtin = builtin_enum(tok);
@@ -7300,7 +7301,8 @@ char *nodekind2str(NodeKind kind)
   case ND_MINPD: return "MINPD";            
   case ND_MINSD: return "MINSD";        
   case ND_MAXPD: return "MAXPD";  
-  case ND_MAXSD: return "MAXSD";                                                               
+  case ND_MAXSD: return "MAXSD";  
+  case ND_ANDPD: return "ANDPD";                                                               
   default: return "UNREACHABLE"; 
   }
 }
@@ -7789,7 +7791,8 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_minpd", ND_MINPD },      
     { "__builtin_ia32_minsd", ND_MINSD },      
     { "__builtin_ia32_maxpd", ND_MAXPD },        
-    { "__builtin_ia32_maxsd", ND_MAXSD },        
+    { "__builtin_ia32_maxsd", ND_MAXSD },       
+    { "__builtin_ia32_andpd", ND_ANDPD },        
 };
 
 static int builtin_enum(Token *tok) {
