@@ -2841,7 +2841,9 @@ static void gen_expr(Node *node)
   case ND_MOVNTQ: gen_sse_binop10(node, "movnti", "rax"); return;   
   case ND_MOVNTPS: gen_sse_binop10(node, "movups", "xmm0"); return;
   case ND_ADDSD: gen_sse_binop3(node, "addsd", false);  return;    
-  case ND_SUBSD: gen_sse_binop3(node, "subsd", false);  return;    
+  case ND_SUBSD: gen_sse_binop3(node, "subsd", false);  return;  
+  case ND_MULSD: gen_sse_binop3(node, "mulsd", false);  return;    
+  case ND_DIVSD: gen_sse_binop3(node, "divsd", false);  return;    
 }
 
   

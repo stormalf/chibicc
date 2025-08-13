@@ -597,6 +597,8 @@ typedef enum
   ND_VECEXTV4SI,
   ND_ADDSD,
   ND_SUBSD,
+  ND_MULSD,
+  ND_DIVSD,
 } NodeKind;
 
 // AST node type

@@ -769,6 +769,8 @@ void add_type(Node *node)
     return;
   case ND_ADDSD:
   case ND_SUBSD:
+  case ND_MULSD:
+  case ND_DIVSD:
     node->ty = vector_of(ty_double, 2);
     return;
   case ND_CVTSS2SI:
