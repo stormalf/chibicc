@@ -1756,6 +1756,7 @@ static void gen_sse_binop10(Node *node, const char *insn, const char *reg) {
   println("  %s %%%s, (%%rdi)", insn, reg);    
 }
 
+
 static void gen_cvt_mmx_binop(Node *node, const char *insn) {
   gen_addr(node->lhs);   
   println("  movups (%%rax), %%xmm0"); 
@@ -2857,6 +2858,16 @@ static void gen_expr(Node *node)
   case ND_XORPD: gen_sse_binop3(node, "xorpd", false);  return;     
   case ND_CMPEQPD: gen_sse_binop3(node, "cmpeqpd", false);  return;   
   case ND_CMPLTPD: gen_sse_binop3(node, "cmpltpd", false);  return;   
+  case ND_CMPLEPD: gen_sse_binop3(node, "cmplepd", false);  return;   
+  case ND_CMPGTPD: gen_sse_binop3(node, "cmpnlepd", false);  return;   
+  case ND_CMPGEPD: gen_sse_binop3(node, "cmpnltpd", false);  return;   
+  case ND_CMPNEQPD: gen_sse_binop3(node, "cmpneqpd", false);  return;   
+  case ND_CMPNLTPD: gen_sse_binop3(node, "cmpnltpd", false);  return;   
+  case ND_CMPNLEPD: gen_sse_binop3(node, "cmpnlepd", false);  return;   
+  case ND_CMPNGTPD: gen_sse_binop3(node, "cmplepd", false);  return;   
+  case ND_CMPNGEPD: gen_sse_binop3(node, "cmpltpd", false);  return;   
+  case ND_CMPORDPD: gen_sse_binop3(node, "cmpordpd", false);  return;   
+  case ND_CMPUNORDPD: gen_sse_binop3(node, "cmpunordpd", false);  return;   
 }
 
   

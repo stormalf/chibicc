@@ -784,6 +784,16 @@ void add_type(Node *node)
   case ND_XORPD:
   case ND_CMPEQPD:
   case ND_CMPLTPD:
+  case ND_CMPLEPD:
+  case ND_CMPGTPD:
+  case ND_CMPGEPD:
+  case ND_CMPNEQPD:
+  case ND_CMPNLTPD:
+  case ND_CMPNLEPD:
+  case ND_CMPNGTPD:
+  case ND_CMPNGEPD:
+  case ND_CMPORDPD:
+  case ND_CMPUNORDPD:
     node->ty = vector_of(ty_double, 2);
     return;
   case ND_CVTSS2SI:
