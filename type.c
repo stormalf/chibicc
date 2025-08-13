@@ -628,6 +628,7 @@ void add_type(Node *node)
   case ND_LDMXCSR:
   case ND_STMXCSR:
   case ND_MASKMOVQ:
+  case ND_MOVNTQ:
     node->ty = ty_void_ptr;
     return;
   case ND_CLFLUSH:

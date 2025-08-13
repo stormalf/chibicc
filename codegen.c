@@ -1555,6 +1555,13 @@ static void gen_maskmovq(Node *node) {
   println("  emms");
 }
 
+static void gen_movntq(Node *node) {
+  gen_expr(node->lhs); 
+  println("  movq %%rax, %%rdi");    
+  gen_expr(node->rhs);  
+  println("  movnti %%rax, (%%rdi)");    
+}
+
 
 static void gen_cvtpi2ps(Node *node) {
   gen_expr(node->lhs);    
@@ -2809,7 +2816,8 @@ static void gen_expr(Node *node)
   case ND_MASKMOVQ: gen_maskmovq(node); return;
   case ND_PAVGB: gen_mmx_binop(node, "pavgb", false);  return;      
   case ND_PAVGW: gen_mmx_binop(node, "pavgw", false);  return;      
-  case ND_PSADBW: gen_mmx_binop(node, "psadbw", false);  return;      
+  case ND_PSADBW: gen_mmx_binop(node, "psadbw", false);  return;   
+  case ND_MOVNTQ: gen_movntq(node); return;   
 }
 
   
