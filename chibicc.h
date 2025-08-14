@@ -671,6 +671,7 @@ typedef enum
   ND_PACKSSDW128,
   ND_PACKUSWB128,
   ND_PUNPCKHBW128,
+  ND_PUNPCKHWD128,
 } NodeKind;
 
 // AST node type
