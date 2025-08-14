@@ -2921,6 +2921,7 @@ static void gen_expr(Node *node)
   case ND_CVTSD2SI64: gen_sse_binop2(node, "cvtsd2siq", "rax", false); return;
   case ND_CVTTSD2SI: gen_sse_binop2(node, "cvttsd2si", "eax", false); return;
   case ND_CVTTSD2SI64: gen_sse_binop2(node, "cvttsd2siq", "rax", false); return;
+  case ND_CVTSD2SS: gen_sse_binop3(node, "cvtsd2ss", false); return;
 
 }
 

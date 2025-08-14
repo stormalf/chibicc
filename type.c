@@ -626,6 +626,7 @@ void add_type(Node *node)
   case ND_SHUFPD:
   case ND_CVTDQ2PS:
   case ND_CVTPD2PS:
+  case ND_CVTSD2SS:
     node->ty = vector_of(ty_float, 4);
     return;  
   case ND_EXPECT:
