@@ -2940,6 +2940,7 @@ static void gen_expr(Node *node)
   case ND_PADDSB128: gen_sse_binop3(node, "paddsb", false); return; 
   case ND_PADDSW128: gen_sse_binop3(node, "paddsw", false); return; 
   case ND_PADDUSB128: gen_sse_binop3(node, "paddusb", false); return; 
+  case ND_PADDUSW128: gen_sse_binop3(node, "paddusw", false); return; 
 
 }
 

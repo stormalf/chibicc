@@ -681,6 +681,7 @@ typedef enum
   ND_PADDSB128,
   ND_PADDSW128,
   ND_PADDUSB128,
+  ND_PADDUSW128,
 } NodeKind;
 
 // AST node type
