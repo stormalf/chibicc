@@ -840,6 +840,7 @@ void add_type(Node *node)
     return;
   case ND_PACKUSWB128:
   case ND_PUNPCKHBW128:
+  case ND_PUNPCKLBW128:
     node->ty = vector_of(ty_uchar, 16);
     return;
   case ND_PACKSSWB128:
