@@ -679,6 +679,7 @@ typedef enum
   ND_PUNPCKLDQ128,
   ND_PUNPCKLQDQ128,
   ND_PADDSB128,
+  ND_PADDSW128,
 } NodeKind;
 
 // AST node type
