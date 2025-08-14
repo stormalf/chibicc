@@ -2899,6 +2899,7 @@ static void gen_expr(Node *node)
   case ND_UCOMISDGE: gen_sse_binop4(node, "ucomisd", "setae");  return;    
   case ND_UCOMISDNEQ: gen_sse_binop4(node, "ucomisd", "setne");  return;     
   case ND_MOVQ128: gen_movq128(node);  return;     
+  case ND_CVTDQ2PD: gen_sse_binop2(node, "cvtdq2pd", "xmm0", false); return;
 }
 
   

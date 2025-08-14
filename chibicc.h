@@ -643,6 +643,7 @@ typedef enum
   ND_UCOMISDGE,
   ND_UCOMISDNEQ,
   ND_MOVQ128,
+  ND_CVTDQ2PD,
 } NodeKind;
 
 // AST node type
