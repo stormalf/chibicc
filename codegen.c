@@ -1593,6 +1593,15 @@ static void gen_loadhps(Node *node) {
   println("  movlhps %%xmm1, %%xmm0"); 
 }
 
+static void gen_packsswb128(Node *node) {
+  gen_expr(node->lhs);
+  println("  movaps (%%rax), %%xmm1");  
+  gen_expr(node->rhs);
+  println("  packsswb (%%rax), %%xmm1"); 
+  println("  movaps %%xmm1, %%xmm0");
+}
+
+
 static void gen_alloc(Node *node) {
   gen_expr(node->lhs); // Assume size to allocate is in RAX
   println("  mov %%rax, %%rdi"); // Move size to RDI (or appropriate register)
@@ -2938,6 +2947,7 @@ static void gen_expr(Node *node)
   case ND_LOADHPD: gen_cvt_sse_binop2(node, "movhpd", "rax", true); return;
   case ND_LOADLPD: gen_cvt_sse_binop2(node, "movlpd", "rax", true); return;
   case ND_MOVMSKPD: gen_sse_binop2(node, "movmskpd", "rax", false);  return;   
+  case ND_PACKSSWB128: gen_packsswb128(node);  return;   
 
 }
 
