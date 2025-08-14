@@ -826,6 +826,8 @@ void add_type(Node *node)
   case ND_UNPCKHPD:
   case ND_UNPCKLPD:
   case ND_LOADHPD:
+  case ND_LOADLPD:
+  case ND_MOVMSKPD:
     node->ty = vector_of(ty_double, 2);
     return;
   case ND_CVTSS2SI:

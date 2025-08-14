@@ -5650,6 +5650,7 @@ static Node *primary(Token **rest, Token *tok)
     equal(tok, "__builtin_ia32_cvttps2dq") || equal(tok, "__builtin_ia32_cvtps2pd") || 
     equal(tok, "__builtin_ia32_cvtsd2si") || equal(tok, "__builtin_ia32_cvtsd2si64") || 
     equal(tok, "__builtin_ia32_cvttsd2si") || equal(tok, "__builtin_ia32_cvttsd2si64") ||
+    equal(tok, "__builtin_ia32_movmskpd") ||
     equal(tok, "__builtin_ia32_cvtss2si64")) {
     int builtin = builtin_enum(tok);
     if (builtin != -1) {
@@ -5674,6 +5675,7 @@ static Node *primary(Token **rest, Token *tok)
       equal(tok, "__builtin_ia32_addsd") || equal(tok, "__builtin_ia32_subsd") ||
       equal(tok, "__builtin_ia32_mulsd") || equal(tok, "__builtin_ia32_divsd") ||
       equal(tok, "__builtin_ia32_movsd") || equal(tok, "__builtin_ia32_loadhpd") ||  
+      equal(tok, "__builtin_ia32_loadlpd") ||  
       equal(tok, "__builtin_ia32_divss") || equal(tok, "__builtin_ia32_mulss"))
   {
     int builtin = builtin_enum(tok);
@@ -7389,6 +7391,8 @@ char *nodekind2str(NodeKind kind)
   case ND_UNPCKHPD: return "UNPCKHPD";  
   case ND_UNPCKLPD: return "UNPCKLPD";  
   case ND_LOADHPD: return "LOADHPD";       
+  case ND_LOADLPD: return "LOADLPD";  
+  case ND_MOVMSKPD: return "MOVMSKPD";         
   default: return "UNREACHABLE"; 
   }
 }
@@ -7936,7 +7940,9 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_cvtss2sd", ND_CVTSS2SD},      
     { "__builtin_ia32_unpckhpd", ND_UNPCKHPD},           
     { "__builtin_ia32_unpcklpd", ND_UNPCKLPD},   
-    { "__builtin_ia32_loadhpd", ND_LOADHPD },            
+    { "__builtin_ia32_loadhpd", ND_LOADHPD },   
+    { "__builtin_ia32_loadlpd", ND_LOADLPD },      
+    { "__builtin_ia32_movmskpd", ND_MOVMSKPD },        
 
 };
 

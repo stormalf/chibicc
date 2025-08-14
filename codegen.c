@@ -2936,6 +2936,8 @@ static void gen_expr(Node *node)
   case ND_UNPCKHPD: gen_sse_binop3(node, "unpckhpd", false); return;
   case ND_UNPCKLPD: gen_sse_binop3(node, "unpcklpd", false); return;
   case ND_LOADHPD: gen_cvt_sse_binop2(node, "movhpd", "rax", true); return;
+  case ND_LOADLPD: gen_cvt_sse_binop2(node, "movlpd", "rax", true); return;
+  case ND_MOVMSKPD: gen_sse_binop2(node, "movmskpd", "rax", false);  return;   
 
 }
 

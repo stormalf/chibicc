@@ -665,6 +665,8 @@ typedef enum
   ND_UNPCKHPD,
   ND_UNPCKLPD,
   ND_LOADHPD,
+  ND_LOADLPD,
+  ND_MOVMSKPD,
 } NodeKind;
 
 // AST node type
