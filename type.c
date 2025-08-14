@@ -561,8 +561,16 @@ void add_type(Node *node)
   case ND_VECINITV2SI:  
   case ND_CVTPS2PI:  
   case ND_CVTTPS2PI:
+  case ND_CVTPD2PI:
+  case ND_CVTTPD2PI:
     node->ty = vector_of(ty_int, 2);
-    return;
+    return;   
+  case ND_CVTPD2DQ:
+  case ND_CVTTPD2DQ:
+  case ND_CVTPS2DQ:
+  case ND_CVTTPS2DQ:
+    node->ty = vector_of(ty_int, 4);
+    return;   
   case ND_CMPUNORDPS:
   case ND_CMPORDPS:
   case ND_CMPNGEPS:
@@ -616,6 +624,8 @@ void add_type(Node *node)
   case ND_PMAXSW:
   case ND_PMINSW:
   case ND_SHUFPD:
+  case ND_CVTDQ2PS:
+  case ND_CVTPD2PS:
     node->ty = vector_of(ty_float, 4);
     return;  
   case ND_EXPECT:
@@ -804,6 +814,7 @@ void add_type(Node *node)
   case ND_CMPORDSD:
   case ND_CMPUNORDSD:
   case ND_CVTDQ2PD:
+  case ND_CVTPI2PD:
     node->ty = vector_of(ty_double, 2);
     return;
   case ND_CVTSS2SI:

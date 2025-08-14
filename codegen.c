@@ -1585,15 +1585,6 @@ static void gen_cvtpi2ps(Node *node) {
   println("  emms");
 } 
 
-static void gen_cvtps2pi(Node *node) {
-  gen_expr(node->lhs);        
-  println("  cvtps2pi %%xmm0, %%mm0");
-  gen_addr(node->lhs);         
-  println("  movq %%mm0, %%rax");
-  println("  movq %%rax, %%xmm0"); 
-  println("  emms");
-}
-
 static void gen_loadhps(Node *node) {
   gen_expr(node->lhs);
   println("  movaps (%%rax), %%xmm0");  
@@ -1780,6 +1771,22 @@ static void gen_cvt_mmx_binop2(Node *node, const char *insn, const char *reg) {
   gen_expr(node->lhs);  
   gen_expr(node->rhs);  
   println("  %s %%%s, %%xmm0", insn, reg);
+}
+
+static void gen_cvt_mmx_binop3(Node *node, const char *insn) {
+  gen_expr(node->lhs);        
+  println("  %s %%xmm0, %%mm0", insn);
+  gen_addr(node->lhs);         
+  println("  movq %%mm0, %%rax");
+  println("  movq %%rax, %%xmm0"); 
+  println("  emms");
+}
+
+static void gen_cvt_mmx_binop4(Node *node, const char *insn) {
+  gen_expr(node->lhs);    
+  println("  movq (%%rax), %%mm0");    
+  println("  %s %%mm0, %%xmm0", insn);
+  println("  emms");
 }
 
 
@@ -2711,7 +2718,7 @@ static void gen_expr(Node *node)
   case ND_SHUFPD: gen_shuf_binop(node, "shufpd"); return;
   case ND_SHUFFLE: gen_shuffle(node, "shufps"); return;
   case ND_CVTPI2PS: gen_cvtpi2ps(node); return;   
-  case ND_CVTPS2PI:  gen_cvtps2pi(node); return;
+  case ND_CVTPS2PI:  gen_cvt_mmx_binop3(node, "cvtps2pi"); return;
   case ND_CVTSS2SI: gen_sse_binop2(node, "cvtss2si", "eax", false); return;
   case ND_CVTSS2SI64: gen_cvt_binop(node, "cvtss2siq"); return;
   case ND_CVTTSS2SI: gen_cvt_binop(node, "cvttss2si"); return;
@@ -2900,6 +2907,16 @@ static void gen_expr(Node *node)
   case ND_UCOMISDNEQ: gen_sse_binop4(node, "ucomisd", "setne");  return;     
   case ND_MOVQ128: gen_movq128(node);  return;     
   case ND_CVTDQ2PD: gen_sse_binop2(node, "cvtdq2pd", "xmm0", false); return;
+  case ND_CVTDQ2PS: gen_sse_binop2(node, "cvtdq2ps", "xmm0", false); return;
+  case ND_CVTPD2DQ: gen_sse_binop2(node, "cvtpd2dq", "xmm0", false); return;
+  case ND_CVTPD2PI: gen_cvt_mmx_binop3(node, "cvtpd2pi"); return;
+  case ND_CVTPD2PS: gen_sse_binop2(node, "cvtpd2ps", "xmm0", false); return;
+  case ND_CVTTPD2DQ: gen_sse_binop2(node, "cvttpd2dq", "xmm0", false); return;
+  case ND_CVTTPD2PI: gen_cvt_mmx_binop3(node, "cvttpd2pi"); return;
+  case ND_CVTPI2PD: gen_cvt_mmx_binop4(node, "cvtpi2pd"); return;
+  case ND_CVTPS2DQ: gen_sse_binop2(node, "cvtps2dq", "xmm0", false); return;
+  case ND_CVTTPS2DQ: gen_sse_binop2(node, "cvttps2dq", "xmm0", false); return;
+
 }
 
   

@@ -5621,7 +5621,9 @@ static Node *primary(Token **rest, Token *tok)
     }
   }
 
-  if (equal(tok, "__builtin_ia32_cvtps2pi") || equal(tok, "__builtin_ia32_cvttps2pi"))
+  if (equal(tok, "__builtin_ia32_cvtps2pi") || equal(tok, "__builtin_ia32_cvttps2pi") || 
+      equal(tok, "__builtin_ia32_cvttpd2pi") || equal(tok, "__builtin_ia32_cvtpi2pd") ||    
+      equal(tok, "__builtin_ia32_cvtpd2pi"))
   {
     if (!opt_mmx)
       error_tok(tok, "%s %d: in primary : option -mmmx required", PARSE_C, __LINE__);
@@ -5642,7 +5644,10 @@ static Node *primary(Token **rest, Token *tok)
     equal(tok, "__builtin_ia32_cvttss2si64") || equal(tok, "__builtin_ia32_movmskps") ||
     equal(tok, "__builtin_ia32_ldmxcsr") ||  equal(tok, "__builtin_ia32_sqrtpd") ||
     equal(tok, "__builtin_ia32_sqrtsd") ||  equal(tok, "__builtin_ia32_movq128") ||
-    equal(tok, "__builtin_ia32_cvtdq2pd") ||
+    equal(tok, "__builtin_ia32_cvtdq2pd") || equal(tok, "__builtin_ia32_cvtdq2ps") ||
+    equal(tok, "__builtin_ia32_cvtpd2dq") || equal(tok, "__builtin_ia32_cvtpd2ps") ||
+    equal(tok, "__builtin_ia32_cvttpd2dq") || equal(tok, "__builtin_ia32_cvtps2dq") || 
+    equal(tok, "__builtin_ia32_cvttps2dq") || 
     equal(tok, "__builtin_ia32_cvtss2si64")) {
     int builtin = builtin_enum(tok);
     if (builtin != -1) {
@@ -7358,6 +7363,15 @@ char *nodekind2str(NodeKind kind)
   case ND_UCOMISDNEQ: return "UCOMISDNEQ"; 
   case ND_MOVQ128: return "MOVQ128"; 
   case ND_CVTDQ2PD: return "CVTDQ2PD"; 
+  case ND_CVTDQ2PS: return "CVTDQ2PS"; 
+  case ND_CVTPD2DQ: return "CVTPD2DQ"; 
+  case ND_CVTPD2PI: return "CVTPD2PI"; 
+  case ND_CVTPD2PS: return "CVTPD2PS"; 
+  case ND_CVTTPD2DQ: return "CVTTPD2DQ";
+  case ND_CVTTPD2PI: return "CVTTPD2PI";  
+  case ND_CVTPI2PD: return "CVTPI2PD"; 
+  case ND_CVTPS2DQ: return "CVTPS2DQ";  
+  case ND_CVTTPS2DQ: return "CVTTPS2DQ";
   default: return "UNREACHABLE"; 
   }
 }
@@ -7885,6 +7899,15 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_ucomisdneq", ND_UCOMISDNEQ},    
     { "__builtin_ia32_movq128", ND_MOVQ128},     
     { "__builtin_ia32_cvtdq2pd", ND_CVTDQ2PD},     
+    { "__builtin_ia32_cvtdq2ps", ND_CVTDQ2PS},     
+    { "__builtin_ia32_cvtpd2dq", ND_CVTPD2DQ}, 
+    { "__builtin_ia32_cvtpd2pi", ND_CVTPD2PI},  
+    { "__builtin_ia32_cvtpd2ps", ND_CVTPD2PS},    
+    { "__builtin_ia32_cvttpd2dq", ND_CVTTPD2DQ},
+    { "__builtin_ia32_cvttpd2pi", ND_CVTTPD2PI},       
+    { "__builtin_ia32_cvtpi2pd", ND_CVTPI2PD}, 
+    { "__builtin_ia32_cvtps2dq", ND_CVTPS2DQ},  
+    { "__builtin_ia32_cvttps2dq", ND_CVTTPS2DQ},     
 
 };
 
