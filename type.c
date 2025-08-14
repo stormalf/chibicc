@@ -720,11 +720,14 @@ void add_type(Node *node)
   case ND_BUILTIN_HUGE_VALL:
     node->ty = ty_ldouble;
     return;
-  case ND_CVTTSS2SI:      
+  case ND_CVTTSS2SI: 
+  case ND_CVTTSD2SI:     
   case ND_VECEXTV2SI:
   case ND_VECEXTV4SI:
     node->ty = ty_int;
     return;
+  case ND_CVTTSD2SI64:
+  case ND_CVTSD2SI64:
   case ND_CVTSS2SI64:
   case ND_CVTTSS2SI64:
     node->ty = ty_long;
@@ -815,6 +818,7 @@ void add_type(Node *node)
   case ND_CMPUNORDSD:
   case ND_CVTDQ2PD:
   case ND_CVTPI2PD:
+  case ND_CVTPS2PD:
     node->ty = vector_of(ty_double, 2);
     return;
   case ND_CVTSS2SI:
@@ -844,6 +848,7 @@ void add_type(Node *node)
   case ND_UCOMISDGT:
   case ND_UCOMISDGE:
   case ND_UCOMISDNEQ:  
+  case ND_CVTSD2SI:
     node->ty = ty_int;
 
   }

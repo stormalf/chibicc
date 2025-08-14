@@ -5647,7 +5647,9 @@ static Node *primary(Token **rest, Token *tok)
     equal(tok, "__builtin_ia32_cvtdq2pd") || equal(tok, "__builtin_ia32_cvtdq2ps") ||
     equal(tok, "__builtin_ia32_cvtpd2dq") || equal(tok, "__builtin_ia32_cvtpd2ps") ||
     equal(tok, "__builtin_ia32_cvttpd2dq") || equal(tok, "__builtin_ia32_cvtps2dq") || 
-    equal(tok, "__builtin_ia32_cvttps2dq") || 
+    equal(tok, "__builtin_ia32_cvttps2dq") || equal(tok, "__builtin_ia32_cvtps2pd") || 
+    equal(tok, "__builtin_ia32_cvtsd2si") || equal(tok, "__builtin_ia32_cvtsd2si64") || 
+    equal(tok, "__builtin_ia32_cvttsd2si") || equal(tok, "__builtin_ia32_cvttsd2si64") ||
     equal(tok, "__builtin_ia32_cvtss2si64")) {
     int builtin = builtin_enum(tok);
     if (builtin != -1) {
@@ -7372,6 +7374,11 @@ char *nodekind2str(NodeKind kind)
   case ND_CVTPI2PD: return "CVTPI2PD"; 
   case ND_CVTPS2DQ: return "CVTPS2DQ";  
   case ND_CVTTPS2DQ: return "CVTTPS2DQ";
+  case ND_CVTPS2PD: return "CVTPS2PD"; 
+  case ND_CVTSD2SI: return "CVTSD2SI"; 
+  case ND_CVTSD2SI64: return "CVTSD2SI64";
+  case ND_CVTTSD2SI: return "CVTTSD2SI";  
+  case ND_CVTTSD2SI64: return "CVTTSD2SI64";
   default: return "UNREACHABLE"; 
   }
 }
@@ -7907,7 +7914,12 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_cvttpd2pi", ND_CVTTPD2PI},       
     { "__builtin_ia32_cvtpi2pd", ND_CVTPI2PD}, 
     { "__builtin_ia32_cvtps2dq", ND_CVTPS2DQ},  
-    { "__builtin_ia32_cvttps2dq", ND_CVTTPS2DQ},     
+    { "__builtin_ia32_cvttps2dq", ND_CVTTPS2DQ},
+    { "__builtin_ia32_cvtps2pd", ND_CVTPS2PD},  
+    { "__builtin_ia32_cvtsd2si", ND_CVTSD2SI},      
+    { "__builtin_ia32_cvtsd2si64", ND_CVTSD2SI64}, 
+    { "__builtin_ia32_cvttsd2si", ND_CVTTSD2SI},   
+    { "__builtin_ia32_cvttsd2si64", ND_CVTTSD2SI64},        
 
 };
 

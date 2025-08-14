@@ -2916,6 +2916,11 @@ static void gen_expr(Node *node)
   case ND_CVTPI2PD: gen_cvt_mmx_binop4(node, "cvtpi2pd"); return;
   case ND_CVTPS2DQ: gen_sse_binop2(node, "cvtps2dq", "xmm0", false); return;
   case ND_CVTTPS2DQ: gen_sse_binop2(node, "cvttps2dq", "xmm0", false); return;
+  case ND_CVTPS2PD: gen_sse_binop2(node, "cvtps2pd", "xmm0", false); return;
+  case ND_CVTSD2SI: gen_sse_binop2(node, "cvtsd2si", "eax", false); return;
+  case ND_CVTSD2SI64: gen_sse_binop2(node, "cvtsd2siq", "rax", false); return;
+  case ND_CVTTSD2SI: gen_sse_binop2(node, "cvttsd2si", "eax", false); return;
+  case ND_CVTTSD2SI64: gen_sse_binop2(node, "cvttsd2siq", "rax", false); return;
 
 }
 
