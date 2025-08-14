@@ -2952,7 +2952,8 @@ static void gen_expr(Node *node)
   case ND_PACKUSWB128: gen_packss128_binop(node, "packuswb");  return;   
   case ND_PUNPCKHBW128: gen_packss128_binop(node, "punpckhbw");  return; 
   case ND_PUNPCKHWD128: gen_packss128_binop(node, "punpckhwd");  return;   
-  case ND_PUNPCKHDQ128: gen_packss128_binop(node, "punpckhdq");  return;   
+  case ND_PUNPCKHDQ128: gen_packss128_binop(node, "punpckhdq");  return;  
+  case ND_PUNPCKHQDQ128: gen_packss128_binop(node, "punpckhqdq");  return;   
 
 }
 
