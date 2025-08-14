@@ -1392,22 +1392,6 @@ static void gen_vec_init_v2si(Node *node) {
   println("  movq %%rax, %%xmm0");
 }
 
-// static void gen_vec_ext_v2si(Node *node) {
-//   gen_expr(node->lhs);  
-//   gen_expr(node->rhs);  
-//   println("  mov %%eax, %%ebx");
-//   println("  movd %%xmm0, %%eax");
-//   static int label_id = 0;
-//   int lbl_zero = label_id++;
-//   int lbl_done = label_id++;
-//   println("  cmpl $0, %%ebx");
-//   println("  je .Lvec_ext_zero_%d", lbl_zero);
-//   println("  psrldq $%d, %%xmm0", 4);
-//   println("  movd %%xmm0, %%eax");
-//   println("  jmp .Lvec_ext_done_%d", lbl_done);
-//   println(".Lvec_ext_zero_%d:", lbl_zero);
-//   println(".Lvec_ext_done_%d:", lbl_done);
-// }
 
 static void gen_vec_ext(Node *node) {
     gen_expr(node->lhs); 
@@ -1558,11 +1542,6 @@ static void gen_shuffle(Node *node, const char *insn) {
     println("  %s $%d, %%xmm1, %%xmm0", insn, single);
   }
 }
-
-
-// static void gen_shuffle(Node *node, const char *insn) {
-//   error_tok(node->tok, "%s: %s:%d: error: shuffle not supported", CODEGEN_C, __FILE__, __LINE__);
-// }
 
 static void gen_maskmovq(Node *node) {
   assert(node->builtin_nargs == 3);
@@ -2958,6 +2937,7 @@ static void gen_expr(Node *node)
   case ND_PUNPCKLWD128: gen_packss128_binop(node, "punpcklwd");  return;   
   case ND_PUNPCKLDQ128: gen_packss128_binop(node, "punpckldq");  return;   
   case ND_PUNPCKLQDQ128: gen_packss128_binop(node, "punpcklqdq");  return;   
+  case ND_PADDSB128: gen_sse_binop3(node, "paddsb", false); return; 
 
 }
 
