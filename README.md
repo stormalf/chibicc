@@ -510,6 +510,9 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
     memcached test stuck at t/binary-extstore.t ......... 5947/?
     vim: compile OK, tests KO (depending the version of chibicc failed early or in the last tests).
 
+    issue with vectors in some specific case (when mixed parameters vectors/non vectors or when lots of vectors parameters).
+    issue with some specific builtin functions shuffle when the last argument is a cast and a function call.
+
 ## projects compiled successfully with chibicc
 
     util-linux : compile OK, tests OK    

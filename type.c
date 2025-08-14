@@ -545,6 +545,7 @@ void add_type(Node *node)
   case ND_PSLLQ:
   case ND_PSUBQ:
   case ND_PADDQ:
+  case ND_MOVQ128:
     node->ty = vector_of(ty_long, 1);
     return;
   case ND_PCMPGTD:

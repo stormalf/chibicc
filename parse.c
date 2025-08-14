@@ -5641,7 +5641,7 @@ static Node *primary(Token **rest, Token *tok)
   if (equal(tok, "__builtin_ia32_cvtss2si") || equal(tok, "__builtin_ia32_cvttss2si") ||
     equal(tok, "__builtin_ia32_cvttss2si64") || equal(tok, "__builtin_ia32_movmskps") ||
     equal(tok, "__builtin_ia32_ldmxcsr") ||  equal(tok, "__builtin_ia32_sqrtpd") ||
-    equal(tok, "__builtin_ia32_sqrtsd") ||
+    equal(tok, "__builtin_ia32_sqrtsd") ||  equal(tok, "__builtin_ia32_movq128") ||
     equal(tok, "__builtin_ia32_cvtss2si64")) {
     int builtin = builtin_enum(tok);
     if (builtin != -1) {
@@ -7355,6 +7355,7 @@ char *nodekind2str(NodeKind kind)
   case ND_UCOMISDGT: return "UCOMISDGT"; 
   case ND_UCOMISDGE: return "UCOMISDGE"; 
   case ND_UCOMISDNEQ: return "UCOMISDNEQ"; 
+  case ND_MOVQ128: return "MOVQ128"; 
   default: return "UNREACHABLE"; 
   }
 }
@@ -7879,7 +7880,8 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_ucomisdle", ND_UCOMISDLE},   
     { "__builtin_ia32_ucomisdgt", ND_UCOMISDGT},   
     { "__builtin_ia32_ucomisdge", ND_UCOMISDGE},    
-    { "__builtin_ia32_ucomisdneq", ND_UCOMISDNEQ},     
+    { "__builtin_ia32_ucomisdneq", ND_UCOMISDNEQ},    
+    { "__builtin_ia32_movq128", ND_MOVQ128},     
 
 };
 

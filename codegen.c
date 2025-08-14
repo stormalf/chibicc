@@ -1675,6 +1675,15 @@ static void gen_single_addr_binop(Node *node, const char *insn){
   println("  %s (%%rax)", insn);
 }
 
+
+static void gen_movq128(Node *node) {
+  gen_expr(node->lhs); 
+  println("  movq %%xmm0, %%xmm1");  
+  println("  pxor %%xmm0, %%xmm0");  
+  println("  movq %%xmm1, %%xmm0");  
+}
+
+
 // Helper to emit MMX two-operand instruction
 static void gen_sse_binop1(Node *node, const char *insn, bool rhs_is_imm) {
   gen_expr(node->rhs);
@@ -1755,6 +1764,8 @@ static void gen_sse_binop10(Node *node, const char *insn, const char *reg) {
   gen_expr(node->rhs);  
   println("  %s %%%s, (%%rdi)", insn, reg);    
 }
+
+
 
 static void gen_cvt_mmx_binop(Node *node, const char *insn) {
   gen_addr(node->lhs);   
@@ -2887,6 +2898,7 @@ static void gen_expr(Node *node)
   case ND_UCOMISDGT: gen_sse_binop4(node, "ucomisd", "seta");  return;
   case ND_UCOMISDGE: gen_sse_binop4(node, "ucomisd", "setae");  return;    
   case ND_UCOMISDNEQ: gen_sse_binop4(node, "ucomisd", "setne");  return;     
+  case ND_MOVQ128: gen_movq128(node);  return;     
 }
 
   
