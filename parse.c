@@ -5758,7 +5758,7 @@ static Node *primary(Token **rest, Token *tok)
       equal(tok, "__builtin_ia32_ucomisdeq") || equal(tok, "__builtin_ia32_ucomisdlt") ||
       equal(tok, "__builtin_ia32_ucomisdle") || equal(tok, "__builtin_ia32_ucomisdgt") ||
       equal(tok, "__builtin_ia32_ucomisdge") || equal(tok, "__builtin_ia32_ucomisdneq") ||  
-      equal(tok, "__builtin_ia32_cvtsd2ss") ||  
+      equal(tok, "__builtin_ia32_cvtsd2ss") ||  equal(tok, "__builtin_ia32_cvtsi2sd") ||  
       equal(tok, "__builtin_ia32_maxss") || equal(tok, "__builtin_ia32_minss"))
   {
     int builtin = builtin_enum(tok);
@@ -7381,6 +7381,7 @@ char *nodekind2str(NodeKind kind)
   case ND_CVTTSD2SI: return "CVTTSD2SI";  
   case ND_CVTTSD2SI64: return "CVTTSD2SI64";
   case ND_CVTSD2SS: return "CVTSD2SS"; 
+  case ND_CVTSI2SD: return "CVTSI2SD"; 
   default: return "UNREACHABLE"; 
   }
 }
@@ -7922,7 +7923,8 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_cvtsd2si64", ND_CVTSD2SI64}, 
     { "__builtin_ia32_cvttsd2si", ND_CVTTSD2SI},   
     { "__builtin_ia32_cvttsd2si64", ND_CVTTSD2SI64},
-    { "__builtin_ia32_cvtsd2ss", ND_CVTSD2SS},            
+    { "__builtin_ia32_cvtsd2ss", ND_CVTSD2SS},        
+    { "__builtin_ia32_cvtsi2sd", ND_CVTSI2SD},            
 
 };
 

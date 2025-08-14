@@ -820,6 +820,7 @@ void add_type(Node *node)
   case ND_CVTDQ2PD:
   case ND_CVTPI2PD:
   case ND_CVTPS2PD:
+  case ND_CVTSI2SD:
     node->ty = vector_of(ty_double, 2);
     return;
   case ND_CVTSS2SI:

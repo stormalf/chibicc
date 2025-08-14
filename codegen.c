@@ -1756,7 +1756,12 @@ static void gen_sse_binop10(Node *node, const char *insn, const char *reg) {
   println("  %s %%%s, (%%rdi)", insn, reg);    
 }
 
-
+static void gen_sse_binop11(Node *node, const char *insn, const char *reg) {
+  gen_expr(node->lhs); 
+  println("  movq %%rax, %%rdi");    
+  gen_expr(node->rhs);  
+  println("  %s %%%s, %%xmm0", insn, reg);  
+}
 
 static void gen_cvt_mmx_binop(Node *node, const char *insn) {
   gen_addr(node->lhs);   
@@ -2922,6 +2927,7 @@ static void gen_expr(Node *node)
   case ND_CVTTSD2SI: gen_sse_binop2(node, "cvttsd2si", "eax", false); return;
   case ND_CVTTSD2SI64: gen_sse_binop2(node, "cvttsd2siq", "rax", false); return;
   case ND_CVTSD2SS: gen_sse_binop3(node, "cvtsd2ss", false); return;
+  case ND_CVTSI2SD:  gen_sse_binop11(node, "cvtsi2sd", "rax"); return;  
 
 }
 
