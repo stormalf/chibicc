@@ -668,6 +668,7 @@ typedef enum
   ND_LOADLPD,
   ND_MOVMSKPD,
   ND_PACKSSWB128,
+  ND_PACKSSDW128,
 } NodeKind;
 
 // AST node type

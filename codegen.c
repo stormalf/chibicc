@@ -1593,11 +1593,11 @@ static void gen_loadhps(Node *node) {
   println("  movlhps %%xmm1, %%xmm0"); 
 }
 
-static void gen_packsswb128(Node *node) {
+static void gen_packss128_binop(Node *node, const char *insn) {
   gen_expr(node->lhs);
   println("  movaps (%%rax), %%xmm1");  
   gen_expr(node->rhs);
-  println("  packsswb (%%rax), %%xmm1"); 
+  println("  %s (%%rax), %%xmm1", insn); 
   println("  movaps %%xmm1, %%xmm0");
 }
 
@@ -2947,7 +2947,8 @@ static void gen_expr(Node *node)
   case ND_LOADHPD: gen_cvt_sse_binop2(node, "movhpd", "rax", true); return;
   case ND_LOADLPD: gen_cvt_sse_binop2(node, "movlpd", "rax", true); return;
   case ND_MOVMSKPD: gen_sse_binop2(node, "movmskpd", "rax", false);  return;   
-  case ND_PACKSSWB128: gen_packsswb128(node);  return;   
+  case ND_PACKSSWB128: gen_packss128_binop(node, "packsswb");  return;   
+  case ND_PACKSSDW128: gen_packss128_binop(node, "packssdw");  return;   
 
 }
 
