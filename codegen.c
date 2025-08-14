@@ -1772,10 +1772,13 @@ static void gen_cvt_mmx_binop(Node *node, const char *insn) {
   println("  emms");
   }
 
-static void gen_cvt_mmx_binop2(Node *node, const char *insn, const char *reg) {  
+static void gen_cvt_sse_binop2(Node *node, const char *insn, const char *reg, bool is_address) {  
   gen_expr(node->lhs);  
   gen_expr(node->rhs);  
-  println("  %s %%%s, %%xmm0", insn, reg);
+  if (is_address)
+    println("  %s (%%%s), %%xmm0", insn, reg);
+  else 
+    println("  %s %%%s, %%xmm0", insn, reg);
 }
 
 static void gen_cvt_mmx_binop3(Node *node, const char *insn) {
@@ -2729,8 +2732,8 @@ static void gen_expr(Node *node)
   case ND_CVTTSS2SI: gen_cvt_binop(node, "cvttss2si"); return;
   case ND_CVTTSS2SI64: gen_cvt_binop(node, "cvttss2siq"); return;
   case ND_CVTTPS2PI: gen_cvt_mmx_binop(node, "cvttps2pi"); return;
-  case ND_CVTSI2SS: gen_cvt_mmx_binop2(node, "cvtsi2ss", "eax"); return;
-  case ND_CVTSI642SS: gen_cvt_mmx_binop2(node, "cvtsi2ss", "rax"); return;
+  case ND_CVTSI2SS: gen_cvt_sse_binop2(node, "cvtsi2ss", "eax", false); return;
+  case ND_CVTSI642SS: gen_cvt_sse_binop2(node, "cvtsi2ss", "rax", false); return;
   case ND_MOVLHPS: gen_sse_binop3(node, "movlhps", false);  return; 
   case ND_MOVHLPS: gen_sse_binop3(node, "movhlps", false);  return; 
   case ND_UNPCKHPS: gen_sse_binop3(node, "unpckhps", false);  return; 
@@ -2928,6 +2931,11 @@ static void gen_expr(Node *node)
   case ND_CVTTSD2SI64: gen_sse_binop2(node, "cvttsd2siq", "rax", false); return;
   case ND_CVTSD2SS: gen_sse_binop3(node, "cvtsd2ss", false); return;
   case ND_CVTSI2SD:  gen_sse_binop11(node, "cvtsi2sd", "rax"); return;  
+  case ND_CVTSI642SD:  gen_sse_binop11(node, "cvtsi2sdq", "rax"); return;  
+  case ND_CVTSS2SD: gen_sse_binop3(node, "cvtss2sd", false); return;
+  case ND_UNPCKHPD: gen_sse_binop3(node, "unpckhpd", false); return;
+  case ND_UNPCKLPD: gen_sse_binop3(node, "unpcklpd", false); return;
+  case ND_LOADHPD: gen_cvt_sse_binop2(node, "movhpd", "rax", true); return;
 
 }
 

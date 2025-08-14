@@ -5673,7 +5673,7 @@ static Node *primary(Token **rest, Token *tok)
       equal(tok, "__builtin_ia32_movntq") || equal(tok, "__builtin_ia32_movntps") ||
       equal(tok, "__builtin_ia32_addsd") || equal(tok, "__builtin_ia32_subsd") ||
       equal(tok, "__builtin_ia32_mulsd") || equal(tok, "__builtin_ia32_divsd") ||
-      equal(tok, "__builtin_ia32_movsd") || 
+      equal(tok, "__builtin_ia32_movsd") || equal(tok, "__builtin_ia32_loadhpd") ||  
       equal(tok, "__builtin_ia32_divss") || equal(tok, "__builtin_ia32_mulss"))
   {
     int builtin = builtin_enum(tok);
@@ -5758,7 +5758,9 @@ static Node *primary(Token **rest, Token *tok)
       equal(tok, "__builtin_ia32_ucomisdeq") || equal(tok, "__builtin_ia32_ucomisdlt") ||
       equal(tok, "__builtin_ia32_ucomisdle") || equal(tok, "__builtin_ia32_ucomisdgt") ||
       equal(tok, "__builtin_ia32_ucomisdge") || equal(tok, "__builtin_ia32_ucomisdneq") ||  
-      equal(tok, "__builtin_ia32_cvtsd2ss") ||  equal(tok, "__builtin_ia32_cvtsi2sd") ||  
+      equal(tok, "__builtin_ia32_cvtsd2ss") ||  equal(tok, "__builtin_ia32_cvtsi2sd") || 
+      equal(tok, "__builtin_ia32_cvtsi642sd") || equal(tok, "__builtin_ia32_cvtss2sd") || 
+      equal(tok, "__builtin_ia32_unpckhpd") || equal(tok, "__builtin_ia32_unpcklpd") || 
       equal(tok, "__builtin_ia32_maxss") || equal(tok, "__builtin_ia32_minss"))
   {
     int builtin = builtin_enum(tok);
@@ -7382,6 +7384,11 @@ char *nodekind2str(NodeKind kind)
   case ND_CVTTSD2SI64: return "CVTTSD2SI64";
   case ND_CVTSD2SS: return "CVTSD2SS"; 
   case ND_CVTSI2SD: return "CVTSI2SD"; 
+  case ND_CVTSI642SD: return "CVTSI642SD";
+  case ND_CVTSS2SD: return "CVTSS2SD";  
+  case ND_UNPCKHPD: return "UNPCKHPD";  
+  case ND_UNPCKLPD: return "UNPCKLPD";  
+  case ND_LOADHPD: return "LOADHPD";       
   default: return "UNREACHABLE"; 
   }
 }
@@ -7924,7 +7931,12 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_cvttsd2si", ND_CVTTSD2SI},   
     { "__builtin_ia32_cvttsd2si64", ND_CVTTSD2SI64},
     { "__builtin_ia32_cvtsd2ss", ND_CVTSD2SS},        
-    { "__builtin_ia32_cvtsi2sd", ND_CVTSI2SD},            
+    { "__builtin_ia32_cvtsi2sd", ND_CVTSI2SD},        
+    { "__builtin_ia32_cvtsi642sd", ND_CVTSI642SD},
+    { "__builtin_ia32_cvtss2sd", ND_CVTSS2SD},      
+    { "__builtin_ia32_unpckhpd", ND_UNPCKHPD},           
+    { "__builtin_ia32_unpcklpd", ND_UNPCKLPD},   
+    { "__builtin_ia32_loadhpd", ND_LOADHPD },            
 
 };
 
