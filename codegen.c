@@ -2949,6 +2949,8 @@ static void gen_expr(Node *node)
   case ND_MOVMSKPD: gen_sse_binop2(node, "movmskpd", "rax", false);  return;   
   case ND_PACKSSWB128: gen_packss128_binop(node, "packsswb");  return;   
   case ND_PACKSSDW128: gen_packss128_binop(node, "packssdw");  return;   
+  case ND_PACKUSWB128: gen_packss128_binop(node, "packuswb");  return;   
+  case ND_PUNPCKHBW128: gen_packss128_binop(node, "punpckhbw");  return;   
 
 }
 
