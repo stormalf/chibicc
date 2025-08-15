@@ -707,6 +707,9 @@ typedef enum
   ND_PSRLD128,
   ND_PSRLQ128,
   ND_PANDN128,
+  ND_PMAXSW128,
+  ND_PMAXUB128,
+  ND_PMINSW128,
 } NodeKind;
 
 // AST node type

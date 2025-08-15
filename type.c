@@ -801,6 +801,8 @@ void add_type(Node *node)
   case ND_PSLLW128:
   case ND_PSRAW128:
   case ND_PSRLW128:
+  case ND_PMAXSW128:
+  case ND_PMINSW128:
     node->ty = vector_of(ty_short, 8);
     return;
   case ND_PUNPCKHDQ128:
@@ -877,6 +879,7 @@ void add_type(Node *node)
   case ND_PUNPCKLBW128:
   case ND_PADDUSB128:
   case ND_PSUBUSB128:
+  case ND_PMAXUB128:
     node->ty = vector_of(ty_uchar, 16);
     return;
   case ND_PACKSSWB128:
