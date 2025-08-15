@@ -720,6 +720,7 @@ typedef enum
   ND_MOVNTI,
   ND_MOVNTI64,
   ND_MOVNTDQ,
+  ND_MOVNTPD,
 } NodeKind;
 
 // AST node type

@@ -1705,10 +1705,10 @@ static void gen_movnti64(Node *node) {
   println("  movnti %%rcx, (%%rax)"); 
 }
 
-static void gen_movntdq(Node *node) {
+static void gen_movnt_binop(Node *node, const char *insn) {
   gen_expr(node->rhs);
   gen_expr(node->lhs);
-  println("  movntdq %%xmm0, (%%rax)");
+  println("  %s %%xmm0, (%%rax)", insn);
 }
 
 
@@ -3026,7 +3026,8 @@ static void gen_expr(Node *node)
   case ND_PSADBW128:gen_sse_binop3(node, "psadbw", false); return; 
   case ND_MOVNTI: gen_movnti(node); return;
   case ND_MOVNTI64: gen_movnti64(node); return;
-  case ND_MOVNTDQ: gen_movntdq(node); return;
+  case ND_MOVNTDQ: gen_movnt_binop(node, "movntdq"); return;
+  case ND_MOVNTPD: gen_movnt_binop(node, "movntpd"); return;
 }
 
   
