@@ -880,6 +880,7 @@ void add_type(Node *node)
   case ND_PADDUSB128:
   case ND_PSUBUSB128:
   case ND_PMAXUB128:
+  case ND_PMINUB128:
     node->ty = vector_of(ty_uchar, 16);
     return;
   case ND_PACKSSWB128:

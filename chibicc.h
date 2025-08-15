@@ -710,6 +710,7 @@ typedef enum
   ND_PMAXSW128,
   ND_PMAXUB128,
   ND_PMINSW128,
+  ND_PMINUB128,
 } NodeKind;
 
 // AST node type

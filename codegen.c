@@ -2980,6 +2980,7 @@ static void gen_expr(Node *node)
   case ND_PMAXSW128:gen_sse_binop3(node, "pmaxsw", false); return; 
   case ND_PMAXUB128:gen_sse_binop3(node, "pmaxub", false); return; 
   case ND_PMINSW128:gen_sse_binop3(node, "pminsw", false); return; 
+  case ND_PMINUB128:gen_sse_binop3(node, "pminub", false); return; 
 
 }
 
