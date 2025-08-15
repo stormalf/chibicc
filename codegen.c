@@ -1430,6 +1430,13 @@ static void gen_shuf_binop(Node *node, const char *insn) {
   println("  %s $%ld, %%xmm1, %%xmm0", insn, node->rhs->val);
 }
 
+static void gen_psll_binop(Node *node, const char *insn) {
+  gen_expr(node->lhs);
+  println("  movaps %%xmm0, %%xmm1");      
+  gen_expr(node->rhs);
+  println("  %s $%ld, %%xmm1", insn, node->rhs->val);
+  println("  movaps %%xmm1, %%xmm0");      
+}
 
 
 // Walk node to find a numeric constant. Works for ND_ASSIGN, ND_COMMA, ND_CAST etc.
@@ -2948,6 +2955,7 @@ static void gen_expr(Node *node)
   case ND_PMADDWD128: gen_sse_binop3(node, "pmaddwd", false); return; 
   case ND_PMULHW128: gen_sse_binop3(node, "pmulhw", false); return; 
   case ND_PMULUDQ:  case ND_PMULUDQ128: gen_sse_binop3(node, "pmuludq", false); return; 
+  case ND_PSLLWI128: gen_psll_binop(node, "psllw"); return;
   
 
 }
