@@ -5697,7 +5697,7 @@ static Node *primary(Token **rest, Token *tok)
       equal(tok, "__builtin_ia32_psrld128") || equal(tok, "__builtin_ia32_psrlq128") || 
       equal(tok, "__builtin_ia32_pandn128") || equal(tok, "__builtin_ia32_pmaxsw128") || 
       equal(tok, "__builtin_ia32_pmaxub128") || equal(tok, "__builtin_ia32_pminsw128") || 
-      equal(tok, "__builtin_ia32_pminub128") || 
+      equal(tok, "__builtin_ia32_pminub128") || equal(tok, "__builtin_ia32_pmulhuw128") || 
       equal(tok, "__builtin_ia32_divss") || equal(tok, "__builtin_ia32_mulss"))
   {
     int builtin = builtin_enum(tok);
@@ -7459,7 +7459,8 @@ char *nodekind2str(NodeKind kind)
   case ND_PMAXUB128: return "PMAXUB128";         
   case ND_PMINSW128: return "PMINSW128"; 
   case ND_PMINUB128: return "PMINUB128";      
-  case ND_PMOVMSKB128: return "PMOVMSKB128";         
+  case ND_PMOVMSKB128: return "PMOVMSKB128";   
+  case ND_PMULHUW128: return "PMULHUW128";         
   default: return "UNREACHABLE"; 
   }
 }
@@ -8054,7 +8055,8 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_pmaxub128", ND_PMAXUB128 }, 
     { "__builtin_ia32_pminsw128", ND_PMINSW128 },   
     { "__builtin_ia32_pminub128", ND_PMINUB128 }, 
-    { "__builtin_ia32_pmovmskb128", ND_PMOVMSKB128 },        
+    { "__builtin_ia32_pmovmskb128", ND_PMOVMSKB128 },  
+    { "__builtin_ia32_pmulhuw128", ND_PMULHUW128 },        
 };
 
 
