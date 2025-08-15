@@ -1705,6 +1705,13 @@ static void gen_movnti64(Node *node) {
   println("  movnti %%rcx, (%%rax)"); 
 }
 
+static void gen_movntdq(Node *node) {
+  gen_expr(node->rhs);
+  gen_expr(node->lhs);
+  println("  movntdq %%xmm0, (%%rax)");
+}
+
+
 // Helper to emit MMX two-operand instruction
 static void gen_sse_binop1(Node *node, const char *insn, bool rhs_is_imm) {
   gen_expr(node->rhs);
@@ -3019,6 +3026,7 @@ static void gen_expr(Node *node)
   case ND_PSADBW128:gen_sse_binop3(node, "psadbw", false); return; 
   case ND_MOVNTI: gen_movnti(node); return;
   case ND_MOVNTI64: gen_movnti64(node); return;
+  case ND_MOVNTDQ: gen_movntdq(node); return;
 }
 
   

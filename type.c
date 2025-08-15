@@ -650,6 +650,7 @@ void add_type(Node *node)
   case ND_MASKMOVDQU:
   case ND_MOVNTI:
   case ND_MOVNTI64:
+  case ND_MOVNTDQ:
     node->ty = ty_void_ptr;
     return;
   case ND_CLFLUSH:
