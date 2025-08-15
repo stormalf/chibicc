@@ -2962,6 +2962,7 @@ static void gen_expr(Node *node)
   case ND_PMULUDQ:  case ND_PMULUDQ128: gen_sse_binop3(node, "pmuludq", false); return; 
   case ND_PSLLWI128: gen_psll_binop(node, "psllw"); return;
   case ND_PSLLDI128: gen_psll_binop(node, "pslld"); return;  
+  case ND_PSLLQI128: gen_psll_binop(node, "psllq"); return;  
 
 }
 

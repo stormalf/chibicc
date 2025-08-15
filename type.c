@@ -807,6 +807,7 @@ void add_type(Node *node)
     node->ty = vector_of(ty_int, 4);
     return;
   case ND_PUNPCKLQDQ128:
+  case ND_PSLLQI128:
     node->ty = vector_of(ty_long, 2);
     return;    
   case ND_ADDSD:
