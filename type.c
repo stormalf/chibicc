@@ -916,6 +916,7 @@ void add_type(Node *node)
   case ND_UCOMISDGE:
   case ND_UCOMISDNEQ:  
   case ND_CVTSD2SI:
+  case ND_PMOVMSKB128:
     node->ty = ty_int;
 
   }
