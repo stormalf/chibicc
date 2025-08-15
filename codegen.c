@@ -1434,7 +1434,12 @@ static void gen_psll_binop(Node *node, const char *insn) {
   gen_expr(node->lhs);
   println("  movaps %%xmm0, %%xmm1");      
   gen_expr(node->rhs);
-  println("  %s $%ld, %%xmm1", insn, node->rhs->val);
+  if (node->rhs->kind == ND_NUM)
+    println("  %s $%ld, %%xmm1", insn, node->rhs->val);
+  else {
+    println("  movq %%rax, %%xmm0");
+    println("  %s %%xmm0, %%xmm1", insn);
+  }
   println("  movaps %%xmm1, %%xmm0");      
 }
 
@@ -2956,7 +2961,7 @@ static void gen_expr(Node *node)
   case ND_PMULHW128: gen_sse_binop3(node, "pmulhw", false); return; 
   case ND_PMULUDQ:  case ND_PMULUDQ128: gen_sse_binop3(node, "pmuludq", false); return; 
   case ND_PSLLWI128: gen_psll_binop(node, "psllw"); return;
-  
+  case ND_PSLLDI128: gen_psll_binop(node, "pslld"); return;  
 
 }
 
