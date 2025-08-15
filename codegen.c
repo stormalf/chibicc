@@ -2947,7 +2947,8 @@ static void gen_expr(Node *node)
   case ND_PSUBUSW128: gen_sse_binop3(node, "psubusw", false); return; 
   case ND_PMADDWD128: gen_sse_binop3(node, "pmaddwd", false); return; 
   case ND_PMULHW128: gen_sse_binop3(node, "pmulhw", false); return; 
-  case ND_PMULUDQ: gen_sse_binop3(node, "pmuludq", false); return; 
+  case ND_PMULUDQ:  case ND_PMULUDQ128: gen_sse_binop3(node, "pmuludq", false); return; 
+  
 
 }
 

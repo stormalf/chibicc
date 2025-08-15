@@ -536,6 +536,9 @@ void add_type(Node *node)
   case ND_PMULUDQ:
     node->ty = vector_of(ty_ulong, 1);
     return;
+  case ND_PMULUDQ128:
+    node->ty = vector_of(ty_ulong, 2);
+    return;
   case ND_PXOR:
   case ND_POR:
   case ND_PAND:
