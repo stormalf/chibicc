@@ -5689,6 +5689,7 @@ static Node *primary(Token **rest, Token *tok)
       equal(tok, "__builtin_ia32_pmuludq") || equal(tok, "__builtin_ia32_pmuludq128") || 
       equal(tok, "__builtin_ia32_psllwi128") || equal(tok, "__builtin_ia32_pslldi128") || 
       equal(tok, "__builtin_ia32_psllqi128") || equal(tok, "__builtin_ia32_psrawi128") || 
+      equal(tok, "__builtin_ia32_psradi128") || 
       equal(tok, "__builtin_ia32_divss") || equal(tok, "__builtin_ia32_mulss"))
   {
     int builtin = builtin_enum(tok);
@@ -7432,7 +7433,8 @@ char *nodekind2str(NodeKind kind)
   case ND_PSLLWI128: return "PSLLWI128";           
   case ND_PSLLDI128: return "PSLLDI128";   
   case ND_PSLLQI128: return "PSLLQI128"; 
-  case ND_PSRAWI128: return "PSRAWI128";           
+  case ND_PSRAWI128: return "PSRAWI128";     
+  case ND_PSRADI128: return "PSRADI128";           
   default: return "UNREACHABLE"; 
   }
 }
@@ -8010,6 +8012,7 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_pslldi128", ND_PSLLDI128 },    
     { "__builtin_ia32_psllqi128", ND_PSLLQI128 },     
     { "__builtin_ia32_psrawi128", ND_PSRAWI128 },          
+    { "__builtin_ia32_psradi128", ND_PSRADI128 },          
 };
 
 static int builtin_enum(Token *tok) {
