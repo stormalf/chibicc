@@ -2995,6 +2995,7 @@ static void gen_expr(Node *node)
   case ND_PMOVMSKB128: gen_sse_binop2(node, "pmovmskb", "eax", false);  return;   
   case ND_PMULHUW128: gen_sse_binop9(node, "pmulhuw"); return; 
   case ND_MASKMOVDQU: gen_maskmovdqu(node); return;
+  case ND_PAVGB128:gen_sse_binop3(node, "pavgb", false); return; 
 }
 
   
