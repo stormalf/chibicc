@@ -5857,6 +5857,32 @@ static Node *primary(Token **rest, Token *tok)
   }
 
     
+  if (equal(tok, "__builtin_ia32_maskmovdqu"))
+  {
+    int builtin = builtin_enum(tok);
+    if (builtin != -1) {
+      Node *node = new_node(builtin, tok);
+      SET_CTX(ctx); 
+      tok = skip(tok->next, "(", ctx);
+      node->builtin_args[0] = assign(&tok, tok);
+      add_type(node->builtin_args[0]);
+      SET_CTX(ctx); 
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[1] = assign(&tok, tok);
+      add_type(node->builtin_args[1]);
+      SET_CTX(ctx); 
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[2] = assign(&tok, tok);
+      add_type(node->builtin_args[2]);
+      node->builtin_nargs = 3;
+      SET_CTX(ctx);       
+      *rest = skip(tok, ")", ctx);
+    return node;
+    }
+  }
+
+
+    
 
   if (equal(tok, "__builtin_ia32_vec_init_v4hi"))
   {
@@ -7460,7 +7486,8 @@ char *nodekind2str(NodeKind kind)
   case ND_PMINSW128: return "PMINSW128"; 
   case ND_PMINUB128: return "PMINUB128";      
   case ND_PMOVMSKB128: return "PMOVMSKB128";   
-  case ND_PMULHUW128: return "PMULHUW128";         
+  case ND_PMULHUW128: return "PMULHUW128";        
+  case ND_MASKMOVDQU: return "MASKMOVDQU";         
   default: return "UNREACHABLE"; 
   }
 }
@@ -8056,7 +8083,8 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_pminsw128", ND_PMINSW128 },   
     { "__builtin_ia32_pminub128", ND_PMINUB128 }, 
     { "__builtin_ia32_pmovmskb128", ND_PMOVMSKB128 },  
-    { "__builtin_ia32_pmulhuw128", ND_PMULHUW128 },        
+    { "__builtin_ia32_pmulhuw128", ND_PMULHUW128 }, 
+    { "__builtin_ia32_maskmovdqu", ND_MASKMOVDQU },        
 };
 
 

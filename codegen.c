@@ -1568,6 +1568,17 @@ static void gen_maskmovq(Node *node) {
 }
 
 
+static void gen_maskmovdqu(Node *node) {
+  assert(node->builtin_nargs == 3);
+  gen_expr(node->builtin_args[1]); 
+  println("  movdqu (%%rax), %%xmm1"); 
+  gen_expr(node->builtin_args[0]);  
+  println("  movdqu (%%rax), %%xmm0");       
+  gen_addr(node->builtin_args[2]); 
+  println("  movq %%rax, %%rdi"); 
+  println("  maskmovdqu %%xmm1, %%xmm0");
+}
+
 static void gen_cvtpi2ps(Node *node) {
   gen_expr(node->lhs);    
   gen_addr(node->rhs);    
@@ -2983,7 +2994,7 @@ static void gen_expr(Node *node)
   case ND_PMINUB128:gen_sse_binop3(node, "pminub", false); return; 
   case ND_PMOVMSKB128: gen_sse_binop2(node, "pmovmskb", "eax", false);  return;   
   case ND_PMULHUW128: gen_sse_binop9(node, "pmulhuw"); return; 
-
+  case ND_MASKMOVDQU: gen_maskmovdqu(node); return;
 }
 
   
