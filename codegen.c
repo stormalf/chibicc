@@ -1685,6 +1685,15 @@ static void gen_movq128(Node *node) {
   println("  movq %%xmm1, %%xmm0");  
 }
 
+static void gen_movnti(Node *node) {
+  gen_expr(node->rhs);
+  if (node->rhs->kind == ND_NUM)
+    println("  mov $%ld, %%ecx", node->rhs->val);
+  else 
+    println("  movq (%%rax), %%rcx");
+  gen_expr(node->lhs);
+  println("  movnti %%ecx, (%%rax)"); 
+}
 
 // Helper to emit MMX two-operand instruction
 static void gen_sse_binop1(Node *node, const char *insn, bool rhs_is_imm) {
@@ -2998,6 +3007,7 @@ static void gen_expr(Node *node)
   case ND_PAVGB128:gen_sse_binop3(node, "pavgb", false); return; 
   case ND_PAVGW128:gen_sse_binop3(node, "pavgw", false); return; 
   case ND_PSADBW128:gen_sse_binop3(node, "psadbw", false); return; 
+  case ND_MOVNTI: gen_movnti(node); return;
 }
 
   
