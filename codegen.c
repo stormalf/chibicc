@@ -2975,6 +2975,8 @@ static void gen_expr(Node *node)
   case ND_PSRAD128:gen_sse_binop3(node, "psrad", false); return; 
   case ND_PSRLW128:gen_sse_binop3(node, "psrlw", false); return; 
   case ND_PSRLD128:gen_sse_binop3(node, "psrld", false); return; 
+  case ND_PSRLQ128:gen_sse_binop3(node, "psrlq", false); return; 
+  case ND_PANDN128:gen_sse_binop3(node, "pandn", false); return; 
 
 }
 
