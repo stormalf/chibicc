@@ -2418,6 +2418,7 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
       error_tok(exp->tok,
                 "%s %d: in stmt : Non-void function cannot return void type expression", PARSE_C, __LINE__);
     }
+
     if (ret_ty->kind != TY_STRUCT && ret_ty->kind != TY_UNION)
       exp = new_cast(exp, ret_ty);
     node->lhs = exp;
@@ -8113,4 +8114,3 @@ static int builtin_enum(Token *tok) {
     }
     return -1; // not found
 }
-

@@ -5,10 +5,12 @@ typedef double __m128d __attribute__ ((__vector_size__ (16)));
 void test_case(__m128d a, __m128d b, const char *desc) {
     int result = __builtin_ia32_comisdeq(a, b);
     printf("%-30s -> %d\n", desc, result);
+    ASSERT(result,  __builtin_ia32_comisdeq(a, b));
+
 }
 
 int main(void) {
-    __m128d v1 = _{2.0, 1.0};    // [2.0, 1.0]
+    __m128d v1 = {2.0, 1.0};    // [2.0, 1.0]
     __m128d v2 = {3.0, 1.0};    // [3.0, 1.0]
     __m128d v3 = {4.0, 2.0};    // [4.0, 2.0]
     __m128d vnan = {9.0, 0.0/0.0}; // NaN in low element

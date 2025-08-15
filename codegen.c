@@ -89,15 +89,15 @@ static void popf(int reg)
 
 static void pushv(void) {
   println("  sub $16, %%rsp");
-  println("  movaps %%xmm0, (%%rsp)");
-  depth += 2; 
+  println("  movdqu %%xmm0, (%%rsp)");
+  depth += 1; 
 }
 
 
 static void popv(int reg) {
-  println("  movaps (%%rsp), %%xmm%d", reg);
+  println("  movdqu (%%rsp), %%xmm%d", reg);
   println("  add $16, %%rsp");
-  depth -= 2;
+  depth -= 1;
 }
 
 
@@ -1024,13 +1024,6 @@ static int push_args(Node *node)
         }
         break;  
     case TY_VECTOR:
-      int slots = align_to(ty->size, 16) / 16;
-      if ((fp += slots) > FP_MAX) 
-      {
-          arg->pass_by_stack = true;
-          stack += slots;
-      }
-      break;
     case TY_FLOAT:
     case TY_DOUBLE:
       if (fp++ >= FP_MAX)
@@ -3692,13 +3685,13 @@ static void emit_text(Obj *prog)
           case TY_VECTOR:
           case TY_FLOAT:
           case TY_DOUBLE:
-            //if (fp < FP_MAX)
+            if (fp < FP_MAX)
               fp++;
             continue;
           case TY_LDOUBLE:
             continue;
           default:
-            //if (gp < GP_MAX)
+            if (gp < GP_MAX)
               gp++;
         }
       }
@@ -3887,8 +3880,10 @@ void assign_lvar_offsets(Obj *prog)
       case TY_VECTOR:
       case TY_FLOAT:
       case TY_DOUBLE:
-        if (fp++ < FP_MAX)
+        if (fp < FP_MAX) {
+          fp++;
           continue;
+        }
         break;
       case TY_LDOUBLE:
         break;
