@@ -533,6 +533,7 @@ void add_type(Node *node)
     add_type(node->builtin_size);
     return;
   case ND_PSADBW:
+  case ND_PMULUDQ:
     node->ty = vector_of(ty_ulong, 1);
     return;
   case ND_PXOR:
