@@ -1,4 +1,4 @@
-#include <stdio.h>
+#include "test.h"
 
 typedef double __m128d __attribute__ ((__vector_size__ (16)));
 

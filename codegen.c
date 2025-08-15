@@ -1447,7 +1447,7 @@ static void gen_psll_binop(Node *node, const char *insn) {
 // Walk node to find a numeric constant. Works for ND_ASSIGN, ND_COMMA, ND_CAST etc.
 static int get_const_int_from_node(Node *node) {
   if (!node)
-    error_tok(NULL, "expected constant node");
+    error("%s: %s:%d: error: in get_const_int_from_node : expected constant node", CODEGEN_C, __FILE__, __LINE__);
   while (true) {
     if (node->kind == ND_NUM) return node->val;
     if (node->kind == ND_CAST) { node = node->lhs; continue; }
@@ -1456,19 +1456,24 @@ static int get_const_int_from_node(Node *node) {
     break;
   }
 
-  error_tok(node->tok, "not a compile-time integer constant");
-  return 0;
+  error_tok(node->tok, "%s: %s:%d: error: in get_const_int_from_node : not a compile-time integer constant", CODEGEN_C, __FILE__, __LINE__);
+ 
+}
+
+static Node *unwrap_casts(Node *node) {
+  while (node && (node->kind == ND_CAST || node->kind == ND_COMMA))
+    node = node->lhs;
+  return node;
 }
 
 // Fill vals[] with mask_node->var->ty->array_len ints (expect 4).
 static void get_mask_values(Node *mask_node, int *vals, int expected_len) {
+  mask_node = unwrap_casts(mask_node);
   if (!mask_node->var || !mask_node->var->init)
-    error_tok(mask_node->tok, "shuffle mask must be a constant vector initializer");
+    error_tok(mask_node->tok, "%s: %s:%d: error: in get_mask_values : shuffle mask must be a constant vector initializer! %d", CODEGEN_C, __FILE__, __LINE__, mask_node->kind);
 
   Initializer *init = mask_node->var->init;
   int len = mask_node->var->ty->array_len;
-  if (len != expected_len)
-    error_tok(mask_node->tok, "shuffle mask must have %d elements (got %d)", expected_len, len);
 
   for (int i = 0; i < len; i++) {
     Initializer *elem = init->children[i];
