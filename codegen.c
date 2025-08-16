@@ -1267,6 +1267,10 @@ static void load_vector_operand(Node *operand, const char *xmm_reg) {
 }
 
 static void gen_vector_op(Node *node) {
+  if (node->lhs)
+    gen_expr(node->lhs); 
+  if (node->rhs)
+    gen_expr(node->rhs);
   switch (node->kind) {
   case ND_ADD:
   case ND_SUB:
@@ -1280,6 +1284,9 @@ static void gen_vector_op(Node *node) {
     if (is_integer(node->lhs->ty->base))
       error_tok(node->tok, "%s: %s:%d: error: in gen_vector_op :  integer vector division not supported", CODEGEN_C, __FILE__, __LINE__);
     break;
+  case ND_NEG:
+    //gen_expr(node->lhs);          // materialize operand in %xmm0
+    break;    
   default:
     error_tok(node->tok, "%s: %s:%d: error: in gen_vector_op :  unsupported vector operation %d", CODEGEN_C, __FILE__, __LINE__, node->kind);
   }
@@ -1292,7 +1299,8 @@ static void gen_vector_op(Node *node) {
     error_tok(node->tok, "%s: %s:%d: error: in gen_vector_op : lhs is not a vector", CODEGEN_C, __FILE__, __LINE__);
 
   load_vector_operand(node->lhs, "%xmm0");
-  load_vector_operand(node->rhs, "%xmm1");
+  if (node->rhs)
+    load_vector_operand(node->rhs, "%xmm1");
 
   switch (vec_ty->base->kind) {
     case TY_FLOAT:
@@ -1318,6 +1326,9 @@ static void gen_vector_op(Node *node) {
       case ND_BITOR:
         println("  por %%xmm1, %%xmm0");
         break;
+      case ND_NEG: 
+        println("  subps %%xmm0, %%xmm1"); println("  movaps %%xmm1, %%xmm0"); 
+        break;                
       default:
         error_tok(node->tok, "%s: %s:%d: error: unsupported float vector operation", CODEGEN_C, __FILE__, __LINE__);
       }
@@ -1345,6 +1356,9 @@ static void gen_vector_op(Node *node) {
     case ND_BITOR:
       println("  por %%xmm1, %%xmm0");
       break;
+    case ND_NEG: println("  subpd %%xmm0, %%xmm1"); 
+      println("  movapd %%xmm1, %%xmm0"); 
+      break;      
     default:
       error_tok(node->tok, "%s: %s:%d: error: unsupported double vector operation", CODEGEN_C, __FILE__, __LINE__);
     }
@@ -1368,6 +1382,10 @@ static void gen_vector_op(Node *node) {
       break;
     case ND_BITOR:
       println("  por %%xmm1, %%xmm0");
+      break;
+    case ND_NEG: 
+      println("  psubd %%xmm0, %%xmm1"); 
+      println("  movaps %%xmm1, %%xmm0"); 
       break;
     default:
       error_tok(node->tok, "%s: %s:%d: error: integer vector operation not supported", CODEGEN_C, __FILE__, __LINE__);
@@ -1933,6 +1951,10 @@ static void gen_expr(Node *node)
   }
   case ND_NEG:
     gen_expr(node->lhs);
+     if (is_vector(node->ty)) {
+        gen_vector_op(node);  
+        return;
+    }
 
     switch (node->ty->kind)
     {

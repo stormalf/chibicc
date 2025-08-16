@@ -2063,6 +2063,7 @@ static Node *create_lvar_init(Initializer *init, Type *ty, InitDesg *desg, Token
       Node *lhs = init_desg_expr(desg, tok);
       return new_binary(ND_ASSIGN, lhs, init->expr, tok);
     }
+ 
 
     Node *node = new_node(ND_NULL_EXPR, tok);
     for (int i = 0; i < ty->array_len; i++) {
@@ -2072,7 +2073,6 @@ static Node *create_lvar_init(Initializer *init, Type *ty, InitDesg *desg, Token
     }
     return node;
   }
-
   if (init->expr) {    
     Node *lhs = init_desg_expr(desg, tok);
     return new_binary(ND_ASSIGN, lhs, init->expr, tok);
@@ -2130,6 +2130,7 @@ static Node *lvar_initializer(Token **rest, Token *tok, Obj *var)
   lhs->var = var;
   lhs->var->init = init;
   Node *rhs = create_lvar_init(init, var->ty, &desg, tok);
+
   return new_binary(ND_COMMA, lhs, rhs, tok);
 }
 
@@ -3529,13 +3530,20 @@ static Node *shift(Token **rest, Token *tok)
 // pointer value. This function takes care of the scaling.
 static Node *new_add(Node *lhs, Node *rhs, Token *tok)
 {
+  
   add_type(lhs);
   add_type(rhs);
 
   // case of vectors
   if (is_vector(lhs->ty) && is_vector(rhs->ty)) {
+    
     if (lhs->ty->array_len != rhs->ty->array_len)
       error_tok(tok, "%s %d: in new_add: incompatible vector types", PARSE_C, __LINE__);
+    if (rhs->kind == ND_COMMA) {
+      Node *node = new_binary(ND_ADD, rhs, lhs, tok);
+      node->ty =  lhs->ty;
+      return node;
+    }
     Node *node = new_binary(ND_ADD, lhs, rhs, tok);
     node->ty =  lhs->ty;
     return node;
@@ -3572,14 +3580,15 @@ static Node *new_add(Node *lhs, Node *rhs, Token *tok)
 // Like `+`, `-` is overloaded for the pointer type.
 static Node *new_sub(Node *lhs, Node *rhs, Token *tok)
 {
+
   add_type(lhs);
   add_type(rhs);
 
+  
   // case of vectors
   if (is_vector(lhs->ty) && is_vector(rhs->ty)) {
     if (lhs->ty->array_len != rhs->ty->array_len || lhs->ty->base->kind != rhs->ty->base->kind)
       error_tok(tok, "%s %d: in new_sub : incompatible vector types", PARSE_C, __LINE__);
-
     Node *node = new_binary(ND_SUB, lhs, rhs, tok);
     node->ty = lhs->ty; 
     return node;
@@ -3590,7 +3599,7 @@ static Node *new_sub(Node *lhs, Node *rhs, Token *tok)
     return new_binary(ND_SUB, lhs, rhs, tok);
 
   // VLA + num
-  if (lhs->ty->base->kind == TY_VLA)
+  if (lhs->ty->base && lhs->ty->base->kind == TY_VLA)
   {
     rhs = new_binary(ND_MUL, rhs, new_var_node(lhs->ty->base->vla_size, tok), tok);
     add_type(rhs);
@@ -5131,6 +5140,7 @@ static Node *postfix(Token **rest, Token *tok)
     else
     {
       Obj *var = new_lvar("", ty, NULL);
+      var->is_compound_lit = true;
       Node *lhs = lvar_initializer(&tok, tok, var);
       Node *rhs = new_var_node(var, tok);
       node = new_binary(ND_COMMA, lhs, rhs, start);

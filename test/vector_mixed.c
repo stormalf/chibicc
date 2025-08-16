@@ -3,7 +3,7 @@
 typedef float float4 __attribute__((vector_size(16)));
 
 float4 mix_params(float a, float4 v, float b) {
-    return v + (float4){a, b, a, b};
+    return (float4){a, b, a, b} + v;
 }
 
 int main() {
