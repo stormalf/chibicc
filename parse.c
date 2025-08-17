@@ -582,6 +582,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     OTHER = 1 << 16,
     SIGNED = 1 << 17,
     UNSIGNED = 1 << 18,
+    INT128 = 1 << 19,
   };
 
   Type *ty = ty_int;
@@ -740,6 +741,8 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
       counter += FLOAT;
     else if (equal(tok, "double"))
       counter += DOUBLE;
+    else if (equal(tok, "__int128"))
+      counter += INT128;        
     else if (equal(tok, "signed"))
       counter |= SIGNED;
     else if (equal(tok, "unsigned"))
@@ -777,6 +780,10 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     case SIGNED + INT:
       ty = ty_int;
       break;
+    case INT128:
+    case SIGNED + INT128:
+      ty = copy_type(ty_int128);
+      break;         
     case UNSIGNED:
     case UNSIGNED + INT:
       ty = ty_uint;
@@ -797,6 +804,9 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     case UNSIGNED + LONG + LONG + INT:
       ty = ty_ulong;
       break;
+    case UNSIGNED + INT128:
+      ty = copy_type(ty_uint128);
+      break;      
     case FLOAT:
       ty = ty_float;
       break;
@@ -1490,7 +1500,21 @@ static void string_initializer(Token **rest, Token *tok, Initializer *init)
         init->children[i]->expr = new_num(value, tok);
     }
     break;
-    
+    case 16:
+      {
+          // Initialize array of 128-bit integers
+          for (int i = 0; i < len; i++)
+          {
+              __int128 value = 0;
+              for (int j = 0; j < 16 && i * 16 + j < len; j++)
+              {
+                  value |= (__int128)(unsigned char)tok->str[i * 16 + j] << (j * 8);
+              }
+              init->children[i]->expr = new_num(value, tok);
+          }
+          
+      }
+    break;
   }
   default:
     error_tok(tok, "%s %d: in string_initializer : array of inappropriate type initialized from string constant", PARSE_C, __LINE__);
@@ -2329,7 +2353,7 @@ static bool is_typename(Token *tok)
         "typedef", "enum", "static", "extern", "_Alignas", "signed", "unsigned",
         "const", "volatile", "auto", "register", "restrict", "__restrict",
         "__restrict__", "_Noreturn", "float", "double", "typeof", "inline",
-        "_Thread_local", "__thread", "_Atomic", "_Complex", "__label__", "__typeof"};
+        "_Thread_local", "__thread", "_Atomic", "_Complex", "__label__", "__typeof", "__int128"};
 
     for (int i = 0; i < sizeof(kw) / sizeof(*kw); i++)
       hashmap_put(&map, kw[i], (void *)1);
@@ -5712,7 +5736,7 @@ static Node *primary(Token **rest, Token *tok)
       equal(tok, "__builtin_ia32_pavgb128") || equal(tok, "__builtin_ia32_pavgw128") ||
       equal(tok, "__builtin_ia32_psadbw128") || equal(tok, "__builtin_ia32_movnti") ||
       equal(tok, "__builtin_ia32_movnti64") || equal(tok, "__builtin_ia32_movntdq") ||
-      equal(tok, "__builtin_ia32_movntpd") ||
+      equal(tok, "__builtin_ia32_movntpd") || 
       equal(tok, "__builtin_ia32_divss") || equal(tok, "__builtin_ia32_mulss"))
   {
     int builtin = builtin_enum(tok);
@@ -6922,7 +6946,7 @@ static void scan_globals(void)
 {
   Obj head;
   Obj *cur = &head;
-  Obj *varArr[20000];  
+  Obj *varArr[50000];  
   int i = 0;
   //the first pass skipped the duplicated tentative and stores in an Array of objects duplicated tentative
   for (Obj *var = globals; var; var = var->next)
@@ -6939,7 +6963,7 @@ static void scan_globals(void)
     for (; var2; var2 = var2->next) {
       if (var != var2 && var2->is_definition && !strcmp(var->name, var2->name)) {
         //warn_tok(var->tok, "%s %d: in scan_globals : duplicated tentative definition", PARSE_C, __LINE__);  
-        if (var2->is_tentative && !var_in_array(var->name, varArr, i + 1 ) && (i + 1) < 20000) {
+        if (var2->is_tentative && !var_in_array(var->name, varArr, i + 1 ) && (i + 1) < 50000) {
           varArr[i++] = var;                
         }
         break;
@@ -6974,7 +6998,7 @@ static void scan_globals2(void)
 {
   Obj head;
   Obj *cur = &head;
-  Obj *varArr[20000];  
+  Obj *varArr[50000];  
   int i = 0;
   //the first pass skipped the duplicated tentative and stores in an Array of objects duplicated tentative
   for (Obj *var = globals; var; var = var->next)
@@ -6991,7 +7015,7 @@ static void scan_globals2(void)
     for (; var2; var2 = var2->next) {
       if (var != var2 && var2->is_definition && !strcmp(var->name, var2->name)) {
         //warn_tok(var->tok, "%s %d: in scan_globals : duplicated tentative definition", PARSE_C, __LINE__);  
-        if (var2->is_definition && !var_in_array2(var->name, varArr, i + 1 ) && (i + 1) < 20000) {
+        if (var2->is_definition && !var_in_array2(var->name, varArr, i + 1 ) && (i + 1) < 50000) {
           varArr[i++] = var;                
         }
         break;

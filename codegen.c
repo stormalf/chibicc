@@ -100,6 +100,19 @@ static void popv(int reg) {
   depth -= 1;
 }
 
+void pushx(void) {
+  println("  push %%rdx");
+  println("  push %%rax");
+  depth++;
+  depth++;
+}
+
+void popx(char *a, char *b) {
+  println("  pop %s", a);
+  println("  pop %s", b);
+  depth--;
+  depth--;  
+}
 
 // Round up `n` to the nearest multiple of `align`. For instance,
 // align_to(5, 8) returns 8 and align_to(11, 8) returns 16.
@@ -559,6 +572,10 @@ static void load(Type *ty)
   case TY_LDOUBLE:
     println("  fldt (%%rax)");
     return;
+  case TY_INT128:
+    println("  mov 8(%%rax), %%rdx");  // Load upper 64 bits into RDX
+    println("  mov (%%rax), %%rax");  // Load lower 64 bits into RAX
+    return;    
   }
 
   char *insn = ty->is_unsigned ? "movz" : "movs";
@@ -610,6 +627,10 @@ static void store(Type *ty)
   case TY_LDOUBLE:
     println("  fstpt (%%rdi)");
     return;
+  case TY_INT128:
+    println("  mov %%rax, (%%rdi)");
+    println("  mov %%rdx, 8(%%rdi)");
+    return;    
   }
 
   if (ty->size == 1)
@@ -641,6 +662,10 @@ static void cmp_zero(Type *ty)
     println("  fucomip");
     println("  fstp %%st(0)");
     return;
+  case TY_INT128:
+    println("  mov %%rax, %%r11");
+    println("  or  %%rdx, %%r11");
+    return;    
   }
 
   if (is_integer(ty) && ty->size <= 4)
@@ -648,6 +673,33 @@ static void cmp_zero(Type *ty)
   else
     println("  cmp $0, %%rax");
 }
+
+#define REDZONE(X)  \
+  "sub\t$16,%rsp\n" \
+  "\t" X "\n"       \
+  "\tadd\t$16,%rsp"
+
+
+#define i8i128  "movsbq\t%al,%rax\n\tcqto"
+#define i16i128 "movswq\t%ax,%rax\n\tcqto"
+#define i32i128 "cltq\n\tcqto"
+#define i64i128 "cqto"
+#define u8i128  "movzbq\t%al,%rax\n\txor\t%edx,%edx"
+#define u16i128 "movzwq\t%ax,%rax\n\txor\t%edx,%edx"
+#define u32i128 "cltq\n\txor\t%edx,%edx"
+#define u64i128 "xor\t%edx,%edx"
+#define i128f32 "mov\t%rax,%rdi\n\tmov\t%rdx,%rsi\n\tcall\t__floattisf"
+#define i128f64 "mov\t%rax,%rdi\n\tmov\t%rdx,%rsi\n\tcall\t__floattidf"
+#define i128f80 "mov\t%rax,%rdi\n\tmov\t%rdx,%rsi\n\tcall\t__floattixf"
+#define u128f32 "mov\t%rax,%rdi\n\tmov\t%rdx,%rsi\n\tcall\t__floatuntisf"
+#define u128f64 "mov\t%rax,%rdi\n\tmov\t%rdx,%rsi\n\tcall\t__floatuntidf"
+#define u128f80 "mov\t%rax,%rdi\n\tmov\t%rdx,%rsi\n\tcall\t__floatuntixf"
+#define f32i128 "call\t__fixsfti"
+#define f64i128 "call\t__fixdfti"
+#define f80i128 REDZONE("fstpt\t(%rsp)\n\tcall\t__fixxfti")
+#define f32u128 "call\t__fixunssfti"
+#define f64u128 "call\t__fixunsdfti"
+#define f80u128 REDZONE("fstpt\t(%rsp)\n\tcall\t__fixunsxfti")
 
 enum
 {
@@ -661,7 +713,9 @@ enum
   U64,
   F32,
   F64,
-  F80
+  F80,
+  I128,
+  U128,
 };
 
 static int getTypeId(Type *ty)
@@ -679,6 +733,8 @@ static int getTypeId(Type *ty)
     return ty->is_unsigned ? U32 : I32;
   case TY_LONG:
     return ty->is_unsigned ? U64 : I64;
+  case TY_INT128:
+    return ty->is_unsigned ? U128 : I128;      
   case TY_FLOAT:
     return F32;
   case TY_DOUBLE:
@@ -770,22 +826,23 @@ static char f80u64[] =
 static char f80f32[] = "fstps -8(%rsp); movss -8(%rsp), %xmm0";
 static char f80f64[] = "fstpl -8(%rsp); movsd -8(%rsp), %xmm0";
 
-static char *cast_table[][11] = {
-    // i8   i16     i32     i64     u8     u16     u32     u64     f32     f64     f80
-    {NULL, NULL, NULL, i32i64, i32u8, i32u16, NULL, i32i64, i32f32, i32f64, i32f80},    // i8
-    {i32i8, NULL, NULL, i32i64, i32u8, i32u16, NULL, i32i64, i32f32, i32f64, i32f80},   // i16
-    {i32i8, i32i16, NULL, i32i64, i32u8, i32u16, NULL, i32i64, i32f32, i32f64, i32f80}, // i32
-    {i32i8, i32i16, NULL, NULL, i32u8, i32u16, NULL, NULL, i64f32, i64f64, i64f80},     // i64
 
-    {i32i8, NULL, NULL, i32i64, NULL, NULL, NULL, i32i64, i32f32, i32f64, i32f80},      // u8
-    {i32i8, i32i16, NULL, i32i64, i32u8, NULL, NULL, i32i64, i32f32, i32f64, i32f80},   // u16
-    {i32i8, i32i16, NULL, u32i64, i32u8, i32u16, NULL, u32i64, u32f32, u32f64, u32f80}, // u32
-    {i32i8, i32i16, NULL, NULL, i32u8, i32u16, NULL, NULL, u64f32, u64f64, u64f80},     // u64
-
-    {f32i8, f32i16, f32i32, f32i64, f32u8, f32u16, f32u32, f32u64, NULL, f32f64, f32f80}, // f32
-    {f64i8, f64i16, f64i32, f64i64, f64u8, f64u16, f64u32, f64u64, f64f32, NULL, f64f80}, // f64
-    {f80i8, f80i16, f80i32, f80i64, f80u8, f80u16, f80u32, f80u64, f80f32, f80f64, NULL}, // f80
-};
+static const char *const cast_table[13][13] = /* clang-format off */ {
+  // i8    i16      i32      i64      u8      u16      u32      u64      f32      f64      f80      i128      u128
+  {NULL,   NULL,    NULL,    i32i64,  i32u8,  i32u16,  NULL,    i32i64,  i32f32,  i32f64,  i32f80,  i32i128, i32i128}, // i8
+  {i32i8,  NULL,    NULL,    i32i64,  i32u8,  i32u16,  NULL,    i32i64,  i32f32,  i32f64,  i32f80,  i32i128, i32i128}, // i16
+  {i32i8,  i32i16,  NULL,    i32i64,  i32u8,  i32u16,  NULL,    i32i64,  i32f32,  i32f64,  i32f80,  i32i128, i32i128}, // i32
+  {i32i8,  i32i16,  NULL,    NULL,    i32u8,  i32u16,  NULL,    NULL,    i64f32,  i64f64,  i64f80,  i64i128, i64i128}, // i64
+  {i32i8,  NULL,    NULL,    i32i64,  NULL,   NULL,    NULL,    i32i64,  i32f32,  i32f64,  i32f80,  i32i128, i32i128}, // u8
+  {i32i8,  i32i16,  NULL,    i32i64,  i32u8,  NULL,    NULL,    i32i64,  i32f32,  i32f64,  i32f80,  i32i128, i32i128}, // u16
+  {i32i8,  i32i16,  NULL,    u32i64,  i32u8,  i32u16,  NULL,    u32i64,  u32f32,  u32f64,  u32f80,  u32i128, i32i128}, // u32
+  {i32i8,  i32i16,  NULL,    NULL,    i32u8,  i32u16,  NULL,    NULL,    u64f32,  u64f64,  u64f80,  u64i128, u64i128}, // u64
+  {f32i8,  f32i16,  f32i32,  f32i64,  f32u8,  f32u16,  f32u32,  f32u64,  NULL,    f32f64,  f32f80,  f32i128, f32u128}, // f32
+  {f64i8,  f64i16,  f64i32,  f64i64,  f64u8,  f64u16,  f64u32,  f64u64,  f64f32,  NULL,    f64f80,  f64i128, f64u128}, // f64
+  {f80i8,  f80i16,  f80i32,  f80i64,  f80u8,  f80u16,  f80u32,  f80u64,  f80f32,  f80f64,  NULL,    f80i128, f80u128}, // f80
+  {i32i8,  i32i16,  NULL,    NULL,    i32u8,  i32u16,  NULL,    NULL,    i128f32, i128f64, i128f80, NULL,    NULL   }, // i128
+  {i32i8,  i32i16,  NULL,    NULL,    i32u8,  i32u16,  NULL,    NULL,    u128f32, u128f64, u128f80, NULL,    NULL   }, // u128
+} /* clang-format on */;
 
 static void cast(Type *from, Type *to)
 {
@@ -962,6 +1019,9 @@ static void push_args2(Node *args, bool first_pass)
     println("  fstpt (%%rsp)");
     depth += 2;
     break;
+  case TY_INT128:
+    pushx();
+    break;    
   default:
     push();
   }
@@ -1035,6 +1095,14 @@ static int push_args(Node *node)
     case TY_LDOUBLE:
       arg->pass_by_stack = true;
       stack += 2;
+      break;
+    case TY_INT128:
+      if (gp + 1 >= GP_MAX) {
+        arg->pass_by_stack = true;
+        stack += 2;
+      } else {
+        gp += 2;
+      }
       break;
     default:
       if (gp++ >= GP_MAX)
@@ -1241,6 +1309,170 @@ static void HandleAtomicArithmetic(Node *node, const char *op) {
   println("\tmov\t%s,%s", reg_di(node->ty->size), reg_ax(node->ty->size));
 }
 
+static void gen_int128_op(Node *node) {
+    if (node->rhs) {
+      gen_expr(node->rhs);
+      pushx();
+    }
+    gen_expr(node->lhs);
+    if (node->rhs)
+      popx("%rdi", "%rsi");
+
+  switch (node->kind) {
+    case ND_ADD:
+      println("  add %%rdi, %%rax");
+      println("  adc %%rsi, %%rdx");
+      break;
+    case ND_SUB:
+      println("  sub %%rdi, %%rax");
+      println("  sbb %%rsi, %%rdx"); 
+      break;
+    case ND_MUL:
+      println("  imul %%rdi, %%rdx");
+      println("  imul %%rax, %%rsi");
+      println("  add %%rdx, %%rsi");
+      println("  mul %%rdi");
+      println("  add %%rsi, %%rdx");     
+      break; 
+    case ND_DIV:
+    case ND_MOD:
+      println("  mov %%rsi, %%rcx");
+      println("  mov %%rdx, %%rsi");
+      println("  mov %%rdi, %%rdx");
+      println("  mov %%rax, %%rdi");
+
+      if (node->kind == ND_DIV) {
+        if (node->ty->is_unsigned) {
+          println("  call __udivti3");
+        } else {
+          println("  call __divti3");
+        }
+      } else {
+        if (node->ty->is_unsigned) {
+          println("  call __umodti3");
+        } else {
+          println("  call __modti3");
+        }
+      }
+      break;    
+    case ND_NEG:
+      println("  neg %%rax");
+      println("  adc $0, %%rdx");
+      println("  neg %%rdx");
+      break;
+    case ND_BITNOT:
+      println("  not %%rax");
+      println("  not %%rdx");  
+      break;    
+    case ND_BITAND:
+      println("  and %%rdi, %%rax");
+      println("  and %%rsi, %%rdx");  
+      break;
+    case ND_BITOR:
+      println("  or %%rdi, %%rax");
+      println("  or %%rsi, %%rdx");    
+      break; 
+    case ND_BITXOR:
+      println("  xor %%rdi, %%rax");
+      println("  xor %%rsi, %%rdx");   
+      break;  
+    case ND_EQ:
+      println("  mov %%rax, %%r8"); // Move lower 64 bits of lhs to r8
+      println("  mov %%rdx, %%r9"); // Move upper 64 bits of lhs to r9
+      println("  xor %%r8, %%rdi"); // Compare lower 64 bits of lhs and rhs
+      println("  xor %%r9, %%rsi"); // Compare upper 64 bits of lhs and rhs
+      println("  or %%rsi, %%rdi"); // Combine the results
+      println("  sete %%al");       // Set AL if the result is zero (equal)
+      println("  movzx %%al, %%eax"); // Zero extend AL to EAX            
+      break;
+    case ND_NE:
+      println("  xor %%rax, %%rdi");
+      println("  xor %%rdx, %%rsi");
+      println("  or %%rsi, %%rdi");
+      println("  setne %%al");
+      println("  movzb %%al, %%rax");  // Zero-extend al to rax to ensure the whole rax is correctly set
+      break;
+    case ND_LT:
+      if (node->lhs->ty->is_unsigned) {
+        println("  cmp %%rdi, %%rax");
+        println("  mov %%rdx, %%rax");
+        println("  sbb %%rsi, %%rax");
+        println("  setc %%al");
+        println("  movzb %%al, %%rax");  // Zero-extend al to rax to ensure the whole rax is correctly set
+      } else {
+        println("  cmp %%rdi, %%rax");
+        println("  mov %%rdx, %%rax");
+        println("  sbb %%rsi, %%rax");
+        println("  setl %%al");
+        println("  movzb %%al, %%rax");  // Zero-extend al to rax to ensure the whole rax is correctly set
+      }
+      break;
+    case ND_LE:
+      if (node->lhs->ty->is_unsigned) {
+        println("  cmp %%rax, %%rdi");
+        println("  sbb %%rdx, %%rsi");
+        println("  setnc %%al");
+        println("  movzb %%al, %%rax");  // Zero-extend al to rax to ensure the whole rax is correctly set
+      } else {
+        println("  cmp %%rax, %%rdi");
+        println("  sbb %%rdx, %%rsi");
+        println("  setge %%al");
+        println("  movzb %%al, %%rax");  // Zero-extend al to rax to ensure the whole rax is correctly set
+      }      
+      break;   
+    case ND_SHL:
+        println("  mov %%rdi, %%rcx");  
+        println("  shld %%cl, %%rax, %%rdx");
+        println("  shl %%cl, %%rax");
+        println("  xor %%edi, %%edi");
+        println("  and $64, %%cl");
+        println("  cmovne %%rax, %%rdx");
+        println("  cmovne %%rdi, %%rax");  
+      break;  
+    case ND_SHR:
+      int c = count();
+      // Move shift amount to CL register
+      println("  mov %%rdi, %%rcx");
+      if (node->lhs->ty->is_unsigned) {
+        // Handle unsigned 128-bit shift right
+        println("  cmp $64, %%rcx");
+        println("  ja .Lshift_gt64_unsigned_%d", c);
+
+        // Common shift logic for shifts within 64 bits
+        println("  shrd %%cl, %%rdx, %%rax");  // Shift right double
+        println("  shr %%cl, %%rdx");          // Logical shift of upper 64 bits
+        println("  jmp .Lshift_done_%d", c);
+
+        // Handle shifts greater than 63 bits
+        println(".Lshift_gt64_unsigned_%d:", c);
+        println("  sub $64, %%rcx");           // Adjust shift amount
+        println("  mov %%rdx, %%rax");         // Move high bits to low
+        println("  shr %%cl, %%rax");          // Logical shift remaining bits in %%rax
+        println("  xor %%rdx, %%rdx");         // Clear %%rdx (upper 64 bits)
+      } else {
+        // Handle signed 128-bit shift right (arithmetic)
+        println("  cmp $64, %%rcx");
+        println("  ja .Lshift_gt64_signed_%d", c);
+
+        // Common shift logic for shifts within 64 bits
+        println("  shrd %%cl, %%rdx, %%rax");  // Shift right double
+        println("  sar %%cl, %%rdx");          // Arithmetic shift of upper 64 bits
+        println("  jmp .Lshift_done_%d", c);
+
+        // Handle shifts greater than 63 bits
+        println(".Lshift_gt64_signed_%d:", c);
+        println("  sub $64, %%rcx");           // Adjust shift amount
+        println("  mov %%rdx, %%rax");         // Move high bits to low
+        println("  sar %%cl, %%rax");          // Arithmetic shift remaining bits in %%rax
+        println("  sar $63, %%rdx");           // Sign extend %%rdx to fill with sign bit
+      }
+      println(".Lshift_done_%d:", c);
+      break;
+    default:
+        error_tok(node->tok,"%s: %s:%d: error: in gen_int128_op : unsupported int128 operation %d", CODEGEN_C, __FILE__, __LINE__, node->kind);
+    }
+}
+
 static void load_vector_operand(Node *operand, const char *xmm_reg) {
   if (operand->ty->kind == TY_VECTOR) {
     gen_addr(operand); 
@@ -1279,6 +1511,7 @@ static void gen_vector_op(Node *node) {
   case ND_BITXOR:
   case ND_BITAND:
   case ND_BITOR:
+  case ND_BITNOT:
     break;
   case ND_DIV:
     if (is_integer(node->lhs->ty->base))
@@ -1387,6 +1620,10 @@ static void gen_vector_op(Node *node) {
       println("  psubd %%xmm0, %%xmm1"); 
       println("  movaps %%xmm1, %%xmm0"); 
       break;
+    case ND_BITNOT:
+      println("  pcmpeqd %%xmm1, %%xmm1"); 
+      println("  pxor %%xmm1, %%xmm0");  
+      break;      
     default:
       error_tok(node->tok, "%s: %s:%d: error: integer vector operation not supported", CODEGEN_C, __FILE__, __LINE__);
     }
@@ -1944,6 +2181,18 @@ static void gen_expr(Node *node)
       println("  fldt -16(%%rsp)");
       return;
     }
+    case TY_INT128:
+    {
+        // Extract the 128-bit integer value into high and low 64-bit parts
+        __int128 val = node->val;
+
+        uint64_t low = (uint64_t)val;
+        uint64_t high = (uint64_t)(val >> 64);
+        println("  mov $%lu, %%rax  # low 64 bits", low);
+        println("  mov $%lu, %%rdx  # high 64 bits", high);
+        return;
+    }
+
     }
 
     println("  mov $%ld, %%rax", node->val);
@@ -1951,11 +2200,16 @@ static void gen_expr(Node *node)
   }
   case ND_NEG:
     gen_expr(node->lhs);
-     if (is_vector(node->ty)) {
-        gen_vector_op(node);  
-        return;
-    }
 
+    if (is_int128(node->ty)) {
+      gen_int128_op(node);
+      return;
+    }
+    if (is_vector(node->ty)) {
+      gen_vector_op(node);  
+      return;
+  }
+        
     switch (node->ty->kind)
     {
     case TY_FLOAT:
@@ -2091,10 +2345,26 @@ static void gen_expr(Node *node)
     println("  movzx %%al, %%rax");
     return;
   case ND_BITNOT:
+    if (is_int128(node->ty)) {
+      gen_int128_op(node);
+      return;
+    }
+    if (is_vector(node->ty)) {
+      gen_vector_op(node);  
+      return;
+    }
     gen_expr(node->lhs);
     println("  not %%rax");
     return;
   case ND_LOGAND:
+    if (is_int128(node->ty)) {
+      gen_int128_op(node);
+      return;
+    }
+    if (is_vector(node->ty)) {
+      gen_vector_op(node);  
+      return;
+    }
   {
     int c = count();
     gen_expr(node->lhs);
@@ -2111,6 +2381,14 @@ static void gen_expr(Node *node)
     return;
   }
   case ND_LOGOR:
+    if (is_int128(node->ty)) {
+      gen_int128_op(node);
+      return;
+    }
+    if (is_vector(node->ty)) {
+      gen_vector_op(node);  
+      return;
+    }
   {
     int c = count();
     gen_expr(node->lhs);
@@ -2185,6 +2463,13 @@ static void gen_expr(Node *node)
         break;
       case TY_LDOUBLE:
         break;
+      case TY_INT128:
+        if (gp + 2 <= GP_MAX) {
+          int a = gp++;
+          int b = gp++;
+          popx(argreg64[a], argreg64[b]);
+        }      
+        break;  
       default:
         if (gp < GP_MAX)
           pop(argreg64[gp++]);
@@ -3049,14 +3334,17 @@ static void gen_expr(Node *node)
   case ND_MOVNTDQ: gen_movnt_binop(node, "movntdq"); return;
   case ND_MOVNTPD: gen_movnt_binop(node, "movntpd"); return;
 }
-
   
 if (is_vector(node->lhs->ty)) {
   gen_vector_op(node);
   return;
 }
+  //managing INT128
+  if (is_int128(node->lhs->ty)) {
+    gen_int128_op(node);
+    return;
+  } 
 
-  
 switch (node->lhs->ty->kind)
 {
   case TY_FLOAT:
@@ -3160,10 +3448,12 @@ switch (node->lhs->ty->kind)
   }
   }
 
-  gen_expr(node->rhs);
-  push();
-  gen_expr(node->lhs);
-  pop("%rdi");
+  if (!is_int128(node->rhs->ty)) {
+    gen_expr(node->rhs);
+    push();
+    gen_expr(node->lhs);
+    pop("%rdi");
+  }
 
   char *ax, *di, *dx;
 
@@ -3183,7 +3473,13 @@ switch (node->lhs->ty->kind)
   switch (node->kind)
   {
   case ND_ADD:
+       if (node->lhs->ty->kind == TY_INT128) {
+      println("  add %%rdi, %%rax");
+      println("  adc %%rsi, %%rdx");
+
+    } else {
     println("  add %s, %s", di, ax);
+    }
     return;
   case ND_SUB:
     println("  sub %s, %s", di, ax);
@@ -3712,6 +4008,12 @@ static void emit_text(Obj *prog)
             continue;
           case TY_LDOUBLE:
             continue;
+          case TY_INT128:
+            if (gp + 1 < FP_MAX) {
+              gp++;
+              gp++;
+            }
+            continue;                      
           default:
             if (gp < GP_MAX)
               gp++;
@@ -3788,6 +4090,10 @@ static void emit_text(Obj *prog)
       case TY_FLOAT:
       case TY_DOUBLE:
         store_fp(fp++, var->offset, ty->size);
+        break;
+      case TY_INT128:
+        store_gp(gp++, var->offset + 0, 8);
+        store_gp(gp++, var->offset + 8, 8);
         break;
       default:
         store_gp(gp++, var->offset, ty->size);
@@ -3909,6 +4215,13 @@ void assign_lvar_offsets(Obj *prog)
         break;
       case TY_LDOUBLE:
         break;
+      case TY_INT128:
+        if (gp + 1 < GP_MAX) {
+          gp++;
+          gp++;
+          continue;
+        }
+        break;        
       default:
         if (gp++ < GP_MAX)
           continue;
@@ -3931,7 +4244,7 @@ void assign_lvar_offsets(Obj *prog)
     for (Obj *var = fn->locals; var; var = var->next)
     {
 
-      int align = ((var->ty->kind == TY_ARRAY && var->ty->size >= 16) || is_vector(var->ty))
+      int align = ((var->ty->kind == TY_ARRAY && var->ty->size >= 16) || is_vector(var->ty) || var->ty->kind == TY_INT128)
                       ? MAX(16, var->align)
                       : var->align;
 

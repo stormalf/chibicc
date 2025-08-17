@@ -846,6 +846,7 @@ typedef enum
   TY_STRUCT,
   TY_UNION,
   TY_VECTOR,
+  TY_INT128,
 } TypeKind;
 
 
@@ -955,6 +956,9 @@ extern Type *ty_float;
 extern Type *ty_double;
 extern Type *ty_ldouble;
 
+extern Type *ty_int128;
+extern Type *ty_uint128;
+
 bool is_integer(Type *ty);
 bool is_flonum(Type *ty);
 bool is_numeric(Type *ty);
@@ -972,6 +976,7 @@ bool is_bitfield(Node *node);
 bool is_array(Type *ty);
 Type *new_qualified_type(Type *ty);
 bool is_vector(Type *ty);
+bool is_int128(Type *ty);
 
 
 char *nodekind2str(NodeKind kind);

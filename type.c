@@ -19,6 +19,9 @@ Type *ty_double = &(Type){TY_DOUBLE, 8, 8};
 Type *ty_ldouble = &(Type){TY_LDOUBLE, 16, 16};
 Type *ty_void_ptr = &(Type){TY_PTR, 8, 8, true};
 
+Type *ty_int128 = &(Type){TY_INT128, 16, 16}; 
+Type *ty_uint128 = &(Type){TY_INT128, 16, 16, true}; 
+
 
 static Type *new_type(TypeKind kind, int size, int align)
 {
@@ -28,6 +31,8 @@ static Type *new_type(TypeKind kind, int size, int align)
   ty->kind = kind;
   ty->size = size;
   ty->align = align;
+  if (ty->kind == TY_INT128)
+    ty->is_aligned = true;
   return ty;
 }
 
@@ -49,7 +54,7 @@ Type *new_qualified_type(Type *ty) {
 bool is_integer(Type *ty)
 {
   TypeKind k = ty->kind;
-  return k == TY_BOOL || k == TY_CHAR || k == TY_SHORT ||
+  return k == TY_BOOL || k == TY_CHAR || k == TY_SHORT || k == TY_INT128 ||
          k == TY_INT || k == TY_LONG || k == TY_ENUM;
 }
 
@@ -175,6 +180,8 @@ bool is_compatible(Type *t1, Type *t2)
   case TY_DOUBLE:
   case TY_LDOUBLE:
     return true;
+  case TY_INT128: 
+    return t1->is_unsigned == t2->is_unsigned;     
   case TY_PTR:
     return is_compatible(t1->base, t2->base);
   case TY_FUNC:
@@ -317,6 +324,14 @@ static Type *get_common_type(Type *ty1, Type *ty2)
   if (ty1->kind == TY_FLOAT || ty2->kind == TY_FLOAT)
     return ty_float;
 
+  if (ty1->kind == TY_INT128 || ty2->kind == TY_INT128) {
+    if( ty1->is_unsigned || ty2->is_unsigned) 
+      return ty_uint128;
+    else
+      return ty_int128;
+  }
+
+
   if (ty1->size < 4)
     ty1 = ty_int;
   if (ty2->size < 4)
@@ -348,6 +363,10 @@ static void usual_arith_conv(Node **lhs, Node **rhs)
 
 bool is_vector(Type *ty) {
   return ty && ty->kind == TY_VECTOR;
+}
+
+bool is_int128(Type *ty) {
+  return ty && ty->kind == TY_INT128;
 }
 
 
@@ -425,9 +444,10 @@ void add_type(Node *node)
   case ND_SHL:
   case ND_SHR:
     //node->ty = node->lhs->ty;  
-    if (!is_integer(node->lhs->ty))
+    if (!is_integer(node->lhs->ty) && !is_vector(node->lhs->ty))
       error_tok(node->tok, "%s %d %d invalid operand ", TYPE_C, __LINE__, node->kind);
-    int_promotion(&node->lhs);
+    if (is_integer(node->lhs->ty))
+      int_promotion(&node->lhs);
     node->ty = node->lhs->ty;       
     return;
   case ND_VAR:

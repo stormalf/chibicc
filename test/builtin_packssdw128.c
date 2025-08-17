@@ -3,7 +3,6 @@
 typedef int   __v4si  __attribute__((vector_size(16)));
 typedef short __v8hi  __attribute__((vector_size(16)));
 
-extern __v8hi __builtin_ia32_packssdw128(__v4si, __v4si);
 
 __v8hi test_packssdw128(__v4si a, __v4si b) {
     return __builtin_ia32_packssdw128(a, b);
