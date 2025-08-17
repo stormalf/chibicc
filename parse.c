@@ -3613,6 +3613,13 @@ static Node *new_sub(Node *lhs, Node *rhs, Token *tok)
   if (is_vector(lhs->ty) && is_vector(rhs->ty)) {
     if (lhs->ty->array_len != rhs->ty->array_len || lhs->ty->base->kind != rhs->ty->base->kind)
       error_tok(tok, "%s %d: in new_sub : incompatible vector types", PARSE_C, __LINE__);
+    if (rhs->kind == ND_COMMA) {
+      Node *node = new_binary(ND_SUB, rhs, lhs, tok);
+      node->ty =  lhs->ty;
+      node->is_to_negate = true;
+      return node;
+    }
+
     Node *node = new_binary(ND_SUB, lhs, rhs, tok);
     node->ty = lhs->ty; 
     return node;

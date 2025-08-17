@@ -1629,6 +1629,27 @@ static void gen_vector_op(Node *node) {
     }
     break;
   }
+    // --- extra negation if is_to_negate flag is set  a trick when rhs contains compound literal ---
+  if (node->is_to_negate) {
+    switch (vec_ty->base->kind) {
+    case TY_FLOAT:
+      println("  xorps %%xmm1, %%xmm1");     
+      println("  subps %%xmm0, %%xmm1");     
+      println("  movaps %%xmm1, %%xmm0");    
+      break;
+    case TY_DOUBLE:
+      println("  xorpd %%xmm1, %%xmm1");     
+      println("  subpd %%xmm0, %%xmm1");     
+      println("  movapd %%xmm1, %%xmm0");
+      break;
+    case TY_INT:
+      println("  pxor %%xmm1, %%xmm1");      
+      println("  psubd %%xmm0, %%xmm1");     
+      println("  movdqa %%xmm1, %%xmm0");
+      break;
+    }
+  }
+
 }
 
 static void gen_vec_init_v2si(Node *node) {
