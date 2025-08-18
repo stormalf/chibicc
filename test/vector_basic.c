@@ -30,10 +30,10 @@ int main() {
     ASSERT(3, v[2]);
     ASSERT(4, v[3]);
     printf("c= %f %f %f %f\n", c[0], c[1], c[2], c[3]);
-    ASSERT(3, c[0]);
-    ASSERT(24, c[1]);
-    ASSERT(225, c[2]);
-    ASSERT(2226, c[3]);
+    ASSERT(4, c[0]);
+    ASSERT(35, c[1]);
+    ASSERT(336, c[2]);
+    ASSERT(3337, c[3]);
     printf("i=%f\n", i);
     ASSERT(20, i);
     printf("z=%f %f %f %f\n", z[0], z[1], z[2], z[3]);
@@ -47,8 +47,11 @@ int main() {
     ASSERT(111, a[2]);
     ASSERT(1111, a[3]);
     printf("j=%f %f %f %f\n", j[0], j[1], j[2], j[3]);
-    ASSERT(3, j[0]);
-    ASSERT(24, j[1]);
-    ASSERT(225, j[2]);
-    ASSERT(2226, j[3]);
+    ASSERT(4, j[0]);
+    ASSERT(35, j[1]);
+    ASSERT(336, j[2]);
+    ASSERT(3337, j[3]);
+
+    printf("OK\n");
+    return 0;
 }

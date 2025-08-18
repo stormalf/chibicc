@@ -93,7 +93,6 @@ static void pushv(void) {
   depth += 1; 
 }
 
-
 static void popv(int reg) {
   println("  movdqu (%%rsp), %%xmm%d", reg);
   println("  add $16, %%rsp");
@@ -113,6 +112,18 @@ void popx(char *a, char *b) {
   depth--;
   depth--;  
 }
+
+static void push_xmm(int x) {
+  println("  sub $16, %%rsp");
+  println("  movdqu %%xmm%d, (%%rsp)", x);
+}
+
+static void pop_xmm(int x) {
+  println("  movdqu (%%rsp), %%xmm%d", x);
+  println("  add $16, %%rsp");
+}
+
+
 
 // Round up `n` to the nearest multiple of `align`. For instance,
 // align_to(5, 8) returns 8 and align_to(11, 8) returns 16.
@@ -1473,36 +1484,17 @@ static void gen_int128_op(Node *node) {
     }
 }
 
-static void load_vector_operand(Node *operand, const char *xmm_reg) {
-  if (operand->ty->kind == TY_VECTOR) {
-    gen_addr(operand); 
-    if (operand->ty->base->kind == TY_FLOAT || operand->ty->base->kind == TY_DOUBLE) {
-      println("  movups (%%rax), %s", xmm_reg);
-    } else if (is_integer(operand->ty->base)) {
-      println("  movdqu (%%rax), %s", xmm_reg);
-    } else {
-        error("%s: %s:%d: error: in load_vector_operand : unsupported vector base type %d", CODEGEN_C, __FILE__, __LINE__, operand->ty->base->kind);
-    }
-  } else if (operand->ty->kind == TY_PTR && operand->ty->base->kind == TY_VECTOR) {
-    gen_expr(operand);
-    Type *vec = operand->ty->base;
-    if (vec->base->kind == TY_FLOAT || vec->base->kind == TY_DOUBLE) {
-      println("  movups (%%rax), %s", xmm_reg);
-    } else if (is_integer(vec->base)) {
-      println("  movdqu (%%rax), %s", xmm_reg);
-    } else {
-      error("%s: %s:%d: error: in load_vector_operand : unsupported vector base type", CODEGEN_C, __FILE__, __LINE__);
-    }
-  } else {
-    error("%s: %s:%d: error: in load_vector_operand : invalid vector operand", CODEGEN_C, __FILE__, __LINE__);
-  }
-}
-
 static void gen_vector_op(Node *node) {
+  if (node->rhs) {
+    gen_expr(node->rhs);
+    push_xmm(0);
+  }
   if (node->lhs)
     gen_expr(node->lhs); 
+
   if (node->rhs)
-    gen_expr(node->rhs);
+    pop_xmm(1);
+
   switch (node->kind) {
   case ND_ADD:
   case ND_SUB:
@@ -1531,9 +1523,9 @@ static void gen_vector_op(Node *node) {
   if (vec_ty->kind != TY_VECTOR)
     error_tok(node->tok, "%s: %s:%d: error: in gen_vector_op : lhs is not a vector", CODEGEN_C, __FILE__, __LINE__);
 
-  if (node->rhs)
-    load_vector_operand(node->rhs, "%xmm1");    
-  load_vector_operand(node->lhs, "%xmm0");
+  // if (node->rhs)
+  //   load_vector_operand(node->rhs, "%xmm1");    
+  // load_vector_operand(node->lhs, "%xmm0");
 
 
   switch (vec_ty->base->kind) {
