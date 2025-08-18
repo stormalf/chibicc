@@ -1,4 +1,4 @@
-#include <stdio.h>
+#include "test.h"
 #include <xmmintrin.h>    // __m128, _mm_add_ps, _mm_set_ps
 
 typedef __m128 v4;
@@ -23,5 +23,11 @@ int main(){
     v4 g = _mm_set_ps(6,6,6,6);
     v4 r = add7(a,b,c,d,e,f,g);
     print_v4(r); // expect element-wise sums
+
+    ASSERT(61, r[0]);
+    ASSERT(51, r[1]);
+    ASSERT(41, r[2]);
+    ASSERT(31, r[3]);
+    printf("OK\n");
     return 0;
 }

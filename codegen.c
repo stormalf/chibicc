@@ -1555,7 +1555,7 @@ static void gen_vector_op(Node *node) {
       case ND_NEG: 
         println("  xorps %%xmm1, %%xmm1");     
         println("  subps %%xmm0, %%xmm1");     
-        println("  movaps %%xmm1, %%xmm0"); 
+        println("  movups %%xmm1, %%xmm0"); 
         break;                
       default:
         error_tok(node->tok, "%s: %s:%d: error: unsupported float vector operation", CODEGEN_C, __FILE__, __LINE__);
@@ -1672,14 +1672,14 @@ static void gen_vec_init_binop(Node *node, const char *insn) {
 
 static void gen_shuf_binop(Node *node, const char *insn) {
   gen_expr(node->rhs);
-  println("  movaps %%xmm0, %%xmm1");      
+  println("  movups %%xmm0, %%xmm1");      
   gen_expr(node->lhs);
   println("  %s $%ld, %%xmm1, %%xmm0", insn, node->rhs->val);
 }
 
 static void gen_psll_binop(Node *node, const char *insn) {
   gen_expr(node->lhs);
-  println("  movaps %%xmm0, %%xmm1");      
+  println("  movups %%xmm0, %%xmm1");      
   gen_expr(node->rhs);
   if (node->rhs->kind == ND_NUM)
     println("  %s $%ld, %%xmm1", insn, node->rhs->val);
@@ -1687,7 +1687,7 @@ static void gen_psll_binop(Node *node, const char *insn) {
     println("  movq %%rax, %%xmm0");
     println("  %s %%xmm0, %%xmm1", insn);
   }
-  println("  movaps %%xmm1, %%xmm0");      
+  println("  movups %%xmm1, %%xmm0");      
 }
 
 
@@ -1786,10 +1786,10 @@ static void gen_shuffle(Node *node, const char *insn) {
   assert(node->builtin_nargs == 3);
   // Evaluate args so %xmm0 ends with lhs and %xmm1 ends with rhs as before:
   gen_expr(node->builtin_args[0]);        // leaves a in %xmm0
-  println("  movaps %%xmm0, %%xmm2");     // save a in xmm2
+  println("  movups %%xmm0, %%xmm2");     // save a in xmm2
   gen_expr(node->builtin_args[1]);        // leaves b in %xmm0
-  println("  movaps %%xmm0, %%xmm1");     // save b in xmm1
-  println("  movaps %%xmm2, %%xmm0");     // restore a into xmm0 (dest)
+  println("  movups %%xmm0, %%xmm1");     // save b in xmm1
+  println("  movups %%xmm2, %%xmm0");     // restore a into xmm0 (dest)
   // read the 4 mask values
   int mask[4];
   get_mask_values(node->builtin_args[2], mask, 4);
@@ -1841,7 +1841,7 @@ static void gen_cvtpi2ps(Node *node) {
 
 static void gen_loadhps(Node *node) {
   gen_expr(node->lhs);
-  println("  movaps (%%rax), %%xmm0");  
+  println("  movups (%%rax), %%xmm0");  
   gen_expr(node->rhs);
   println("  movq (%%rax), %%xmm1");   
   println("  movlhps %%xmm1, %%xmm0"); 
@@ -1849,10 +1849,10 @@ static void gen_loadhps(Node *node) {
 
 static void gen_packss128_binop(Node *node, const char *insn) {
   gen_expr(node->lhs);
-  println("  movaps (%%rax), %%xmm1");  
+  println("  movups (%%rax), %%xmm1");  
   gen_expr(node->rhs);
   println("  %s (%%rax), %%xmm1", insn); 
-  println("  movaps %%xmm1, %%xmm0");
+  println("  movups %%xmm1, %%xmm0");
 }
 
 
@@ -1980,7 +1980,7 @@ static void gen_sse_binop2(Node *node, const char *insn, const char *reg, bool r
 
 static void gen_sse_binop3(Node *node, const char *insn, bool rhs_is_imm) {
   gen_expr(node->rhs);
-  println("  movaps %%xmm0, %%xmm1"); 
+  println("  movups %%xmm0, %%xmm1"); 
   gen_expr(node->lhs);
   println("  %s %%xmm1, %%xmm0", insn);
 }
@@ -1988,7 +1988,7 @@ static void gen_sse_binop3(Node *node, const char *insn, bool rhs_is_imm) {
 
 static void gen_sse_binop4(Node *node, const char *insn, const char *insn2) {
   gen_expr(node->lhs);
-  println("  movaps %%xmm0, %%xmm1");
+  println("  movups %%xmm0, %%xmm1");
   gen_expr(node->rhs);
   println("  %s %%xmm0, %%xmm1", insn); 
   println("  %s %%al", insn2);
@@ -1998,7 +1998,7 @@ static void gen_sse_binop4(Node *node, const char *insn, const char *insn2) {
 
 static void gen_sse_binop5(Node *node, const char *insn, const char *insn2) {
   gen_expr(node->lhs);
-  println("  movaps %%xmm0, %%xmm1");
+  println("  movups %%xmm0, %%xmm1");
   gen_expr(node->rhs);
   println("  %s %%xmm1, %%xmm0", insn); 
   println("  %s %%al", insn2);
@@ -2007,7 +2007,7 @@ static void gen_sse_binop5(Node *node, const char *insn, const char *insn2) {
 
 static void gen_sse_binop6(Node *node, const char *insn, const char *insn2) {
   gen_expr(node->lhs);
-  println("  movaps %%xmm0, %%xmm1");
+  println("  movups %%xmm0, %%xmm1");
   gen_expr(node->rhs);
   println("  %s %%xmm0, %%xmm1", insn); 
   println("  setnp %%dl");
@@ -2033,7 +2033,7 @@ static void gen_sse_binop8(Node *node, const char *insn, const char *reg) {
 
 static void gen_sse_binop9(Node *node, const char *insn) {
   gen_expr(node->lhs);  
-  println("  movaps %%xmm0, %%xmm1");
+  println("  movups %%xmm0, %%xmm1");
   gen_expr(node->rhs); 
   println("  %s %%xmm1, %%xmm0", insn);
 }
@@ -3850,7 +3850,7 @@ static void store_fp(int r, int offset, int sz)
     println("  movsd %%xmm%d, %d(%%rbp)", r, offset);
     return;
   case 16:
-    println("  movaps %%xmm%d, %d(%%rbp)", r, offset); // movaps for 16-byte (128-bit) vector
+    println("  movups %%xmm%d, %d(%%rbp)", r, offset); // movaps for 16-byte (128-bit) vector
     return;
   }
   printf("===== r=%d offset=%d sz=%d\n", r, offset, sz);
