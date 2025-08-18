@@ -1531,9 +1531,10 @@ static void gen_vector_op(Node *node) {
   if (vec_ty->kind != TY_VECTOR)
     error_tok(node->tok, "%s: %s:%d: error: in gen_vector_op : lhs is not a vector", CODEGEN_C, __FILE__, __LINE__);
 
-  load_vector_operand(node->lhs, "%xmm0");
   if (node->rhs)
-    load_vector_operand(node->rhs, "%xmm1");
+    load_vector_operand(node->rhs, "%xmm1");    
+  load_vector_operand(node->lhs, "%xmm0");
+
 
   switch (vec_ty->base->kind) {
     case TY_FLOAT:
@@ -1560,7 +1561,9 @@ static void gen_vector_op(Node *node) {
         println("  por %%xmm1, %%xmm0");
         break;
       case ND_NEG: 
-        println("  subps %%xmm0, %%xmm1"); println("  movaps %%xmm1, %%xmm0"); 
+        println("  xorps %%xmm1, %%xmm1");     
+        println("  subps %%xmm0, %%xmm1");     
+        println("  movaps %%xmm1, %%xmm0"); 
         break;                
       default:
         error_tok(node->tok, "%s: %s:%d: error: unsupported float vector operation", CODEGEN_C, __FILE__, __LINE__);
@@ -1589,8 +1592,10 @@ static void gen_vector_op(Node *node) {
     case ND_BITOR:
       println("  por %%xmm1, %%xmm0");
       break;
-    case ND_NEG: println("  subpd %%xmm0, %%xmm1"); 
-      println("  movapd %%xmm1, %%xmm0"); 
+    case ND_NEG: 
+      println("  xorpd %%xmm1, %%xmm1");     
+      println("  subpd %%xmm0, %%xmm1");     
+      println("  movapd %%xmm1, %%xmm0");  
       break;      
     default:
       error_tok(node->tok, "%s: %s:%d: error: unsupported double vector operation", CODEGEN_C, __FILE__, __LINE__);
@@ -1617,8 +1622,9 @@ static void gen_vector_op(Node *node) {
       println("  por %%xmm1, %%xmm0");
       break;
     case ND_NEG: 
-      println("  psubd %%xmm0, %%xmm1"); 
-      println("  movaps %%xmm1, %%xmm0"); 
+      println("  pxor %%xmm1, %%xmm1");      
+      println("  psubd %%xmm0, %%xmm1");     
+      println("  movdqa %%xmm1, %%xmm0");
       break;
     case ND_BITNOT:
       println("  pcmpeqd %%xmm1, %%xmm1"); 
@@ -1628,26 +1634,6 @@ static void gen_vector_op(Node *node) {
       error_tok(node->tok, "%s: %s:%d: error: integer vector operation not supported", CODEGEN_C, __FILE__, __LINE__);
     }
     break;
-  }
-    // --- extra negation if is_to_negate flag is set  a trick when rhs contains compound literal ---
-  if (node->is_to_negate) {
-    switch (vec_ty->base->kind) {
-    case TY_FLOAT:
-      println("  xorps %%xmm1, %%xmm1");     
-      println("  subps %%xmm0, %%xmm1");     
-      println("  movaps %%xmm1, %%xmm0");    
-      break;
-    case TY_DOUBLE:
-      println("  xorpd %%xmm1, %%xmm1");     
-      println("  subpd %%xmm0, %%xmm1");     
-      println("  movapd %%xmm1, %%xmm0");
-      break;
-    case TY_INT:
-      println("  pxor %%xmm1, %%xmm1");      
-      println("  psubd %%xmm0, %%xmm1");     
-      println("  movdqa %%xmm1, %%xmm0");
-      break;
-    }
   }
 
 }

@@ -740,8 +740,7 @@ Node
   Node *then;
   Node *els;
   Node *init;
-  Node *inc;
-  bool is_to_negate;
+  Node *inc;  
   // "break" and "continue" labels
   char *brk_label;
   char *cont_label;
