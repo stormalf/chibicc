@@ -401,7 +401,7 @@ void add_type(Node *node)
   case ND_MOD:
   case ND_BITAND:
   case ND_BITOR:
-  case ND_BITXOR:
+  case ND_BITXOR:    
     if (is_vector(node->lhs->ty) && is_vector(node->rhs->ty)) {
           node->ty = node->lhs->ty;
     } else {

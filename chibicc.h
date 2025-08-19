@@ -800,6 +800,8 @@ Node
   long double fval;
   // for dot diagram
   int unique_number;
+  bool is_op;
+  bool is_scalar_promoted;  
 };
 
 typedef struct

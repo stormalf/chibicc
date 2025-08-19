@@ -45,7 +45,6 @@ static CtorFunc *destructors[256];
 static int destructor_cnt = 0;
 
 
-
 __attribute__((format(printf, 1, 2))) static void println(char *fmt, ...)
 {
   va_list ap;
@@ -1484,16 +1483,40 @@ static void gen_int128_op(Node *node) {
     }
 }
 
+static void scalar_to_xmm(Type *vec_ty, const char *xmm_reg) {
+    switch (vec_ty->base->kind) {
+    case TY_INT:
+        println("  movd %%eax, %s", xmm_reg);          // move scalar to XMM
+        println("  pshufd $0x0, %s, %s", xmm_reg, xmm_reg); // duplicate to all lanes
+        break;
+    case TY_FLOAT:
+        println("  shufps $0x00, %s, %s", xmm_reg, xmm_reg);
+        break;
+    case TY_DOUBLE:
+        println("  shufpd $0x00, %s, %s", xmm_reg, xmm_reg);
+        break;
+    default:
+        error("%s: %s:%d: error: in scalar_to_xmm : unsupported vector base type for scalar promotion", CODEGEN_C, __FILE__, __LINE__);
+    }
+}
+
+
 static void gen_vector_op(Node *node) {
   if (node->rhs) {
     gen_expr(node->rhs);
-    push_xmm(0);
+    if (node->rhs->is_scalar_promoted)
+      scalar_to_xmm(node->rhs->ty, "%xmm0");
+    push_xmm(0);      
   }
-  if (node->lhs)
+  if (node->lhs) {
     gen_expr(node->lhs); 
-
+    if (node->lhs->is_scalar_promoted)
+      scalar_to_xmm(node->lhs->ty, "%xmm0");
+  }
+  
   if (node->rhs)
     pop_xmm(1);
+
 
   switch (node->kind) {
   case ND_ADD:
@@ -2144,33 +2167,21 @@ static void gen_expr(Node *node)
     {
     case TY_FLOAT:
     {
-      union
-      {
-        float f32;
-        uint32_t u32;
-      } u = {node->fval};
+      union { float f32; uint32_t u32; } u = {node->fval};
       println("  mov $%u, %%eax  # float %Lf", u.u32, node->fval);
-      println("  movq %%rax, %%xmm0");
+      println("  movq %%rax, %%xmm0"); 
       return;
     }
     case TY_DOUBLE:
     {
-      union
-      {
-        double f64;
-        uint64_t u64;
-      } u = {node->fval};
+      union { double f64; uint64_t u64; } u = {node->fval};
       println("  mov $%lu, %%rax  # double %Lf", u.u64, node->fval);
       println("  movq %%rax, %%xmm0");
       return;
     }
     case TY_LDOUBLE:
     {
-      union
-      {
-        long double f80;
-        uint64_t u64[2];
-      } u;
+      union { long double f80; uint64_t u64[2]; } u;
       memset(&u, 0, sizeof(u));
       u.f80 = node->fval;
       println("  mov $%lu, %%rax  # long double %Lf", u.u64[0], node->fval);
@@ -4133,7 +4144,7 @@ void codegen(Obj *prog, FILE *out)
   assign_lvar_offsets(prog);
   emit_data(prog);
   emit_text(prog);
-
+  
   println("  .section  .note.GNU-stack,\"\",@progbits");
   //print offset for each variable
   if (isDebug)

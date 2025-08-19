@@ -201,6 +201,7 @@ static bool is_str_tok(Token **rest, Token *tok, Token **str_tok);
 
 static Node *compound_stmt2(Token **rest, Token *tok);
 static int builtin_enum(Token *tok);
+static Node *scalar_to_vector(Node *scalar, Type *vec_ty);
 
 static int align_down(int n, int align)
 {
@@ -3558,6 +3559,18 @@ static Node *new_add(Node *lhs, Node *rhs, Token *tok)
   add_type(lhs);
   add_type(rhs);
 
+  //case of vectors + sclaras
+  if (lhs->is_op && (is_vector(lhs->ty) || is_vector(rhs->ty))) {
+    if (is_vector(lhs->ty) && !is_vector(rhs->ty)) {
+      rhs = scalar_to_vector(rhs, lhs->ty);
+      rhs->ty = lhs->ty;
+    }
+    else if (is_vector(rhs->ty) && !is_vector(lhs->ty)) {
+      lhs = scalar_to_vector(lhs, rhs->ty);
+      lhs->ty = rhs->ty;
+    }
+  }
+
   // case of vectors
   if (is_vector(lhs->ty) && is_vector(rhs->ty)) {
     
@@ -3660,12 +3673,15 @@ static Node *add(Token **rest, Token *tok)
 
     if (equal(tok, "+"))
     {
+      node->is_op = true;
       node = new_add(node, mul(&tok, tok->next), start);
+      
       continue;
     }
 
     if (equal(tok, "-"))
     {
+      node->is_op = true;
       node = new_sub(node, mul(&tok, tok->next), start);
       continue;
     }
@@ -3686,18 +3702,21 @@ static Node *mul(Token **rest, Token *tok)
 
     if (equal(tok, "*"))
     {
+      node->is_op = true;
       node = new_binary(ND_MUL, node, cast(&tok, tok->next), start);
       continue;
     }
 
     if (equal(tok, "/"))
     {
+      node->is_op = true;
       node = new_binary(ND_DIV, node, cast(&tok, tok->next), start);
       continue;
     }
 
     if (equal(tok, "%"))
     {
+      node->is_op = true;
       node = new_binary(ND_MOD, node, cast(&tok, tok->next), start);
       continue;
     }
@@ -8144,4 +8163,12 @@ static int builtin_enum(Token *tok) {
             return builtin_table[i].node_kind;
     }
     return -1; // not found
+}
+
+// scalar_to_vector now marks the node as a scalar promotion
+static Node *scalar_to_vector(Node *scalar, Type *vec_ty) {
+    Node *n = new_unary(ND_CAST, scalar, scalar->tok);
+    n->ty = vec_ty;                  // target vector type
+    n->is_scalar_promoted = true;     // renamed flag for clarity
+    return n;
 }
