@@ -470,7 +470,7 @@ static void gen_addr(Node *node)
   case ND_BITXOR:
   case ND_BITAND:
   case ND_BITOR:
-    if (is_vector(node->lhs->ty)) {
+    if (is_vector(node->lhs->ty) || (node->rhs && is_vector(node->rhs->ty))) {
       gen_expr(node->lhs);
       gen_expr(node->rhs);  
       return;
@@ -3348,7 +3348,7 @@ static void gen_expr(Node *node)
   case ND_MOVNTPD: gen_movnt_binop(node, "movntpd"); return;
 }
   
-if (is_vector(node->lhs->ty)) {
+if (is_vector(node->lhs->ty) || (node->rhs && is_vector(node->rhs->ty))) {
   gen_vector_op(node);
   return;
 }

@@ -153,8 +153,8 @@ static Node *equality(Token **rest, Token *tok);
 static Node *relational(Token **rest, Token *tok);
 static Node *shift(Token **rest, Token *tok);
 static Node *add(Token **rest, Token *tok);
-static Node *new_add(Node *lhs, Node *rhs, Token *tok);
-static Node *new_sub(Node *lhs, Node *rhs, Token *tok);
+static Node *new_add(Node *lhs, Node *rhs, Token *tok, bool is_op);
+static Node *new_sub(Node *lhs, Node *rhs, Token *tok, bool is_op);
 static Node *mul(Token **rest, Token *tok);
 static Node *cast(Token **rest, Token *tok);
 static Member *get_struct_member(Type *ty, Token *tok);
@@ -202,6 +202,7 @@ static bool is_str_tok(Token **rest, Token *tok, Token **str_tok);
 static Node *compound_stmt2(Token **rest, Token *tok);
 static int builtin_enum(Token *tok);
 static Node *scalar_to_vector(Node *scalar, Type *vec_ty);
+static void promote_scalar_to_vector(Node *node);
 
 static int align_down(int n, int align)
 {
@@ -2065,7 +2066,7 @@ static Node *init_desg_expr(InitDesg *desg, Token *tok)
   
   Node *lhs = init_desg_expr(desg->next, tok);
   Node *rhs = new_num(desg->idx, tok);
-  return new_unary(ND_DEREF, new_add(lhs, rhs, tok), tok);
+  return new_unary(ND_DEREF, new_add(lhs, rhs, tok, false), tok);
 }
 
 static Node *create_lvar_init(Initializer *init, Type *ty, InitDesg *desg, Token *tok)
@@ -3326,10 +3327,10 @@ static Node *assign(Token **rest, Token *tok)
     return new_binary(ND_ASSIGN, node, assign(rest, tok->next), tok);
 
   if (equal(tok, "+="))
-    return to_assign(new_add(node, assign(rest, tok->next), tok));
+    return to_assign(new_add(node, assign(rest, tok->next), tok, false));
 
   if (equal(tok, "-="))
-    return to_assign(new_sub(node, assign(rest, tok->next), tok));
+    return to_assign(new_sub(node, assign(rest, tok->next), tok, false));
 
   if (equal(tok, "*="))
     return to_assign(new_binary(ND_MUL, node, assign(rest, tok->next), tok));
@@ -3428,6 +3429,7 @@ static Node * bitor (Token * *rest, Token *tok)
   {
     Token *start = tok;
     node = new_binary(ND_BITOR, node, bitxor(&tok, tok->next), start);
+    promote_scalar_to_vector(node);
   }
   *rest = tok;
   return node;
@@ -3441,6 +3443,7 @@ static Node *bitxor(Token **rest, Token *tok)
   {
     Token *start = tok;
     node = new_binary(ND_BITXOR, node, bitand(&tok, tok->next), start);
+    promote_scalar_to_vector(node);
   }
   *rest = tok;
   return node;
@@ -3454,6 +3457,7 @@ static Node *bitand(Token **rest, Token *tok)
   {
     Token *start = tok;
     node = new_binary(ND_BITAND, node, equality(&tok, tok->next), start);
+    promote_scalar_to_vector(node);
   }
   *rest = tok;
   return node;
@@ -3553,14 +3557,14 @@ static Node *shift(Token **rest, Token *tok)
 // so that p+n points to the location n elements (not bytes) ahead of p.
 // In other words, we need to scale an integer value before adding to a
 // pointer value. This function takes care of the scaling.
-static Node *new_add(Node *lhs, Node *rhs, Token *tok)
+static Node *new_add(Node *lhs, Node *rhs, Token *tok, bool is_op)
 {
   
   add_type(lhs);
   add_type(rhs);
 
   //case of vectors + sclaras
-  if (lhs->is_op && (is_vector(lhs->ty) || is_vector(rhs->ty))) {
+  if (is_op && (is_vector(lhs->ty) || is_vector(rhs->ty))) {
     if (is_vector(lhs->ty) && !is_vector(rhs->ty)) {
       rhs = scalar_to_vector(rhs, lhs->ty);
       rhs->ty = lhs->ty;
@@ -3610,15 +3614,15 @@ static Node *new_add(Node *lhs, Node *rhs, Token *tok)
 }
 
 // Like `+`, `-` is overloaded for the pointer type.
-static Node *new_sub(Node *lhs, Node *rhs, Token *tok)
+static Node *new_sub(Node *lhs, Node *rhs, Token *tok, bool is_op)
 {
 
   add_type(lhs);
   add_type(rhs);
 
   
-  //case of vectors + sclaras
-  if (lhs->is_op && (is_vector(lhs->ty) || is_vector(rhs->ty))) {
+  //case of vectors + scalars
+  if (is_op && (is_vector(lhs->ty) || is_vector(rhs->ty))) {
     if (is_vector(lhs->ty) && !is_vector(rhs->ty)) {
       rhs = scalar_to_vector(rhs, lhs->ty);
       rhs->ty = lhs->ty;
@@ -3686,16 +3690,13 @@ static Node *add(Token **rest, Token *tok)
 
     if (equal(tok, "+"))
     {
-      node->is_op = true;
-      node = new_add(node, mul(&tok, tok->next), start);
-      
+      node = new_add(node, mul(&tok, tok->next), start, true);
       continue;
     }
 
     if (equal(tok, "-"))
     {
-      node->is_op = true;
-      node = new_sub(node, mul(&tok, tok->next), start);
+      node = new_sub(node, mul(&tok, tok->next), start, true);
       continue;
     }
 
@@ -3715,22 +3716,22 @@ static Node *mul(Token **rest, Token *tok)
 
     if (equal(tok, "*"))
     {
-      node->is_op = true;
       node = new_binary(ND_MUL, node, cast(&tok, tok->next), start);
+      promote_scalar_to_vector(node);
       continue;
     }
 
     if (equal(tok, "/"))
     {
-      node->is_op = true;
       node = new_binary(ND_DIV, node, cast(&tok, tok->next), start);
+      promote_scalar_to_vector(node);
       continue;
     }
 
     if (equal(tok, "%"))
     {
-      node->is_op = true;
       node = new_binary(ND_MOD, node, cast(&tok, tok->next), start);
+      promote_scalar_to_vector(node);
       continue;
     }
 
@@ -3837,11 +3838,11 @@ static Node *unary(Token **rest, Token *tok)
 
   // Read ++i as i+=1
   if (equal(tok, "++"))
-    return to_assign(new_add(unary(rest, tok->next), new_num(1, tok), tok));
+    return to_assign(new_add(unary(rest, tok->next), new_num(1, tok), tok, false));
 
   // Read --i as i-=1
   if (equal(tok, "--"))
-    return to_assign(new_sub(unary(rest, tok->next), new_num(1, tok), tok));
+    return to_assign(new_sub(unary(rest, tok->next), new_num(1, tok), tok, false));
 
   // [GNU] labels-as-values
   if (equal(tok, "&&"))
@@ -5150,8 +5151,8 @@ static Node *struct_ref(Node *node, Token *tok)
 static Node *new_inc_dec(Node *node, Token *tok, int addend)
 {
   add_type(node);
-  return new_cast(new_add(to_assign(new_add(node, new_num(addend, tok), tok)),
-                          new_num(-addend, tok), tok),
+  return new_cast(new_add(to_assign(new_add(node, new_num(addend, tok), tok, false)),
+                          new_num(-addend, tok), tok, false),
                   node->ty);
 }
 
@@ -5227,7 +5228,7 @@ static Node *postfix(Token **rest, Token *tok)
       
       add_type(node);
       Type *ty = node->ty;
-      node = new_unary(ND_DEREF, new_add(node, idx, start), start);
+      node = new_unary(ND_DEREF, new_add(node, idx, start, false), start);
       if (is_array(ty))
         apply_cv_qualifier(node, ty);
        continue;
@@ -6449,7 +6450,7 @@ static Node *primary(Token **rest, Token *tok)
     Node *val = assign(&tok, tok);
     add_type(val);
     Node *node;
-    node = new_add(obj, val, tok);
+    node = new_add(obj, val, tok, false);
     node->atomic_fetch = true;
     *rest = tok->next;
     return to_assign(node);
@@ -6466,7 +6467,7 @@ static Node *primary(Token **rest, Token *tok)
     Node *val = assign(&tok, tok);
     add_type(val);
     Node *node;
-    node = new_sub(obj, val, tok);
+    node = new_sub(obj, val, tok, false);
     node->atomic_fetch = true;
     *rest = tok->next;
     return to_assign(node);
@@ -6531,9 +6532,9 @@ static Node *primary(Token **rest, Token *tok)
     tok = skip(tok, ",", ctx);
     Node *node;
     if (equal(tok, "0"))
-      node = new_add(obj, val, tok);
+      node = new_add(obj, val, tok, false);
     else if (equal(tok, "1"))
-      node = new_sub(obj, val, tok);
+      node = new_sub(obj, val, tok, false);
     else if (equal(tok, "2"))
       node = new_binary(ND_BITOR, obj, val, tok);
     else if (equal(tok, "3"))
@@ -8184,4 +8185,20 @@ static Node *scalar_to_vector(Node *scalar, Type *vec_ty) {
     n->ty = vec_ty;                  // target vector type
     n->is_scalar_promoted = true;     // renamed flag for clarity
     return n;
+}
+
+// Promote scalars to vectors for a binary operation
+static void promote_scalar_to_vector(Node *node) {
+    add_type(node->lhs);
+    add_type(node->rhs);
+
+    if (is_vector(node->rhs->ty) && !is_vector(node->lhs->ty)) {
+        node->lhs = scalar_to_vector(node->lhs, node->rhs->ty);
+        node->lhs->is_scalar_promoted = true;
+    }
+
+    if (is_vector(node->lhs->ty) && !is_vector(node->rhs->ty)) {
+        node->rhs = scalar_to_vector(node->rhs, node->lhs->ty);
+        node->rhs->is_scalar_promoted = true;
+    }
 }
