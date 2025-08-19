@@ -2248,6 +2248,7 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
 
   if (ty->kind == TY_UNION)
   {
+    memset(buf + offset, 0, ty->size);
     if (!init->mem)
       return cur;
     return write_gvar_data(cur, init->children[init->mem->idx],

@@ -27,7 +27,7 @@ int main(void) {
 
     for (int i = 0; i < 2; i++) {
         uint32_t crc = simple_crc32c(&arr[i], sizeof(MyStruct));
-        printf("Struct %d CRC: %u\n", i, crc);
+        printf("Struct %d CRC: %u\n", i, crc);            
     }
 
     return 0;
