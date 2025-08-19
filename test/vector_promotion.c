@@ -40,6 +40,11 @@ int main(void) {
     ASSERT(4.5f, res_f[2]);
     ASSERT(5.5f, res_f[3]);
 
+    res_f = 1.5f + vf; 
+    ASSERT(2.5f, res_f[0]);
+    ASSERT(3.5f, res_f[1]);
+    ASSERT(4.5f, res_f[2]);
+    ASSERT(5.5f, res_f[3]);
     // double vector + scalar
     double2 vd = {1.0, 2.0};
     double2 res_d = vd + 3.0; // scalar promoted to {3.0,3.0}
@@ -50,6 +55,9 @@ int main(void) {
 
     printf("\n");    
 
+    res_d = 3.0 + vd; 
+    ASSERT(4.0, res_d[0]);
+    ASSERT(5.0, res_d[1]);
 
 
     printf("Scalar to vector promotion OK\n");

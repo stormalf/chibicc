@@ -870,7 +870,10 @@ static void cast(Type *from, Type *to)
     println("  movzx %%al, %%eax");
     return;
   }
-  
+
+  if (is_vector(from) ||is_vector(to))
+    return;
+
   int t1 = getTypeId(from);
   int t2 = getTypeId(to);
   if (cast_table[t1][t2])

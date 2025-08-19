@@ -3617,6 +3617,19 @@ static Node *new_sub(Node *lhs, Node *rhs, Token *tok)
   add_type(rhs);
 
   
+  //case of vectors + sclaras
+  if (lhs->is_op && (is_vector(lhs->ty) || is_vector(rhs->ty))) {
+    if (is_vector(lhs->ty) && !is_vector(rhs->ty)) {
+      rhs = scalar_to_vector(rhs, lhs->ty);
+      rhs->ty = lhs->ty;
+    }
+    else if (is_vector(rhs->ty) && !is_vector(lhs->ty)) {
+      lhs = scalar_to_vector(lhs, rhs->ty);
+      lhs->ty = rhs->ty;
+    }
+  }
+
+  
   // case of vectors
   if (is_vector(lhs->ty) && is_vector(rhs->ty)) {
     if (lhs->ty->array_len != rhs->ty->array_len || lhs->ty->base->kind != rhs->ty->base->kind)
