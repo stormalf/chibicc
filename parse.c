@@ -2206,8 +2206,6 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
   }
   if (is_vector(ty))
   {
-   if (init->expr)
-      error_tok(init->expr->tok, "%s %d: in write_gvar_data : vector initializer must be an initializer list", PARSE_C, __LINE__);
     int sz = ty->base->size;
     for (int i = 0; i < ty->array_len; i++)
       cur = write_gvar_data(cur, init->children[i], ty->base, buf, offset + sz * i);
@@ -5664,47 +5662,6 @@ static Node *primary(Token **rest, Token *tok)
     }
   }
 
-
-  if (equal(tok, "__builtin_ia32_cvtpi2ps") || equal(tok, "__builtin_ia32_cvtsi2ss") || equal(tok, "__builtin_ia32_cvtsi642ss"))
-  {
-    if (!opt_mmx)
-      error_tok(tok, "%s %d: in primary : option -mmmx required", PARSE_C, __LINE__);
-    int builtin = builtin_enum(tok);
-    if (builtin != -1) {
-      Node *node = new_node(builtin, tok);    
-      SET_CTX(ctx); 
-      tok = skip(tok->next, "(", ctx);
-      node->lhs = assign(&tok, tok);
-      add_type(node->lhs);
-      SET_CTX(ctx);     
-      tok = skip(tok, ",", ctx);
-      node->rhs = assign(&tok, tok);
-      add_type(node->rhs);
-      SET_CTX(ctx);      
-      *rest = skip(tok, ")", ctx);
-      return node;
-    }
-  }
-
-  if (equal(tok, "__builtin_ia32_cvtps2pi") || equal(tok, "__builtin_ia32_cvttps2pi") || 
-      equal(tok, "__builtin_ia32_cvttpd2pi") || equal(tok, "__builtin_ia32_cvtpi2pd") ||    
-      equal(tok, "__builtin_ia32_cvtpd2pi"))
-  {
-    if (!opt_mmx)
-      error_tok(tok, "%s %d: in primary : option -mmmx required", PARSE_C, __LINE__);
-    int builtin = builtin_enum(tok);
-    if (builtin != -1) {
-      Node *node = new_node(builtin, tok);    
-      SET_CTX(ctx); 
-      tok = skip(tok->next, "(", ctx);
-      node->lhs = assign(&tok, tok);
-      add_type(node->lhs);
-      SET_CTX(ctx); 
-      *rest = skip(tok, ")", ctx);
-      return node;
-    }
-  }
-
   if (equal(tok, "__builtin_ia32_cvtss2si") || equal(tok, "__builtin_ia32_cvttss2si") ||
     equal(tok, "__builtin_ia32_cvttss2si64") || equal(tok, "__builtin_ia32_movmskps") ||
     equal(tok, "__builtin_ia32_ldmxcsr") ||  equal(tok, "__builtin_ia32_sqrtpd") ||
@@ -5716,7 +5673,14 @@ static Node *primary(Token **rest, Token *tok)
     equal(tok, "__builtin_ia32_cvtsd2si") || equal(tok, "__builtin_ia32_cvtsd2si64") || 
     equal(tok, "__builtin_ia32_cvttsd2si") || equal(tok, "__builtin_ia32_cvttsd2si64") ||
     equal(tok, "__builtin_ia32_movmskpd") || equal(tok, "__builtin_ia32_pmovmskb128") || 
-    equal(tok, "__builtin_ia32_cvtss2si64")) {
+    equal(tok, "__builtin_ia32_cvtss2si64") || equal(tok, "__builtin_ia32_cvtps2pi") || 
+    equal(tok, "__builtin_ia32_cvttps2pi") || equal(tok, "__builtin_ia32_cvttpd2pi") || 
+    equal(tok, "__builtin_ia32_cvtpi2pd") ||  equal(tok, "__builtin_ia32_cvtpd2pi") ||
+    equal(tok, "__builtin_ia32_sqrtss") || equal(tok, "__builtin_ia32_rcpss") || 
+    equal(tok, "__builtin_ia32_rcpps") || equal(tok, "__builtin_ia32_rsqrtps") ||
+    equal(tok, "__builtin_ia32_clflush") || equal(tok, "_mm_clflush") ||
+    equal(tok, "__builtin_ia32_pmovmskb") || equal(tok, "__builtin_ia32_sqrtps") || 
+    equal(tok, "__builtin_ia32_rsqrtss")) {
     int builtin = builtin_enum(tok);
     if (builtin != -1) {
       Node *node = new_node(builtin, tok);    
@@ -5730,149 +5694,6 @@ static Node *primary(Token **rest, Token *tok)
     }
 
   }
-  
-  if (equal(tok, "__builtin_ia32_addss") || equal(tok, "__builtin_ia32_subss") ||
-      equal(tok, "__builtin_ia32_movlhps") || equal(tok, "__builtin_ia32_movhlps") ||
-      equal(tok, "__builtin_ia32_unpckhps") || equal(tok, "__builtin_ia32_unpcklps") ||
-      equal(tok, "__builtin_ia32_loadhps") || equal(tok, "__builtin_ia32_storehps") ||
-      equal(tok, "__builtin_ia32_loadlps") || equal(tok, "__builtin_ia32_storelps") ||
-      equal(tok, "__builtin_ia32_movntq") || equal(tok, "__builtin_ia32_movntps") ||
-      equal(tok, "__builtin_ia32_addsd") || equal(tok, "__builtin_ia32_subsd") ||
-      equal(tok, "__builtin_ia32_mulsd") || equal(tok, "__builtin_ia32_divsd") ||
-      equal(tok, "__builtin_ia32_movsd") || equal(tok, "__builtin_ia32_loadhpd") ||  
-      equal(tok, "__builtin_ia32_loadlpd") || equal(tok, "__builtin_ia32_packsswb128") ||
-      equal(tok, "__builtin_ia32_packssdw128") || equal(tok, "__builtin_ia32_packuswb128") ||
-      equal(tok, "__builtin_ia32_punpckhbw128") || equal(tok, "__builtin_ia32_punpckhwd128") ||
-      equal(tok, "__builtin_ia32_punpckhdq128") || equal(tok, "__builtin_ia32_punpckhqdq128") ||
-      equal(tok, "__builtin_ia32_punpcklbw128") || equal(tok, "__builtin_ia32_punpcklwd128") ||
-      equal(tok, "__builtin_ia32_punpckldq128") || equal(tok, "__builtin_ia32_punpcklqdq128") ||
-      equal(tok, "__builtin_ia32_paddsb128") || equal(tok, "__builtin_ia32_paddsw128") || 
-      equal(tok, "__builtin_ia32_paddusb128") || equal(tok, "__builtin_ia32_paddusw128") || 
-      equal(tok, "__builtin_ia32_psubsb128") || equal(tok, "__builtin_ia32_psubsw128") || 
-      equal(tok, "__builtin_ia32_psubusb128") || equal(tok, "__builtin_ia32_psubusw128") || 
-      equal(tok, "__builtin_ia32_pmaddwd128") || equal(tok, "__builtin_ia32_pmulhw128") || 
-      equal(tok, "__builtin_ia32_pmuludq") || equal(tok, "__builtin_ia32_pmuludq128") || 
-      equal(tok, "__builtin_ia32_psllwi128") || equal(tok, "__builtin_ia32_pslldi128") || 
-      equal(tok, "__builtin_ia32_psllqi128") || equal(tok, "__builtin_ia32_psrawi128") || 
-      equal(tok, "__builtin_ia32_psradi128") || equal(tok, "__builtin_ia32_psrlwi128") || 
-      equal(tok, "__builtin_ia32_psrldi128") || equal(tok, "__builtin_ia32_psrlqi128") || 
-      equal(tok, "__builtin_ia32_psllw128") || equal(tok, "__builtin_ia32_pslld128") || 
-      equal(tok, "__builtin_ia32_psllq128") || equal(tok, "__builtin_ia32_psraw128") || 
-      equal(tok, "__builtin_ia32_psrad128") || equal(tok, "__builtin_ia32_psrlw128") || 
-      equal(tok, "__builtin_ia32_psrld128") || equal(tok, "__builtin_ia32_psrlq128") || 
-      equal(tok, "__builtin_ia32_pandn128") || equal(tok, "__builtin_ia32_pmaxsw128") || 
-      equal(tok, "__builtin_ia32_pmaxub128") || equal(tok, "__builtin_ia32_pminsw128") || 
-      equal(tok, "__builtin_ia32_pminub128") || equal(tok, "__builtin_ia32_pmulhuw128") || 
-      equal(tok, "__builtin_ia32_pavgb128") || equal(tok, "__builtin_ia32_pavgw128") ||
-      equal(tok, "__builtin_ia32_psadbw128") || equal(tok, "__builtin_ia32_movnti") ||
-      equal(tok, "__builtin_ia32_movnti64") || equal(tok, "__builtin_ia32_movntdq") ||
-      equal(tok, "__builtin_ia32_movntpd") || 
-      equal(tok, "__builtin_ia32_divss") || equal(tok, "__builtin_ia32_mulss"))
-  {
-    int builtin = builtin_enum(tok);
-    if (builtin != -1) {
-      Node *node = new_node(builtin, tok);    
-      SET_CTX(ctx); 
-      tok = skip(tok->next, "(", ctx);
-      node->lhs = assign(&tok, tok);
-      add_type(node->lhs);
-      SET_CTX(ctx);     
-      tok = skip(tok, ",", ctx);
-      node->rhs = assign(&tok, tok);
-      add_type(node->rhs);
-      SET_CTX(ctx);      
-      *rest = skip(tok, ")", ctx);
-      return node;
-    }
-  }
-
-
-  if (equal(tok, "__builtin_ia32_sqrtss") || equal(tok, "__builtin_ia32_rcpss") || 
-      equal(tok, "__builtin_ia32_rcpps") || equal(tok, "__builtin_ia32_rsqrtps") ||
-      equal(tok, "__builtin_ia32_clflush") || equal(tok, "_mm_clflush") ||
-      equal(tok, "__builtin_ia32_pmovmskb") || 
-      equal(tok, "__builtin_ia32_sqrtps") || equal(tok, "__builtin_ia32_rsqrtss")) {
-    int builtin = builtin_enum(tok);
-    if (builtin != -1) {
-      Node *node = new_node(builtin, tok);
-      SET_CTX(ctx); 
-      tok = skip(tok->next, "(", ctx);
-      node->lhs = assign(&tok, tok);
-      add_type(node->lhs);
-      SET_CTX(ctx); 
-      *rest = skip(tok, ")", ctx);
-      return node;
-    }
-   }
-
-   
-  if (equal(tok, "__builtin_ia32_vec_init_v2si") || equal(tok, "__builtin_ia32_vec_ext_v2si") ||
-      equal(tok, "__builtin_ia32_vec_ext_v4si") ||
-      equal(tok, "__builtin_ia32_minps") || equal(tok, "__builtin_ia32_maxps") ||
-      equal(tok, "__builtin_ia32_andps") || equal(tok, "__builtin_ia32_andnps") ||
-      equal(tok, "__builtin_ia32_orps") || equal(tok, "__builtin_ia32_xorps") ||
-      equal(tok, "__builtin_ia32_cmpeqss") || equal(tok, "__builtin_ia32_cmpltss") ||
-      equal(tok, "__builtin_ia32_cmpless") || equal(tok, "__builtin_ia32_movss") ||
-      equal(tok, "__builtin_ia32_cmpneqss") || equal(tok, "__builtin_ia32_cmpnltss") ||
-      equal(tok, "__builtin_ia32_cmpnless") || equal(tok, "__builtin_ia32_cmpordss") ||
-      equal(tok, "__builtin_ia32_cmpunordss") || equal(tok, "__builtin_ia32_cmpeqps") || 
-      equal(tok, "__builtin_ia32_cmpltps") || equal(tok, "__builtin_ia32_cmpleps") ||
-      equal(tok, "__builtin_ia32_cmpgtps") || equal(tok, "__builtin_ia32_cmpgeps") || 
-      equal(tok, "__builtin_ia32_cmpneqps") || equal(tok, "__builtin_ia32_cmpnltps") || 
-      equal(tok, "__builtin_ia32_cmpnleps") || equal(tok, "__builtin_ia32_cmpngtps") || 
-      equal(tok, "__builtin_ia32_cmpngeps") || equal(tok, "__builtin_ia32_cmpordps") ||
-      equal(tok, "__builtin_ia32_cmpunordps") || equal(tok, "__builtin_ia32_comieq") || 
-      equal(tok, "__builtin_ia32_comilt") || equal(tok, "__builtin_ia32_comile") || 
-      equal(tok, "__builtin_ia32_comige") || equal(tok, "__builtin_ia32_comigt") || 
-      equal(tok, "__builtin_ia32_comineq") || equal(tok, "__builtin_ia32_ucomieq") || 
-      equal(tok, "__builtin_ia32_ucomilt") || equal(tok, "__builtin_ia32_ucomile") || 
-      equal(tok, "__builtin_ia32_ucomige") || equal(tok, "__builtin_ia32_ucomigt") || 
-      equal(tok, "__builtin_ia32_ucomineq") || equal(tok, "__builtin_ia32_ucomine") ||
-      equal(tok, "__builtin_ia32_comine") || equal(tok, "__builtin_ia32_pmaxsw") || 
-      equal(tok, "__builtin_ia32_pmaxub") || equal(tok, "__builtin_ia32_pminsw") || 
-      equal(tok, "__builtin_ia32_pminub") || equal(tok, "__builtin_ia32_pmulhuw") || 
-      equal(tok, "__builtin_ia32_minpd") || equal(tok, "__builtin_ia32_minsd") ||
-      equal(tok, "__builtin_ia32_maxpd") || equal(tok, "__builtin_ia32_maxsd") || 
-      equal(tok, "__builtin_ia32_andpd") || equal(tok, "__builtin_ia32_andnpd") || 
-      equal(tok, "__builtin_ia32_orpd") || equal(tok, "__builtin_ia32_xorpd") || 
-      equal(tok, "__builtin_ia32_cmpeqpd") || equal(tok, "__builtin_ia32_cmpltpd") || 
-      equal(tok, "__builtin_ia32_cmplepd") || equal(tok, "__builtin_ia32_cmpgtpd") || 
-      equal(tok, "__builtin_ia32_cmpgepd") || equal(tok, "__builtin_ia32_cmpneqpd") || 
-      equal(tok, "__builtin_ia32_cmpnltpd") || equal(tok, "__builtin_ia32_cmpnlepd") || 
-      equal(tok, "__builtin_ia32_cmpngtpd") || equal(tok, "__builtin_ia32_cmpngepd") ||
-      equal(tok, "__builtin_ia32_cmpordpd") || equal(tok, "__builtin_ia32_cmpunordpd") ||
-      equal(tok, "__builtin_ia32_cmpeqsd") || equal(tok, "__builtin_ia32_cmpltsd") ||
-      equal(tok, "__builtin_ia32_cmplesd") || equal(tok, "__builtin_ia32_cmpneqsd") ||
-      equal(tok, "__builtin_ia32_cmpnltsd") || equal(tok, "__builtin_ia32_cmpnlesd") ||
-      equal(tok, "__builtin_ia32_cmpordsd") || equal(tok, "__builtin_ia32_cmpunordsd") ||
-      equal(tok, "__builtin_ia32_comisdeq") || equal(tok, "__builtin_ia32_comisdlt") ||
-      equal(tok, "__builtin_ia32_comisdle") || equal(tok, "__builtin_ia32_comisdgt") ||
-      equal(tok, "__builtin_ia32_comisdge") || equal(tok, "__builtin_ia32_comisdneq") ||
-      equal(tok, "__builtin_ia32_ucomisdeq") || equal(tok, "__builtin_ia32_ucomisdlt") ||
-      equal(tok, "__builtin_ia32_ucomisdle") || equal(tok, "__builtin_ia32_ucomisdgt") ||
-      equal(tok, "__builtin_ia32_ucomisdge") || equal(tok, "__builtin_ia32_ucomisdneq") ||  
-      equal(tok, "__builtin_ia32_cvtsd2ss") ||  equal(tok, "__builtin_ia32_cvtsi2sd") || 
-      equal(tok, "__builtin_ia32_cvtsi642sd") || equal(tok, "__builtin_ia32_cvtss2sd") || 
-      equal(tok, "__builtin_ia32_unpckhpd") || equal(tok, "__builtin_ia32_unpcklpd") || 
-      equal(tok, "__builtin_ia32_maxss") || equal(tok, "__builtin_ia32_minss"))
-  {
-    int builtin = builtin_enum(tok);
-    if (builtin != -1) {
-      Node *node = new_node(builtin, tok);
-      SET_CTX(ctx); 
-      tok = skip(tok->next, "(", ctx);
-      node->lhs = assign(&tok, tok);
-      add_type(node->lhs);
-      SET_CTX(ctx);     
-      tok = skip(tok, ",", ctx);
-      node->rhs = assign(&tok, tok);
-      add_type(node->rhs);
-      SET_CTX(ctx);       
-      *rest = skip(tok, ")", ctx);
-      return node;
-    }
-  }
-
    
   if (equal(tok, "__builtin_shuffle"))
   {
@@ -5900,9 +5721,7 @@ static Node *primary(Token **rest, Token *tok)
 
   
   if (equal(tok, "__builtin_ia32_maskmovq"))
-  {
-    if (!opt_mmx)
-      error_tok(tok, "%s %d: in primary : option -mmmx required", PARSE_C, __LINE__);
+  {   
     int builtin = builtin_enum(tok);
     if (builtin != -1) {
       Node *node = new_node(builtin, tok);
@@ -6049,10 +5868,6 @@ static Node *primary(Token **rest, Token *tok)
   // defined in builtin_table[]
   int builtin = builtin_enum(tok);
   if (builtin != -1) {
-  
-    if (!opt_mmx)
-        error_tok(tok, "%s %d: in primary : option -mmmx required for builtin_ia32", PARSE_C, __LINE__);
-
     Node *node = new_node(builtin, tok);
     SET_CTX(ctx); 
     tok = skip(tok->next, "(", ctx);
@@ -6304,6 +6119,15 @@ static Node *primary(Token **rest, Token *tok)
   if (equal(tok, "__builtin_popcount")) {
       return ParseBuiltin(ND_POPCOUNT, tok, rest);
   }
+
+  if (equal(tok, "__builtin_popcountl")) {
+      return ParseBuiltin(ND_POPCOUNTL, tok, rest);
+  }
+
+  if (equal(tok, "__builtin_popcountll")) {
+      return ParseBuiltin(ND_POPCOUNTLL, tok, rest);
+  }
+
 
 
   if (equal(tok, "__builtin_expect")) {
@@ -7276,6 +7100,8 @@ char *nodekind2str(NodeKind kind)
   case ND_BUILTIN_HUGE_VALF: return "ISNAN"; 
   case ND_BUILTIN_HUGE_VALL: return "ISNAN";
   case ND_POPCOUNT: return "POPCOUNT";
+  case ND_POPCOUNTL: return "POPCOUNTL";
+  case ND_POPCOUNTLL: return "POPCOUNTLL";
   case ND_RETURN_ADDR: return "RETURN_ADDRESS";  
   case ND_BUILTIN_FRAME_ADDRESS: return "FRAME_ADDRESS"; 
   case ND_BUILTIN_ADD_OVERFLOW: return "ADD_OVERFLOW";    

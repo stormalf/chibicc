@@ -702,6 +702,11 @@ void add_type(Node *node)
     add_type(node->builtin_val);
     node->ty = ty_int;
     return;
+  case ND_POPCOUNTL:
+  case ND_POPCOUNTLL:
+    add_type(node->builtin_val);
+    node->ty = ty_long;
+    return;
   case ND_BUILTIN_BSWAP16:
     add_type(node->builtin_val);
     node->ty = ty_short;

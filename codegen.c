@@ -1489,17 +1489,21 @@ static void gen_int128_op(Node *node) {
 static void scalar_to_xmm(Type *vec_ty, const char *xmm_reg) {
     switch (vec_ty->base->kind) {
     case TY_INT:
-        println("  movd %%eax, %s", xmm_reg);          // move scalar to XMM
-        println("  pshufd $0x0, %s, %s", xmm_reg, xmm_reg); // duplicate to all lanes
-        break;
+      println("  movd %%eax, %s", xmm_reg);      
+      println("  pshufd $0x0, %s, %s", xmm_reg, xmm_reg); 
+      break; 
+    case TY_LONG:
+      println("  movq %%rax, %s", xmm_reg);       
+      println("  punpckqdq %s, %s", xmm_reg, xmm_reg); 
+      break; 
     case TY_FLOAT:
-        println("  shufps $0x00, %s, %s", xmm_reg, xmm_reg);
-        break;
+      println("  shufps $0x00, %s, %s", xmm_reg, xmm_reg);
+      break;
     case TY_DOUBLE:
-        println("  shufpd $0x00, %s, %s", xmm_reg, xmm_reg);
-        break;
+      println("  shufpd $0x00, %s, %s", xmm_reg, xmm_reg);
+      break;
     default:
-        error("%s: %s:%d: error: in scalar_to_xmm : unsupported vector base type for scalar promotion", CODEGEN_C, __FILE__, __LINE__);
+      error("%s: %s:%d: error: in scalar_to_xmm : unsupported vector base type for scalar promotion %d", CODEGEN_C, __FILE__, __LINE__, vec_ty->base->kind);
     }
 }
 
@@ -1654,6 +1658,11 @@ static void gen_vector_op(Node *node) {
     break;
   }
 
+}
+
+static void gen_builtin(Node *node, const char *insn) {
+    gen_expr(node->builtin_val); 
+    println("  %s %%rax, %%rax", insn); 
 }
 
 static void gen_vec_init_v2si(Node *node) {
@@ -2663,11 +2672,12 @@ static void gen_expr(Node *node)
     return;
   }
   case ND_BUILTIN_CTZLL:
-  case ND_BUILTIN_CTZL: {
-    gen_expr(node->builtin_val); 
-    println("  bsf %%rax, %%rax"); 
-    return;
-  }
+  case ND_BUILTIN_CTZL: gen_builtin(node, "bsf"); return;
+  // {
+  //   gen_expr(node->builtin_val); 
+  //   println("  bsf %%rax, %%rax"); 
+  //   return;
+  // }
 
   case ND_BUILTIN_BSWAP16: {
       gen_expr(node->builtin_val);  
@@ -2732,12 +2742,9 @@ static void gen_expr(Node *node)
   println(".Lframe_address_return%d:", c);
     return;
   }
-
-  case ND_POPCOUNT:
-    gen_expr(node->builtin_val); 
-    println("  popcnt %%rax, %%rax"); 
-    return;
-
+  case ND_POPCOUNTL:
+  case ND_POPCOUNTLL:
+  case ND_POPCOUNT: gen_builtin(node, "popcnt"); return;
   case ND_EXPECT: {
     gen_expr(node->lhs); 
     push(); 

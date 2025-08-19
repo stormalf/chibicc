@@ -1,6 +1,6 @@
 CC=gcc
 CFLAGS =-std=c11 -g -fno-common -Wall -Wno-switch 
-CFLAGS_DIAG=-dotfile -std=c11 -mmmx
+CFLAGS_DIAG=-dotfile -std=c11 
 OBJECT=chibicc
 OBJECTLIB=libchibicc
 SRCS=$(wildcard *.c)
@@ -94,6 +94,7 @@ memcached:
 
 openssh-portable:
 	cd ../openssh-portable && make clean && CC=chibicc ./configure && make && make tests
+
 
 # Misc.
 

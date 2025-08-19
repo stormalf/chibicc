@@ -721,6 +721,8 @@ typedef enum
   ND_MOVNTI64,
   ND_MOVNTDQ,
   ND_MOVNTPD,
+  ND_POPCOUNTL,
+  ND_POPCOUNTLL,
 } NodeKind;
 
 // AST node type
