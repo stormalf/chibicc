@@ -1,6 +1,6 @@
 CC=gcc
 CFLAGS =-std=c11 -g -fno-common -Wall -Wno-switch 
-CFLAGS_DIAG=-dotfile 
+CFLAGS_DIAG=-dotfile -std=c11 
 OBJECT=chibicc
 OBJECTLIB=libchibicc
 SRCS=$(wildcard *.c)
@@ -61,13 +61,13 @@ projects: zlib util-linux nginx
 
 
 curl:
-	cd ../curl && make clean && CC=chibicc ./configure && make && make test
+	cd ../curl && make clean && CC=chibicc  CFLAGS="-std=c11" ./configure && make && make test
 
 zlib:
-	cd ../zlib && make clean && CC=chibicc ./configure && make && make test
+	cd ../zlib && make clean && CC=chibicc CFLAGS=-fPIC ./configure && make && make test
 
 nmap:
-	cd ../nmap && make clean && CC=chibicc LDFLAGS="-ldbus-1" LIBS="-ldbus-1" ./configure --with-dbus && make && make check
+	cd ../nmap && make clean && CC=chibicc LDFLAGS="-fPIC -ldbus-1" LIBS="-ldbus-1 -latomic" ./configure --with-dbus && make && make check
 
 openssl:
 	cd ../openssl && make clean && CC=chibicc ./configure && make 
@@ -90,7 +90,11 @@ git:
 	cd ../git && CC=chibicc CFLAGS=-fPIC ./configure && make && make test
 
 memcached:
-	cd ../memcached && make clean && CC=chibicc CFLAGS=-fPIC ./configure && make && make test
+	cd ../memcached && make clean && CC=chibicc CFLAGS="-fPIC -std=c11" ./configure && make && make test
+
+openssh-portable:
+	cd ../openssh-portable && make clean && CC=chibicc ./configure && make && make tests
+
 
 # Misc.
 
@@ -115,4 +119,4 @@ install:
 uninstall:
 	sudo rm -rf	/usr/local/include/x86_64-linux-gnu/chibicc && sudo rm /usr/local/bin/chibicc
 
-.PHONY: test clean test-stage2 libchibicc projects projects-all test-all install uninstall
+.PHONY: test clean test-stage2 libchibicc projects projects-all  projects-oth test-all install uninstall

@@ -11,6 +11,36 @@ void assert(int expected, int actual, char *code) {
   }
 }
 
+void assert64(long long expected, long long actual, char *code) {
+  if (expected == actual) {
+    printf("%s => %lld\n", code, actual);
+  } else {
+    printf("%s => %lld expected but got %lld\n", code, expected, actual);
+    exit(1);
+  }
+}
+
+
+typedef unsigned long long uint64_t;
+void print_i128(__int128 v) {
+  unsigned __int128 uv = v; // for bit shifts
+  uint64_t lo = (uint64_t)uv;
+  uint64_t hi = (uint64_t)(uv >> 64);
+
+  printf("(%lld, %llu)", (long long)hi, (unsigned long long)lo);
+}
+
+void assert128(__int128 k, __int128 x, char *code, char *func, int line) {
+  if (k != x) {
+    printf("%s:%d: %s => want ", func, line, code);
+    print_i128(k);
+    printf(" but got ");
+    print_i128(x);
+    printf("\n");
+    exit(1);
+  }
+}
+
 
 static int static_fn() { return 5; }
 int ext1 = 5;

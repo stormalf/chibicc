@@ -336,9 +336,7 @@ static Token *read_const_expr(Token **rest, Token *tok)
       tok = tok->next;
 
       if (has_paren) {
-        ctx->filename = PREPROCESS_C;
-        ctx->funcname = "read_const_expr";        
-        ctx->line_no = __LINE__ + 1;           
+        SET_CTX(ctx); 
         tok = skip(tok, ")", ctx);
       } 
 
@@ -375,8 +373,10 @@ static Token *read_const_expr(Token **rest, Token *tok)
     tok = tok->next;  // consume '>'
   }
 
-  if (has_paren)
+  if (has_paren) {
+    SET_CTX(ctx); 
     tok = skip(tok, ")", ctx);
+  }
 
   bool found = file_exists_in_include_path(filename);
   cur = cur->next = new_num_token(found ? 1 : 0, start);
@@ -473,18 +473,14 @@ static MacroParam *read_macro_params(Token **rest, Token *tok, char **va_args_na
   while (!equal(tok, ")"))
   {
     if (cur != &head) {
-      ctx->filename = PREPROCESS_C;
-      ctx->funcname = "read_macro_params";        
-      ctx->line_no = __LINE__ + 1;         
+      SET_CTX(ctx);          
       tok = skip(tok, ",", ctx);
     }
 
     if (equal(tok, "..."))
     {
       *va_args_name = "__VA_ARGS__";
-      ctx->filename = PREPROCESS_C;
-      ctx->funcname = "read_macro_params";        
-      ctx->line_no = __LINE__ + 1;          
+      SET_CTX(ctx);        
       *rest = skip(tok->next, ")", ctx);
       return head.next;
     }
@@ -495,9 +491,7 @@ static MacroParam *read_macro_params(Token **rest, Token *tok, char **va_args_na
     if (equal(tok->next, "..."))
     {
       *va_args_name = strndup(tok->loc, tok->len);
-      ctx->filename = PREPROCESS_C;
-      ctx->funcname = "read_macro_params";        
-      ctx->line_no = __LINE__ + 1;          
+      SET_CTX(ctx);         
       *rest = skip(tok->next->next, ")", ctx);
       return head.next;
     }
@@ -633,9 +627,7 @@ read_macro_args(Token **rest, Token *tok, MacroParam *params, char *va_args_name
   for (; pp; pp = pp->next)
   {
     if (cur != &head) {
-      ctx->filename = PREPROCESS_C;
-      ctx->funcname = "read_macro_args";        
-      ctx->line_no = __LINE__ + 1;          
+      SET_CTX(ctx);        
       tok = skip(tok, ",", ctx);
     }
     cur = cur->next = read_macro_arg_one(&tok, tok, false);
@@ -656,9 +648,7 @@ read_macro_args(Token **rest, Token *tok, MacroParam *params, char *va_args_name
     else
     {
       if (pp != params) {
-        ctx->filename = PREPROCESS_C;
-        ctx->funcname = "read_macro_args";        
-        ctx->line_no = __LINE__ + 1;           
+        SET_CTX(ctx);         
         tok = skip(tok, ",", ctx);
       }
       arg = read_macro_arg_one(&tok, tok, true);
@@ -673,9 +663,7 @@ read_macro_args(Token **rest, Token *tok, MacroParam *params, char *va_args_name
     error_tok(start, "%s: in read_macro_args : too many arguments", PREPROCESS_C);
   }
 
-  ctx->filename = PREPROCESS_C;
-  ctx->funcname = "read_macro_args";        
-  ctx->line_no = __LINE__ + 1;   
+  SET_CTX(ctx); 
   skip(tok, ")",ctx);
   *rest = tok;
   return head.next;
@@ -859,9 +847,7 @@ static Token *subst(Macro *m, MacroArg *args)
       if (has_varargs(args))
         for (Token *t = arg->tok; t->kind != TK_EOF; t = t->next)
           cur = cur->next = t;
-      ctx->filename = PREPROCESS_C;
-      ctx->funcname = "subst";        
-      ctx->line_no = __LINE__ + 1;             
+      SET_CTX(ctx);            
       tok = skip(tok, ")", ctx);
       continue;
     }
@@ -1388,8 +1374,6 @@ void define_macro(char *name, char *buf)
   {
     Token *tok = tokenize(new_file("<built-in>", 1, buf));
     add_macro(name, true, tok);
-    if (isPrintMacro)
-      printf("#define %s %s\n", name, buf);
   }
 }
 
@@ -1516,6 +1500,12 @@ void init_macros(void)
   define_macro("__STDC_UTF_32__", "1");
   define_macro("__STDC_VERSION__", "201112L");
   define_macro("__STDC__", "1");
+  // define_macro("__STDC_IEC_559__" , "1");
+  // define_macro("__STDC_ISO_10646__" , "201706L");
+  // define_macro("__STDC_IEC_559_COMPLEX__" , "1");
+  // define_macro("__STDC_IEC_60559_COMPLEX__" , "201404L");
+  // define_macro("__STDC_IEC_60559_BFP__" , "201404L");
+  define_macro("__GNUC_STDC_INLINE__", "1");
   define_macro("__USER_LABEL_PREFIX__", "");
   define_macro("__alignof__", "_Alignof");
   define_macro("__amd64", "1");
@@ -1535,11 +1525,11 @@ void init_macros(void)
   define_macro("__volatile__", "volatile");
   define_macro("__x86_64", "1");
   define_macro("__x86_64__", "1");
-  define_macro("__GNU__", "1");
   define_macro("_GNU_SOURCE", "1");  
   define_macro("_DEFAULT_SOURCE", "1");
   //define_macro("__INTEL_COMPILER", "1");
   //define_macro("__GNUC__", "9");
+   define_macro("__GNUC__", "2");
   //define_macro("__GNUC_MINOR__", "1");
   //define_macro("__GNUC_PATCHLEVEL__ ", "1");
   //define_macro("HAVE_ATTRIBUTE_PACKED", "1");
@@ -1549,12 +1539,7 @@ void init_macros(void)
   define_macro("HAVE_SEND", "1");
   define_macro("HAVE_SYS_IO_H", "1");  
   define_macro("__extension__", "");
-  // define_macro("HAVE_GCC__SYNC_CHAR_TAS", "1");
-  // define_macro("HAVE_GCC__SYNC_INT32_TAS", "1");
-  // define_macro("HAVE_GCC__SYNC_INT32_CAS", "1");
-  // define_macro("HAVE_GCC__SYNC_INT64_CAS", "1");
-  // define_macro("HAVE_GCC__ATOMIC_INT32_CAS", "1"); 
-  // define_macro("HAVE_GCC__ATOMIC_INT64_CAS", "1");
+  define_macro("HAVE_TEST_AND_SET", "1");  
   define_macro("HAVE_LONG_LONG_INT_64", "1");
   define_macro("__ATOMIC_RELAXED", "0");
   define_macro("__ATOMIC_CONSUME", "1");
@@ -1562,10 +1547,8 @@ void init_macros(void)
   define_macro("__ATOMIC_RELEASE", "3");
   define_macro("__ATOMIC_ACQ_REL", "4");
   define_macro("__ATOMIC_SEQ_CST", "5");
-  define_macro("offsetof", "__builtin_offsetof");
   define_macro("__builtin_choose_expr(cond, true_expr, false_expr)", "(cond ? true_expr : false_expr)");
-  //define_macro("__GNUC__", "9");
-    define_macro("__SHRT_MAX__", "32767");
+  define_macro("__SHRT_MAX__", "32767");
   define_macro("__INT_MAX__", "2147483647");
   define_macro("__LONG_MAX__", "9223372036854775807L");
   define_macro("__LONG_LONG_MAX__", "9223372036854775807LL");

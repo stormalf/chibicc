@@ -23,6 +23,13 @@
 #include <stdatomic.h>
 #include <limits.h>
 
+#define SET_CTX(ctx) \
+    do { \
+        (ctx)->filename = __FILE__; \
+        (ctx)->funcname = __func__; \
+        (ctx)->line_no  = __LINE__ + 1; \
+    } while (0)
+
 
 
 #define ROUNDUP(X, K)   (((X) + (K) - 1) & -(K))
@@ -40,10 +47,10 @@
 #endif
 
 #define PRODUCT "chibicc"
-#define VERSION "1.0.22.8"
+#define VERSION "1.0.22.9"
 #define MAXLEN 501
 #define DEFAULT_TARGET_MACHINE "x86_64-linux-gnu"
-
+#define MAX_BUILTIN_ARGS 8
 
 #define STR_HELPER(x) #x
 #define STR(x) STR_HELPER(x)
@@ -110,6 +117,9 @@ this " PRODUCT " contains only some differences for now like new parameters\n"
 -msse4 enabling sse4 support \n \
 -nostdlib  Do not use the standard system startup files or libraries when linking \n \
 -nostdinc Do not use the standard system header files when compiling \n \
+-std=c99 generates an error on implicit function declaration (without -std only a warning is emitted) \n \
+-std=c11 generates an error on implicit function declaration (without -std only a warning is emitted) \n \
+-mmmx to allow mmx instructions and builtin functions linked to mmx like __builtin_packuswb... \n \
 chibicc [ -o <path> ] <file>\n"
 
 typedef struct Type Type;
@@ -121,8 +131,8 @@ typedef struct Hideset Hideset;
 
 typedef struct
 {
-  char *filename;
-  char *funcname;
+  const char *filename;
+  const char *funcname;
   int line_no;
 } Context;
 
@@ -196,7 +206,7 @@ noreturn void error(char *fmt, ...) __attribute__((format(printf, 1, 2)));
 noreturn void error_at(char *loc, char *fmt, ...) __attribute__((format(printf, 2, 3)));
 noreturn void error_tok(Token *tok, char *fmt, ...) __attribute__((format(printf, 2, 3)));
 void warn_tok(Token *tok, char *fmt, ...) __attribute__((format(printf, 2, 3)));
-bool equal(Token *tok, char *op);
+bool equal(Token *tok, const char *op);
 Token *skip(Token *tok, char *op, Context *ctx);
 bool consume(Token **rest, Token *tok, char *str);
 void convert_pp_tokens(Token *tok);
@@ -226,6 +236,30 @@ void print_all_macros(void);
 //
 // parse.c
 //
+// This struct represents a variable initializer. Since initializers
+// can be nested (e.g. `int x[2][2] = {{1, 2}, {3, 4}}`), this struct
+// is a tree data structure.
+typedef struct Initializer Initializer;
+struct Initializer
+{
+  Initializer *next;
+  Type *ty;
+  Token *tok;
+  bool is_flexible;
+
+  // If it's not an aggregate type and has an initializer,
+  // `expr` has an initialization expression.
+  Node *expr;
+
+  // If it's an initializer for an aggregate type (e.g. array or struct),
+  // `children` has initializers for its children.
+  Initializer **children;
+
+  // Only one member can be initialized for a union.
+  // `mem` is used to clarify which member is initialized.
+  Member *mem;
+};
+
 
 // Variable or function
 typedef struct Obj Obj;
@@ -249,6 +283,7 @@ struct Obj
   bool is_function;
   bool is_definition;
   bool is_static;
+  bool is_extern;
 
   // Global variable
   bool is_tentative;
@@ -296,7 +331,7 @@ struct Obj
   int file_no; // Index or number to identify the source file
   int line_no; // Line number where the variable or function is defined
   bool is_prototyped; // Whether the function is prototyped or not
-
+  Initializer *init;
 };
 
 // Global variable can be initialized either by a constant expression
@@ -409,6 +444,285 @@ typedef enum
   ND_BUILTIN_BSWAP32, //builtin bswap32
   ND_BUILTIN_BSWAP64, //builtin bswap64,
   ND_BUILTIN_FRAME_ADDRESS, // builtin frame address
+  ND_EMMS,
+  ND_SFENCE,
+  ND_LFENCE,
+  ND_MFENCE,
+  ND_PAUSE,
+  ND_STMXCSR,
+  ND_CVTPI2PS,
+  ND_CVTPS2PI,
+  ND_CLFLUSH,
+  ND_VECINITV2SI,
+  ND_VECEXTV2SI,
+  ND_PACKSSWB,
+  ND_PACKSSDW,
+  ND_PACKUSWB,
+  ND_PUNPCKHBW,
+  ND_PUNPCKHWD,
+  ND_PUNPCKHDQ,
+  ND_PUNPCKLBW,
+  ND_PUNPCKLWD,
+  ND_PUNPCKLDQ,
+  ND_PADDB,
+  ND_PADDW,
+  ND_PADDD,
+  ND_PADDQ,
+  ND_PADDSB,
+  ND_PADDSW,
+  ND_PADDUSB,
+  ND_PADDUSW,
+  ND_PSUBB,
+  ND_PSUBW,
+  ND_PSUBD,
+  ND_PSUBQ,
+  ND_PSUBSB,
+  ND_PSUBSW,
+  ND_PSUBUSB,
+  ND_PSUBUSW,
+  ND_PMADDWD,
+  ND_PMULHW,
+  ND_PMULLW,
+  ND_PSLLW,
+  ND_PSLLWI,
+  ND_PSLLD,
+  ND_PSLLDI,
+  ND_PSLLQ,
+  ND_PSLLQI,
+  ND_PSRAW,
+  ND_PSRAWI,
+  ND_PSRAD,
+  ND_PSRADI,
+  ND_PSRLW,
+  ND_PSRLWI,
+  ND_PSRLD,
+  ND_PSRLDI,
+  ND_PSRLQ,
+  ND_PSRLQI,
+  ND_PAND,
+  ND_PANDN,
+  ND_POR,
+  ND_PXOR,
+  ND_PCMPEQB,
+  ND_PCMPGTB,
+  ND_PCMPEQW,
+  ND_PCMPGTW,
+  ND_PCMPEQD,
+  ND_PCMPGTD,
+  ND_VECINITV4HI,
+  ND_VECINITV8QI,
+  ND_ADDSS,
+  ND_SUBSS,
+  ND_MULSS,
+  ND_DIVSS,
+  ND_SQRTSS,
+  ND_RCPSS,
+  ND_RSQRTSS,
+  ND_SQRTPS,
+  ND_MINSS,
+  ND_MAXSS,
+  ND_RCPPS,
+  ND_RSQRTPS,
+  ND_MINPS,
+  ND_MAXPS,
+  ND_ANDPS,
+  ND_ANDNPS,
+  ND_ORPS,
+  ND_XORPS,
+  ND_CMPEQSS,
+  ND_CMPLTSS,
+  ND_CMPLESS,
+  ND_MOVSS,
+  ND_CMPNEQSS,
+  ND_CMPNLTSS,
+  ND_CMPNLESS,
+  ND_CMPORDSS,
+  ND_CMPUNORDSS,
+  ND_CMPEQPS,
+  ND_CMPLTPS,
+  ND_CMPLEPS,
+  ND_CMPGTPS,
+  ND_CMPGEPS,
+  ND_CMPNEQPS,
+  ND_CMPNLTPS,
+  ND_CMPNLEPS,
+  ND_CMPNGTPS,
+  ND_CMPNGEPS,
+  ND_CMPORDPS,
+  ND_CMPUNORDPS,
+  ND_COMIEQ,
+  ND_COMILT,
+  ND_COMILE,
+  ND_COMIGT,
+  ND_COMIGE,
+  ND_COMINEQ,
+  ND_UCOMIEQ,
+  ND_UCOMILT,
+  ND_UCOMILE,
+  ND_UCOMIGT,
+  ND_UCOMIGE,
+  ND_UCOMINEQ,
+  ND_CVTSS2SI,
+  ND_CVTSS2SI64,
+  ND_CVTTSS2SI,
+  ND_CVTTSS2SI64,
+  ND_CVTTPS2PI,
+  ND_CVTSI2SS,
+  ND_CVTSI642SS,
+  ND_MOVLHPS,
+  ND_MOVHLPS,
+  ND_UNPCKHPS,
+  ND_UNPCKLPS,
+  ND_LOADHPS,
+  ND_STOREHPS,
+  ND_LOADLPS,
+  ND_STORELPS,
+  ND_MOVMSKPS,
+  ND_LDMXCSR,
+  ND_SHUFPS,
+  ND_SHUFFLE,
+  ND_PMAXSW,
+  ND_PMAXUB,
+  ND_PMINSW,
+  ND_PMINUB,
+  ND_PMOVMSKB,
+  ND_PMULHUW,
+  ND_MASKMOVQ,
+  ND_PAVGB,
+  ND_PAVGW,
+  ND_PSADBW,
+  ND_MOVNTQ,
+  ND_MOVNTPS,
+  ND_SHUFPD,
+  ND_VECEXTV4SI,
+  ND_ADDSD,
+  ND_SUBSD,
+  ND_MULSD,
+  ND_DIVSD,
+  ND_SQRTPD,
+  ND_MOVSD,
+  ND_SQRTSD,
+  ND_MINPD,
+  ND_MINSD,
+  ND_MAXPD,
+  ND_MAXSD,
+  ND_ANDPD,
+  ND_ANDNPD,
+  ND_ORPD,
+  ND_XORPD,
+  ND_CMPEQPD,
+  ND_CMPLTPD,
+  ND_CMPLEPD,
+  ND_CMPGTPD,
+  ND_CMPGEPD,
+  ND_CMPNEQPD,
+  ND_CMPNLTPD,
+  ND_CMPNLEPD,
+  ND_CMPNGTPD,
+  ND_CMPNGEPD,
+  ND_CMPORDPD,
+  ND_CMPUNORDPD,
+  ND_CMPEQSD,
+  ND_CMPLTSD,
+  ND_CMPLESD,
+  ND_CMPNEQSD,
+  ND_CMPNLTSD,
+  ND_CMPNLESD,
+  ND_CMPORDSD,
+  ND_CMPUNORDSD,
+  ND_COMISDEQ,
+  ND_COMISDLT,
+  ND_COMISDLE,
+  ND_COMISDGT,
+  ND_COMISDGE,
+  ND_COMISDNEQ,
+  ND_UCOMISDEQ,
+  ND_UCOMISDLT,
+  ND_UCOMISDLE,
+  ND_UCOMISDGT,
+  ND_UCOMISDGE,
+  ND_UCOMISDNEQ,
+  ND_MOVQ128,
+  ND_CVTDQ2PD,
+  ND_CVTDQ2PS,
+  ND_CVTPD2DQ,
+  ND_CVTPD2PI,
+  ND_CVTPD2PS,
+  ND_CVTTPD2DQ,
+  ND_CVTTPD2PI,
+  ND_CVTPI2PD,
+  ND_CVTPS2DQ,
+  ND_CVTTPS2DQ,
+  ND_CVTPS2PD,
+  ND_CVTSD2SI,
+  ND_CVTSD2SI64,
+  ND_CVTTSD2SI,
+  ND_CVTTSD2SI64,
+  ND_CVTSD2SS,
+  ND_CVTSI2SD,
+  ND_CVTSI642SD,
+  ND_CVTSS2SD,
+  ND_UNPCKHPD,
+  ND_UNPCKLPD,
+  ND_LOADHPD,
+  ND_LOADLPD,
+  ND_MOVMSKPD,
+  ND_PACKSSWB128,
+  ND_PACKSSDW128,
+  ND_PACKUSWB128,
+  ND_PUNPCKHBW128,
+  ND_PUNPCKHWD128,
+  ND_PUNPCKHDQ128,
+  ND_PUNPCKHQDQ128,
+  ND_PUNPCKLBW128,
+  ND_PUNPCKLWD128,
+  ND_PUNPCKLDQ128,
+  ND_PUNPCKLQDQ128,
+  ND_PADDSB128,
+  ND_PADDSW128,
+  ND_PADDUSB128,
+  ND_PADDUSW128,
+  ND_PSUBSB128,
+  ND_PSUBSW128,
+  ND_PSUBUSB128,
+  ND_PSUBUSW128,
+  ND_PMADDWD128,
+  ND_PMULHW128,
+  ND_PMULUDQ,
+  ND_PMULUDQ128,
+  ND_PSLLWI128,
+  ND_PSLLDI128,
+  ND_PSLLQI128,
+  ND_PSRAWI128,
+  ND_PSRADI128,
+  ND_PSRLWI128,
+  ND_PSRLDI128,
+  ND_PSRLQI128,
+  ND_PSLLW128,
+  ND_PSLLD128,
+  ND_PSLLQ128,
+  ND_PSRAW128,
+  ND_PSRAD128,
+  ND_PSRLW128,
+  ND_PSRLD128,
+  ND_PSRLQ128,
+  ND_PANDN128,
+  ND_PMAXSW128,
+  ND_PMAXUB128,
+  ND_PMINSW128,
+  ND_PMINUB128,
+  ND_PMOVMSKB128,
+  ND_PMULHUW128,
+  ND_MASKMOVDQU,
+  ND_PAVGB128,
+  ND_PAVGW128,
+  ND_PSADBW128,
+  ND_MOVNTI,
+  ND_MOVNTI64,
+  ND_MOVNTDQ,
+  ND_MOVNTPD,
+  ND_POPCOUNTL,
+  ND_POPCOUNTLL,
 } NodeKind;
 
 // AST node type
@@ -428,8 +742,7 @@ Node
   Node *then;
   Node *els;
   Node *init;
-  Node *inc;
-
+  Node *inc;  
   // "break" and "continue" labels
   char *brk_label;
   char *cont_label;
@@ -472,7 +785,8 @@ Node
   Node *builtin_src;
   Node *builtin_size;
   Node *builtin_val;
-
+  Node *builtin_args[MAX_BUILTIN_ARGS];
+  int  builtin_nargs;
   // Atomic op= operators
   Obj *atomic_addr;
   Node *atomic_expr;
@@ -488,6 +802,7 @@ Node
   long double fval;
   // for dot diagram
   int unique_number;
+  bool is_scalar_promoted;  
 };
 
 typedef struct
@@ -530,7 +845,11 @@ typedef enum
   TY_VLA, // variable-length array
   TY_STRUCT,
   TY_UNION,
+  TY_VECTOR,
+  TY_INT128,
 } TypeKind;
+
+
 
 struct Type
 {
@@ -584,6 +903,7 @@ struct Type
   bool is_aligned;
   bool is_weak;
   char *visibility;
+  bool is_inline;
 
   bool is_compound_lit; // Flag to indicate if this type is a compound literal
   // Function type
@@ -597,6 +917,8 @@ struct Type
   bool is_destructor;
   int destructor_priority;
   int constructor_priority;
+  bool is_vector;
+
 };
 
 // Struct member
@@ -634,6 +956,9 @@ extern Type *ty_float;
 extern Type *ty_double;
 extern Type *ty_ldouble;
 
+extern Type *ty_int128;
+extern Type *ty_uint128;
+
 bool is_integer(Type *ty);
 bool is_flonum(Type *ty);
 bool is_numeric(Type *ty);
@@ -642,6 +967,7 @@ Type *copy_type(Type *ty);
 Type *pointer_to(Type *base);
 Type *func_type(Type *return_ty);
 Type *array_of(Type *base, int size);
+Type *vector_of(Type *base, int size);
 Type *vla_of(Type *base, Node *expr);
 Type *enum_type(void);
 Type *struct_type(void);
@@ -649,6 +975,8 @@ void add_type(Node *node);
 bool is_bitfield(Node *node);
 bool is_array(Type *ty);
 Type *new_qualified_type(Type *ty);
+bool is_vector(Type *ty);
+bool is_int128(Type *ty);
 
 
 char *nodekind2str(NodeKind kind);
@@ -757,12 +1085,15 @@ extern bool printTokens;
 extern bool isPrintMacro;
 extern char *extract_filename(char *tmpl);
 extern char *extract_path(char *tmpl);
+extern bool opt_sse2;
 extern bool opt_sse3;
 extern bool opt_sse4;
+extern bool opt_mmx;
 extern bool opt_g;
 extern FILE *open_file(char *path);
 extern FILE *ofile;
-
+extern bool opt_c99;
+extern bool opt_c11;
 
 //
 // extended_asm.c

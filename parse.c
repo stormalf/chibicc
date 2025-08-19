@@ -64,29 +64,6 @@ struct VarAttr
   bool is_packed;
 };
 
-// This struct represents a variable initializer. Since initializers
-// can be nested (e.g. `int x[2][2] = {{1, 2}, {3, 4}}`), this struct
-// is a tree data structure.
-typedef struct Initializer Initializer;
-struct Initializer
-{
-  Initializer *next;
-  Type *ty;
-  Token *tok;
-  bool is_flexible;
-
-  // If it's not an aggregate type and has an initializer,
-  // `expr` has an initialization expression.
-  Node *expr;
-
-  // If it's an initializer for an aggregate type (e.g. array or struct),
-  // `children` has initializers for its children.
-  Initializer **children;
-
-  // Only one member can be initialized for a union.
-  // `mem` is used to clarify which member is initialized.
-  Member *mem;
-};
 
 // For local variable initializer.
 typedef struct InitDesg InitDesg;
@@ -97,6 +74,13 @@ struct InitDesg
   Member *member;
   Obj *var;
 };
+
+
+typedef struct {
+    const char *name;
+    int node_kind;
+} BuiltinEntry;
+
 
 static int nbFunc = 0;
 static Type* ArrayType[50][50];
@@ -169,8 +153,8 @@ static Node *equality(Token **rest, Token *tok);
 static Node *relational(Token **rest, Token *tok);
 static Node *shift(Token **rest, Token *tok);
 static Node *add(Token **rest, Token *tok);
-static Node *new_add(Node *lhs, Node *rhs, Token *tok);
-static Node *new_sub(Node *lhs, Node *rhs, Token *tok);
+static Node *new_add(Node *lhs, Node *rhs, Token *tok, bool is_op);
+static Node *new_sub(Node *lhs, Node *rhs, Token *tok, bool is_op);
 static Node *mul(Token **rest, Token *tok);
 static Node *cast(Token **rest, Token *tok);
 static Member *get_struct_member(Type *ty, Token *tok);
@@ -216,10 +200,13 @@ static bool is_const_var(Obj *var) ;
 static bool is_str_tok(Token **rest, Token *tok, Token **str_tok);
 
 static Node *compound_stmt2(Token **rest, Token *tok);
+static int builtin_enum(Token *tok);
+static Node *scalar_to_vector(Node *scalar, Type *vec_ty);
+static void promote_scalar_to_vector(Node *node);
 
 static int align_down(int n, int align)
 {
-  return align_to(n - align + 1, align);
+    return (n / align) * align;
 }
 
 static void enter_scope(void)
@@ -307,6 +294,7 @@ static Node *new_unary(NodeKind kind, Node *expr, Token *tok)
   if (isDotfile && dotf != NULL)
     fprintf(dotf, "%s%d -> %s%d\n", nodekind2str(node->kind), node->unique_number, nodekind2str(expr->kind), expr->unique_number);
   node->lhs = expr;
+  add_type(node->lhs);
   return node;
 }
 
@@ -374,6 +362,8 @@ Node *new_cast(Node *expr, Type *ty)
   node->kind = ND_CAST;
   node->tok = expr->tok;
   node->lhs = expr;
+  if (!ty)
+    error("%s: %s:%d: error: in new_cast : type is null", PARSE_C, __FILE__, __LINE__);
   node->ty = copy_type(ty);
   return node;
 }
@@ -413,6 +403,18 @@ static Initializer *new_initializer(Type *ty, bool is_flexible)
       init->is_flexible = true;
       return init;
     }
+
+    init->children = calloc(ty->array_len, sizeof(Initializer *));
+    if (init->children == NULL)
+      error("%s: %s:%d: error: in new_initializer : init->children is null %d %d", PARSE_C, __FILE__, __LINE__, ty->array_len, ty->size);
+    for (int i = 0; i < ty->array_len; i++)
+      init->children[i] = new_initializer(ty->base, false);
+    return init;
+  }
+
+  
+  if (ty->kind == TY_VECTOR)
+  {
 
     init->children = calloc(ty->array_len, sizeof(Initializer *));
     if (init->children == NULL)
@@ -531,8 +533,10 @@ static Type *find_typedef(Token *tok)
   if (tok->kind == TK_IDENT)
   {
     VarScope *sc = find_var(tok);
-    if (sc)
-      return sc->type_def;
+    if (sc) {
+      if (sc->type_def)
+        return sc->type_def;
+    }
   }
   return NULL;
 }
@@ -580,6 +584,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     OTHER = 1 << 16,
     SIGNED = 1 << 17,
     UNSIGNED = 1 << 18,
+    INT128 = 1 << 19,
   };
 
   Type *ty = ty_int;
@@ -593,9 +598,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
       consume(&tok, tok, "__label__");
       //skip the label identifier
       tok = tok->next;
-      ctx->filename = PARSE_C;
-      ctx->funcname = "declspec";          
-      ctx->line_no = __LINE__ + 1;  
+      SET_CTX(ctx); 
       tok = skip(tok, ";", ctx);
     }
 
@@ -650,9 +653,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
       if (equal(tok, "("))
       {
         ty = typename(&tok, tok->next);
-        ctx->filename = PARSE_C;
-        ctx->funcname = "declspec";          
-        ctx->line_no = __LINE__ + 1;
+        SET_CTX(ctx); 
         tok = skip(tok, ")", ctx);
       }
       is_atomic = true;
@@ -663,14 +664,8 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     {
       if (!attr)
         error_tok(tok, "%s %d: in declspec : _Alignas is not allowed in this context", PARSE_C, __LINE__);
-      ctx->filename = PARSE_C;
-      ctx->funcname = "declspec";          
-      ctx->line_no = __LINE__ + 1;  
+      SET_CTX(ctx); 
       tok = skip(tok->next, "(", ctx);
-      // if (is_typename(tok))
-      //   attr->align = typename(&tok, tok)->align;
-      // else
-      //   attr->align = const_expr(&tok, tok);
       int align;
       if (is_typename(tok))
         align = typename(&tok, tok)->align;
@@ -684,9 +679,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
         ty = copy_type(ty);
         ty->align = attr->align;
       }      
-      ctx->filename = PARSE_C;
-      ctx->funcname = "declspec";          
-      ctx->line_no = __LINE__ + 1;       
+      SET_CTX(ctx); 
       tok = skip(tok, ")", ctx);
       continue;
     }
@@ -750,6 +743,8 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
       counter += FLOAT;
     else if (equal(tok, "double"))
       counter += DOUBLE;
+    else if (equal(tok, "__int128"))
+      counter += INT128;        
     else if (equal(tok, "signed"))
       counter |= SIGNED;
     else if (equal(tok, "unsigned"))
@@ -787,6 +782,10 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     case SIGNED + INT:
       ty = ty_int;
       break;
+    case INT128:
+    case SIGNED + INT128:
+      ty = copy_type(ty_int128);
+      break;         
     case UNSIGNED:
     case UNSIGNED + INT:
       ty = ty_uint;
@@ -807,6 +806,9 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     case UNSIGNED + LONG + LONG + INT:
       ty = ty_ulong;
       break;
+    case UNSIGNED + INT128:
+      ty = copy_type(ty_uint128);
+      break;      
     case FLOAT:
       ty = ty_float;
       break;
@@ -821,14 +823,14 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     }
 
     tok = tok->next;
-    //to fix attributes after on before the identifier
-    if (attr && !attr->is_typedef)  {      
-      tok = attribute_list(tok, attr, thing_attributes);
-      tok->next = attribute_list(tok->next, attr, thing_attributes);
-    } else {      
-    tok = attribute_list(tok, ty, type_attributes);
-      tok->next = attribute_list(tok->next, ty, type_attributes);
-    }
+    //to fix attributes after or before the identifier
+    // if (attr && !attr->is_typedef)  {      
+    //   tok = attribute_list(tok, attr, thing_attributes);
+    //   tok->next = attribute_list(tok->next, attr, thing_attributes);
+    // } else {      
+    // tok = attribute_list(tok, ty, type_attributes);
+    //   tok->next = attribute_list(tok->next, ty, type_attributes);
+    // }
 
 
   }
@@ -839,6 +841,8 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     ty->is_atomic = true;
   }
   *rest = tok;
+  if (!ty)
+    error_tok(tok, "%s %d: in declspec : ty is null!", PARSE_C, __LINE__);
   return ty;
 }
 
@@ -847,7 +851,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
 static Type *func_params(Token **rest, Token *tok, Type *ty)
 {
 
-  tok = attribute_list(tok, ty, type_attributes);
+  //tok = attribute_list(tok, ty, type_attributes);
   if (equal(tok, "void") && equal(tok->next, ")"))
   {
     *rest = tok->next->next;
@@ -861,12 +865,12 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
   while (!equal(tok, ")") && !equal(tok->next, "{"))
   {
 
+    tok = attribute_list(tok, ty, type_attributes);
     if (cur != &head) {
-      ctx->filename = PARSE_C;
-      ctx->funcname = "func_params";      
-      ctx->line_no = __LINE__ + 2;
-      if (equal(tok, ";"))
+      if (equal(tok, ";")) {
+        SET_CTX(ctx); 
         tok = skip(tok, ";", ctx);
+      }
       //fix for Static assert declaration ISS-165/ISS-166
       else if (!equal(tok, ",")) {
         Node *node = expr(&tok, tok);
@@ -877,20 +881,16 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
           tok = tok->next;
         break;
     } else {
-      ctx->filename = PARSE_C;
-      ctx->funcname = "func_params";      
-      ctx->line_no = __LINE__ + 1;
+      SET_CTX(ctx); 
       tok = skip(tok, ",", ctx);
     }
     }
-
+    tok = attribute_list(tok, ty, type_attributes);
     if (equal(tok, "..."))
     {
       is_variadic = true;
       tok = tok->next;
-      ctx->filename = PARSE_C;
-      ctx->funcname = "func_params";      
-      ctx->line_no = __LINE__ + 1;
+      SET_CTX(ctx); 
       skip(tok, ")", ctx);
       break;
     }
@@ -921,7 +921,7 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
 
     Token *name = ty2->name;
 
-    if (ty2->kind == TY_ARRAY || ty2->kind == TY_VLA)
+    if (is_array(ty2))
     {
       // "array of T" is converted to "pointer to T" only in the parameter
       // context. For example, *argv[] is converted to **argv by this.
@@ -959,6 +959,8 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
     ty->params = head.next;
   ty->is_variadic = is_variadic;
   *rest = tok->next;
+  if (!ty)
+    error_tok(tok, "%s %d: in func_params : ty is null!", PARSE_C, __LINE__);
   return ty;
 }
 
@@ -989,9 +991,7 @@ static Type *array_dimensions(Token **rest, Token *tok, Type *ty)
 
   Node *expr = assign(&tok, tok);
   add_type(expr);
-  ctx->filename = PARSE_C;
-  ctx->funcname = "array_dimensions";  
-  ctx->line_no = __LINE__ + 1;
+  SET_CTX(ctx); 
   tok = skip(tok, "]", ctx);
 
   if (equal(tok, "["))
@@ -1010,7 +1010,7 @@ static Type *array_dimensions(Token **rest, Token *tok, Type *ty)
 static Type *type_suffix(Token **rest, Token *tok, Type *ty)
 {
 
-  tok->next = attribute_list(tok->next, ty, type_attributes);
+  //tok->next = attribute_list(tok->next, ty, type_attributes);
 
   if (equal(tok, "("))
   {
@@ -1032,6 +1032,8 @@ static Type *type_suffix(Token **rest, Token *tok, Type *ty)
     return array_dimensions(rest, tok->next, ty);
 
   *rest = tok;
+  if (!ty)
+    error_tok(tok, "%s %d: in type_suffix : ty is null!", PARSE_C, __LINE__);
   return ty;
 }
 
@@ -1066,13 +1068,10 @@ static Type *pointers(Token **rest, Token *tok, Type *ty)
       }
     }
   }
-  //   while (equal(tok, "const") || equal(tok, "volatile") || equal(tok, "restrict") ||
-  //          equal(tok, "__restrict") || equal(tok, "__restrict__") ||
-  //          equal(tok, "_Atomic") || equal(tok, "_Complex") )
-  //     tok = tok->next;
-  // }
   tok = attribute_list(tok, ty, type_attributes);
   *rest = tok;
+  if (!ty)
+    error_tok(tok, "%s %d: in pointers : ty is null!", PARSE_C, __LINE__);
   return ty;
 }
 
@@ -1089,11 +1088,10 @@ static Type *declarator(Token **rest, Token *tok, Type *ty)
     Token *start = tok;
     Type dummy = {};
     declarator(&tok, start->next, &dummy);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "declarator";    
-    ctx->line_no = __LINE__ + 2;
-    if (equal(tok, ")"))
+    if (equal(tok, ")")) {
+      SET_CTX(ctx); 
       tok = skip(tok, ")", ctx);
+    }
     ty = type_suffix(rest, tok, ty);
     if (!ty)
       error_tok(tok, "%s %d: in declarator : ty is null", PARSE_C, __LINE__);
@@ -1115,6 +1113,8 @@ static Type *declarator(Token **rest, Token *tok, Type *ty)
   ty->name = name;
   ty->name_pos = name_pos;
   tok = attribute_list(tok, ty, type_attributes);
+  if (!ty)
+    error_tok(tok, "%s %d: in declarator : ty is null!", PARSE_C, __LINE__);
   return ty;
 }
 
@@ -1129,9 +1129,7 @@ static Type *abstract_declarator(Token **rest, Token *tok, Type *ty)
     Token *start = tok;
     Type dummy = {};
     abstract_declarator(&tok, start->next, &dummy);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "abstract_declarator";    
-    ctx->line_no = __LINE__ + 1;
+    SET_CTX(ctx); 
     tok = skip(tok, ")", ctx);
     ty = type_suffix(rest, tok, ty);
     if (!ty)
@@ -1199,11 +1197,12 @@ static Type *enum_specifier(Token **rest, Token *tok)
     *rest = tok;
     if (ty2)
       return ty2;
+
+    if (!ty)
+      error_tok(tok, "%s %d: in enum_specifier : ty is null!", PARSE_C, __LINE__);  
     return ty;
   }
-  ctx->filename = PARSE_C;
-  ctx->funcname = "enum_specifier";  
-  ctx->line_no = __LINE__ + 1;
+  SET_CTX(ctx); 
   tok = skip(tok, "{", ctx);
 
   // Read an enum-list.
@@ -1213,9 +1212,7 @@ static Type *enum_specifier(Token **rest, Token *tok)
   {
     tok->next = attribute_list(tok->next, ty, type_attributes);
     if (i++ > 0) {
-      ctx->filename = PARSE_C;
-      ctx->funcname = "enum_specifier";  
-      ctx->line_no = __LINE__ + 1;
+      SET_CTX(ctx); 
       tok = skip(tok, ",", ctx);
     }
 
@@ -1233,15 +1230,15 @@ static Type *enum_specifier(Token **rest, Token *tok)
 
   if (tag)
     push_tag_scope(tag, ty);
+  if (!ty)
+    error_tok(tok, "%s %d: in enum_specifier : ty is null!", PARSE_C, __LINE__);    
   return ty;
 }
 
 // typeof-specifier = "(" (expr | typename) ")"
 static Type *typeof_specifier(Token **rest, Token *tok)
 {
-  ctx->filename = PARSE_C;
-  ctx->funcname = "typeof_specifier";
-  ctx->line_no = __LINE__ + 1;
+  SET_CTX(ctx); 
   tok = skip(tok, "(", ctx);
 
   Type *ty;
@@ -1255,10 +1252,10 @@ static Type *typeof_specifier(Token **rest, Token *tok)
     add_type(node);
     ty = node->ty;
   }
-  ctx->filename = PARSE_C;
-  ctx->funcname = "typeof_specifier";
-  ctx->line_no = __LINE__ + 1;
+  SET_CTX(ctx); 
   *rest = skip(tok, ")", ctx);
+  if (!ty)
+    error_tok(tok, "%s %d: in typeof_specifier : ty is null!", PARSE_C, __LINE__);
   return ty;
 }
 
@@ -1350,13 +1347,11 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
   Node head = {};
   Node *cur = &head;
   int i = 0;
-
   while (!equal(tok, ";"))
   {
+
     if (i++ > 0) {
-      ctx->filename = PARSE_C;
-      ctx->funcname = "declaration";      
-      ctx->line_no = __LINE__ + 1;  
+      SET_CTX(ctx); 
       tok = skip(tok, ",", ctx);
     }
     int alt_align = attr ? attr->align : 0;
@@ -1368,7 +1363,6 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
     if (!ty->name)
       error_tok(ty->name_pos, "%s %d: in declaration : variable name omitted", PARSE_C, __LINE__);    
     tok = attribute_list(tok, attr, thing_attributes);
-   
     if (attr && attr->is_static)
     {
       // static local variable
@@ -1422,12 +1416,20 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
     //   var->align = attr->align;
 
 
-    if (equal(tok, "="))
-    {
-      Node *expr = lvar_initializer(&tok, tok->next, var);
-      cur = cur->next = new_unary(ND_EXPR_STMT, expr, tok);
-    }
+    // if (equal(tok, "="))
+    // {
 
+    //   Node *expr = lvar_initializer(&tok, tok->next, var);
+    //   cur = cur->next = new_unary(ND_EXPR_STMT, expr, tok);
+    // }
+    if (equal(tok, "=")) {
+      tok = tok->next;
+      Node *expr;
+      expr = lvar_initializer(&tok, tok, var);
+      if (expr->lhs && expr->lhs->var && expr->lhs->var->name) {
+        cur = cur->next = new_unary(ND_EXPR_STMT, expr, tok);
+      }
+    }
     //ISS-146
     if (var->ty->size < 0)
       error_tok(ty->name, "%s %d: in declaration : variable has incomplete type", PARSE_C, __LINE__);
@@ -1449,9 +1451,7 @@ static Token *skip_excess_element(Token *tok)
   if (equal(tok, "{"))
   {
     tok = skip_excess_element(tok->next);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "skip_excess_element";      
-    ctx->line_no = __LINE__ + 1;
+    SET_CTX(ctx); 
     return skip(tok, "}", ctx);
   }
 
@@ -1502,7 +1502,21 @@ static void string_initializer(Token **rest, Token *tok, Initializer *init)
         init->children[i]->expr = new_num(value, tok);
     }
     break;
-    
+    case 16:
+      {
+          // Initialize array of 128-bit integers
+          for (int i = 0; i < len; i++)
+          {
+              __int128 value = 0;
+              for (int j = 0; j < 16 && i * 16 + j < len; j++)
+              {
+                  value |= (__int128)(unsigned char)tok->str[i * 16 + j] << (j * 8);
+              }
+              init->children[i]->expr = new_num(value, tok);
+          }
+          
+      }
+    break;
   }
   default:
     error_tok(tok, "%s %d: in string_initializer : array of inappropriate type initialized from string constant", PARSE_C, __LINE__);
@@ -1556,9 +1570,7 @@ static void array_designator(Token **rest, Token *tok, Type *ty, int *begin, int
   {
     *end = *begin;
   }
-  ctx->filename = PARSE_C;
-  ctx->funcname = "array_designator";    
-  ctx->line_no = __LINE__ + 1;
+  SET_CTX(ctx); 
   *rest = skip(tok, "]", ctx);
 }
 
@@ -1566,12 +1578,11 @@ static void array_designator(Token **rest, Token *tok, Type *ty, int *begin, int
 static Member *struct_designator(Token **rest, Token *tok, Type *ty)
 {
   
-  Token *start = tok;
-  ctx->filename = PARSE_C;
-  ctx->funcname = "struct_designator";    
-  ctx->line_no = __LINE__ + 1;
-  if (equal(tok, "."))
+  Token *start = tok;  
+  if (equal(tok, ".")) {
+    SET_CTX(ctx); 
     tok = skip(tok, ".", ctx);
+  }
   if (tok->kind != TK_IDENT)
     error_tok(tok, "%s %d: in struct_designator : expected a field designator", PARSE_C, __LINE__);
 
@@ -1650,9 +1661,7 @@ static void designation(Token **rest, Token *tok, Initializer *init)
     error_tok(tok, "%s %d: in designation: field name not in struct or union initializer", PARSE_C, __LINE__);
 
   if (equal(tok, "=")) {
-    ctx->filename = PARSE_C;
-    ctx->funcname = "designation";       
-    ctx->line_no = __LINE__ + 1;
+    SET_CTX(ctx); 
     tok = skip(tok, "=", ctx);
   }
   // tok = tok->next;
@@ -1675,9 +1684,7 @@ static int count_array_init_elements(Token *tok, Type *ty)
   {
 
     if (!first) {
-      ctx->filename = PARSE_C;
-      ctx->funcname = "count_array_init_elements";        
-      ctx->line_no = __LINE__ + 1;
+      SET_CTX(ctx); 
       tok = skip(tok, ",", ctx);
     }
 
@@ -1688,9 +1695,7 @@ static int count_array_init_elements(Token *tok, Type *ty)
       i = const_expr(&tok, tok->next);
       if (equal(tok, "..."))
         i = const_expr(&tok, tok->next);
-      ctx->filename = PARSE_C;
-      ctx->funcname = "count_array_init_elements";        
-      ctx->line_no = __LINE__ + 1;        
+      SET_CTX(ctx);        
       tok = skip(tok, "]", ctx);
       designation(&tok, tok, dummy);
     }
@@ -1708,9 +1713,7 @@ static int count_array_init_elements(Token *tok, Type *ty)
 // array-initializer1 = "{" initializer ("," initializer)* ","? "}"
 static void array_initializer1(Token **rest, Token *tok, Initializer *init)
 {
-  ctx->filename = PARSE_C;
-  ctx->funcname = "array_initializer1";        
-  ctx->line_no = __LINE__ + 1;  
+  SET_CTX(ctx); 
   tok = skip(tok, "{", ctx);
 
   // if (init->is_flexible)
@@ -1730,9 +1733,7 @@ static void array_initializer1(Token **rest, Token *tok, Initializer *init)
   for (int i = 0; !consume_end(rest, tok); i++)
   {
     if (!first) {
-      ctx->filename = PARSE_C;
-      ctx->funcname = "array_initializer1";        
-      ctx->line_no = __LINE__ + 1;        
+      SET_CTX(ctx); 
       tok = skip(tok, ",", ctx);
     }
 
@@ -1772,9 +1773,7 @@ static void array_initializer2(Token **rest, Token *tok, Initializer *init, int 
   {
     Token *start = tok;
     if (i > 0) {
-      ctx->filename = PARSE_C;
-      ctx->funcname = "array_initializer2";        
-      ctx->line_no = __LINE__ + 1;        
+      SET_CTX(ctx); 
       tok = skip(tok, ",", ctx);
     }
 
@@ -1792,9 +1791,7 @@ static void array_initializer2(Token **rest, Token *tok, Initializer *init, int 
 // struct-initializer1 = "{" initializer ("," initializer)* ","? "}"
 static void struct_initializer1(Token **rest, Token *tok, Initializer *init)
 {
-  ctx->filename = PARSE_C;
-  ctx->funcname = "struct_initializer1";        
-  ctx->line_no = __LINE__ + 1;          
+  SET_CTX(ctx);          
   tok = skip(tok, "{", ctx);
 
   Member *mem = init->ty->members;
@@ -1803,9 +1800,7 @@ static void struct_initializer1(Token **rest, Token *tok, Initializer *init)
   while (!consume_end(rest, tok))
   {
     if (!first) {
-      ctx->filename = PARSE_C;
-      ctx->funcname = "struct_initializer1";        
-      ctx->line_no = __LINE__ + 1;         
+      SET_CTX(ctx); 
       tok = skip(tok, ",", ctx);
     }
 
@@ -1840,9 +1835,7 @@ static void struct_initializer2(Token **rest, Token *tok, Initializer *init, Mem
     Token *start = tok;
 
     if (!first || post_desig) {
-      ctx->filename = PARSE_C;
-      ctx->funcname = "struct_initializer2";        
-      ctx->line_no = __LINE__ + 1;         
+      SET_CTX(ctx);         
       tok = skip(tok, ",", ctx);
     }
 
@@ -1869,83 +1862,16 @@ static void struct_initializer2(Token **rest, Token *tok, Initializer *init, Mem
   *rest = tok;
 }
 
-// static void union_initializer(Token **rest, Token *tok, Initializer *init)
-// {
-
-//   // Unlike structs, union initializers take only one initializer,
-//   // and that initializes the first union member by default.
-//   // You can initialize other member using a designated initializer.
-//   if (equal(tok, "{") && equal(tok->next, "."))
-//   {
-//     Member *mem = struct_designator(&tok, tok->next, init->ty);
-//     init->mem = mem;
-//     designation(&tok, tok, init->children[mem->idx]);
-//     // fix issue 113, gcc allows to have a struct finishing with ,}
-//     if (equal(tok, ",") && equal(tok->next, "}"))
-//       consume(&tok, tok, ",");
-//     // issue #110 when union with ,
-//     while (!equal(tok, "}"))
-//     {
-//       Member *mem = struct_designator(&tok, tok->next, init->ty);
-//       init->mem = mem;
-//       designation(&tok, tok, init->children[mem->idx]);
-//       // fix issue 108, gcc allows to have a struct finishing with ,}
-//       if (equal(tok, ",") && equal(tok->next, "}"))
-//         consume(&tok, tok, ",");
-//     }
-//     ctx->filename = PARSE_C;
-//     ctx->funcname = "union_initializer";        
-//     ctx->line_no = __LINE__ + 1;         
-//     *rest = skip(tok, "}", ctx);
-//     return;
-//   }
-
-//   init->mem = init->ty->members;
-
-//   if (equal(tok, "{"))
-//   {
-//     //trying to fix =====ISS-157 about union empty initializer like union string_value lval = {}, rval = {};
-//     if (equal(tok->next, "}")) {
-//       consume(&tok, tok, "{");
-//       ctx->filename = PARSE_C;
-//       ctx->funcname = "union_initializer";        
-//       ctx->line_no = __LINE__ + 1;   
-//       *rest = skip(tok, "}", ctx);
-//       return;
-//     }
-//     initializer2(&tok, tok->next, init->children[0]);
-//     if (equal(tok, ",") && equal(tok->next, "}"))
-//       consume(&tok, tok, ",");
-//     ctx->filename = PARSE_C;
-//     ctx->funcname = "union_initializer";        
-//     ctx->line_no = __LINE__ + 1;   
-//     *rest = skip(tok, "}", ctx);
-//   }
-//   else if (equal(tok->next, "->"))
-//   {
-    
-//     initializer3(rest, tok, init->children[0]);
-//     return;
-//   }
-//   else
-//   {
-//     initializer2(rest, tok, init->children[0]);
-//   }
-// }
 
 static void union_initializer(Token **rest, Token *tok, Initializer *init) {
-    ctx->filename = PARSE_C;
-    ctx->funcname = "union_initializer";        
-    ctx->line_no = __LINE__ + 1;         
+  SET_CTX(ctx);        
   tok = skip(tok, "{", ctx);
 
   bool first = true;
 
   for (; !consume_end(rest, tok); first = false) {
     if (!first) {
-      ctx->filename = PARSE_C;
-      ctx->funcname = "union_initializer";        
-      ctx->line_no = __LINE__ + 1;   
+      SET_CTX(ctx); 
       tok = skip(tok, ",", ctx);
     }
 
@@ -1964,23 +1890,20 @@ static void union_initializer(Token **rest, Token *tok, Initializer *init) {
   }
 }
 
-// // initializer = struct-> union
-// static void initializer3(Token **rest, Token *tok, Initializer *init)
-// {
-//   //ISS-154 the initial error seems more in the init->ty->kind returning TY_CHAR instead of TY_STRUCT (need to check why)
-//   if (init->ty->kind == TY_STRUCT || init->ty->kind == TY_UNION || init->ty->kind == TY_CHAR)
-//   {
-//     Node *expr = assign(rest, tok);
-//     add_type(expr);
-//     if (expr->ty->kind == TY_STRUCT || expr->ty->kind == TY_UNION)
-//     {
-//       init->expr = expr;
-//       return;
-//     }
+static void vector_initializer1(Token **rest, Token *tok, Initializer *init) {
+  SET_CTX(ctx); 
+  tok = skip(tok, "{", ctx);
+  for (int i = 0; i < init->ty->array_len && !equal(tok, "}"); i++) {
+    init->children[i] = calloc(1, sizeof(Initializer));
+    init->children[i]->ty = init->ty->base;
+    initializer2(&tok, tok, init->children[i]);
+    if (equal(tok, ","))
+      tok = tok->next;
+  }
 
-//     init->expr = assign(rest, tok);
-//   }
-// }
+  SET_CTX(ctx); 
+  *rest = skip(tok, "}", ctx);
+}
 
 // initializer = string-initializer | array-initializer
 //             | struct-initializer | union-initializer
@@ -2008,6 +1931,13 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
       string_initializer(&tok, str_tok, init);
       return;
     }
+  }
+
+  if (is_vector(init->ty)) {
+    if (equal(tok, "{")) {
+      vector_initializer1(rest, tok, init); 
+      return;
+    } 
   }
 
   if (init->ty->kind == TY_ARRAY) {
@@ -2068,14 +1998,13 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
     while (!equal(tok, "}")) {
     initializer2(&tok, tok->next, init);
     }
-    ctx->filename = PARSE_C;
-    ctx->funcname = "initializer2";        
-    ctx->line_no = __LINE__ + 1;       
+    SET_CTX(ctx); 
     *rest = skip(tok, "}", ctx);
     return;
   }
 
   init->expr = assign(rest, tok);
+  add_type(init->expr);
 
 }
 
@@ -2095,6 +2024,8 @@ static Type *copy_struct_type(Type *ty)
   }
 
   ty->members = head.next;
+  if (!ty)
+    error("%s %d: in copy_struct_type : ty is null!", PARSE_C, __LINE__);
   return ty;
 }
 
@@ -2132,14 +2063,15 @@ static Node *init_desg_expr(InitDesg *desg, Token *tok)
     node->member = desg->member;
     return node;
   }
-
+  
   Node *lhs = init_desg_expr(desg->next, tok);
   Node *rhs = new_num(desg->idx, tok);
-  return new_unary(ND_DEREF, new_add(lhs, rhs, tok), tok);
+  return new_unary(ND_DEREF, new_add(lhs, rhs, tok, false), tok);
 }
 
 static Node *create_lvar_init(Initializer *init, Type *ty, InitDesg *desg, Token *tok)
 {
+  
   if (ty->kind == TY_ARRAY)
   {
     Node *node = new_node(ND_NULL_EXPR, tok);
@@ -2151,7 +2083,23 @@ static Node *create_lvar_init(Initializer *init, Type *ty, InitDesg *desg, Token
     }
     return node;
   }
-  if (init->expr) {
+  //case of vectors two kinds of initialization possible : direct like {1.0f, 2.0f...} or from expressions like function call
+  if (is_vector(ty)) {
+    if (init->expr) {
+      Node *lhs = init_desg_expr(desg, tok);
+      return new_binary(ND_ASSIGN, lhs, init->expr, tok);
+    }
+ 
+
+    Node *node = new_node(ND_NULL_EXPR, tok);
+    for (int i = 0; i < ty->array_len; i++) {
+      InitDesg desg2 = {desg, i};
+      Node *rhs = create_lvar_init(init->children[i], ty->base, &desg2, tok);
+      node = new_binary(ND_COMMA, node, rhs, tok);
+    }
+    return node;
+  }
+  if (init->expr) {    
     Node *lhs = init_desg_expr(desg, tok);
     return new_binary(ND_ASSIGN, lhs, init->expr, tok);
   }
@@ -2206,8 +2154,9 @@ static Node *lvar_initializer(Token **rest, Token *tok, Obj *var)
   // initializing it with user-supplied values.
   Node *lhs = new_node(ND_MEMZERO, tok);
   lhs->var = var;
-
+  lhs->var->init = init;
   Node *rhs = create_lvar_init(init, var->ty, &desg, tok);
+
   return new_binary(ND_COMMA, lhs, rhs, tok);
 }
 
@@ -2247,7 +2196,8 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
 {
   if (ty->kind == TY_ARRAY)
   {
-
+    int elem_size = ty->base->size;
+    memset(buf + offset, 0, elem_size * ty->array_len);
     if (init->expr)
       error_tok(init->expr->tok, "%s %d: in write_gvar_data : array initializer must be an initializer list", PARSE_C, __LINE__);
     int sz = ty->base->size;
@@ -2255,16 +2205,25 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
       cur = write_gvar_data(cur, init->children[i], ty->base, buf, offset + sz * i);
     return cur;
   }
+  if (is_vector(ty))
+  {
+    int sz = ty->base->size;
+    memset(buf + offset, 0, sz * ty->array_len);
+    for (int i = 0; i < ty->array_len; i++)
+      cur = write_gvar_data(cur, init->children[i], ty->base, buf, offset + sz * i);
+    return cur;
+
+  }
   if (!init->expr) {
   if (ty->kind == TY_STRUCT)
   {
+    // Zero the whole struct first
+    memset(buf + offset, 0, ty->size);
     for (Member *mem = ty->members; mem; mem = mem->next)
     {
       if (mem->is_bitfield)
       {
         Node *expr = init->children[mem->idx]->expr;
-        // if (!expr)
-        //   break;
         if (!expr)
           continue;
         add_type(expr);
@@ -2289,6 +2248,7 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
 
   if (ty->kind == TY_UNION)
   {
+    memset(buf + offset, 0, ty->size);
     if (!init->mem)
       return cur;
     return write_gvar_data(cur, init->children[init->mem->idx],
@@ -2398,7 +2358,7 @@ static bool is_typename(Token *tok)
         "typedef", "enum", "static", "extern", "_Alignas", "signed", "unsigned",
         "const", "volatile", "auto", "register", "restrict", "__restrict",
         "__restrict__", "_Noreturn", "float", "double", "typeof", "inline",
-        "_Thread_local", "__thread", "_Atomic", "_Complex", "__label__", "__typeof"};
+        "_Thread_local", "__thread", "_Atomic", "_Complex", "__label__", "__typeof", "__int128"};
 
     for (int i = 0; i < sizeof(kw) / sizeof(*kw); i++)
       hashmap_put(&map, kw[i], (void *)1);
@@ -2416,9 +2376,7 @@ static Node *asm_stmt(Token **rest, Token *tok)
   while (equal(tok, "volatile") || equal(tok, "inline"))
     tok = tok->next;
 
-  ctx->filename = PARSE_C;
-  ctx->funcname = "asm_stmt";        
-  ctx->line_no = __LINE__ + 1;   
+  SET_CTX(ctx);   
   tok = skip(tok, "(", ctx);
   if (tok->kind != TK_STR || tok->ty->base->kind != TY_CHAR)
     error_tok(tok, "%s %d: in asm_stmt : expected string literal", PARSE_C, __LINE__);
@@ -2432,9 +2390,7 @@ static Node *asm_stmt(Token **rest, Token *tok)
     return node;
   }
   node->asm_str = tok->str;
-  ctx->filename = PARSE_C;
-  ctx->funcname = "asm_stmt";        
-  ctx->line_no = __LINE__ + 1;     
+  SET_CTX(ctx);     
   *rest = skip(tok->next, ")", ctx);
   return node;
 }
@@ -2473,9 +2429,7 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
 
 
     Node *exp = expr(&tok, tok->next);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "stmt";        
-    ctx->line_no = __LINE__ + 1;       
+    SET_CTX(ctx);       
     *rest = skip(tok, ";", ctx);
     add_type(exp);
     // Type *ty = current_fn->ty->return_ty;
@@ -2494,6 +2448,7 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
       error_tok(exp->tok,
                 "%s %d: in stmt : Non-void function cannot return void type expression", PARSE_C, __LINE__);
     }
+
     if (ret_ty->kind != TY_STRUCT && ret_ty->kind != TY_UNION)
       exp = new_cast(exp, ret_ty);
     node->lhs = exp;
@@ -2503,18 +2458,14 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
   if (equal(tok, "if"))
   {
     Node *node = new_node(ND_IF, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "stmt";        
-    ctx->line_no = __LINE__ + 1;       
+    SET_CTX(ctx);       
     tok = skip(tok->next, "(", ctx);
     node->cond = expr(&tok, tok);
 
     if (isDotfile && dotf != NULL)
       fprintf(dotf, "%s%d -> %s%d\n", nodekind2str(node->kind), node->unique_number, nodekind2str(node->cond->kind), node->cond->unique_number);
 
-    ctx->filename = PARSE_C;
-    ctx->funcname = "stmt";        
-    ctx->line_no = __LINE__ + 1;         
+    SET_CTX(ctx);        
     tok = skip(tok, ")", ctx);
     node->then = stmt(&tok, tok, true);
 
@@ -2541,15 +2492,11 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
   if (equal(tok, "switch"))
   {
     Node *node = new_node(ND_SWITCH, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "stmt";        
-    ctx->line_no = __LINE__ + 1;       
+    SET_CTX(ctx);      
     tok = skip(tok->next, "(", ctx);
     node->cond = expr(&tok, tok);
 
-    ctx->filename = PARSE_C;
-    ctx->funcname = "stmt";        
-    ctx->line_no = __LINE__ + 1;       
+    SET_CTX(ctx);      
     tok = skip(tok, ")", ctx);
 
     Node *sw = current_switch;
@@ -2604,9 +2551,7 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
       ((current_switch->cond->ty->is_unsigned && ((uint64_t)end < begin))))
       error_tok(tok, "%s %d: in stmt : empty case range specified", PARSE_C, __LINE__);
 
-    ctx->filename = PARSE_C;
-    ctx->funcname = "stmt";        
-    ctx->line_no = __LINE__ + 1;    
+    SET_CTX(ctx); 
     tok = skip(tok, ":", ctx);
     VarAttr attr = {};
     tok = attribute_list(tok, &attr, thing_attributes);
@@ -2620,11 +2565,11 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
     } else
       *rest = tok;
     //duplicate case value detection
-    // for (Node *c = current_switch->case_next; c; c = c->case_next)
-    // {
-    //   if (!(end < c->begin || begin > c->end))
-    //     error_tok(tok, "%s %d: in stmt : duplicated case value or overlapping range %d", PARSE_C, __LINE__, begin);
-    // }
+    for (Node *c = current_switch->case_next; c; c = c->case_next)
+    {
+      if (!(end < c->begin || begin > c->end))
+        error_tok(tok, "%s %d: in stmt : duplicated case value or overlapping range %ld", PARSE_C, __LINE__, begin);
+    }
     node->begin = begin;
     node->end = end;
     node->case_next = current_switch->case_next;
@@ -2638,9 +2583,7 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
       error_tok(tok, "%s %d: in stmt : stray default", PARSE_C, __LINE__);
 
     Node *node = new_node(ND_CASE, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "stmt";        
-    ctx->line_no = __LINE__ + 1;        
+    SET_CTX(ctx);        
     tok = skip(tok->next, ":", ctx);
     node->label = new_unique_name();
     if (chained) {
@@ -2659,9 +2602,7 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
   if (equal(tok, "for"))
   {
     Node *node = new_node(ND_FOR, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "stmt";        
-    ctx->line_no = __LINE__ + 1;        
+    SET_CTX(ctx);         
     tok = skip(tok->next, "(", ctx);
 
     enter_scope();
@@ -2687,9 +2628,7 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
       if (isDotfile && dotf != NULL)
         fprintf(dotf, "%s%d -> %s%d\n", nodekind2str(node->kind), node->unique_number, nodekind2str(node->cond->kind), node->cond->unique_number);
     }
-    ctx->filename = PARSE_C;
-    ctx->funcname = "stmt";        
-    ctx->line_no = __LINE__ + 1;        
+    SET_CTX(ctx);      
     tok = skip(tok, ";", ctx);
 
     if (!equal(tok, ")"))
@@ -2699,9 +2638,7 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
       if (isDotfile && dotf != NULL)
         fprintf(dotf, "%s%d -> %s%d\n", nodekind2str(node->kind), node->unique_number, nodekind2str(node->inc->kind), node->inc->unique_number);
     }
-    ctx->filename = PARSE_C;
-    ctx->funcname = "stmt";        
-    ctx->line_no = __LINE__ + 1;    
+    SET_CTX(ctx);     
     tok = skip(tok, ")", ctx);
 
     node->then = stmt(rest, tok, true);
@@ -2717,14 +2654,10 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
   if (equal(tok, "while"))
   {
     Node *node = new_node(ND_FOR, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "stmt";        
-    ctx->line_no = __LINE__ + 1;        
+    SET_CTX(ctx);     
     tok = skip(tok->next, "(", ctx);
     node->cond = expr(&tok, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "stmt";        
-    ctx->line_no = __LINE__ + 1;        
+    SET_CTX(ctx);        
     tok = skip(tok, ")", ctx);
 
     char *brk = brk_label;
@@ -2750,22 +2683,14 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
     node->then = stmt(&tok, tok->next, true);
     brk_label = brk;
     cont_label = cont;
-    ctx->filename = PARSE_C;
-    ctx->funcname = "stmt";        
-    ctx->line_no = __LINE__ + 1;    
+    SET_CTX(ctx); 
     tok = skip(tok, "while", ctx);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "stmt";        
-    ctx->line_no = __LINE__ + 1;       
+    SET_CTX(ctx);     
     tok = skip(tok, "(", ctx);
     node->cond = expr(&tok, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "stmt";        
-    ctx->line_no = __LINE__ + 1;        
+    SET_CTX(ctx);       
     tok = skip(tok, ")", ctx);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "stmt";        
-    ctx->line_no = __LINE__ + 1;        
+    SET_CTX(ctx);        
     *rest = skip(tok, ";", ctx);
     return node;
   }
@@ -2780,9 +2705,7 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
       // [GNU] `goto *ptr` jumps to the address specified by `ptr`.
       Node *node = new_node(ND_GOTO_EXPR, tok);
       node->lhs = expr(&tok, tok->next->next);
-      ctx->filename = PARSE_C;
-      ctx->funcname = "stmt";        
-      ctx->line_no = __LINE__ + 1;          
+      SET_CTX(ctx);         
       *rest = skip(tok, ";", ctx);
       return node;
     }
@@ -2791,9 +2714,7 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
     node->label = get_ident(tok->next);
     node->goto_next = gotos;
     gotos = node;
-    ctx->filename = PARSE_C;
-    ctx->funcname = "stmt";        
-    ctx->line_no = __LINE__ + 1;        
+    SET_CTX(ctx);        
     *rest = skip(tok->next->next, ";", ctx);
     return node;
   }
@@ -2804,9 +2725,7 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
       error_tok(tok, "%s %d: in stmt : stray break", PARSE_C, __LINE__);
     Node *node = new_node(ND_GOTO, tok);
     node->unique_label = brk_label;
-    ctx->filename = PARSE_C;
-    ctx->funcname = "stmt";        
-    ctx->line_no = __LINE__ + 1;        
+    SET_CTX(ctx);     
     *rest = skip(tok->next, ";", ctx);
     return node;
   }
@@ -2817,9 +2736,7 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
       error_tok(tok, "%s %d: in stmt : stray continue", PARSE_C, __LINE__);
     Node *node = new_node(ND_GOTO, tok);
     node->unique_label = cont_label;
-    ctx->filename = PARSE_C;
-    ctx->funcname = "stmt";        
-    ctx->line_no = __LINE__ + 1;        
+    SET_CTX(ctx);        
     *rest = skip(tok->next, ";", ctx);
     return node;
   }
@@ -2861,12 +2778,14 @@ static Node *compound_stmt(Token **rest, Token *tok, Node **last)
   {
     VarAttr attr = {};
     tok = attribute_list(tok, &attr, thing_attributes);
+
     if (is_typename(tok) && !equal(tok->next, ":"))
     {
       //VarAttr attr = {};
       Type *basety = declspec(&tok, tok, &attr);
       if (attr.is_typedef)
       {
+  
         Node *vla_calc = parse_typedef(&tok, tok, basety);
         cur = cur->next = new_unary(ND_EXPR_STMT, vla_calc, tok);
         add_type(cur);
@@ -2992,9 +2911,7 @@ static Node *expr_stmt(Token **rest, Token *tok)
   if (isDotfile && dotf != NULL)
     fprintf(dotf, "%s%d -> %s%d\n", nodekind2str(node->kind), node->unique_number, nodekind2str(node->lhs->kind), node->lhs->unique_number);
 
-  ctx->filename = PARSE_C;
-  ctx->funcname = "expr_stmt";        
-  ctx->line_no = __LINE__ + 1;        
+  SET_CTX(ctx);     
   *rest = skip(tok, ";", ctx);
   return node;
 }
@@ -3115,21 +3032,6 @@ static int64_t eval2(Node *node, char ***label)
     return eval(node->lhs) || eval(node->rhs);
   case ND_CAST:
   {
-  //   int64_t val = eval2(node->lhs, label);
-  //   if (is_integer(node->ty))
-  //   {
-  //     switch (node->ty->size)
-  //     {
-  //     case 1:
-  //       return node->ty->is_unsigned ? (uint8_t)val : (int8_t)val;
-  //     case 2:
-  //       return node->ty->is_unsigned ? (uint16_t)val : (int16_t)val;
-  //     case 4:
-  //       return node->ty->is_unsigned ? (uint32_t)val : (int32_t)val;
-  //     }
-  //   }
-  //   return val;
-  // }
      if (is_flonum(node->lhs->ty)) {
         if (node->ty->kind == TY_BOOL)
           return !!eval_double(node->lhs);
@@ -3157,7 +3059,7 @@ static int64_t eval2(Node *node, char ***label)
   //   return eval2(node->lhs, label);
   //from @fuhsnn eval2():Evaluate ND_DEREF for TY_ARRAY
   case ND_DEREF:
-    if (node->ty->kind != TY_ARRAY)
+    if (node->ty->kind != TY_ARRAY && !is_vector(node->ty))
       error_tok(node->tok, "%s:%d: in eval2 : not a compile-time constant node->ty->kind=%d", PARSE_C, __LINE__, node->ty->kind);
     return eval2(node->lhs, label);    
   case ND_MEMBER:
@@ -3170,6 +3072,8 @@ static int64_t eval2(Node *node, char ***label)
     }
     return eval_rval(node->lhs, label) + node->member->offset;
   case ND_VAR:
+    if (is_vector(node->var->ty))
+      return 0;
     if (!label) {
       error_tok(node->tok, "%s %d : in eval2 : not a compile-time constant", PARSE_C, __LINE__);
     }
@@ -3177,7 +3081,7 @@ static int64_t eval2(Node *node, char ***label)
     if (node->var->ty->kind != TY_ARRAY && node->var->ty->kind != TY_FUNC && node->var->ty->kind != TY_INT) {
       error_tok(node->tok, "%s %d: in eval2 : invalid initializer2 %d", PARSE_C, __LINE__, node->var->ty->kind);
     }
-      //trying to fix ======ISS-145 compiling util-linux failed with invalid initalizer2 
+    //trying to fix ======ISS-145 compiling util-linux failed with invalid initalizer2 
     if (node->var->ty->kind == TY_INT)
       return 0;
     *label = &node->var->name;
@@ -3399,7 +3303,6 @@ static Node *to_assign(Node *binary)
 
   // Convert `A op= B` to ``tmp = &A, *tmp = *tmp op B`.
   Obj *var = new_lvar("", pointer_to(binary->lhs->ty), NULL);
-
   Node *expr1 = new_binary(ND_ASSIGN, new_var_node(var, tok),
                            new_unary(ND_ADDR, binary->lhs, tok), tok);
 
@@ -3427,10 +3330,10 @@ static Node *assign(Token **rest, Token *tok)
     return new_binary(ND_ASSIGN, node, assign(rest, tok->next), tok);
 
   if (equal(tok, "+="))
-    return to_assign(new_add(node, assign(rest, tok->next), tok));
+    return to_assign(new_add(node, assign(rest, tok->next), tok, false));
 
   if (equal(tok, "-="))
-    return to_assign(new_sub(node, assign(rest, tok->next), tok));
+    return to_assign(new_sub(node, assign(rest, tok->next), tok, false));
 
   if (equal(tok, "*="))
     return to_assign(new_binary(ND_MUL, node, assign(rest, tok->next), tok));
@@ -3489,9 +3392,7 @@ static Node *conditional(Token **rest, Token *tok)
   Node *node = new_node(ND_COND, tok);
   node->cond = cond;
   node->then = expr(&tok, tok->next);
-  ctx->filename = PARSE_C;
-  ctx->funcname = "conditional";        
-  ctx->line_no = __LINE__ + 1;      
+  SET_CTX(ctx);     
   tok = skip(tok, ":", ctx);
   node->els = conditional(rest, tok);
   return node;
@@ -3531,6 +3432,7 @@ static Node * bitor (Token * *rest, Token *tok)
   {
     Token *start = tok;
     node = new_binary(ND_BITOR, node, bitxor(&tok, tok->next), start);
+    promote_scalar_to_vector(node);
   }
   *rest = tok;
   return node;
@@ -3544,6 +3446,7 @@ static Node *bitxor(Token **rest, Token *tok)
   {
     Token *start = tok;
     node = new_binary(ND_BITXOR, node, bitand(&tok, tok->next), start);
+    promote_scalar_to_vector(node);
   }
   *rest = tok;
   return node;
@@ -3557,6 +3460,7 @@ static Node *bitand(Token **rest, Token *tok)
   {
     Token *start = tok;
     node = new_binary(ND_BITAND, node, equality(&tok, tok->next), start);
+    promote_scalar_to_vector(node);
   }
   *rest = tok;
   return node;
@@ -3656,10 +3560,33 @@ static Node *shift(Token **rest, Token *tok)
 // so that p+n points to the location n elements (not bytes) ahead of p.
 // In other words, we need to scale an integer value before adding to a
 // pointer value. This function takes care of the scaling.
-static Node *new_add(Node *lhs, Node *rhs, Token *tok)
+static Node *new_add(Node *lhs, Node *rhs, Token *tok, bool is_op)
 {
+  
   add_type(lhs);
   add_type(rhs);
+
+  //case of vectors + sclaras
+  if (is_op && (is_vector(lhs->ty) || is_vector(rhs->ty))) {
+    if (is_vector(lhs->ty) && !is_vector(rhs->ty)) {
+      rhs = scalar_to_vector(rhs, lhs->ty);
+      rhs->ty = lhs->ty;
+    }
+    else if (is_vector(rhs->ty) && !is_vector(lhs->ty)) {
+      lhs = scalar_to_vector(lhs, rhs->ty);
+      lhs->ty = rhs->ty;
+    }
+  }
+
+  // case of vectors
+  if (is_vector(lhs->ty) && is_vector(rhs->ty)) {
+    
+    if (lhs->ty->array_len != rhs->ty->array_len)
+      error_tok(tok, "%s %d: in new_add: incompatible vector types", PARSE_C, __LINE__);
+    Node *node = new_binary(ND_ADD, lhs, rhs, tok);
+    node->ty =  lhs->ty;
+    return node;
+  }
 
   // num + num
   if (is_numeric(lhs->ty) && is_numeric(rhs->ty))
@@ -3690,17 +3617,42 @@ static Node *new_add(Node *lhs, Node *rhs, Token *tok)
 }
 
 // Like `+`, `-` is overloaded for the pointer type.
-static Node *new_sub(Node *lhs, Node *rhs, Token *tok)
+static Node *new_sub(Node *lhs, Node *rhs, Token *tok, bool is_op)
 {
+
   add_type(lhs);
   add_type(rhs);
+
+  
+  //case of vectors + scalars
+  if (is_op && (is_vector(lhs->ty) || is_vector(rhs->ty))) {
+    if (is_vector(lhs->ty) && !is_vector(rhs->ty)) {
+      rhs = scalar_to_vector(rhs, lhs->ty);
+      rhs->ty = lhs->ty;
+    }
+    else if (is_vector(rhs->ty) && !is_vector(lhs->ty)) {
+      lhs = scalar_to_vector(lhs, rhs->ty);
+      lhs->ty = rhs->ty;
+    }
+  }
+
+  
+  // case of vectors
+  if (is_vector(lhs->ty) && is_vector(rhs->ty)) {
+    if (lhs->ty->array_len != rhs->ty->array_len || lhs->ty->base->kind != rhs->ty->base->kind)
+      error_tok(tok, "%s %d: in new_sub : incompatible vector types", PARSE_C, __LINE__);
+
+    Node *node = new_binary(ND_SUB, lhs, rhs, tok);
+    node->ty = lhs->ty; 
+    return node;
+  }
 
   // num - num
   if (is_numeric(lhs->ty) && is_numeric(rhs->ty))
     return new_binary(ND_SUB, lhs, rhs, tok);
 
   // VLA + num
-  if (lhs->ty->base->kind == TY_VLA)
+  if (lhs->ty->base && lhs->ty->base->kind == TY_VLA)
   {
     rhs = new_binary(ND_MUL, rhs, new_var_node(lhs->ty->base->vla_size, tok), tok);
     add_type(rhs);
@@ -3741,13 +3693,13 @@ static Node *add(Token **rest, Token *tok)
 
     if (equal(tok, "+"))
     {
-      node = new_add(node, mul(&tok, tok->next), start);
+      node = new_add(node, mul(&tok, tok->next), start, true);
       continue;
     }
 
     if (equal(tok, "-"))
     {
-      node = new_sub(node, mul(&tok, tok->next), start);
+      node = new_sub(node, mul(&tok, tok->next), start, true);
       continue;
     }
 
@@ -3768,18 +3720,21 @@ static Node *mul(Token **rest, Token *tok)
     if (equal(tok, "*"))
     {
       node = new_binary(ND_MUL, node, cast(&tok, tok->next), start);
+      promote_scalar_to_vector(node);
       continue;
     }
 
     if (equal(tok, "/"))
     {
       node = new_binary(ND_DIV, node, cast(&tok, tok->next), start);
+      promote_scalar_to_vector(node);
       continue;
     }
 
     if (equal(tok, "%"))
     {
       node = new_binary(ND_MOD, node, cast(&tok, tok->next), start);
+      promote_scalar_to_vector(node);
       continue;
     }
 
@@ -3803,9 +3758,7 @@ static Node *cast(Token **rest, Token *tok)
     tok = attribute_list(start->next, tmp, type_attributes);
     start->next = tok;
     Type *ty = typename(&tok, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "cast";        
-    ctx->line_no = __LINE__ + 1;          
+    SET_CTX(ctx);         
     tok = skip(tok, ")", ctx);
     
     // compound literal
@@ -3822,9 +3775,7 @@ static Node *cast(Token **rest, Token *tok)
   {
     //Token *start = tok;
     Type *ty = typename(&tok, tok->next);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "cast";        
-    ctx->line_no = __LINE__ + 1;          
+    SET_CTX(ctx);       
     tok = skip(tok, ")", ctx);
 
     // compound literal
@@ -3890,11 +3841,11 @@ static Node *unary(Token **rest, Token *tok)
 
   // Read ++i as i+=1
   if (equal(tok, "++"))
-    return to_assign(new_add(unary(rest, tok->next), new_num(1, tok), tok));
+    return to_assign(new_add(unary(rest, tok->next), new_num(1, tok), tok, false));
 
   // Read --i as i-=1
   if (equal(tok, "--"))
-    return to_assign(new_sub(unary(rest, tok->next), new_num(1, tok), tok));
+    return to_assign(new_sub(unary(rest, tok->next), new_num(1, tok), tok, false));
 
   // [GNU] labels-as-values
   if (equal(tok, "&&"))
@@ -3944,9 +3895,7 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
       if (equal(tok, ";"))
         break;
       if (!first) {
-        ctx->filename = PARSE_C;
-        ctx->funcname = "struct_members";        
-        ctx->line_no = __LINE__ + 1;
+        SET_CTX(ctx); 
         tok = skip(tok, ",", ctx);
       }
 
@@ -4012,28 +3961,20 @@ static Token *attribute_list(Token *tok, void *arg, Token *(*f)(Token *, void *)
   while (consume(&tok, tok, "__attribute__") || consume(&tok, tok, "__attribute"))
   {
 
-    ctx->filename = PARSE_C;
-    ctx->funcname = "attribute_list";        
-    ctx->line_no = __LINE__ + 1;       
+    SET_CTX(ctx);            
     tok = skip(tok, "(", ctx);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "attribute_list";        
-    ctx->line_no = __LINE__ + 1;       
+    SET_CTX(ctx);       
     tok = skip(tok, "(", ctx);
     bool first = true;
     while (!consume(&tok, tok, ")")) {
       if (!first) {
-        ctx->filename = PARSE_C;
-        ctx->funcname = "attribute_list";        
-        ctx->line_no = __LINE__ + 1;       
+        SET_CTX(ctx); 
         tok = skip(tok, ",", ctx);
       }
       first = false;
             tok = f(tok, arg);
     }
-    ctx->filename = PARSE_C;
-    ctx->funcname = "attribute_list";        
-    ctx->line_no = __LINE__ + 1;     
+    SET_CTX(ctx);     
     tok = skip(tok, ")", ctx);
   }
   return tok;
@@ -4066,15 +4007,11 @@ static Token *type_attributes(Token *tok, void *arg)
       {
         ty->is_aligned = true;
         if (equal(tok, "(")) {
-          ctx->filename = PARSE_C;
-          ctx->funcname = "type_attributes";       
-          ctx->line_no = __LINE__ + 1;       
+          SET_CTX(ctx); 
           tok = skip(tok, "(", ctx);
           //from COSMOPOLITAN adding is_aligned
           ty->align = const_expr(&tok, tok);
-          ctx->filename = PARSE_C;
-          ctx->funcname = "type_attributes";     
-          ctx->line_no = __LINE__ + 1;       
+          SET_CTX(ctx); 
           tok = skip(tok, ")", ctx);
         } 
         return tok;
@@ -4091,9 +4028,7 @@ static Token *type_attributes(Token *tok, void *arg)
     ty->is_constructor = true;
     ty->constructor_priority = 65535; // Default GCC priority
     if (equal(tok, "(")) {
-      ctx->filename = PARSE_C;
-      ctx->funcname = "type_attributes";        
-      ctx->line_no = __LINE__ + 1;          
+      SET_CTX(ctx); 
       tok = skip(tok, "(",ctx);
 
       // Parse the priority integer constant if present
@@ -4104,9 +4039,7 @@ static Token *type_attributes(Token *tok, void *arg)
         warn_tok(tok, "in type_attributes: %s %d: expected integer priority in constructor attribute", PARSE_C, __LINE__);
       }
 
-      ctx->filename = PARSE_C;
-      ctx->funcname = "type_attributes";        
-      ctx->line_no = __LINE__ + 1;    
+      SET_CTX(ctx); 
       tok = skip(tok, ")", ctx);
     }
 
@@ -4124,9 +4057,7 @@ static Token *type_attributes(Token *tok, void *arg)
     ty->destructor_priority = 65535; // Default GCC priority
 
     if (equal(tok, "(")) {
-      ctx->filename = PARSE_C;
-      ctx->funcname = "type_attributes";        
-      ctx->line_no = __LINE__ + 1;          
+      SET_CTX(ctx);        
       tok = skip(tok, "(",ctx);
 
       // Parse the priority integer constant if present
@@ -4136,9 +4067,7 @@ static Token *type_attributes(Token *tok, void *arg)
       } else {
         warn_tok(tok, "in type_attributes: %s %d: expected integer priority in destructor attribute", PARSE_C, __LINE__);
       }
-      ctx->filename = PARSE_C;
-      ctx->funcname = "type_attributes";        
-      ctx->line_no = __LINE__ + 1;    
+      SET_CTX(ctx); 
       tok = skip(tok, ")", ctx);
     }
 
@@ -4147,22 +4076,26 @@ static Token *type_attributes(Token *tok, void *arg)
 
 
   if (consume(&tok, tok, "vector_size") || consume(&tok, tok, "__vector_size__")) {
-    ctx->filename = PARSE_C;
-    ctx->funcname = "type_attributes";        
-    ctx->line_no = __LINE__ + 1;          
+    SET_CTX(ctx);          
     tok = skip(tok, "(", ctx);
     int vs = const_expr(&tok, tok);
     if (vs != 2 && vs != 4 && vs != 8 && vs != 16) {
         error_tok(tok, "%s %d: unsupported vector_size %d; only 2, 4, 8 and 16 are supported", PARSE_C, __LINE__, vs);
     }
     if (vs != ty->vector_size) {
-        ty->size = vs;
+        //ty->size = vs;
         ty->vector_size = vs;
         if (!ty->is_aligned) ty->align = vs;
     }
-    ctx->filename = PARSE_C;
-    ctx->funcname = "type_attributes";        
-    ctx->line_no = __LINE__ + 1;  
+    int base_size = ty->size;
+    if (base_size == 0) {
+        error_tok(tok, "%s %d: in types_attributes: incorrect base size %d;", PARSE_C, __LINE__, base_size);
+    }  
+    int n = vs / base_size;
+    
+    ty->is_vector = true;
+    ty = vector_of(ty, n);
+    SET_CTX(ctx); 
     tok = skip(tok, ")", ctx);
     return tok;
   }
@@ -4171,14 +4104,10 @@ static Token *type_attributes(Token *tok, void *arg)
 
   //from COSMOPOLITAN adding warn_if_not_aligned
   if (consume(&tok, tok, "warn_if_not_aligned") || consume(&tok, tok, "__warn_if_not_aligned__") ) {
-    ctx->filename = PARSE_C;
-    ctx->funcname = "type_attributes";        
-    ctx->line_no = __LINE__ + 1;          
+    SET_CTX(ctx);          
     tok = skip(tok, "(", ctx);
     const_expr(&tok, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "type_attributes";        
-    ctx->line_no = __LINE__ + 1;          
+    SET_CTX(ctx);          
     tok = skip(tok, ")", ctx);
     return tok;
   }
@@ -4186,37 +4115,29 @@ static Token *type_attributes(Token *tok, void *arg)
 
   if (equal(tok->next, "(") && (consume(&tok, tok, "__deprecated__") || 
        consume(&tok, tok, "deprecated"))) {
-    ctx->filename = PARSE_C;
-    ctx->funcname = "type_attributes";        
-    ctx->line_no = __LINE__ + 1;          
+    SET_CTX(ctx); 
     tok = skip(tok, "(", ctx);
     ConsumeStringLiteral(&tok, tok);
-    ctx->line_no = __LINE__ + 1;  
+    SET_CTX(ctx);  
     return skip(tok, ")", ctx);
   }
 
     if (consume(&tok, tok, "__target__") || 
        consume(&tok, tok, "target")) {
-    ctx->filename = PARSE_C;
-    ctx->funcname = "type_attributes";        
-    ctx->line_no = __LINE__ + 1;          
+    SET_CTX(ctx);          
     tok = skip(tok, "(", ctx);
     ConsumeStringLiteral(&tok, tok);
-    ctx->line_no = __LINE__ + 1;  
+    SET_CTX(ctx);  
     return skip(tok, ")", ctx);
   }
 
   
   if (consume(&tok, tok, "section") || consume(&tok, tok, "__section__")) {        
-    ctx->filename = PARSE_C;
-    ctx->funcname = "type_attributes";        
-    ctx->line_no = __LINE__ + 1;  
+    SET_CTX(ctx); 
     tok = skip(tok, "(", ctx);
     ty->section = ConsumeStringLiteral(&tok, tok);
     current_section = ty->section;
-    ctx->filename = PARSE_C;
-    ctx->funcname = "type_attributes";        
-    ctx->line_no = __LINE__ + 1;      
+    SET_CTX(ctx);     
     return skip(tok, ")", ctx);
   }
 
@@ -4231,9 +4152,7 @@ static Token *type_attributes(Token *tok, void *arg)
   
   // Handle __cleanup__ attribute
   if (consume(&tok, tok, "cleanup") || consume(&tok, tok, "__cleanup__")) {
-      ctx->filename = PARSE_C;
-      ctx->funcname = "type_attributes";        
-      ctx->line_no = __LINE__ + 1;
+      SET_CTX(ctx); 
       tok = skip(tok, "(", ctx);  
       if (tok->kind != TK_IDENT)  
           error_tok(tok, "%s %d: in type_attributes: expected identifier in __cleanup__", PARSE_C, __LINE__);
@@ -4242,9 +4161,7 @@ static Token *type_attributes(Token *tok, void *arg)
       current_type = copy_type(ty); 
 
       tok = tok->next;  
-      ctx->filename = PARSE_C;
-      ctx->funcname = "type_attributes";        
-      ctx->line_no = __LINE__ + 1; 
+      SET_CTX(ctx); 
       tok = skip(tok, ")", ctx); 
       return tok;
   }
@@ -4258,12 +4175,11 @@ static Token *type_attributes(Token *tok, void *arg)
   }
 
     if (consume(&tok, tok, "malloc") || consume(&tok, tok, "__malloc__")) {
-    ctx->filename = PARSE_C;
-    ctx->funcname = "type_attributes";
-    ctx->line_no = __LINE__ + 1;
+      
 
     // Check for optional parameters: e.g., __malloc__(rpl_free, 1)
     if (equal(tok, "(")) {
+        SET_CTX(ctx); 
         tok = skip(tok, "(", ctx);
         // Parse the deallocator function name (e.g., rpl_free)
         if (tok->kind != TK_IDENT)
@@ -4275,21 +4191,21 @@ static Token *type_attributes(Token *tok, void *arg)
             tok = tok->next;
             const_expr(&tok, tok); // size index (e.g., 1)
         }
-
+        SET_CTX(ctx); 
         tok = skip(tok, ")", ctx);
     }
     return tok;
   }
 
   if (consume(&tok, tok, "null_terminated_string_arg")) {
-    ctx->filename = PARSE_C;
-    ctx->funcname = "type_attributes";
-    ctx->line_no = __LINE__ + 1;
+
 
     // GCC syntax: __attribute__((null_terminated_string_arg(index)))
     if (equal(tok, "(")) {
+        SET_CTX(ctx); 
         tok = skip(tok, "(", ctx);
-        const_expr(&tok, tok);  // parse the index, e.g., 1
+        const_expr(&tok, tok);  
+        SET_CTX(ctx); 
         tok = skip(tok, ")", ctx);
     }
     return tok;
@@ -4332,7 +4248,6 @@ static Token *type_attributes(Token *tok, void *arg)
       consume(&tok, tok, "transparent_union") ||
       consume(&tok, tok, "gnu_inline") ||
       consume(&tok, tok, "__gnu_inline__") ||
-      consume(&tok, tok, "__always_inline__") ||
       consume(&tok, tok, "used") ||
       consume(&tok, tok, "__used__") ||
       consume(&tok, tok, "unused") ||
@@ -4379,9 +4294,7 @@ static Token *type_attributes(Token *tok, void *arg)
       
 
   if (consume(&tok, tok, "format") || consume(&tok, tok, "__format__")) {
-    ctx->filename = PARSE_C;
-    ctx->funcname = "type_attributes";        
-    ctx->line_no = __LINE__ + 1;      
+    SET_CTX(ctx);       
     tok = skip(tok, "(", ctx);
     consume(&tok, tok, "printf") ;
     consume(&tok, tok, "__printf__");
@@ -4397,40 +4310,28 @@ static Token *type_attributes(Token *tok, void *arg)
     consume(&tok, tok, "__gnu_scanf__");
     consume(&tok, tok, "gnu_strftime");
     consume(&tok, tok, "__gnu_strftime__");
-    ctx->filename = PARSE_C;
-    ctx->funcname = "type_attributes";        
-    ctx->line_no = __LINE__ + 1;      
+    SET_CTX(ctx);     
     tok = skip(tok, ",", ctx);
     const_expr(&tok, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "type_attributes";        
-    ctx->line_no = __LINE__ + 1;  
+    SET_CTX(ctx); 
     tok = skip(tok, ",", ctx);
     const_expr(&tok, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "type_attributes";        
-    ctx->line_no = __LINE__ + 1;  
+    SET_CTX(ctx); 
     tok = skip(tok, ")", ctx);
     return tok;
   }
 
   if (consume(&tok, tok, "format_arg") || consume(&tok, tok, "__format_arg__")) {
-    ctx->filename = PARSE_C;
-    ctx->funcname = "type_attributes";        
-    ctx->line_no = __LINE__ + 1;      
+    SET_CTX(ctx); 
     tok = skip(tok, "(", ctx);
     const_expr(&tok, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "type_attributes";        
-    ctx->line_no = __LINE__ + 1;      
+    SET_CTX(ctx);      
     tok =skip(tok, ")", ctx);
     return tok;
   }
 
   if (consume(&tok, tok, "mode") || consume(&tok, tok, "__mode__")) {
-    ctx->filename = PARSE_C;
-    ctx->funcname = "type_attributes";        
-    ctx->line_no = __LINE__ + 1;          
+    SET_CTX(ctx);     
     tok = skip(tok, "(", ctx);
     if (consume(&tok, tok, "__QI__") || consume(&tok, tok, "__HI__") ||
         consume(&tok, tok, "__SI__") || consume(&tok, tok, "__DI__") ||
@@ -4441,11 +4342,11 @@ static Token *type_attributes(Token *tok, void *arg)
         consume(&tok, tok, "__V2SI__") || consume(&tok, tok, "__V4SI__") || consume(&tok, tok, "__V8HI__") ||
         consume(&tok, tok, "__V16QI__") || consume(&tok, tok, "__word__") || consume(&tok, tok, "__pointer__") ||
         consume(&tok, tok, "__CQI__") || consume(&tok, tok, "__CHI__") || consume(&tok, tok, "__CDF__") ||
-        consume(&tok, tok, "__BI__")) {
-        ctx->line_no = __LINE__ + 1;  
+        consume(&tok, tok, "__TC__") ||consume(&tok, tok, "__BI__")) {
+      SET_CTX(ctx);  
       return skip(tok, ")", ctx);
     }
-    ctx->line_no = __LINE__ + 1;  
+    SET_CTX(ctx);  
     return skip(tok, ")", ctx);
   }
 
@@ -4463,11 +4364,14 @@ static Token *type_attributes(Token *tok, void *arg)
     return tok;
   }
 
+  if (consume(&tok, tok, "always_inline") || consume(&tok, tok, "__always_inline__")) {
+      ty->is_inline = true;
+    return tok;
+  }
+
   if (consume(&tok, tok, "nonnull") || consume(&tok, tok, "__nonnull__")) {
       if (equal(tok, "(")) {
-          ctx->filename = PARSE_C;
-          ctx->funcname = "type_attributes";        
-          ctx->line_no = __LINE__ + 1; 
+          SET_CTX(ctx); 
           tok = skip(tok, "(",ctx);
 
           // Optional parameter list
@@ -4483,9 +4387,7 @@ static Token *type_attributes(Token *tok, void *arg)
               else
                   break;
           }
-          ctx->filename = PARSE_C;
-          ctx->funcname = "type_attributes";        
-          ctx->line_no = __LINE__ + 1; 
+          SET_CTX(ctx); 
           tok = skip(tok, ")",ctx);
       }
 
@@ -4504,9 +4406,7 @@ static Token *type_attributes(Token *tok, void *arg)
       for (;;) {
         const_expr(&tok, tok);
         if (consume(&tok, tok, ")")) break;
-        ctx->filename = PARSE_C;
-        ctx->funcname = "type_attributes";        
-        ctx->line_no = __LINE__ + 1;          
+        SET_CTX(ctx);          
         tok = skip(tok, ",", ctx);
       }
     }
@@ -4518,34 +4418,30 @@ static Token *type_attributes(Token *tok, void *arg)
       consume(&tok, tok, "warning") || consume(&tok, tok, "__warning__") ||
       consume(&tok, tok, "__access__")
       )  {
-    ctx->filename = PARSE_C;
-    ctx->funcname = "type_attributes";        
-    ctx->line_no = __LINE__ + 1;  
-    bool two_parent= false;        
-    tok = skip(tok, "(", ctx);
-    ctx->line_no = __LINE__ + 1;  
+    
+    bool two_parent= false;    
+    SET_CTX(ctx);     
+    tok = skip(tok, "(", ctx);    
     if (equal(tok, "("))   { 
+      SET_CTX(ctx); 
       tok = skip(tok, "(", ctx);
       two_parent = true;
     }
     ConsumeStringLiteral(&tok, tok); 
     if (two_parent) {   
-      ctx->line_no = __LINE__ + 1; 
+      SET_CTX(ctx); 
       tok = skip(tok, ")", ctx);
     }
-    ctx->line_no = __LINE__ + 1;  
+    SET_CTX(ctx);  
     return skip(tok, ")", ctx);
   }
 
 
   if (consume(&tok, tok, "no_sanitize"))  {
-    ctx->filename = PARSE_C;
-    ctx->funcname = "type_attributes";        
-    ctx->line_no = __LINE__ + 1;  
-    tok = skip(tok, "(", ctx);
-    ctx->line_no = __LINE__ + 1;  
+    SET_CTX(ctx); 
+    tok = skip(tok, "(", ctx);     
     ConsumeStringLiteral(&tok, tok); 
-    ctx->line_no = __LINE__ + 1;  
+    SET_CTX(ctx);   
     return skip(tok, ")", ctx);
   }
 
@@ -4554,19 +4450,20 @@ static Token *type_attributes(Token *tok, void *arg)
     ty->is_weak = true;
     consume(&tok, tok, ",");
     if (consume(&tok, tok, "alias")) {
+      SET_CTX(ctx); 
       tok = skip(tok, "(", ctx);
-      ty->alias_name = ConsumeStringLiteral(&tok, tok); // Capture alias name
+      ty->alias_name = ConsumeStringLiteral(&tok, tok); 
+      SET_CTX(ctx); 
       tok = skip(tok, ")", ctx);
     }
     return tok;
   }
 
   if (consume(&tok, tok, "visibility") || consume(&tok, tok, "__visibility__")) {
-    ctx->filename = PARSE_C;
-    ctx->funcname = "type_attributes";        
-    ctx->line_no = __LINE__ + 1;  
+    SET_CTX(ctx); 
     tok = skip(tok, "(", ctx);
     ty->visibility = ConsumeStringLiteral(&tok, tok);
+    SET_CTX(ctx); 
     return skip(tok, ")", ctx);
   }
 
@@ -4594,8 +4491,10 @@ static Token *thing_attributes(Token *tok, void *arg) {
     attr->is_weak = true;
     consume(&tok, tok, ",");
     if (consume(&tok, tok, "alias")) {
+      SET_CTX(ctx); 
       tok = skip(tok, "(", ctx);
-      attr->alias_name = ConsumeStringLiteral(&tok, tok); // Capture alias name
+      attr->alias_name = ConsumeStringLiteral(&tok, tok); 
+      SET_CTX(ctx); 
       tok = skip(tok, ")", ctx);
     }
     return tok;
@@ -4613,15 +4512,11 @@ static Token *thing_attributes(Token *tok, void *arg) {
   }
 
   if (consume(&tok, tok, "section") || consume(&tok, tok, "__section__")) {    
-    ctx->filename = PARSE_C;
-    ctx->funcname = "thing_attributes";        
-    ctx->line_no = __LINE__ + 1;  
+    SET_CTX(ctx); 
     tok = skip(tok, "(", ctx);
     attr->section = ConsumeStringLiteral(&tok, tok);
     current_section = attr->section;
-    ctx->filename = PARSE_C;
-    ctx->funcname = "thing_attributes";        
-    ctx->line_no = __LINE__ + 1;      
+    SET_CTX(ctx); 
     return skip(tok, ")", ctx);
   }
   
@@ -4644,11 +4539,10 @@ static Token *thing_attributes(Token *tok, void *arg) {
   }
 
   if (consume(&tok, tok, "visibility") || consume(&tok, tok, "__visibility__")) {
-    ctx->filename = PARSE_C;
-    ctx->funcname = "thing_attributes";        
-    ctx->line_no = __LINE__ + 1;  
+    SET_CTX(ctx); 
     tok = skip(tok, "(", ctx);
     attr->visibility = ConsumeStringLiteral(&tok, tok);
+    SET_CTX(ctx); 
     return skip(tok, ")", ctx);
   }
   if (consume(&tok, tok, "externally_visible") || consume(&tok, tok, "__externally_visible__")) {
@@ -4677,9 +4571,7 @@ static Token *thing_attributes(Token *tok, void *arg) {
     attr->constructor_priority = 65535; // Default GCC priority
 
     if (equal(tok, "(")) {
-      ctx->filename = PARSE_C;
-      ctx->funcname = "thing_attributes";        
-      ctx->line_no = __LINE__ + 1;          
+      SET_CTX(ctx);        
       tok = skip(tok, "(",ctx);
 
       // Parse the priority integer constant if present
@@ -4689,9 +4581,7 @@ static Token *thing_attributes(Token *tok, void *arg) {
       } else {
         warn_tok(tok, "in thing_attributes: %s %d: expected integer priority in constructor attribute", PARSE_C, __LINE__);
       }
-      ctx->filename = PARSE_C;
-      ctx->funcname = "thing_attributes";        
-      ctx->line_no = __LINE__ + 1;    
+      SET_CTX(ctx); 
       tok = skip(tok, ")", ctx);
     }
 
@@ -4702,9 +4592,7 @@ static Token *thing_attributes(Token *tok, void *arg) {
     attr->is_destructor = true;
     attr->destructor_priority = 65535; // Default GCC priority
     if (equal(tok, "(")) {
-      ctx->filename = PARSE_C;
-      ctx->funcname = "thing_attributes";        
-      ctx->line_no = __LINE__ + 1;          
+      SET_CTX(ctx);        
       tok = skip(tok, "(",ctx);
 
       // Parse the priority integer constant if present
@@ -4714,9 +4602,7 @@ static Token *thing_attributes(Token *tok, void *arg) {
       } else {
         warn_tok(tok, "in thing_attributes: %s %d: expected integer priority in destructor attribute", PARSE_C, __LINE__);
       }
-      ctx->filename = PARSE_C;
-      ctx->funcname = "thing_attributes";        
-      ctx->line_no = __LINE__ + 1;    
+      SET_CTX(ctx); 
       tok = skip(tok, ")", ctx);
     }
 
@@ -4728,16 +4614,11 @@ static Token *thing_attributes(Token *tok, void *arg) {
       {
         attr->is_aligned = true;
         if (equal(tok, "(")) {
-          ctx->filename = PARSE_C;
-          ctx->funcname = "thing_attributes";       
-          ctx->line_no = __LINE__ + 1;       
-
+          SET_CTX(ctx); 
           tok = skip(tok, "(", ctx);
           //from COSMOPOLITAN adding is_aligned        
           attr->align = const_expr(&tok, tok);
-          ctx->filename = PARSE_C;
-          ctx->funcname = "thing_attributes";     
-          ctx->line_no = __LINE__ + 1;       
+          SET_CTX(ctx); 
           tok = skip(tok, ")", ctx);
         }
         return tok;
@@ -4745,14 +4626,10 @@ static Token *thing_attributes(Token *tok, void *arg) {
 
 
   if (consume(&tok, tok, "warn_if_not_aligned") || consume(&tok, tok, "__warn_if_not_aligned__")) {
-    ctx->filename = PARSE_C;
-    ctx->funcname = "thing_attributes";        
-    ctx->line_no = __LINE__ + 1;      
+    SET_CTX(ctx);     
     tok = skip(tok, "(", ctx);
     const_expr(&tok, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "thing_attributes";        
-    ctx->line_no = __LINE__ + 1;      
+    SET_CTX(ctx);     
     return skip(tok, ")", ctx);
   }
 
@@ -4762,30 +4639,28 @@ static Token *thing_attributes(Token *tok, void *arg) {
       consume(&tok, tok, "warning") || consume(&tok, tok, "__warning__") ||
        consume(&tok, tok, "__access__")
       )  {
-    ctx->filename = PARSE_C;
-    ctx->funcname = "thing_attributes";        
-    ctx->line_no = __LINE__ + 1;  
-    bool two_parent= false;        
+
+    bool two_parent= false; 
+    SET_CTX(ctx);        
     tok = skip(tok, "(", ctx);
-    ctx->line_no = __LINE__ + 1;  
+
     if (equal(tok, "("))   { 
+      SET_CTX(ctx); 
       tok = skip(tok, "(", ctx);
       two_parent = true;
     }
     ConsumeStringLiteral(&tok, tok); 
     if (two_parent) {   
-      ctx->line_no = __LINE__ + 1; 
+      SET_CTX(ctx); 
       tok = skip(tok, ")", ctx);
     }
-    ctx->line_no = __LINE__ + 1;  
+    SET_CTX(ctx); 
     return skip(tok, ")", ctx);
   }
 
 
   if (consume(&tok, tok, "mode") || consume(&tok, tok, "__mode__")) {
-    ctx->filename = PARSE_C;
-    ctx->funcname = "thing_attributes";        
-    ctx->line_no = __LINE__ + 1;          
+    SET_CTX(ctx);           
     tok = skip(tok, "(", ctx);
     if (consume(&tok, tok, "__QI__") || consume(&tok, tok, "__HI__") ||
         consume(&tok, tok, "__SI__") || consume(&tok, tok, "__DI__") ||
@@ -4796,23 +4671,21 @@ static Token *thing_attributes(Token *tok, void *arg) {
         consume(&tok, tok, "__V2SI__") || consume(&tok, tok, "__V4SI__") || consume(&tok, tok, "__V8HI__") ||
         consume(&tok, tok, "__V16QI__") || consume(&tok, tok, "__word__") || consume(&tok, tok, "__pointer__") ||
         consume(&tok, tok, "__CQI__") || consume(&tok, tok, "__CHI__") || consume(&tok, tok, "__CDF__") ||
-        consume(&tok, tok, "__BI__")) {
-        ctx->line_no = __LINE__ + 1;  
+        consume(&tok, tok, "__TC__") || consume(&tok, tok, "__BI__")) {
+      SET_CTX(ctx);  
       return skip(tok, ")", ctx);
     }
-    ctx->line_no = __LINE__ + 1;  
+    SET_CTX(ctx); 
     return skip(tok, ")", ctx);
   }
 
   
   if (equal(tok->next, "(") && (consume(&tok, tok, "__deprecated__") || 
        consume(&tok, tok, "deprecated"))) {
-    ctx->filename = PARSE_C;
-    ctx->funcname = "thing_attributes";        
-    ctx->line_no = __LINE__ + 1;          
+    SET_CTX(ctx); 
     tok = skip(tok, "(", ctx);
     ConsumeStringLiteral(&tok, tok);
-    ctx->line_no = __LINE__ + 1;  
+    SET_CTX(ctx);   
     return skip(tok, ")", ctx);
   }
 
@@ -4820,9 +4693,7 @@ static Token *thing_attributes(Token *tok, void *arg) {
  
  // Handle __cleanup__ attribute
   if (consume(&tok, tok, "cleanup") || consume(&tok, tok, "__cleanup__")) {
-      ctx->filename = PARSE_C;
-      ctx->funcname = "thing_attributes";        
-      ctx->line_no = __LINE__ + 1;
+      SET_CTX(ctx); 
       tok = skip(tok, "(", ctx);  
       if (tok->kind != TK_IDENT)  
           error_tok(tok, "%s %d: expected identifier in __cleanup__", PARSE_C, __LINE__);
@@ -4831,21 +4702,17 @@ static Token *thing_attributes(Token *tok, void *arg) {
       current_attr = attr;
 
       tok = tok->next;
-      ctx->filename = PARSE_C;
-      ctx->funcname = "thing_attributes";        
-      ctx->line_no = __LINE__ + 1; 
+      SET_CTX(ctx); 
       tok = skip(tok, ")", ctx); 
       return tok;
   }
 
  
   if (consume(&tok, tok, "malloc") || consume(&tok, tok, "__malloc__")) {
-    ctx->filename = PARSE_C;
-    ctx->funcname = "thing_attributes";
-    ctx->line_no = __LINE__ + 1;
 
     // Check for optional parameters: e.g., __malloc__(rpl_free, 1)
     if (equal(tok, "(")) {
+        SET_CTX(ctx); 
         tok = skip(tok, "(", ctx);
         // Parse the deallocator function name (e.g., rpl_free)
         if (tok->kind != TK_IDENT)
@@ -4857,21 +4724,20 @@ static Token *thing_attributes(Token *tok, void *arg) {
             tok = tok->next;
             const_expr(&tok, tok); // size index (e.g., 1)
         }
-
+        SET_CTX(ctx); 
         tok = skip(tok, ")", ctx);
     }
     return tok;
   }
 
   if (consume(&tok, tok, "null_terminated_string_arg")) {
-    ctx->filename = PARSE_C;
-    ctx->funcname = "thing_attributes";
-    ctx->line_no = __LINE__ + 1;
 
     // GCC syntax: __attribute__((null_terminated_string_arg(index)))
     if (equal(tok, "(")) {
+        SET_CTX(ctx); 
         tok = skip(tok, "(", ctx);
-        const_expr(&tok, tok);  // parse the index, e.g., 1
+        const_expr(&tok, tok); 
+        SET_CTX(ctx); 
         tok = skip(tok, ")", ctx);
     }
     return tok;
@@ -4914,7 +4780,6 @@ static Token *thing_attributes(Token *tok, void *arg) {
       consume(&tok, tok, "transparent_union") ||
       consume(&tok, tok, "gnu_inline") ||
       consume(&tok, tok, "__gnu_inline__") ||
-      consume(&tok, tok, "__always_inline__") ||
       consume(&tok, tok, "used") ||
       consume(&tok, tok, "__used__") ||
       consume(&tok, tok, "unused") ||
@@ -4951,6 +4816,12 @@ static Token *thing_attributes(Token *tok, void *arg) {
         return tok;
     }
 
+
+    if (consume(&tok, tok, "always_inline") || consume(&tok, tok, "__always_inline__")) {
+      attr->is_inline = true;
+        return tok;
+    }
+
     //fallthrough is the last instruction in case: followed by a semicolon
     if (consume(&tok, tok, "fallthrough") ||
       consume(&tok, tok, "__fallthrough__") )
@@ -4960,9 +4831,7 @@ static Token *thing_attributes(Token *tok, void *arg) {
 
     if (consume(&tok, tok, "nonnull") || consume(&tok, tok, "__nonnull__")) {
       if (equal(tok, "(")) {
-          ctx->filename = PARSE_C;
-          ctx->funcname = "type_attributes";        
-          ctx->line_no = __LINE__ + 1; 
+          SET_CTX(ctx); 
           tok = skip(tok, "(",ctx);
 
           // Optional parameter list
@@ -4978,9 +4847,7 @@ static Token *thing_attributes(Token *tok, void *arg) {
               else
                   break;
           }
-          ctx->filename = PARSE_C;
-          ctx->funcname = "type_attributes";        
-          ctx->line_no = __LINE__ + 1; 
+          SET_CTX(ctx); 
           tok = skip(tok, ")",ctx);
       }
 
@@ -4999,9 +4866,7 @@ static Token *thing_attributes(Token *tok, void *arg) {
       for (;;) {
         const_expr(&tok, tok);
         if (consume(&tok, tok, ")")) break;
-        ctx->filename = PARSE_C;
-        ctx->funcname = "thing_attributes";        
-        ctx->line_no = __LINE__ + 1;          
+        SET_CTX(ctx);          
         tok = skip(tok, ",", ctx);
       }
     }
@@ -5009,9 +4874,7 @@ static Token *thing_attributes(Token *tok, void *arg) {
   }
 
   if (consume(&tok, tok, "format") || consume(&tok, tok, "__format__")) {
-    ctx->filename = PARSE_C;
-    ctx->funcname = "thing_attributes";        
-    ctx->line_no = __LINE__ + 1;      
+    SET_CTX(ctx);     
     tok = skip(tok, "(", ctx);
     consume(&tok, tok, "printf");
     consume(&tok, tok, "__printf__");
@@ -5027,44 +4890,31 @@ static Token *thing_attributes(Token *tok, void *arg) {
     consume(&tok, tok, "__gnu_scanf__");
     consume(&tok, tok, "gnu_strftime");
     consume(&tok, tok, "__gnu_strftime__");
-    ctx->filename = PARSE_C;
-    ctx->funcname = "thing_attributes";        
-    ctx->line_no = __LINE__ + 1;      
+    SET_CTX(ctx);     
     tok = skip(tok, ",", ctx);
     const_expr(&tok, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "thing_attributes";        
-    ctx->line_no = __LINE__ + 1;  
+    SET_CTX(ctx); 
     tok = skip(tok, ",", ctx);
     const_expr(&tok, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "thing_attributes";        
-    ctx->line_no = __LINE__ + 1;  
+    SET_CTX(ctx); 
     return skip(tok, ")", ctx);
   }
 
 
 
   if (consume(&tok, tok, "format_arg")) {
-    ctx->filename = PARSE_C;
-    ctx->funcname = "thing_attributes";        
-    ctx->line_no = __LINE__ + 1;      
+    SET_CTX(ctx); 
     tok = skip(tok, "(", ctx);
     const_expr(&tok, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "thing_attributes";        
-    ctx->line_no = __LINE__ + 1;      
+    SET_CTX(ctx);     
     return skip(tok, ")", ctx);
   }
 
   if (consume(&tok, tok, "no_sanitize"))  {
-    ctx->filename = PARSE_C;
-    ctx->funcname = "type_attributes";        
-    ctx->line_no = __LINE__ + 1;  
+    SET_CTX(ctx); 
     tok = skip(tok, "(", ctx);
-    ctx->line_no = __LINE__ + 1;  
     ConsumeStringLiteral(&tok, tok); 
-    ctx->line_no = __LINE__ + 1;  
+    SET_CTX(ctx); 
     return skip(tok, ")", ctx);
   }
 
@@ -5102,12 +4952,12 @@ static Type *struct_union_decl(Token **rest, Token *tok, bool *no_list)
 
     ty->size = -1;
     push_tag_scope(tag, ty);
+    if (!ty)
+      error_tok(tok, "%s %d: in struct_union_decl : ty is null!", PARSE_C, __LINE__);
     return ty;
   }
 
-  ctx->filename = PARSE_C;
-  ctx->funcname = "struct_union_decl";        
-  ctx->line_no = __LINE__ + 1;       
+  SET_CTX(ctx);     
   tok = skip(tok, "{", ctx);
 
   // Construct a struct object.
@@ -5133,7 +4983,8 @@ static Type *struct_union_decl(Token **rest, Token *tok, bool *no_list)
 
     push_tag_scope(tag, ty);
   }
-
+  if (!ty)
+    error_tok(tok, "%s %d: in struct_union_decl : ty is null!", PARSE_C, __LINE__);
   return ty;
 }
 
@@ -5196,7 +5047,8 @@ static Type *struct_decl(Token **rest, Token *tok)
 
   ty->members = head.next;
   ty->size = align_to(bits, ty->align * 8) / 8;
-
+  if (!ty)
+    error_tok(tok, "%s %d: in struct_decl : ty is null!", PARSE_C, __LINE__);
   return ty;
 }
 
@@ -5233,6 +5085,8 @@ static Type *union_decl(Token **rest, Token *tok)
   }
   ty->members = head.next;
   ty->size = align_to(ty->size, ty->align);
+  if (!ty)
+    error_tok(tok, "%s %d: in union_decl : ty is null!", PARSE_C, __LINE__);
   return ty;
 }
 
@@ -5284,7 +5138,6 @@ static Node *struct_ref(Node *node, Token *tok)
   for (;;)
   {
     Member *mem = get_struct_member(ty, tok);
-    //printf("=====%p %s\n", mem, tok->loc);
     if (!mem)
       error_tok(tok, "%s %d: in struct_ref : no such member", PARSE_C, __LINE__);
     node = new_unary(ND_MEMBER, node, tok);
@@ -5301,8 +5154,8 @@ static Node *struct_ref(Node *node, Token *tok)
 static Node *new_inc_dec(Node *node, Token *tok, int addend)
 {
   add_type(node);
-  return new_cast(new_add(to_assign(new_add(node, new_num(addend, tok), tok)),
-                          new_num(-addend, tok), tok),
+  return new_cast(new_add(to_assign(new_add(node, new_num(addend, tok), tok, false)),
+                          new_num(-addend, tok), tok, false),
                   node->ty);
 }
 
@@ -5330,9 +5183,7 @@ static Node *postfix(Token **rest, Token *tok)
     tok = attribute_list(tok, ty, type_attributes);
     if (ty->kind == TY_VLA)
       error_tok(tok, "%s %d: in postfix : compound literals cannot be VLA", PARSE_C, __LINE__);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "postfix";        
-    ctx->line_no = __LINE__ + 1;         
+    SET_CTX(ctx);     
     tok = skip(tok, ")", ctx);
 
     if (scope->next == NULL)
@@ -5345,9 +5196,11 @@ static Node *postfix(Token **rest, Token *tok)
     else
     {
       Obj *var = new_lvar("", ty, NULL);
+      var->is_compound_lit = true;
       Node *lhs = lvar_initializer(&tok, tok, var);
       Node *rhs = new_var_node(var, tok);
       node = new_binary(ND_COMMA, lhs, rhs, start);
+
     }
   }
   else
@@ -5373,17 +5226,15 @@ static Node *postfix(Token **rest, Token *tok)
       // x[y] is short for *(x+y)
       Token *start = tok;
       Node *idx = expr(&tok, tok->next);
-      ctx->filename = PARSE_C;
-      ctx->funcname = "postfix";        
-      ctx->line_no = __LINE__ + 1;           
+      SET_CTX(ctx);           
       tok = skip(tok, "]", ctx);
       
       add_type(node);
       Type *ty = node->ty;
-      node = new_unary(ND_DEREF, new_add(node, idx, start), start);
+      node = new_unary(ND_DEREF, new_add(node, idx, start, false), start);
       if (is_array(ty))
         apply_cv_qualifier(node, ty);
-      continue;
+       continue;
     }
 
     if (equal(tok, "."))
@@ -5427,6 +5278,12 @@ static Node *postfix(Token **rest, Token *tok)
   }
 }
 
+static char *token_to_string(Token *tok) {
+  char *buf = calloc(tok->len + 1, 1);  // allocate and zero-initialize
+  memcpy(buf, tok->loc, tok->len);
+  return buf;
+}
+
 
 // funcall = (assign ("," assign)*)? ")"
 static Node *funcall(Token **rest, Token *tok, Node *fn)
@@ -5446,9 +5303,7 @@ static Node *funcall(Token **rest, Token *tok, Node *fn)
   while (!equal(tok, ")"))
   {
     if (cur != &head) {
-      ctx->filename = PARSE_C;
-      ctx->funcname = "funcall";        
-      ctx->line_no = __LINE__ + 1;           
+      SET_CTX(ctx);        
       tok = skip(tok, ",", ctx);
     }
 
@@ -5478,7 +5333,7 @@ static Node *funcall(Token **rest, Token *tok, Node *fn)
       // If parameter type is omitted (e.g. in "..."), float
       // arguments are promoted to double.
       arg = new_cast(arg, ty_double);
-    } else if (is_array(arg->ty) || arg->ty->kind == TY_VLA)
+    } else if (is_array(arg->ty))
         arg = new_cast(arg, pointer_to(arg->ty->base));
       else if (arg->ty->kind == TY_FUNC)
         arg = new_cast(arg, pointer_to(arg->ty));
@@ -5489,9 +5344,7 @@ static Node *funcall(Token **rest, Token *tok, Node *fn)
 
   if (param_ty)
     error_tok(tok, "%s %d: in funcall : too few arguments", PARSE_C, __LINE__);
-  ctx->filename = PARSE_C;
-  ctx->funcname = "funcall";        
-  ctx->line_no = __LINE__ + 1;     
+  SET_CTX(ctx);    
   *rest = skip(tok, ")", ctx);
 
   Node *node = new_unary(ND_FUNCALL, fn, tok);
@@ -5513,9 +5366,7 @@ static Node *funcall(Token **rest, Token *tok, Node *fn)
 static Node *generic_selection(Token **rest, Token *tok)
 {
   // Token *start = tok;
-  ctx->filename = PARSE_C;
-  ctx->funcname = "generic_selection";        
-  ctx->line_no = __LINE__ + 1;       
+  SET_CTX(ctx);   
   tok = skip(tok, "(", ctx);
 
   Node *ctrl = assign(&tok, tok);
@@ -5532,16 +5383,12 @@ static Node *generic_selection(Token **rest, Token *tok)
 
   while (!consume(rest, tok, ")"))
   {
-    ctx->filename = PARSE_C;
-    ctx->funcname = "generic_selection";        
-    ctx->line_no = __LINE__ + 1;          
+    SET_CTX(ctx);          
     tok = skip(tok, ",", ctx);
 
     if (equal(tok, "default"))
     {
-      ctx->filename = PARSE_C;
-      ctx->funcname = "generic_selection";        
-      ctx->line_no = __LINE__ + 1;            
+      SET_CTX(ctx);           
       tok = skip(tok->next, ":", ctx);
       Node *node = assign(&tok, tok);
       if (!ret)
@@ -5550,9 +5397,7 @@ static Node *generic_selection(Token **rest, Token *tok)
     }
 
     Type *t2 = typename(&tok, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "generic_selection";        
-    ctx->line_no = __LINE__ + 1;          
+    SET_CTX(ctx); 
     tok = skip(tok, ":", ctx);
     Node *node = assign(&tok, tok);
     if (is_compatible(t1, t2))
@@ -5604,13 +5449,11 @@ static Node *primary(Token **rest, Token *tok)
                           expr, tok);
         add_type(expr);
         stmt->lhs = expr;
-      } else if (expr->ty->kind == TY_ARRAY || expr->ty->kind == TY_VLA) {
+      } else if (is_array(expr->ty)) {
         stmt->lhs = new_cast(expr, pointer_to(expr->ty->base));
       }
     }
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";        
-    ctx->line_no = __LINE__ + 1;          
+    SET_CTX(ctx);       
     *rest = skip(tok, ")", ctx);
     return node;
   }
@@ -5618,9 +5461,7 @@ static Node *primary(Token **rest, Token *tok)
   if (equal(tok, "("))
   {
     Node *node = expr(&tok, tok->next);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";        
-    ctx->line_no = __LINE__ + 1;  
+    SET_CTX(ctx); 
     *rest = skip(tok, ")", ctx);
     return node;
   }
@@ -5631,9 +5472,7 @@ static Node *primary(Token **rest, Token *tok)
 
     if (equal(tok->next, "(") && is_typename(tok->next->next)) {      
       ty = typename(&tok, tok->next->next);
-      ctx->filename = PARSE_C;
-      ctx->funcname = "primary";        
-      ctx->line_no = __LINE__ + 1;      
+      SET_CTX(ctx); 
       *rest = skip(tok, ")", ctx);
      
       if ((ty->kind == TY_STRUCT || ty->kind == TY_UNION) && ty->has_vla) {
@@ -5705,7 +5544,7 @@ static Node *primary(Token **rest, Token *tok)
       
       // if (node->ty->kind == TY_VLA)
       //   return new_var_node(node->ty->vla_size, tok);
-      return new_ulong(node->ty->size, tok);   
+      return new_ulong(node->ty->size, start);   
 
     }
   }
@@ -5718,9 +5557,7 @@ static Node *primary(Token **rest, Token *tok)
     Type *ty;
     if (equal(tok->next, "(") && is_typename(tok->next->next)) {
       ty = typename(&tok, tok->next->next);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";        
-    ctx->line_no = __LINE__ + 1;      
+    SET_CTX(ctx); 
     *rest = skip(tok, ")", ctx);
     } else {
     Node *node = unary(rest, tok->next);
@@ -5744,43 +5581,27 @@ static Node *primary(Token **rest, Token *tok)
 
   if (equal(tok, "__builtin_types_compatible_p"))
   {
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";        
-    ctx->line_no = __LINE__ + 1;      
+    SET_CTX(ctx);      
     tok = skip(tok->next, "(", ctx);
     Type *t1 = typename(&tok, tok);
     if (equal(tok, ",")) {
-      ctx->filename = PARSE_C;
-      ctx->funcname = "primary";        
-      ctx->line_no = __LINE__ + 1;        
+      SET_CTX(ctx);       
       tok = skip(tok, ",", ctx);
     }
     Type *t2 = typename(&tok, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";        
-    ctx->line_no = __LINE__ + 1;      
+    SET_CTX(ctx);       
     *rest = skip(tok, ")", ctx);
 
     return new_num(is_compatible(t1, t2), start);
   }
 
   if (equal(tok, "__builtin_constant_p")) {
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";        
-    ctx->line_no = __LINE__ + 1;  
+    SET_CTX(ctx); 
     tok = skip(tok->next, "(", ctx);
-
-    // Parse the expression inside __builtin_constant_p
     Node *expr = assign(&tok, tok);
-
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";        
-    ctx->line_no = __LINE__ + 1;    
+    SET_CTX(ctx);     
     *rest = skip(tok, ")", ctx);
-
-    // Determine if the expression is constant
     bool is_constant = false;
-
     if (expr->tok->kind == TK_NUM || expr->tok->kind == TK_STR || is_const_expr(expr)) {
         // Consider numeric and character literals as constants
         is_constant = true;
@@ -5790,22 +5611,18 @@ static Node *primary(Token **rest, Token *tok)
 
 
     // if (equal(tok, "__builtin_offsetof")) {
-    //   ctx->filename = PARSE_C;
-    //   ctx->funcname = "primary";        
-    //   ctx->line_no = __LINE__ + 1;          
+    //   SET_CTX(ctx);   
     //   tok = skip(tok->next, "(", ctx);
     //   Token *stok = tok;
     //   Type *tstruct = typename(&tok, tok);
     //   if (tstruct->kind != TY_STRUCT && tstruct->kind != TY_UNION) {
     //     error_tok(stok, "%s %d: in primary : not a structure or union type", PARSE_C, __LINE__);
     //   }
-
-    //   ctx->filename = PARSE_C;
-    //   ctx->funcname = "primary";        
-    //   ctx->line_no = __LINE__ + 1;  
+    //   SET_CTX(ctx);   
     //   tok = skip(tok, ",", ctx);
     //   Token *member = tok;
     //   tok = tok->next;
+    //   SET_CTX(ctx); 
     //   *rest = skip(tok, ")", ctx);
     //   for (Member *m = tstruct->members; m; m = m->next) {
     //     if (m->name->len == member->len &&
@@ -5819,42 +5636,270 @@ static Node *primary(Token **rest, Token *tok)
 
 
   //trying to fix ===== some builtin functions linked to mmx/emms
-  if (equal(tok, "__builtin_ia32_emms") || equal(tok, "__builtin_ia32_stmxcsr") || 
+  if (equal(tok, "__builtin_ia32_emms") ||  
       equal(tok, "__builtin_ia32_sfence") || equal(tok, "__builtin_ia32_pause") ||
-      equal(tok, "__builtin_ia32_lfence") || equal(tok, "__builtin_ia32_mfence") 
-      ) {
-    Type *t1 = typename(&tok, tok);        
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";        
-    ctx->line_no = __LINE__ + 1;      
+      equal(tok, "__builtin_ia32_lfence") || equal(tok, "__builtin_ia32_mfence")) 
+  {
+    int builtin = builtin_enum(tok);
+    if (builtin != -1) {
+      Node *node = new_node(builtin, tok);
+      SET_CTX(ctx);      
+      tok = skip(tok->next, "(", ctx);
+      SET_CTX(ctx); 
+      *rest = skip(tok, ")", ctx);    
+      return node;
+    }
+  }
+
+  if (equal(tok, "__builtin_ia32_stmxcsr")) {
+    int builtin = builtin_enum(tok);
+    if (builtin != -1) {
+      Node *node = new_node(builtin, tok);    
+      SET_CTX(ctx); 
+      tok = skip(tok->next, "(", ctx);
+      if (!equal(tok, ")")) {
+        node->lhs = assign(&tok, tok); 
+        add_type(node->lhs);
+      }
+      SET_CTX(ctx); 
+      *rest = skip(tok, ")", ctx);    
+      return node;
+    }
+  }
+
+  if (equal(tok, "__builtin_ia32_cvtss2si") || equal(tok, "__builtin_ia32_cvttss2si") ||
+    equal(tok, "__builtin_ia32_cvttss2si64") || equal(tok, "__builtin_ia32_movmskps") ||
+    equal(tok, "__builtin_ia32_ldmxcsr") ||  equal(tok, "__builtin_ia32_sqrtpd") ||
+    equal(tok, "__builtin_ia32_sqrtsd") ||  equal(tok, "__builtin_ia32_movq128") ||
+    equal(tok, "__builtin_ia32_cvtdq2pd") || equal(tok, "__builtin_ia32_cvtdq2ps") ||
+    equal(tok, "__builtin_ia32_cvtpd2dq") || equal(tok, "__builtin_ia32_cvtpd2ps") ||
+    equal(tok, "__builtin_ia32_cvttpd2dq") || equal(tok, "__builtin_ia32_cvtps2dq") || 
+    equal(tok, "__builtin_ia32_cvttps2dq") || equal(tok, "__builtin_ia32_cvtps2pd") || 
+    equal(tok, "__builtin_ia32_cvtsd2si") || equal(tok, "__builtin_ia32_cvtsd2si64") || 
+    equal(tok, "__builtin_ia32_cvttsd2si") || equal(tok, "__builtin_ia32_cvttsd2si64") ||
+    equal(tok, "__builtin_ia32_movmskpd") || equal(tok, "__builtin_ia32_pmovmskb128") || 
+    equal(tok, "__builtin_ia32_cvtss2si64") || equal(tok, "__builtin_ia32_cvtps2pi") || 
+    equal(tok, "__builtin_ia32_cvttps2pi") || equal(tok, "__builtin_ia32_cvttpd2pi") || 
+    equal(tok, "__builtin_ia32_cvtpi2pd") ||  equal(tok, "__builtin_ia32_cvtpd2pi") ||
+    equal(tok, "__builtin_ia32_sqrtss") || equal(tok, "__builtin_ia32_rcpss") || 
+    equal(tok, "__builtin_ia32_rcpps") || equal(tok, "__builtin_ia32_rsqrtps") ||
+    equal(tok, "__builtin_ia32_clflush") || equal(tok, "_mm_clflush") ||
+    equal(tok, "__builtin_ia32_pmovmskb") || equal(tok, "__builtin_ia32_sqrtps") || 
+    equal(tok, "__builtin_ia32_rsqrtss")) {
+    int builtin = builtin_enum(tok);
+    if (builtin != -1) {
+      Node *node = new_node(builtin, tok);    
+      SET_CTX(ctx); 
+      tok = skip(tok->next, "(", ctx);
+      node->lhs = assign(&tok, tok);
+      add_type(node->lhs);
+      SET_CTX(ctx); 
+      *rest = skip(tok, ")", ctx);
+      return node;
+    }
+
+  }
+   
+  if (equal(tok, "__builtin_shuffle"))
+  {
+    int builtin = builtin_enum(tok);
+    if (builtin != -1) {
+      Node *node = new_node(builtin, tok);
+      SET_CTX(ctx); 
+      tok = skip(tok->next, "(", ctx);
+      node->builtin_args[0] = assign(&tok, tok);
+      add_type(node->builtin_args[0]);
+      SET_CTX(ctx); 
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[1] = assign(&tok, tok);
+      add_type(node->builtin_args[1]);
+      SET_CTX(ctx); 
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[2] = assign(&tok, tok);
+      add_type(node->builtin_args[2]);
+      node->builtin_nargs = 3;
+      SET_CTX(ctx);       
+      *rest = skip(tok, ")", ctx);
+    return node;
+    }
+  }
+
+  
+  if (equal(tok, "__builtin_ia32_maskmovq"))
+  {   
+    int builtin = builtin_enum(tok);
+    if (builtin != -1) {
+      Node *node = new_node(builtin, tok);
+      SET_CTX(ctx); 
+      tok = skip(tok->next, "(", ctx);
+      node->builtin_args[0] = assign(&tok, tok);
+      add_type(node->builtin_args[0]);
+      SET_CTX(ctx); 
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[1] = assign(&tok, tok);
+      add_type(node->builtin_args[1]);
+      SET_CTX(ctx); 
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[2] = assign(&tok, tok);
+      add_type(node->builtin_args[2]);
+      node->builtin_nargs = 3;
+      SET_CTX(ctx);       
+      *rest = skip(tok, ")", ctx);
+    return node;
+    }
+  }
+
+    
+  if (equal(tok, "__builtin_ia32_maskmovdqu"))
+  {
+    int builtin = builtin_enum(tok);
+    if (builtin != -1) {
+      Node *node = new_node(builtin, tok);
+      SET_CTX(ctx); 
+      tok = skip(tok->next, "(", ctx);
+      node->builtin_args[0] = assign(&tok, tok);
+      add_type(node->builtin_args[0]);
+      SET_CTX(ctx); 
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[1] = assign(&tok, tok);
+      add_type(node->builtin_args[1]);
+      SET_CTX(ctx); 
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[2] = assign(&tok, tok);
+      add_type(node->builtin_args[2]);
+      node->builtin_nargs = 3;
+      SET_CTX(ctx);       
+      *rest = skip(tok, ")", ctx);
+    return node;
+    }
+  }
+
+
+    
+
+  if (equal(tok, "__builtin_ia32_vec_init_v4hi"))
+  {
+    int builtin = builtin_enum(tok);
+    if (builtin != -1) {
+      Node *node = new_node(builtin, tok);
+      SET_CTX(ctx); 
+      tok = skip(tok->next, "(", ctx);
+      node->builtin_args[0] = assign(&tok, tok);
+      add_type(node->builtin_args[0]);
+      SET_CTX(ctx); 
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[1] = assign(&tok, tok);
+      add_type(node->builtin_args[1]);
+      SET_CTX(ctx); 
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[2] = assign(&tok, tok);
+      add_type(node->builtin_args[2]);
+      SET_CTX(ctx); 
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[3] = assign(&tok, tok);
+      add_type(node->builtin_args[3]);
+      node->builtin_nargs = 4;
+      SET_CTX(ctx);       
+      *rest = skip(tok, ")", ctx);
+    return node;
+    }
+  }
+
+     
+  if (equal(tok, "__builtin_ia32_shufps") || equal(tok, "__builtin_ia32_shufpd"))
+  {
+    int builtin = builtin_enum(tok);
+    if (builtin != -1) {
+      Node *node = new_node(builtin, tok);
+      SET_CTX(ctx); 
+      tok = skip(tok->next, "(", ctx);
+      node->lhs = assign(&tok, tok);
+      add_type(node->lhs);
+      SET_CTX(ctx); 
+      tok = skip(tok, ",", ctx);
+      node->rhs = assign(&tok, tok);
+      add_type(node->rhs);
+      SET_CTX(ctx); 
+      tok = skip(tok, ",", ctx);
+      node->rhs->val = const_expr(&tok, tok);
+      SET_CTX(ctx);       
+      *rest = skip(tok, ")", ctx);
+    return node;
+    }
+  }
+
+  if (equal(tok, "__builtin_ia32_vec_init_v8qi"))
+  {
+    int builtin = builtin_enum(tok);
+    if (builtin != -1) {
+      Node *node = new_node(builtin, tok);
+      SET_CTX(ctx); 
+      tok = skip(tok->next, "(", ctx);
+      node->builtin_args[0] = assign(&tok, tok);
+      add_type(node->builtin_args[0]);
+      SET_CTX(ctx); 
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[1] = assign(&tok, tok);
+      add_type(node->builtin_args[1]);
+      SET_CTX(ctx); 
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[2] = assign(&tok, tok);
+      add_type(node->builtin_args[2]);
+      SET_CTX(ctx); 
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[3] = assign(&tok, tok);
+      add_type(node->builtin_args[3]);
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[4] = assign(&tok, tok);
+      add_type(node->builtin_args[4]);
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[5] = assign(&tok, tok);
+      add_type(node->builtin_args[5]);   
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[6] = assign(&tok, tok);
+      add_type(node->builtin_args[6]); 
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[7] = assign(&tok, tok);
+      add_type(node->builtin_args[7]);                  
+      node->builtin_nargs = 8;      
+      SET_CTX(ctx);       
+      *rest = skip(tok, ")", ctx);
+    return node;
+    }
+  }
+
+
+  //managing lots of  builtin_ia32 that needs two args
+  // defined in builtin_table[]
+  int builtin = builtin_enum(tok);
+  if (builtin != -1) {
+    Node *node = new_node(builtin, tok);
+    SET_CTX(ctx); 
     tok = skip(tok->next, "(", ctx);
-    Node *node = new_node(ND_NULL_EXPR, tok);
-    node->ty = t1;
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";        
-    ctx->line_no = __LINE__ + 1;      
-    *rest = skip(tok, ")", ctx);    
+    node->lhs = assign(&tok, tok);
+    add_type(node->lhs);
+    SET_CTX(ctx); 
+    tok = skip(tok, ",", ctx);
+    node->rhs = assign(&tok, tok);
+    add_type(node->rhs);
+    SET_CTX(ctx); 
+    *rest = skip(tok, ")", ctx);
     return node;
   }
 
+
   if (equal(tok, "__builtin_reg_class"))
   {
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";        
-    ctx->line_no = __LINE__ + 1;      
+    SET_CTX(ctx);      
     tok = skip(tok->next, "(", ctx);
     Type *ty = typename(&tok, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";        
-    ctx->line_no = __LINE__ + 1;      
+    SET_CTX(ctx);      
     *rest = skip(tok, ")", ctx);
 
     if (is_integer(ty) || ty->kind == TY_PTR)
       return new_num(0, start);
     if (ty->kind == TY_FLOAT || ty->kind == TY_DOUBLE)
       return new_num(1, start);
-    // if (is_flonum(ty))
-    //   return new_num(1, start);
     return new_num(2, start);
   }
 
@@ -5862,24 +5907,19 @@ static Node *primary(Token **rest, Token *tok)
   if (equal(tok, "__builtin_compare_and_swap"))
   {
     Node *node = new_node(ND_CAS, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";        
-    ctx->line_no = __LINE__ + 1;      
+    SET_CTX(ctx);     
     tok = skip(tok->next, "(", ctx);
     node->cas_addr = assign(&tok, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";        
-    ctx->line_no = __LINE__ + 1;      
+    add_type(node->cas_addr);
+    SET_CTX(ctx);     
     tok = skip(tok, ",", ctx);
     node->cas_old = assign(&tok, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";        
-    ctx->line_no = __LINE__ + 1;      
+    add_type(node->cas_old);
+    SET_CTX(ctx); 
     tok = skip(tok, ",", ctx);
     node->cas_new = assign(&tok, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";        
-    ctx->line_no = __LINE__ + 1;      
+    add_type(node->cas_new);
+    SET_CTX(ctx); 
     *rest = skip(tok, ")", ctx);
     return node;
   }
@@ -5888,43 +5928,34 @@ static Node *primary(Token **rest, Token *tok)
   if (equal(tok, "__builtin_atomic_exchange"))
   {
     Node *node = new_node(ND_EXCH, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";        
-    ctx->line_no = __LINE__ + 1;      
+    SET_CTX(ctx); 
     tok = skip(tok->next, "(", ctx);
     node->lhs = assign(&tok, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";        
-    ctx->line_no = __LINE__ + 1;      
+    add_type(node->lhs);
+    SET_CTX(ctx);     
     tok = skip(tok, ",", ctx);
     node->rhs = assign(&tok, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";        
-    ctx->line_no = __LINE__ + 1;      
+    add_type(node->rhs);
+    SET_CTX(ctx);       
     *rest = skip(tok, ")", ctx);
     return node;
   }
 
   if (equal(tok, "__sync_val_compare_and_swap")) {
     Node *node = new_node(ND_CAS_N, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";        
-    ctx->line_no = __LINE__ + 1;      
+    SET_CTX(ctx); 
     tok = skip(tok->next, "(", ctx);
     node->cas_addr = assign(&tok, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";        
-    ctx->line_no = __LINE__ + 1;      
+    add_type(node->cas_addr);
+    SET_CTX(ctx);     
     tok = skip(tok, ",", ctx);
     node->cas_old = assign(&tok, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";        
-    ctx->line_no = __LINE__ + 1;      
+    add_type(node->cas_old);
+    SET_CTX(ctx);     
     tok = skip(tok, ",", ctx);
     node->cas_new = assign(&tok, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";        
-    ctx->line_no = __LINE__ + 1;      
+    add_type(node->cas_new);
+    SET_CTX(ctx);       
     *rest = skip(tok, ")", ctx);
     return node;
   }
@@ -5933,13 +5964,9 @@ static Node *primary(Token **rest, Token *tok)
   // Extend the parser to recognize __sync_synchronize()
   if (equal(tok, "__sync_synchronize")) {
       Node *node = new_node(ND_SYNC, tok);
-      ctx->filename = PARSE_C;
-      ctx->funcname = "primary";        
-      ctx->line_no = __LINE__ + 1;      
+      SET_CTX(ctx);     
       *rest = skip(tok->next, "(", ctx);
-      ctx->filename = PARSE_C;
-      ctx->funcname = "primary";        
-      ctx->line_no = __LINE__ + 1;      
+      SET_CTX(ctx);     
       *rest = skip(*rest, ")", ctx);
       return node;
   }
@@ -5953,45 +5980,33 @@ static Node *primary(Token **rest, Token *tok)
   }
 
   if (equal(tok, "__builtin_huge_valf")) {
-    Node *node = new_node(ND_BUILTIN_HUGE_VALF, tok);  // you may define a separate ND_BUILTIN_HUGE_VALF if you prefer
+    Node *node = new_node(ND_BUILTIN_HUGE_VALF, tok); 
     node->ty = ty_float;
     node->fval = INFINITY;
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";
-    ctx->line_no = __LINE__ + 1;      
+    SET_CTX(ctx); 
     tok = skip(tok->next, "(", ctx);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";
-    ctx->line_no = __LINE__ + 1;      
+    SET_CTX(ctx); 
     *rest = skip(tok, ")", ctx);
     return node;
   }
 
   if (equal(tok, "__builtin_inf")) {
-    Node *node = new_node(ND_BUILTIN_INF, tok);  // or ND_BUILTIN_HUGE_VAL
+    Node *node = new_node(ND_BUILTIN_INF, tok); 
     node->ty = ty_double;
     node->fval = INFINITY;
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";
-    ctx->line_no = __LINE__ + 1;    
+    SET_CTX(ctx); 
     tok = skip(tok->next, "(", ctx);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";
-    ctx->line_no = __LINE__ + 1;    
+    SET_CTX(ctx); 
     *rest = skip(tok, ")",  ctx);
     return node;
   }
   if (equal(tok, "__builtin_huge_val")) {
-    Node *node = new_node(ND_BUILTIN_HUGE_VAL, tok);  // or ND_BUILTIN_HUGE_VAL
+    Node *node = new_node(ND_BUILTIN_HUGE_VAL, tok); 
     node->ty = ty_double;
     node->fval = INFINITY;
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";
-    ctx->line_no = __LINE__ + 1;    
+    SET_CTX(ctx); 
     tok = skip(tok->next, "(", ctx);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";
-    ctx->line_no = __LINE__ + 1;    
+    SET_CTX(ctx); 
     *rest = skip(tok, ")",  ctx);
     return node;
   }
@@ -5999,26 +6014,21 @@ static Node *primary(Token **rest, Token *tok)
   if (equal(tok, "__builtin_huge_vall")) {
     Node *node = new_node(ND_BUILTIN_HUGE_VALL, tok);
     node->ty = ty_ldouble;
-    node->fval = INFINITY;  // if you're using long double, make sure node supports this or adapt accordingly
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";
-    ctx->line_no = __LINE__ + 1;    
+    node->fval = INFINITY; 
+    SET_CTX(ctx); 
     tok = skip(tok->next, "(", ctx);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";
-    ctx->line_no = __LINE__ + 1;    
+    SET_CTX(ctx); 
     *rest = skip(tok, ")", ctx);
     return node;
   }
 
   if (equal(tok, "__builtin_inff")) {
     Node *node = new_node(ND_BUILTIN_INFF, tok);
-    node->ty = ty_float;            // or ty_double if that's your convention
+    node->ty = ty_float;    
     node->fval = INFINITY;     
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";
-    ctx->line_no = __LINE__ + 1;    
+    SET_CTX(ctx); 
     tok = skip(tok->next, "(", ctx);
+    SET_CTX(ctx); 
     *rest = skip(tok, ")", ctx);    
     return node;
   }
@@ -6027,15 +6037,11 @@ static Node *primary(Token **rest, Token *tok)
     Node *node = new_node(ND_BUILTIN_NAN, tok);
     node->ty = ty_double;
     node->fval = NAN;
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";
-    ctx->line_no = __LINE__ + 1; 
+    SET_CTX(ctx); 
     tok = skip(tok->next, "(", ctx);
     if (tok->kind == TK_STR)
       tok = tok->next; 
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";
-    ctx->line_no = __LINE__ + 1;   
+    SET_CTX(ctx); 
     *rest = skip(tok, ")", ctx);
     return node;
   }
@@ -6044,15 +6050,11 @@ static Node *primary(Token **rest, Token *tok)
     Node *node = new_node(ND_BUILTIN_NANF, tok);
     node->ty = ty_float;
     node->fval = NAN;
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";
-    ctx->line_no = __LINE__ + 1; 
+    SET_CTX(ctx); 
     tok = skip(tok->next, "(", ctx);
     if (tok->kind == TK_STR)
       tok = tok->next;
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";
-    ctx->line_no = __LINE__ + 1;       
+    SET_CTX(ctx);       
     *rest = skip(tok, ")", ctx);
     return node;
   }
@@ -6061,15 +6063,11 @@ static Node *primary(Token **rest, Token *tok)
   Node *node = new_node(ND_BUILTIN_NANL, tok);
   node->ty = ty_ldouble;
   node->fval = NAN;
-  ctx->filename = PARSE_C;
-  ctx->funcname = "primary";
-  ctx->line_no = __LINE__ + 1; 
+  SET_CTX(ctx); 
   tok = skip(tok->next, "(", ctx);
   if (tok->kind == TK_STR)
     tok = tok->next;
-  ctx->filename = PARSE_C;
-  ctx->funcname = "primary";
-  ctx->line_no = __LINE__ + 1;   
+  SET_CTX(ctx); 
   *rest = skip(tok, ")", ctx);
   return node;
 }
@@ -6127,40 +6125,48 @@ static Node *primary(Token **rest, Token *tok)
       return ParseBuiltin(ND_POPCOUNT, tok, rest);
   }
 
+  if (equal(tok, "__builtin_popcountl")) {
+      return ParseBuiltin(ND_POPCOUNTL, tok, rest);
+  }
+
+  if (equal(tok, "__builtin_popcountll")) {
+      return ParseBuiltin(ND_POPCOUNTLL, tok, rest);
+  }
+
+
 
   if (equal(tok, "__builtin_expect")) {
     Node *node = new_node(ND_EXPECT, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";
-    ctx->line_no = __LINE__ + 1;    
+    SET_CTX(ctx); 
     tok = skip(tok->next, "(", ctx);
     node->lhs = assign(&tok, tok); 
+    add_type(node->lhs);
+    SET_CTX(ctx); 
     tok = skip(tok, ",", ctx);
     node->rhs = assign(&tok, tok); 
+    add_type(node->rhs);
+    SET_CTX(ctx); 
     *rest = skip(tok, ")", ctx);    
     return node;
   }
 
   if (equal(tok, "__builtin_abort")) {
-      Node *node = new_node(ND_ABORT, tok); // Create a node for the built-in function
-      ctx->filename = PARSE_C;
-      ctx->funcname = "primary";
-      ctx->line_no = __LINE__ + 1;    
-      tok = skip(tok->next, "(", ctx); // Skip the opening parenthesis
-
-      // Since __builtin_abort has no parameters, you can directly skip to the closing parenthesis
-      *rest = skip(tok, ")", ctx); // Skip to the closing parenthesis
-      return node; // Return the node for further processing
+      Node *node = new_node(ND_ABORT, tok); 
+      SET_CTX(ctx); 
+      tok = skip(tok->next, "(", ctx);  
+      SET_CTX(ctx);   
+      *rest = skip(tok, ")", ctx);
+      return node; 
   }
 
 
   if (equal(tok, "__builtin_return_address")) {
     Node *node = new_node(ND_RETURN_ADDR, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";
-    ctx->line_no = __LINE__ + 1;
+    SET_CTX(ctx); 
     tok = skip(tok->next, "(", ctx);
     node->lhs = assign(&tok, tok); 
+    add_type(node->lhs);
+    SET_CTX(ctx); 
     *rest = skip(tok, ")", ctx);
     return node;
   }
@@ -6168,11 +6174,11 @@ static Node *primary(Token **rest, Token *tok)
   if (equal(tok, "__builtin_frame_address"))
   {
     Node *node = new_node(ND_BUILTIN_FRAME_ADDRESS, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";
-    ctx->line_no = __LINE__ + 1;
+    add_type(node);
+    SET_CTX(ctx); 
     tok = skip(tok->next, "(", ctx);
     node->lhs = assign(&tok, tok); 
+    SET_CTX(ctx); 
     *rest = skip(tok, ")", ctx);
     return node;
   }
@@ -6191,19 +6197,15 @@ static Node *primary(Token **rest, Token *tok)
 
   if (equal(tok, "__builtin_unreachable")) {
     Node *node = new_node(ND_UNREACHABLE, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";
-    ctx->line_no = __LINE__ + 1;
+    SET_CTX(ctx); 
     tok = skip(tok->next, "(", ctx);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";
-    ctx->line_no = __LINE__ + 1;    
+    SET_CTX(ctx);     
     *rest = skip(tok, ")", ctx);
     return node;
   }
 
 
-  if (equal(tok, "__builtin_atomic_exchange_n")) {
+  if (equal(tok, "__builtin_atomic_exchange_n") || equal(tok, "__atomic_exchange_n")) {
     return ParseAtomic3(ND_EXCH_N, tok, rest);
   }
   if (equal(tok, "__builtin_atomic_load")) {
@@ -6212,10 +6214,10 @@ static Node *primary(Token **rest, Token *tok)
   if (equal(tok, "__builtin_atomic_store")) {
     return ParseAtomic3(ND_STORE, tok, rest);
   }
-  if (equal(tok, "__builtin_atomic_load_n")) {
+  if (equal(tok, "__builtin_atomic_load_n") || equal(tok, "__atomic_load_n")) {
     return ParseAtomic2(ND_LOAD_N, tok, rest);
   }
-  if (equal(tok, "__builtin_atomic_store_n")) {
+  if (equal(tok, "__builtin_atomic_store_n") || equal(tok, "__atomic_store_n")) {
     return ParseAtomic3(ND_STORE_N, tok, rest);
   }
   if (equal(tok, "__builtin_atomic_fetch_add")) {
@@ -6241,36 +6243,27 @@ static Node *primary(Token **rest, Token *tok)
   }
   if (equal(tok, "__sync_lock_test_and_set")) {
     Node *node = new_node(ND_TESTANDSET, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";        
-    ctx->line_no = __LINE__ + 1;     
+    SET_CTX(ctx); 
     tok = skip(tok->next,  "(", ctx);
     node->lhs = assign(&tok, tok);
     add_type(node->lhs);
     node->ty = node->lhs->ty->base;
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";        
-    ctx->line_no = __LINE__ + 1;     
+    SET_CTX(ctx); 
     tok = skip(tok,  ",", ctx);
     node->rhs = assign(&tok, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";        
-    ctx->line_no = __LINE__ + 1;     
+    add_type(node->rhs);
+    SET_CTX(ctx);     
     *rest = skip(tok,  ")", ctx);
     return node;
   }
   if (equal(tok, "__sync_lock_release")) {
     Node *node = new_node(ND_RELEASE, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";        
-    ctx->line_no = __LINE__ + 1;     
+    SET_CTX(ctx);     
     tok = skip(tok->next, "(", ctx);
     node->lhs = assign(&tok, tok);
     add_type(node->lhs);
     node->ty = node->lhs->ty->base;
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";        
-    ctx->line_no = __LINE__ + 1;      
+    SET_CTX(ctx);      
     *rest = skip(tok, ")", ctx);
     return node;
   }
@@ -6278,18 +6271,15 @@ static Node *primary(Token **rest, Token *tok)
 
   if (equal(tok, "__sync_fetch_and_add"))
   {
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";        
-    ctx->line_no = __LINE__ + 1;      
+    SET_CTX(ctx);     
     tok = skip(tok->next, "(", ctx);
     Node *obj = new_unary(ND_DEREF, assign(&tok, tok), tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";        
-    ctx->line_no = __LINE__ + 1;      
+    SET_CTX(ctx);     
     tok = skip(tok, ",", ctx);
     Node *val = assign(&tok, tok);
+    add_type(val);
     Node *node;
-    node = new_add(obj, val, tok);
+    node = new_add(obj, val, tok, false);
     node->atomic_fetch = true;
     *rest = tok->next;
     return to_assign(node);
@@ -6298,97 +6288,61 @@ static Node *primary(Token **rest, Token *tok)
 
   if (equal(tok, "__sync_fetch_and_sub"))
   {
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";        
-    ctx->line_no = __LINE__ + 1;      
+    SET_CTX(ctx);      
     tok = skip(tok->next, "(", ctx);
     Node *obj = new_unary(ND_DEREF, assign(&tok, tok), tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";        
-    ctx->line_no = __LINE__ + 1;      
+    SET_CTX(ctx);     
     tok = skip(tok, ",", ctx);
     Node *val = assign(&tok, tok);
+    add_type(val);
     Node *node;
-    node = new_sub(obj, val, tok);
+    node = new_sub(obj, val, tok, false);
     node->atomic_fetch = true;
-        *rest = tok->next;
+    *rest = tok->next;
     return to_assign(node);
   }
   
   if (equal(tok, "__sync_fetch_and_or"))
   {
-      ctx->filename = PARSE_C;
-      ctx->funcname = "primary";
-      ctx->line_no = __LINE__ + 1;
+      SET_CTX(ctx); 
       tok = skip(tok->next, "(", ctx);
-      
-      // Parse the object
       Node *obj = new_unary(ND_DEREF, assign(&tok, tok), tok);
-      
-      ctx->filename = PARSE_C;
-      ctx->funcname = "primary";
-      ctx->line_no = __LINE__ + 1;
+      SET_CTX(ctx); 
       tok = skip(tok, ",", ctx);
-      
-      // Parse the value to be ORed
       Node *val = assign(&tok, tok);
-      
-      // Use ND_BITOR to represent the OR operation
+      add_type(val);      
       Node *node = new_binary(ND_BITOR, obj, val, tok);
-      
-      node->atomic_fetch = true;  // Mark as atomic fetch operation
+      node->atomic_fetch = true;  
       *rest = tok->next;
       return to_assign(node);
   }
 
   if (equal(tok, "__sync_fetch_and_xor"))
   {
-      ctx->filename = PARSE_C;
-      ctx->funcname = "primary";
-      ctx->line_no = __LINE__ + 1;
+      SET_CTX(ctx); 
       tok = skip(tok->next, "(", ctx);
-      
-      // Parse the object
       Node *obj = new_unary(ND_DEREF, assign(&tok, tok), tok);
-      
-      ctx->filename = PARSE_C;
-      ctx->funcname = "primary";
-      ctx->line_no = __LINE__ + 1;
+      SET_CTX(ctx); 
       tok = skip(tok, ",", ctx);
-      
-      // Parse the value to be XORed
       Node *val = assign(&tok, tok);
-      
-      // Use ND_BITXOR to represent the XOR operation
+      add_type(val);      
       Node *node = new_binary(ND_BITXOR, obj, val, tok);
-      
-      node->atomic_fetch = true;  // Mark as atomic fetch operation
+      node->atomic_fetch = true; 
       *rest = tok->next;
       return to_assign(node);
   }
 
   if (equal(tok, "__sync_fetch_and_and"))
   {
-      ctx->filename = PARSE_C;
-      ctx->funcname = "primary";
-      ctx->line_no = __LINE__ + 1;
-      tok = skip(tok->next, "(", ctx);
-      
-      // Parse the object
-      Node *obj = new_unary(ND_DEREF, assign(&tok, tok), tok);
-      
-      ctx->filename = PARSE_C;
-      ctx->funcname = "primary";
-      ctx->line_no = __LINE__ + 1;
-      tok = skip(tok, ",", ctx);
-      
-      // Parse the value to be ANDed
-      Node *val = assign(&tok, tok);
-      
-      // Use ND_BITAND to represent the AND operation
-      Node *node = new_binary(ND_BITAND, obj, val, tok);
-      
-      node->atomic_fetch = true;  // Mark as atomic fetch operation
+    SET_CTX(ctx); 
+    tok = skip(tok->next, "(", ctx);
+    Node *obj = new_unary(ND_DEREF, assign(&tok, tok), tok);
+    SET_CTX(ctx); 
+    tok = skip(tok, ",", ctx);
+    Node *val = assign(&tok, tok);
+    add_type(val);   
+    Node *node = new_binary(ND_BITAND, obj, val, tok);
+    node->atomic_fetch = true; 
     *rest = tok->next;
     return to_assign(node);
   }
@@ -6396,26 +6350,20 @@ static Node *primary(Token **rest, Token *tok)
 
   if (equal(tok, "__builtin_atomic_fetch_op"))
   {
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";        
-    ctx->line_no = __LINE__ + 1;      
+    SET_CTX(ctx); 
     tok = skip(tok->next, "(", ctx);
     Node *obj = new_unary(ND_DEREF, assign(&tok, tok), tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";        
-    ctx->line_no = __LINE__ + 1;      
+    SET_CTX(ctx); 
     tok = skip(tok, ",", ctx);
     Node *val = assign(&tok, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";        
-    ctx->line_no = __LINE__ + 1;      
+    add_type(val);    
+    SET_CTX(ctx); 
     tok = skip(tok, ",", ctx);
     Node *node;
-
     if (equal(tok, "0"))
-      node = new_add(obj, val, tok);
+      node = new_add(obj, val, tok, false);
     else if (equal(tok, "1"))
-      node = new_sub(obj, val, tok);
+      node = new_sub(obj, val, tok, false);
     else if (equal(tok, "2"))
       node = new_binary(ND_BITOR, obj, val, tok);
     else if (equal(tok, "3"))
@@ -6426,9 +6374,7 @@ static Node *primary(Token **rest, Token *tok)
       error_tok(tok, "%s %d: in primary : invalid fetch operator", PARSE_C, __LINE__);
 
     node->atomic_fetch = true;
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";        
-    ctx->line_no = __LINE__ + 1;      
+    SET_CTX(ctx);     
     *rest = skip(tok->next, ")", ctx);
     return to_assign(node);
   }
@@ -6475,8 +6421,25 @@ static Node *primary(Token **rest, Token *tok)
 
     if (equal(tok->next, "("))
     {
+      Obj *fn = find_func(token_to_string(tok));
 
-      Node *node = unary(rest, tok->next);
+      if (!fn  && (opt_c99 || opt_c11)) {
+        error_tok(tok, "%s %d: in primary : implicit declaration of function", PARSE_C, __LINE__);
+      }    
+
+      if (!fn) {
+        warn_tok(tok, "%s %d: in primary : implicit declaration of function", PARSE_C, __LINE__);
+        Type *ty = func_type(ty_int);        
+        ty->is_variadic = true;
+        fn = new_gvar(token_to_string(tok), ty);
+        fn->name = token_to_string(tok);
+        fn->is_function = true;
+        fn->is_definition = false;
+        fn->is_tentative = true;
+        fn->is_static = false;
+        fn->is_extern = true;
+      }
+      Node *node = unary(rest, tok->next);      
       return node;
       // error_tok(tok, "%s %d: in primary : implicit declaration of a function", PARSE_C, __LINE__);
     }
@@ -6530,9 +6493,7 @@ static Node *parse_typedef(Token **rest, Token *tok, Type *basety)
   while (!consume(rest, tok, ";"))
   {
     if (!first) {
-      ctx->filename = PARSE_C;
-      ctx->funcname = "parse_typedef";        
-      ctx->line_no = __LINE__ + 1;        
+      SET_CTX(ctx);        
       tok = skip(tok, ",", ctx);
     }
     first = false;
@@ -6544,7 +6505,13 @@ static Node *parse_typedef(Token **rest, Token *tok, Type *basety)
       error_tok(ty->name_pos, "%s %d: in parse_typedef : typedef name omitted", PARSE_C, __LINE__);
     //from COSMOPOLITAN adding other GNUC attributes
     tok = attribute_list(tok, ty, type_attributes);      
-    push_scope(get_ident(ty->name))->type_def = ty;
+    if (ty->is_vector  && !is_vector(ty)) {
+      int len = ty->vector_size / ty->size;
+      Token *name = ty->name;
+      ty = vector_of(ty, len);
+      ty->name = name;
+    }
+    push_scope(get_ident(ty->name))->type_def = ty;    
     node = new_binary(ND_COMMA, node, compute_vla_size(ty, tok), tok);
   }
   
@@ -6623,11 +6590,13 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
 {
 
   Type *ty = declarator(&tok, tok, basety);
+  
+  tok = attribute_list(tok, attr, thing_attributes); 
   if (!ty)
     error_tok(tok, "%s %d: in function : ty is null", PARSE_C, __LINE__);
   if (!ty->name)
     error_tok(ty->name_pos, "%s %d: in function : function name omitted", PARSE_C, __LINE__);  
-  tok = attribute_list(tok, ty, type_attributes);
+
   char *name_str = get_ident(ty->name);
 
   Obj *fn = find_func(name_str);
@@ -6650,19 +6619,23 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
     fn->is_definition = equal(tok, "{");
     fn->is_static = attr->is_static || (attr->is_inline && !attr->is_extern);
     fn->is_inline = attr->is_inline;
-    fn->alias_name = attr->alias_name;
+    
   }
   //from COSMOPOLITAN adding other GNUC attributes
+  fn->alias_name = attr->alias_name;
+  fn->is_extern |= attr->is_extern;
   fn->is_weak |= attr->is_weak;
   fn->section = attr->section;
   fn->is_ms_abi |= attr->is_ms_abi;
   fn->visibility = fn->visibility ?: attr->visibility;
   fn->is_aligned |= attr->is_aligned;
   fn->is_noreturn |= attr->is_noreturn;
-  fn->ty->is_destructor |= attr->is_destructor;
+  fn->is_destructor |= attr->is_destructor;
   fn->is_constructor |=  attr->is_constructor;
-  fn->destructor_priority = attr->destructor_priority;
-  fn->constructor_priority = attr->constructor_priority;
+  if (attr->destructor_priority > 0)
+    fn->destructor_priority = attr->destructor_priority;
+  if (attr->constructor_priority > 0)
+    fn->constructor_priority = attr->constructor_priority;
   fn->is_externally_visible |= attr->is_externally_visible;
   fn->is_no_instrument_function |= attr->is_no_instrument_function;
   fn->is_force_align_arg_pointer |= attr->is_force_align_arg_pointer;
@@ -6673,14 +6646,10 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   fn->is_root = !(fn->is_static && fn->is_inline);
 
    if (consume(&tok, tok, "asm") || consume(&tok, tok, "__asm__")) {
-    ctx->filename = PARSE_C;
-    ctx->funcname = "function";        
-    ctx->line_no = __LINE__ + 1;      
+    SET_CTX(ctx); 
     tok = skip(tok, "(", ctx);
     fn->asmname = ConsumeStringLiteral(&tok, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "function";        
-    ctx->line_no = __LINE__ + 1;     
+    SET_CTX(ctx); 
     tok = skip(tok, ")", ctx);
   }
  //from COSMOPOLITAN adding other GNUC attributes
@@ -6714,9 +6683,7 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
     return tok;
 
 
-  ctx->filename = PARSE_C;
-  ctx->funcname = "function";        
-  ctx->line_no = __LINE__ + 1;     
+  SET_CTX(ctx);    
   tok = skip(tok, "{", ctx);
   is_old_style = false;
   // [https://www.sigbus.info/n1570#6.4.2.2p1] "__func__" is
@@ -6751,9 +6718,7 @@ static Token *global_variable(Token *tok, Type *basety, VarAttr *attr)
   while (!consume(&tok, tok, ";"))
   {
     if (!first) {
-      ctx->filename = PARSE_C;
-      ctx->funcname = "global_variable";        
-      ctx->line_no = __LINE__ + 1;         
+      SET_CTX(ctx);         
       tok = skip(tok, ",", ctx);
     }
     first = false;
@@ -6768,14 +6733,10 @@ static Token *global_variable(Token *tok, Type *basety, VarAttr *attr)
     tok = attribute_list(tok, attr, thing_attributes);
     //tok = attribute_list(tok, ty, type_attributes);
     if (consume(&tok, tok, "asm") || consume(&tok, tok, "__asm__")) {
-      ctx->filename = PARSE_C;
-      ctx->funcname = "function";        
-      ctx->line_no = __LINE__ + 1;       
+      SET_CTX(ctx);
       tok = skip(tok, "(", ctx);
       var->asmname = ConsumeStringLiteral(&tok, tok);
-      ctx->filename = PARSE_C;
-      ctx->funcname = "function";        
-      ctx->line_no = __LINE__ + 1;       
+      SET_CTX(ctx);
       tok = skip(tok, ")", ctx);
     }
 
@@ -6818,12 +6779,35 @@ static bool is_function(Token *tok)
   return ty->kind == TY_FUNC;
 }
 
+
+static bool var_in_array(const char *str, Obj *varArr[], size_t count) {
+    for (size_t i = 0; i < count ; i++) {
+        if (varArr[i] && varArr[i]->name && strcmp(str, varArr[i]->name) == 0) {
+            return true; 
+        }
+    }
+    return false;  
+}
+
+
+static bool var_in_array2(const char *str, Obj *varArr[], size_t count) {
+    for (size_t i = 0; i < count ; i++) {
+        if (varArr[i] && varArr[i]->name && strcmp(str, varArr[i]->name) == 0) {
+            return true; 
+        }
+    }
+    return false;  
+}
 // Remove redundant tentative definitions.
+// works fine when we have tentative and definition but didn't work when we have multiple tentatives.
+// that's why here we're doing two passes and managed the case of duplicate tentatives.
 static void scan_globals(void)
 {
   Obj head;
   Obj *cur = &head;
-
+  Obj *varArr[50000];  
+  int i = 0;
+  //the first pass skipped the duplicated tentative and stores in an Array of objects duplicated tentative
   for (Obj *var = globals; var; var = var->next)
   {
     if (!var->is_tentative)
@@ -6834,19 +6818,92 @@ static void scan_globals(void)
 
     // Find another definition of the same identifier.
     Obj *var2 = globals;
-    for (; var2; var2 = var2->next)
-      if (var != var2 && var2->is_definition && !strcmp(var->name, var2->name))
+    
+    for (; var2; var2 = var2->next) {
+      if (var != var2 && var2->is_definition && !strcmp(var->name, var2->name)) {
+        //warn_tok(var->tok, "%s %d: in scan_globals : duplicated tentative definition", PARSE_C, __LINE__);  
+        if (var2->is_tentative && !var_in_array(var->name, varArr, i + 1 ) && (i + 1) < 50000) {
+          varArr[i++] = var;                
+        }
         break;
+      }
+    }
 
     // If there's another definition, the tentative definition
     // is redundant
     if (!var2)
       cur = cur->next = var;
   }
+  //here now we have globals without duplicated tentative, we start from de-duplicated tentatives
+  //and we add after all the remaining globals.
+  cur = &head;
+  head.next = NULL;
+  for (int j = 0; j < i; j++) {
+    if (varArr[j]) {
+      cur = cur->next = varArr[j];
+    }
+  }
+ for (Obj *var = globals; var; var = var->next)
+  {
+      cur = cur->next = var;
+  }
 
   cur->next = NULL;
   globals = head.next;
 }
+
+
+static void scan_globals2(void)
+{
+  Obj head;
+  Obj *cur = &head;
+  Obj *varArr[50000];  
+  int i = 0;
+  //the first pass skipped the duplicated tentative and stores in an Array of objects duplicated tentative
+  for (Obj *var = globals; var; var = var->next)
+  {
+    if (!var->is_definition)
+    {
+      cur = cur->next = var;
+      continue;
+    }
+
+    // Find another definition of the same identifier.
+    Obj *var2 = globals;
+    
+    for (; var2; var2 = var2->next) {
+      if (var != var2 && var2->is_definition && !strcmp(var->name, var2->name)) {
+        //warn_tok(var->tok, "%s %d: in scan_globals : duplicated tentative definition", PARSE_C, __LINE__);  
+        if (var2->is_definition && !var_in_array2(var->name, varArr, i + 1 ) && (i + 1) < 50000) {
+          varArr[i++] = var;                
+        }
+        break;
+      }
+    }
+
+    // If there's another definition, the tentative definition
+    // is redundant
+    if (!var2)
+      cur = cur->next = var;
+  }
+  //here now we have globals without duplicated tentative, we start from de-duplicated tentatives
+  //and we add after all the remaining globals.
+  cur = &head;
+  head.next = NULL;
+  for (int j = 0; j < i; j++) {
+    if (varArr[j]) {
+      cur = cur->next = varArr[j];
+    }
+  }
+ for (Obj *var = globals; var; var = var->next)
+  {
+   cur = cur->next = var; 
+  }     
+
+  cur->next = NULL;
+  globals = head.next;
+}
+
 
 static void declare_builtin_functions(void)
 {
@@ -6904,6 +6961,13 @@ Obj *parse(Token *tok)
       tok = static_assertion(tok);
       continue;
     }
+    //fixing ISS-192 found during php-src compile
+    if (equal(tok, "asm") || equal(tok, "__asm__")) {
+      Node *node = asm_stmt(&tok, tok);
+      add_type(node);
+      continue;
+    }
+
 
     VarAttr attr = {};
     //from COSMOPOLITAN adding other GNUC attributes
@@ -6914,6 +6978,13 @@ Obj *parse(Token *tok)
     // Typedef
     if (attr.is_typedef)
     {
+      //checking if the typedef has attributes set at the end;
+      Token *start = tok;
+      while (!equal(tok, ";")) {
+        tok = attribute_list(tok, basety, type_attributes);
+        tok = tok->next;
+      }
+      tok = start;
       parse_typedef(&tok, tok, basety);
       continue;
     }
@@ -6941,6 +7012,8 @@ Obj *parse(Token *tok)
 
   // Remove redundant tentative definitions.
   scan_globals();
+  // Remove redundant declaration;
+  scan_globals2();
   return globals;
 }
 
@@ -6949,191 +7022,380 @@ char *nodekind2str(NodeKind kind)
 {
   switch (kind)
   {
-  case ND_NULL_EXPR:
-    return "NULL_EXPR";
-  case ND_ADD:
-    return "ADD";
-  case ND_SUB:
-    return "SUB";
-  case ND_MUL: // *
-    return "MUL";
-  case ND_DIV: // /
-    return "DIV";
-  case ND_NEG: // unary -
-    return "NEG";
-  case ND_MOD: // %
-    return "MOD";
-  case ND_BITAND: // &
-    return "BITAND";
-  case ND_BITOR: // |
-    return "BITOR";
-  case ND_BITXOR: // ^
-    return "BITXOR";
-  case ND_SHL: // <<
-    return "SHL";
-  case ND_SHR: // >>
-    return "SHR";
-  case ND_EQ: // ==
-    return "EQ";
-  case ND_NE: // !=
-    return "NE";
-  case ND_LT: // <
-    return "LT";
-  case ND_LE: // <=
-    return "LE";
-  case ND_ASSIGN: // =
-    return "ASSIGN";
-  case ND_COND:
-    return "COND"; // ?:
-  case ND_COMMA:
-    return "COMMA"; // ,
-  case ND_MEMBER:
-    return "MEMBER"; // . (struct member access)
-  case ND_ADDR:
-    return "ADDR"; // unary &
-  case ND_DEREF:
-    return "DEREF"; // unary *
-  case ND_NOT:
-    return "NOT"; // !
-  case ND_BITNOT:
-    return "BITNOT"; // ~
-  case ND_LOGAND:
-    return "LOGAND"; // &&
-  case ND_LOGOR:
-    return "LOGOR"; // ||
-  case ND_RETURN:
-    return "RETURN"; // "return"
-  case ND_IF:
-    return "IF"; // "if"
-  case ND_FOR:
-    return "FOR"; // "for" or "while"
-  case ND_DO:
-    return "DO"; // "do"
-  case ND_SWITCH:
-    return "SWITCH"; // "switch"
-  case ND_CASE:
-    return "CASE"; // "case"
-  case ND_BLOCK:
-    return "BLOCK"; // { ... }
-  case ND_GOTO:
-    return "GOTO"; // "goto"
-  case ND_GOTO_EXPR:
-    return "GOTO_EXPR"; // "goto" labels-as-values
-  case ND_LABEL:
-    return "LABEL"; // Labeled statement
-  case ND_LABEL_VAL:
-    return "LABEL_VAL"; // [GNU] Labels-as-values
-  case ND_FUNCALL:
-    return "FUNCCALL";
-  case ND_EXPR_STMT:
-    return "EXPRSTMR"; // Expression statement
-  case ND_STMT_EXPR:
-    return "STMTEXPR"; // Statement expression
-  case ND_VAR:
-    return "VAR"; // Variable
-  case ND_VLA_PTR:
-    return "VLAPTR"; // VLA designator
-  case ND_NUM:
-    return "NUM"; // Integer
-  case ND_CAST:
-    return "CAST"; // Type cast
-  case ND_MEMZERO:
-    return "MEMZERO"; // Zero-clear a stack variable
-  case ND_ASM:
-    return "ASM"; //"asm"
+  case ND_NULL_EXPR: return "NULL_EXPR";
+  case ND_ADD: return "ADD";
+  case ND_SUB: return "SUB";
+  case ND_MUL: return "MUL";
+  case ND_DIV: return "DIV";
+  case ND_NEG: return "NEG";
+  case ND_MOD: return "MOD";
+  case ND_BITAND: return "BITAND";
+  case ND_BITOR: return "BITOR";
+  case ND_BITXOR: return "BITXOR";
+  case ND_SHL: return "SHL";
+  case ND_SHR: return "SHR";
+  case ND_EQ: return "EQ";
+  case ND_NE: return "NE";
+  case ND_LT: return "LT";
+  case ND_LE: return "LE";
+  case ND_ASSIGN: return "ASSIGN";
+  case ND_COND: return "COND"; 
+  case ND_COMMA: return "COMMA";
+  case ND_MEMBER: return "MEMBER"; 
+  case ND_ADDR: return "ADDR";
+  case ND_DEREF: return "DEREF";
+  case ND_NOT: return "NOT";
+  case ND_BITNOT: return "BITNOT"; 
+  case ND_LOGAND: return "LOGAND"; 
+  case ND_LOGOR: return "LOGOR"; 
+  case ND_RETURN: return "RETURN";
+  case ND_IF: return "IF";
+  case ND_FOR: return "FOR"; 
+  case ND_DO: return "DO"; 
+  case ND_SWITCH: return "SWITCH"; 
+  case ND_CASE: return "CASE"; 
+  case ND_BLOCK: return "BLOCK"; 
+  case ND_GOTO: return "GOTO"; 
+  case ND_GOTO_EXPR: return "GOTO_EXPR"; 
+  case ND_LABEL: return "LABEL"; 
+  case ND_LABEL_VAL: return "LABEL_VAL";
+  case ND_FUNCALL: return "FUNCCALL";
+  case ND_EXPR_STMT: return "EXPRSTMR";
+  case ND_STMT_EXPR: return "STMTEXPR"; 
+  case ND_VAR: return "VAR"; 
+  case ND_VLA_PTR: return "VLAPTR"; 
+  case ND_NUM: return "NUM";
+  case ND_CAST: return "CAST";
+  case ND_MEMZERO: return "MEMZERO"; 
+  case ND_ASM: return "ASM";
   case ND_CAS:
-  case ND_CAS_N:
-    return "CAS"; // Atomic compare-and-swap
+  case ND_CAS_N: return "CAS";
   case ND_EXCH:
-  case ND_EXCH_N:
-    return "EXCH";
+  case ND_EXCH_N: return "EXCH";
   case ND_LOAD:
-  case ND_LOAD_N:
-    return "LOAD"; // Atomic load
+  case ND_LOAD_N: return "LOAD";
   case ND_STORE:
-  case ND_STORE_N:
-    return "STORE"; // Atomic store
+  case ND_STORE_N: return "STORE"; 
   case ND_TESTANDSET:
-  case ND_TESTANDSETA:
-    return "TESTANDSET"; // Atomic test and set
-  case ND_CLEAR:
-    return "CLEAR"; //atomic clear
-  case ND_RELEASE:
-    return "RELEASE"; //atomic release
-  case  ND_FETCHADD:
-    return "FETCHADD";  // Atomic fetch and add
-  case ND_FETCHSUB:
-    return "FETCHSUB";     // Atomic fetch and sub
-  case ND_FETCHXOR:
-    return "FETCHXOR";     // Atomic fetch and xor
-  case ND_FETCHAND:
-    return "FETCHAND";     // Atomic fetch and and
-  case ND_FETCHOR:
-    return "FETCHOR";      // Atomic fetch and or
-  case ND_SUBFETCH:
-    return "SUBFETCH";     // Atomic sub and fetch
-  case ND_SYNC:
-    return "SYNC";    //atomic synchronize
-  case ND_BUILTIN_MEMCPY:
-    return "MEMCPY";  //builtin memcpy
-  case ND_BUILTIN_MEMSET:
-    return "MEMSET";  //builtin memset
-  case ND_BUILTIN_CLZ:
-    return "CLZ";   //builtin clz
-  case ND_BUILTIN_CLZL:
-    return "CLZL";   //builtin clzl
-  case ND_BUILTIN_CLZLL:
-    return "CLZLL";   //builtin clzll
-  case ND_BUILTIN_CTZ:
-    return "CTZ";   //builtin ctz
-  case ND_BUILTIN_CTZL:
-    return "CTZL";   //builtin ctzl
-  case ND_BUILTIN_CTZLL:
-    return "CTZLL";   //builtin ctzll
-  case ND_BUILTIN_INFF:
-    return "INFF";   //builtin inff
-  case ND_BUILTIN_INF:
-    return "INFF";   //builtin inf    
-  case ND_BUILTIN_NAN:
-    return "NAN";   //builtin nan    
-  case ND_BUILTIN_NANF:
-    return "NANF";   //builtin nanf   
-  case ND_BUILTIN_NANL:
-    return "NANL";   //builtin nanl       
-  case ND_BUILTIN_ISNAN:
-    return "ISNAN"; //builtin isnan
-  case ND_BUILTIN_HUGE_VAL:
-    return "ISNAN"; //builtin huge val
-  case ND_BUILTIN_HUGE_VALF:
-    return "ISNAN"; //builtin huge valf
-  case ND_BUILTIN_HUGE_VALL:
-    return "ISNAN"; //builtin huge vall
-  case ND_POPCOUNT:
-    return "POPCOUNT"; //builtin popcount
-  case ND_RETURN_ADDR:
-    return "RETURN_ADDRESS";  //builtin return address
-  case ND_BUILTIN_FRAME_ADDRESS:
-    return "FRAME_ADDRESS"; //builtin frame address
-  case ND_BUILTIN_ADD_OVERFLOW:
-    return "ADD_OVERFLOW";    //builtin add overflow
-  case ND_BUILTIN_SUB_OVERFLOW:
-    return "SUB_OVERFLOW";    //builtin sub overflow
-  case ND_BUILTIN_MUL_OVERFLOW:
-    return "MUL_OVERFLOW";    //builtin mul overflow
-  case ND_BUILTIN_BSWAP16:
-    return "BSWAP16";    //builtin bswap16
-  case ND_BUILTIN_BSWAP32:
-    return "BSWAP32";    //builtin bswap32
-  case ND_BUILTIN_BSWAP64:
-    return "BSWAP64";    //builtin bswap64          
-  case ND_ALLOC:
-    return "ALLOCA";  //builtin alloca
-  case ND_ABORT:
-    return "ABORT";  //builtin abort
-  case ND_EXPECT:
-    return "EXPECT";  //builtin expect
-  default:
-    return "UNREACHABLE"; // Atomic e
+  case ND_TESTANDSETA: return "TESTANDSET";
+  case ND_CLEAR: return "CLEAR"; 
+  case ND_RELEASE: return "RELEASE"; 
+  case  ND_FETCHADD: return "FETCHADD";
+  case ND_FETCHSUB: return "FETCHSUB";
+  case ND_FETCHXOR: return "FETCHXOR";
+  case ND_FETCHAND: return "FETCHAND";    
+  case ND_FETCHOR: return "FETCHOR";
+  case ND_SUBFETCH: return "SUBFETCH";
+  case ND_SYNC: return "SYNC";    
+  case ND_BUILTIN_MEMCPY: return "MEMCPY";  
+  case ND_BUILTIN_MEMSET: return "MEMSET";  
+  case ND_BUILTIN_CLZ: return "CLZ";   
+  case ND_BUILTIN_CLZL: return "CLZL";   
+  case ND_BUILTIN_CLZLL: return "CLZLL";  
+  case ND_BUILTIN_CTZ: return "CTZ";   
+  case ND_BUILTIN_CTZL: return "CTZL";  
+  case ND_BUILTIN_CTZLL: return "CTZLL";  
+  case ND_BUILTIN_INFF: return "INFF";   
+  case ND_BUILTIN_INF: return "INFF";  
+  case ND_BUILTIN_NAN: return "NAN";   
+  case ND_BUILTIN_NANF: return "NANF";   
+  case ND_BUILTIN_NANL: return "NANL";   
+  case ND_BUILTIN_ISNAN: return "ISNAN"; 
+  case ND_BUILTIN_HUGE_VAL: return "ISNAN"; 
+  case ND_BUILTIN_HUGE_VALF: return "ISNAN"; 
+  case ND_BUILTIN_HUGE_VALL: return "ISNAN";
+  case ND_POPCOUNT: return "POPCOUNT";
+  case ND_POPCOUNTL: return "POPCOUNTL";
+  case ND_POPCOUNTLL: return "POPCOUNTLL";
+  case ND_RETURN_ADDR: return "RETURN_ADDRESS";  
+  case ND_BUILTIN_FRAME_ADDRESS: return "FRAME_ADDRESS"; 
+  case ND_BUILTIN_ADD_OVERFLOW: return "ADD_OVERFLOW";    
+  case ND_BUILTIN_SUB_OVERFLOW: return "SUB_OVERFLOW";    
+  case ND_BUILTIN_MUL_OVERFLOW: return "MUL_OVERFLOW"; 
+  case ND_BUILTIN_BSWAP16:  return "BSWAP16";   
+  case ND_BUILTIN_BSWAP32: return "BSWAP32";    
+  case ND_BUILTIN_BSWAP64: return "BSWAP64"; 
+  case ND_ALLOC: return "ALLOCA";
+  case ND_ABORT: return "ABORT";
+  case ND_EXPECT: return "EXPECT";
+  case ND_EMMS: return "EMMS";
+  case ND_LFENCE: return "LFENCE";
+  case ND_MFENCE: return "MFENCE";
+  case ND_SFENCE: return "SFENCE";
+  case ND_PAUSE: return "PAUSE";
+  case ND_STMXCSR: return "STMXCSR";
+  case ND_LDMXCSR: return "LDMXCSR";    
+  case ND_CVTPI2PS: return "CVTPI2PS";    
+  case ND_CVTPS2PI: return "CVTPS2PI";
+  case ND_CLFLUSH: return "CLFLUSH"; 
+  case ND_VECINITV2SI: return "VEC_INIT_V2SI";
+  case ND_VECEXTV2SI: return "VEC_EXT_V2SI";
+  case ND_VECEXTV4SI: return "VEC_EXT_V4SI";
+  case ND_VECINITV8QI: return "VEC_INIT_V8QI";   
+  case ND_VECINITV4HI: return "VEC_INIT_V4HI";        
+  case ND_PACKSSWB: return "PACKSSWB";
+  case ND_PACKSSDW: return "PACKSSDW";
+  case ND_PACKUSWB: return "PACKUSWB";
+  case ND_PUNPCKHBW: return "PUNPCKHBW";
+  case ND_PUNPCKHWD: return "PUNPCKHWD";   
+  case ND_PUNPCKHDQ: return "PUNPCKHDQ";   
+  case ND_PUNPCKLBW: return "PUNPCKLBW";  
+  case ND_PUNPCKLWD: return "PUNPCKLWD";   
+  case ND_PUNPCKLDQ: return "PUNPCKLDQ";   
+  case ND_PADDB: return "PADDB";   
+  case ND_PADDW: return "PADDW";  
+  case ND_PADDD: return "PADDD";
+  case ND_PADDQ: return "PADDQ";   
+  case ND_PADDSB: return "PADDSB";  
+  case ND_PADDSW: return "PADDSW";   
+  case ND_PADDUSB: return "PADDUSB"; 
+  case ND_PADDUSW: return "PADDUSW";   
+  case ND_PSUBB: return "PSUBB";    
+  case ND_PSUBW: return "PSUBW";   
+  case ND_PSUBD: return "PSUBD";     
+  case ND_PSUBQ: return "PSUBQ";  
+  case ND_PSUBSB: return "PSUBSB";   
+  case ND_PSUBSW: return "PSUBSW"; 
+  case ND_PSUBUSB: return "PSUBUSB"; 
+  case ND_PSUBUSW: return "PSUBUSW";     
+  case ND_PMADDWD: return "PMADDWD";    
+  case ND_PMULHW: return "PMULHW";   
+  case ND_PMULLW: return "PMULLW";  
+  case ND_PSLLW: return "PSLLW";   
+  case ND_PSLLWI: return "PSLLWI"; 
+  case ND_PSLLD: return "PSLLD";      
+  case ND_PSLLDI: return "PSLLDI";   
+  case ND_PSLLQ: return "PSLLQ";
+  case ND_PSLLQI: return "PSLLQI";  
+  case ND_PSRAW: return "PSRAW";   
+  case ND_PSRAWI: return "PSRAWI";
+  case ND_PSRAD: return "PSRAD";  
+  case ND_PSRADI: return "PSRADI";
+  case ND_PSRLW: return "PSRLW";      
+  case ND_PSRLWI: return "PSRLWI";   
+  case ND_PSRLD: return "PSRLD";      
+  case ND_PSRLDI: return "PSRLDI";  
+  case ND_PSRLQ: return "PSRLQ";      
+  case ND_PSRLQI: return "PSRLQI"; 
+  case ND_PAND: return "PAND";  
+  case ND_PANDN: return "PANDN";    
+  case ND_POR: return "POR";
+  case ND_PXOR: return "PXOR";    
+  case ND_PCMPEQB: return "PCMPEQB";     
+  case ND_PCMPGTB: return "PCMPGTB";  
+  case ND_PCMPEQW: return "PCMPEQW";  
+  case ND_PCMPEQD: return "PCMPEQD";        
+  case ND_PCMPGTW: return "PCMPGTW";  
+  case ND_PCMPGTD: return "PCMPGTD";  
+  case ND_ADDSS: return "ADDSS";  
+  case ND_SUBSS: return "SUBSS";   
+  case ND_MULSS: return "MULSS";  
+  case ND_DIVSS: return "DIVSS";  
+  case ND_SQRTSS: return "SQRTSS"; 
+  case ND_SQRTPS: return "SQRTPS";     
+  case ND_RSQRTSS: return "RSQRTSS";  
+  case ND_RSQRTPS: return "RSQRTPS";         
+  case ND_RCPSS: return "RCPSS"; 
+  case ND_RCPPS: return "RCPPS";      
+  case ND_MINSS: return "MINSS";
+  case ND_MINPS: return "MINPS"; 
+  case ND_MAXPS: return "MAXPS";        
+  case ND_MAXSS: return "MAXSS"; 
+  case ND_ANDPS: return "ANDPS";       
+  case ND_ANDNPS: return "ANDNPS";   
+  case ND_ORPS: return "ORPS";  
+  case ND_XORPS: return "XORPS";   
+  case ND_CMPEQSS: return "CMPEQSS";    
+  case ND_CMPLTSS: return "CMPLTSS";  
+  case ND_CMPLESS: return "CMPLESS";    
+  case ND_MOVSS: return "MOVSS";   
+  case ND_CMPNEQSS: return "CMPNEQSS"; 
+  case ND_CMPNLTSS: return "CMPNLTSS"; 
+  case ND_CMPNLESS: return "CMPNLESS"; 
+  case ND_CMPORDSS: return "CMPORDSS"; 
+  case ND_CMPUNORDSS: return "CMPUNORDSS";    
+  case ND_CMPEQPS: return "CMPEQPS";  
+  case ND_CMPLTPS: return "CMPLTPS";     
+  case ND_CMPLEPS: return "CMPLEPS";  
+  case ND_CMPGTPS: return "CMPGTPS";     
+  case ND_CMPGEPS: return "CMPGEPS"; 
+  case ND_CMPNEQPS: return "CMPNEQPS";  
+  case ND_CMPNLTPS: return "CMPNLTPS";         
+  case ND_CMPNLEPS: return "CMPNLEPS"; 
+  case ND_CMPNGTPS: return "CMPNGTPS";     
+  case ND_CMPNGEPS: return "CMPNGEPS"; 
+  case ND_CMPORDPS: return "CMPORDPS";   
+  case ND_CMPUNORDPS: return "CMPUNORDPS";  
+  case ND_COMIEQ: return "COMIEQ";  
+  case ND_COMILT: return "COMILT";     
+  case ND_COMILE: return "COMILE"; 
+  case ND_COMIGT: return "COMIGT"; 
+  case ND_COMIGE: return "COMIGE";     
+  case ND_COMINEQ: return "COMINEQ";                                                                                                                                                                                                                                                                                                                             
+  case ND_UCOMIEQ: return "UCOMIEQ";  
+  case ND_UCOMILT: return "UCOMILT";     
+  case ND_UCOMILE: return "UCOMILE"; 
+  case ND_UCOMIGT: return "UCOMIGT"; 
+  case ND_UCOMIGE: return "UCOMIGE";     
+  case ND_UCOMINEQ: return "UCOMINEQ";
+  case ND_CVTSS2SI: return "CVTSS2SI";    
+  case ND_CVTSS2SI64: return "CVTSS2SI64";   
+  case ND_CVTTSS2SI: return "CVTTSS2SI";  
+  case ND_CVTTSS2SI64: return "CVTTSS2SI64";
+  case ND_CVTTPS2PI: return "CVTTPS2PI";   
+  case ND_CVTSI2SS: return "CVTSI2SS";   
+  case ND_CVTSI642SS: return "CVTSI642SS";  
+  case ND_MOVLHPS: return "MOVLHPS";    
+  case ND_MOVHLPS: return "MOVHLPS"; 
+  case ND_UNPCKHPS: return "UNPCKHPS";  
+  case ND_UNPCKLPS: return "UNPCKLPS";  
+  case ND_LOADHPS: return "LOADHPS";        
+  case ND_STOREHPS: return "STOREHPS"; 
+  case ND_LOADLPS: return "LOADLPS";        
+  case ND_STORELPS: return "STORELPS"; 
+  case ND_MOVMSKPS: return "MOVMSKPS";    
+  case ND_SHUFPS: return "SHUFPS";       
+  case ND_SHUFFLE: return "SHUFFLE";     
+  case ND_PMAXSW: return "PMAXSW";     
+  case ND_PMAXUB: return "PMAXUB";   
+  case ND_PMINSW: return "PMINSW"; 
+  case ND_PMINUB: return "PMINUB";        
+  case ND_PMOVMSKB: return "PMOVMSKB";
+  case ND_PMULHUW: return "PMULHUW";   
+  case ND_MASKMOVQ: return "MASKMOVQ";   
+  case ND_PAVGB: return "PAVGB";            
+  case ND_PAVGW: return "PAVGW"; 
+  case ND_PSADBW: return "PSADBW";    
+  case ND_MOVNTQ: return "MOVNTQ";    
+  case ND_MOVNTPS: return "MOVNTPS";         
+  case ND_SHUFPD: return "SHUFPD";       
+  case ND_ADDSD: return "ADDSD";   
+  case ND_SUBSD: return "SUBSD";       
+  case ND_MULSD: return "MULSD";   
+  case ND_DIVSD: return "DIVSD";    
+  case ND_SQRTPD: return "SQRTPD"; 
+  case ND_SQRTSD: return "SQRTSD"; 
+  case ND_MOVSD: return "MOVSD";        
+  case ND_MINPD: return "MINPD";            
+  case ND_MINSD: return "MINSD";        
+  case ND_MAXPD: return "MAXPD";  
+  case ND_MAXSD: return "MAXSD";  
+  case ND_ANDPD: return "ANDPD";    
+  case ND_ANDNPD: return "ANDNPD";  
+  case ND_ORPD: return "ORPD";         
+  case ND_XORPD: return "XORPD";      
+  case ND_CMPEQPD: return "CMPEQPD";    
+  case ND_CMPLTPD: return "CMPLTPD"; 
+  case ND_CMPLEPD: return "CMPLEPD"; 
+  case ND_CMPGTPD: return "CMPGTPD"; 
+  case ND_CMPGEPD: return "CMPGEPD";  
+  case ND_CMPNEQPD: return "CMPNEQPD"; 
+  case ND_CMPNLTPD: return "CMPNLTPD";  
+  case ND_CMPNLEPD: return "CMPNLEPD";  
+  case ND_CMPNGTPD: return "CMPNGTPD";   
+  case ND_CMPNGEPD: return "CMPNGEPD";   
+  case ND_CMPORDPD: return "CMPORDPD";   
+  case ND_CMPUNORDPD: return "CMPUNORDPD";
+  case ND_CMPEQSD: return "CMPEQSD";   
+  case ND_CMPLTSD: return "CMPLTSD";    
+  case ND_CMPLESD: return "CMPLESD";    
+  case ND_CMPNEQSD: return "CMPNEQSD";   
+  case ND_CMPNLTSD: return "CMPNLTSD";     
+  case ND_CMPNLESD: return "CMPNLESD";  
+  case ND_CMPORDSD: return "CMPORDSD";    
+  case ND_CMPUNORDSD: return "CMPUNORDSD"; 
+  case ND_COMISDEQ: return "COMISDEQ"; 
+  case ND_COMISDLT: return "COMISDLT"; 
+  case ND_COMISDLE: return "COMISDLE"; 
+  case ND_COMISDGT: return "COMISDGT"; 
+  case ND_COMISDGE: return "COMISDGE"; 
+  case ND_COMISDNEQ: return "COMISDNEQ"; 
+  case ND_UCOMISDEQ: return "UCOMISDEQ"; 
+  case ND_UCOMISDLT: return "UCOMISDLT"; 
+  case ND_UCOMISDLE: return "UCOMISDLE"; 
+  case ND_UCOMISDGT: return "UCOMISDGT"; 
+  case ND_UCOMISDGE: return "UCOMISDGE"; 
+  case ND_UCOMISDNEQ: return "UCOMISDNEQ"; 
+  case ND_MOVQ128: return "MOVQ128"; 
+  case ND_CVTDQ2PD: return "CVTDQ2PD"; 
+  case ND_CVTDQ2PS: return "CVTDQ2PS"; 
+  case ND_CVTPD2DQ: return "CVTPD2DQ"; 
+  case ND_CVTPD2PI: return "CVTPD2PI"; 
+  case ND_CVTPD2PS: return "CVTPD2PS"; 
+  case ND_CVTTPD2DQ: return "CVTTPD2DQ";
+  case ND_CVTTPD2PI: return "CVTTPD2PI";  
+  case ND_CVTPI2PD: return "CVTPI2PD"; 
+  case ND_CVTPS2DQ: return "CVTPS2DQ";  
+  case ND_CVTTPS2DQ: return "CVTTPS2DQ";
+  case ND_CVTPS2PD: return "CVTPS2PD"; 
+  case ND_CVTSD2SI: return "CVTSD2SI"; 
+  case ND_CVTSD2SI64: return "CVTSD2SI64";
+  case ND_CVTTSD2SI: return "CVTTSD2SI";  
+  case ND_CVTTSD2SI64: return "CVTTSD2SI64";
+  case ND_CVTSD2SS: return "CVTSD2SS"; 
+  case ND_CVTSI2SD: return "CVTSI2SD"; 
+  case ND_CVTSI642SD: return "CVTSI642SD";
+  case ND_CVTSS2SD: return "CVTSS2SD";  
+  case ND_UNPCKHPD: return "UNPCKHPD";  
+  case ND_UNPCKLPD: return "UNPCKLPD";  
+  case ND_LOADHPD: return "LOADHPD";       
+  case ND_LOADLPD: return "LOADLPD";  
+  case ND_MOVMSKPD: return "MOVMSKPD";    
+  case ND_PACKSSWB128: return "PACKSSWB128";   
+  case ND_PACKSSDW128: return "PACKSSDW128";   
+  case ND_PACKUSWB128: return "PACKUSWB128";     
+  case ND_PUNPCKHBW128: return "PUNPCKHB128";   
+  case ND_PUNPCKHWD128: return "PUNPCKHWD128";  
+  case ND_PUNPCKHDQ128: return "PUNPCKHDQ128";   
+  case ND_PUNPCKHQDQ128: return "PUNPCKHQDQ128"; 
+  case ND_PUNPCKLBW128: return "PUNPCKLBW128";   
+  case ND_PUNPCKLWD128: return "PUNPCKLWD128";   
+  case ND_PUNPCKLDQ128: return "PUNPCKLDQ128";      
+  case ND_PUNPCKLQDQ128: return "PUNPCKLQDQ128";      
+  case ND_PADDSB128: return "PADDSB128";     
+  case ND_PADDSW128: return "PADDSW128";   
+  case ND_PADDUSB128: return "PADDUSB128";      
+  case ND_PADDUSW128: return "PADDUSW128";   
+  case ND_PSUBSB128: return "PSUBSB128";      
+  case ND_PSUBSW128: return "PSUBSW128";  
+  case ND_PSUBUSB128: return "PSUBUSB128";   
+  case ND_PSUBUSW128: return "PSUBUSW128";    
+  case ND_PMADDWD128: return "PMADDWD128";         
+  case ND_PMULHW128: return "PMULHW128";  
+  case ND_PMULUDQ: return "PMULUDQ";    
+  case ND_PMULUDQ128: return "PMULUDQ128";      
+  case ND_PSLLWI128: return "PSLLWI128";           
+  case ND_PSLLDI128: return "PSLLDI128";   
+  case ND_PSLLQI128: return "PSLLQI128"; 
+  case ND_PSRAWI128: return "PSRAWI128";     
+  case ND_PSRADI128: return "PSRADI128";   
+  case ND_PSRLWI128: return "PSRLWI128";     
+  case ND_PSRLDI128: return "PSRLDI128"; 
+  case ND_PSRLQI128: return "PSRLQI128";   
+  case ND_PSLLW128: return "PSLLW128";      
+  case ND_PSLLD128: return "PSLLD128";   
+  case ND_PSLLQ128: return "PSLLQ128";     
+  case ND_PSRAW128: return "PSRAW128";   
+  case ND_PSRAD128: return "PSRAD128";         
+  case ND_PSRLW128: return "PSRLW128";   
+  case ND_PSRLD128: return "PSRLD128";   
+  case ND_PSRLQ128: return "PSRLQ128";  
+  case ND_PANDN128: return "PANDN128";     
+  case ND_PMAXSW128: return "PMAXSW128";         
+  case ND_PMAXUB128: return "PMAXUB128";         
+  case ND_PMINSW128: return "PMINSW128"; 
+  case ND_PMINUB128: return "PMINUB128";      
+  case ND_PMOVMSKB128: return "PMOVMSKB128";   
+  case ND_PMULHUW128: return "PMULHUW128";        
+  case ND_MASKMOVDQU: return "MASKMOVDQU";   
+  case ND_PAVGB128: return "PAVGB128";        
+  case ND_PAVGW128: return "PAVGW128";        
+  case ND_PSADBW128: return "PSADBW128";       
+  case ND_MOVNTI: return "MOVNTI";  
+  case ND_MOVNTI64: return "MOVNTI64";  
+  case ND_MOVNTDQ: return "MOVNTDQ";  
+  case ND_MOVNTPD: return "MOVNTPD";                  
+  default: return "UNREACHABLE"; 
   }
 }
 
@@ -7155,9 +7417,7 @@ static Token *static_assertion(Token *tok) {
   char *msg;
   Token *start = tok;
   Token *errmsg = tok;
-  ctx->filename = PARSE_C;
-  ctx->funcname = "static_assertion";        
-  ctx->line_no = __LINE__ + 1;   
+  SET_CTX(ctx);
   tok = skip(tok->next, "(", ctx);
   int64_t cond = const_expr(&tok, tok);
 
@@ -7167,13 +7427,9 @@ static Token *static_assertion(Token *tok) {
   } else {
     msg = "static assertion failed";
   }
-  ctx->filename = PARSE_C;
-  ctx->funcname = "static_assertion";        
-  ctx->line_no = __LINE__ + 1; 
+  SET_CTX(ctx);
   tok = skip(tok, ")", ctx);
-  ctx->filename = PARSE_C;
-  ctx->funcname = "static_assertion";        
-  ctx->line_no = __LINE__ + 1;   
+  SET_CTX(ctx);  
   tok = skip(tok, ";", ctx);
   if (!cond) {
     error_tok(start, "%s %d: in static_assertion : %s %s", PARSE_C, __LINE__, msg, errmsg->loc);
@@ -7234,9 +7490,7 @@ static Token * old_style_params(Token **rest, Token *tok, Type *ty) {
   {
     //first count the number of parameters 
     if (!first) {
-      ctx->filename = PARSE_C;
-      ctx->funcname = "old_style_params";      
-      ctx->line_no = __LINE__ + 1;
+      SET_CTX(ctx);
       tok = skip(tok, ",", ctx);
       }
     first = false;
@@ -7251,63 +7505,52 @@ static Token * old_style_params(Token **rest, Token *tok, Type *ty) {
 
 
 static Node *ParseBuiltin(NodeKind kind, Token *tok, Token **rest) {
-   Node *node = new_node(kind, tok);
-   ctx->filename = PARSE_C;
-   ctx->funcname = "primary";        
-   ctx->line_no = __LINE__ + 1;      
-   tok = skip(tok->next, "(", ctx);
-   node->builtin_val = assign(&tok, tok);
-   ctx->filename = PARSE_C;
-   ctx->funcname = "primary";        
-   ctx->line_no = __LINE__ + 1;      
-   *rest = skip(tok, ")", ctx);
-   return node;  
+  Node *node = new_node(kind, tok);
+  SET_CTX(ctx);    
+  tok = skip(tok->next, "(", ctx);
+  node->builtin_val = assign(&tok, tok);
+  add_type(node->builtin_val); 
+  SET_CTX(ctx);      
+  *rest = skip(tok, ")", ctx);
+  return node;  
 }
 
 //from cosmopolitan managing builtin atomics
 static Node *ParseAtomic2(NodeKind kind, Token *tok, Token **rest) {
   Node *node = new_node(kind, tok);
-  ctx->filename = PARSE_C;
-  ctx->funcname = "ParseAtomic2";      
-  ctx->line_no = __LINE__ + 1;  
+  SET_CTX(ctx); 
   tok = skip(tok->next, "(", ctx);
   node->lhs = assign(&tok, tok);
   add_type(node->lhs);
   node->ty = node->lhs->ty->base;
   if (equal(tok, ",")) {
+    SET_CTX(ctx); 
     tok = skip(tok, ",", ctx);
     node->memorder = const_expr(&tok, tok);
   }   
-  ctx->filename = PARSE_C;
-  ctx->funcname = "ParseAtomic2";      
-  ctx->line_no = __LINE__ + 1;  
+  SET_CTX(ctx); 
   *rest = skip(tok, ")", ctx);
   return node;
 }
 
 static Node *ParseAtomic3(NodeKind kind, Token *tok, Token **rest) {
   Node *node = new_node(kind, tok);
-  ctx->filename = PARSE_C;
-  ctx->funcname = "ParseAtomic3";      
-  ctx->line_no = __LINE__ + 1;  
+  SET_CTX(ctx); 
   tok = skip(tok->next, "(", ctx);
   node->lhs = assign(&tok, tok);
   add_type(node->lhs);
   node->ty = node->lhs->ty->base;
-  ctx->filename = PARSE_C;
-  ctx->funcname = "ParseAtomic3";      
-  ctx->line_no = __LINE__ + 1;  
+  SET_CTX(ctx); 
   tok = skip(tok, ",", ctx);
   node->rhs = assign(&tok, tok);
   add_type(node->rhs);
   // Check if there's a comma, indicating a memory order argument
   if (equal(tok, ",")) {
+    SET_CTX(ctx); 
     tok = skip(tok, ",", ctx);
     node->memorder = const_expr(&tok, tok);
   } 
-  ctx->filename = PARSE_C;
-  ctx->funcname = "ParseAtomic3";      
-  ctx->line_no = __LINE__ + 1;  
+  SET_CTX(ctx); 
   *rest = skip(tok, ")", ctx);
   return node;
 }
@@ -7315,24 +7558,19 @@ static Node *ParseAtomic3(NodeKind kind, Token *tok, Token **rest) {
 //builtin function memcpy
 static Node *parse_memcpy(Token *tok, Token **rest) {
     Node *node = new_node(ND_BUILTIN_MEMCPY, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "parse_memcpy";        
-    ctx->line_no = __LINE__ + 1;
+    SET_CTX(ctx); 
     tok = skip(tok->next, "(", ctx);
     node->builtin_dest = assign(&tok, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "parse_memcpy";        
-    ctx->line_no = __LINE__ + 1;
+    add_type(node->builtin_dest); 
+    SET_CTX(ctx); 
     tok = skip(tok, ",", ctx);
     node->builtin_src = assign(&tok, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "parse_memcpy";        
-    ctx->line_no = __LINE__ + 1;
+    add_type(node->builtin_src); 
+    SET_CTX(ctx); 
     tok = skip(tok, ",", ctx);
     node->builtin_size = assign(&tok, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "parse_memcpy";        
-    ctx->line_no = __LINE__ + 1;
+    add_type(node->builtin_size); 
+    SET_CTX(ctx); 
     *rest = skip(tok, ")", ctx);
     return node;  
 }
@@ -7340,24 +7578,19 @@ static Node *parse_memcpy(Token *tok, Token **rest) {
 
 static Node *parse_memset(Token *tok, Token **rest) {
     Node *node = new_node(ND_BUILTIN_MEMSET, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "parse_memset";
-    ctx->line_no = __LINE__ + 1;
+    SET_CTX(ctx); 
     tok = skip(tok->next, "(", ctx);
     node->builtin_dest = assign(&tok, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "parse_memset";
-    ctx->line_no = __LINE__ + 1;
+    add_type(node->builtin_dest); 
+    SET_CTX(ctx); 
     tok = skip(tok, ",", ctx);
     node->builtin_val = assign(&tok, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "parse_memset";
-    ctx->line_no = __LINE__ + 1;
+    add_type(node->builtin_val); 
+    SET_CTX(ctx); 
     tok = skip(tok, ",", ctx);
     node->builtin_size = assign(&tok, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "parse_memset";
-    ctx->line_no = __LINE__ + 1;
+    add_type(node->builtin_size); 
+    SET_CTX(ctx); 
     *rest = skip(tok, ")", ctx);
     return node;
 }
@@ -7365,24 +7598,19 @@ static Node *parse_memset(Token *tok, Token **rest) {
 static Node *parse_overflow(NodeKind kind, Token *tok, Token **rest) {
     // Parse the arguments for __builtin_add_overflow
     Node *node = new_node(kind, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";
-    ctx->line_no = __LINE__ + 1;
+    SET_CTX(ctx); 
     tok = skip(tok->next, "(", ctx);
     node->lhs = assign(&tok, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";
-    ctx->line_no = __LINE__ + 1;
+    add_type(node->lhs); 
+    SET_CTX(ctx); 
     tok = skip(tok, ",", ctx);
     node->rhs = assign(&tok, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";
-    ctx->line_no = __LINE__ + 1;
+    add_type(node->rhs); 
+    SET_CTX(ctx); 
     tok = skip(tok, ",", ctx);
     node->builtin_dest = assign(&tok, tok);
-    ctx->filename = PARSE_C;
-    ctx->funcname = "primary";
-    ctx->line_no = __LINE__ + 1;
+    add_type(node->builtin_dest); 
+    SET_CTX(ctx); 
     *rest = skip(tok, ")", ctx);    
     return node;
 
@@ -7429,14 +7657,13 @@ static Type *old_params(Type *ty, int nbparms) {
 }
 
 static Node *parse_huge_val(double fval, Token *tok, Token **rest) {
-      Node *node = new_double(fval, tok);
-      ctx->filename = PARSE_C;
-      ctx->funcname = "primary";        
-      ctx->line_no = __LINE__ + 1;      
-      tok = skip(tok->next, "(", ctx);
-      tok = skip(tok, ")", ctx);
-      *rest = tok;
-      return node;
+  Node *node = new_double(fval, tok);
+  SET_CTX(ctx);    
+  tok = skip(tok->next, "(", ctx);
+  SET_CTX(ctx); 
+  tok = skip(tok, ")", ctx);
+  *rest = tok;
+  return node;
 }
 
 static int64_t eval_sign_extend(Type *ty, uint64_t val) {
@@ -7493,4 +7720,316 @@ static bool is_str_tok(Token **rest, Token *tok, Token **str_tok) {
   return false;
 }
 
+static BuiltinEntry builtin_table[] = {
+    { "__builtin_ia32_packssdw", ND_PACKSSDW },
+    { "__builtin_ia32_packsswb", ND_PACKSSWB },
+    { "__builtin_ia32_packuswb", ND_PACKUSWB },
+    { "__builtin_ia32_punpckhbw", ND_PUNPCKHBW },
+    { "__builtin_ia32_punpckhwd", ND_PUNPCKHWD },
+    { "__builtin_ia32_punpckhdq", ND_PUNPCKHDQ },
+    { "__builtin_ia32_punpcklbw", ND_PUNPCKLBW },
+    { "__builtin_ia32_punpcklwd", ND_PUNPCKLWD },
+    { "__builtin_ia32_punpckldq", ND_PUNPCKLDQ },
+    { "__builtin_ia32_paddb", ND_PADDB },
+    { "__builtin_ia32_paddw", ND_PADDW },
+    { "__builtin_ia32_paddd", ND_PADDD },
+    { "__builtin_ia32_paddq", ND_PADDQ },
+    { "__builtin_ia32_paddsb", ND_PADDSB },
+    { "__builtin_ia32_paddsw", ND_PADDSW },
+    { "__builtin_ia32_paddusb", ND_PADDUSB },
+    { "__builtin_ia32_paddusw", ND_PADDUSW },
+    { "__builtin_ia32_psubb", ND_PSUBB },
+    { "__builtin_ia32_psubw", ND_PSUBW },
+    { "__builtin_ia32_psubd", ND_PSUBD },
+    { "__builtin_ia32_psubq", ND_PSUBQ },
+    { "__builtin_ia32_psubsb", ND_PSUBSB },
+    { "__builtin_ia32_psubsw", ND_PSUBSW },
+    { "__builtin_ia32_psubusb", ND_PSUBUSB },
+    { "__builtin_ia32_psubusw", ND_PSUBUSW },
+    { "__builtin_ia32_pmaddwd", ND_PMADDWD },
+    { "__builtin_ia32_pmulhw", ND_PMULHW },
+    { "__builtin_ia32_pmullw", ND_PMULLW },
+    { "__builtin_ia32_psllw", ND_PSLLW },
+    { "__builtin_ia32_psllwi", ND_PSLLWI },
+    { "__builtin_ia32_pslld", ND_PSLLD },
+    { "__builtin_ia32_pslldi", ND_PSLLDI },
+    { "__builtin_ia32_psllq", ND_PSLLQ },
+    { "__builtin_ia32_psllqi", ND_PSLLQI },
+    { "__builtin_ia32_psraw", ND_PSRAW },
+    { "__builtin_ia32_psrawi", ND_PSRAWI },
+    { "__builtin_ia32_psrad", ND_PSRAD },
+    { "__builtin_ia32_psradi", ND_PSRADI },
+    { "__builtin_ia32_psrlw", ND_PSRLW },
+    { "__builtin_ia32_psrlwi", ND_PSRLWI },
+    { "__builtin_ia32_psrld", ND_PSRLD },
+    { "__builtin_ia32_psrldi", ND_PSRLDI },
+    { "__builtin_ia32_psrlq", ND_PSRLQ },
+    { "__builtin_ia32_psrlqi", ND_PSRLQI },
+    { "__builtin_ia32_pand", ND_PAND },
+    { "__builtin_ia32_pandn", ND_PANDN },
+    { "__builtin_ia32_por", ND_POR },
+    { "__builtin_ia32_pxor", ND_PXOR },
+    { "__builtin_ia32_pcmpeqb", ND_PCMPEQB },
+    { "__builtin_ia32_pcmpgtb", ND_PCMPGTB },
+    { "__builtin_ia32_pcmpeqw", ND_PCMPEQW },
+    { "__builtin_ia32_pcmpgtw", ND_PCMPGTW },
+    { "__builtin_ia32_pcmpeqd", ND_PCMPEQD },    
+    { "__builtin_ia32_pcmpgtd", ND_PCMPGTD },  
+    { "__builtin_ia32_vec_init_v4hi", ND_VECINITV4HI },  
+    { "__builtin_ia32_vec_init_v8qi", ND_VECINITV8QI },    
+    { "__builtin_ia32_vec_init_v2si", ND_VECINITV2SI },   
+    { "__builtin_ia32_vec_ext_v2si", ND_VECEXTV2SI },       
+    { "__builtin_ia32_vec_ext_v4si", ND_VECEXTV4SI },       
+    { "__builtin_ia32_emms", ND_EMMS },       
+    { "__builtin_ia32_sfence", ND_SFENCE },       
+    { "__builtin_ia32_lfence", ND_LFENCE },     
+    { "__builtin_ia32_mfence", ND_MFENCE },       
+    { "__builtin_ia32_pause", ND_PAUSE },     
+    { "__builtin_ia32_stmxcsr", ND_STMXCSR },   
+    { "__builtin_ia32_ldmxcsr", ND_LDMXCSR },     
+    { "__builtin_ia32_cvtpi2ps", ND_CVTPI2PS },    
+    { "__builtin_ia32_cvtps2pi", ND_CVTPS2PI },    
+    { "__builtin_ia32_addss", ND_ADDSS },        
+    { "__builtin_ia32_subss", ND_SUBSS },        
+    { "__builtin_ia32_mulss", ND_MULSS },   
+    { "__builtin_ia32_divss", ND_DIVSS },     
+    { "__builtin_ia32_sqrtss", ND_SQRTSS },   
+    { "__builtin_ia32_sqrtps", ND_SQRTPS },   
+    { "__builtin_ia32_rcpss", ND_RCPSS },     
+    { "__builtin_ia32_rsqrtss", ND_RSQRTSS },
+    { "__builtin_ia32_rsqrtps", ND_RSQRTPS },
+    { "__builtin_ia32_minss", ND_MINSS },          
+    { "__builtin_ia32_minps", ND_MINPS },           
+    { "__builtin_ia32_maxss", ND_MAXSS },  
+    { "__builtin_ia32_maxps", ND_MAXPS },       
+    { "__builtin_ia32_rcpps", ND_RCPPS },     
+    { "__builtin_ia32_andps", ND_ANDPS },      
+    { "__builtin_ia32_andnps", ND_ANDNPS }, 
+    { "__builtin_ia32_orps", ND_ORPS },   
+    { "__builtin_ia32_xorps", ND_XORPS },  
+    { "__builtin_ia32_cmpeqss", ND_CMPEQSS },
+    { "__builtin_ia32_cmpltss", ND_CMPLTSS },       
+    { "__builtin_ia32_cmpless", ND_CMPLESS },      
+    { "__builtin_ia32_movss", ND_MOVSS },    
+    { "__builtin_ia32_cmpneqss", ND_CMPNEQSS },  
+    { "__builtin_ia32_cmpnltss", ND_CMPNLTSS },       
+    { "__builtin_ia32_cmpnless", ND_CMPNLESS },         
+    { "__builtin_ia32_cmpordss", ND_CMPORDSS },  
+    { "__builtin_ia32_cmpunordss", ND_CMPUNORDSS },  
+    { "__builtin_ia32_cmpeqps", ND_CMPEQPS },
+    { "__builtin_ia32_cmpltps", ND_CMPLTPS },
+    { "__builtin_ia32_cmpleps", ND_CMPLEPS },
+    { "__builtin_ia32_cmpgtps", ND_CMPGTPS },
+    { "__builtin_ia32_cmpgeps", ND_CMPGEPS },
+    { "__builtin_ia32_cmpneqps", ND_CMPNEQPS },
+    { "__builtin_ia32_cmpnltps", ND_CMPNLTPS },
+    { "__builtin_ia32_cmpnleps", ND_CMPNLEPS },
+    { "__builtin_ia32_cmpngtps", ND_CMPNGTPS },
+    { "__builtin_ia32_cmpngeps", ND_CMPNGEPS },
+    { "__builtin_ia32_cmpordps", ND_CMPORDPS },  
+    { "__builtin_ia32_cmpunordps", ND_CMPUNORDPS },  
+    { "__builtin_ia32_comieq", ND_COMIEQ },  
+    { "__builtin_ia32_comilt", ND_COMILT },  
+    { "__builtin_ia32_comile", ND_COMILE },  
+    { "__builtin_ia32_comigt", ND_COMIGT },  
+    { "__builtin_ia32_comige", ND_COMIGE },  
+    { "__builtin_ia32_comineq", ND_COMINEQ },  
+    { "__builtin_ia32_ucomieq", ND_UCOMIEQ },  
+    { "__builtin_ia32_ucomilt", ND_UCOMILT },  
+    { "__builtin_ia32_ucomile", ND_UCOMILE },  
+    { "__builtin_ia32_ucomigt", ND_UCOMIGT },  
+    { "__builtin_ia32_ucomige", ND_UCOMIGE },  
+    { "__builtin_ia32_ucomineq", ND_UCOMINEQ },   
+    { "__builtin_ia32_cvtss2si", ND_CVTSS2SI },   
+    { "__builtin_ia32_cvtss2si64", ND_CVTSS2SI64 },   
+    { "__builtin_ia32_cvttss2si", ND_CVTTSS2SI },   
+    { "__builtin_ia32_cvttss2si64", ND_CVTTSS2SI64 },
+    { "__builtin_ia32_cvttps2pi", ND_CVTTPS2PI },      
+    { "__builtin_ia32_cvtsi2ss", ND_CVTSI2SS },      
+    { "__builtin_ia32_cvtsi642ss", ND_CVTSI642SS },
+    { "__builtin_ia32_movlhps", ND_MOVLHPS },         
+    { "__builtin_ia32_movhlps", ND_MOVHLPS },         
+    { "__builtin_ia32_unpckhps", ND_UNPCKHPS },    
+    { "__builtin_ia32_unpcklps", ND_UNPCKLPS },         
+    { "__builtin_ia32_loadhps", ND_LOADHPS },   
+    { "__builtin_ia32_storehps", ND_STOREHPS },        
+    { "__builtin_ia32_loadlps", ND_LOADLPS },   
+    { "__builtin_ia32_storelps", ND_STORELPS },   
+    { "__builtin_ia32_movmskps", ND_MOVMSKPS },  
+    { "__builtin_ia32_shufps", ND_SHUFPS },         
+    { "__builtin_shuffle", ND_SHUFFLE },       
+    { "__builtin_ia32_pmaxsw", ND_PMAXSW },     
+    { "__builtin_ia32_pmaxub", ND_PMAXUB },   
+    { "__builtin_ia32_pminsw", ND_PMINSW },   
+    { "__builtin_ia32_pminub", ND_PMINUB },          
+    { "__builtin_ia32_clflush", ND_CLFLUSH },          
+    { "_mm_clflush", ND_CLFLUSH },          
+    { "__builtin_ia32_pmovmskb", ND_PMOVMSKB },   
+    { "__builtin_ia32_pmulhuw", ND_PMULHUW },
+    { "__builtin_ia32_maskmovq", ND_MASKMOVQ },    
+    { "__builtin_ia32_pavgb", ND_PAVGB },
+    { "__builtin_ia32_pavgw", ND_PAVGW },
+    { "__builtin_ia32_psadbw", ND_PSADBW },
+    { "__builtin_ia32_movntq", ND_MOVNTQ },
+    { "__builtin_ia32_movntps", ND_MOVNTPS },
+    { "__builtin_ia32_shufpd", ND_SHUFPD },    
+    { "__builtin_ia32_addsd", ND_ADDSD },  
+    { "__builtin_ia32_subsd", ND_SUBSD },  
+    { "__builtin_ia32_mulsd", ND_MULSD },  
+    { "__builtin_ia32_divsd", ND_DIVSD }, 
+    { "__builtin_ia32_sqrtpd", ND_SQRTPD },
+    { "__builtin_ia32_movsd", ND_MOVSD },  
+    { "__builtin_ia32_sqrtsd", ND_SQRTSD },
+    { "__builtin_ia32_minpd", ND_MINPD },      
+    { "__builtin_ia32_minsd", ND_MINSD },      
+    { "__builtin_ia32_maxpd", ND_MAXPD },        
+    { "__builtin_ia32_maxsd", ND_MAXSD },       
+    { "__builtin_ia32_andpd", ND_ANDPD }, 
+    { "__builtin_ia32_andnpd", ND_ANDNPD },
+    { "__builtin_ia32_orpd", ND_ORPD },      
+    { "__builtin_ia32_xorpd", ND_XORPD },   
+    { "__builtin_ia32_cmpeqpd", ND_CMPEQPD },  
+    { "__builtin_ia32_cmpltpd", ND_CMPLTPD },  
+    { "__builtin_ia32_cmplepd", ND_CMPLEPD },     
+    { "__builtin_ia32_cmpgtpd", ND_CMPGTPD },     
+    { "__builtin_ia32_cmpgepd", ND_CMPGEPD },    
+    { "__builtin_ia32_cmpneqpd", ND_CMPNEQPD },        
+    { "__builtin_ia32_cmpnltpd", ND_CMPNLTPD }, 
+    { "__builtin_ia32_cmpnlepd", ND_CMPNLEPD }, 
+    { "__builtin_ia32_cmpngtpd", ND_CMPNGTPD },  
+    { "__builtin_ia32_cmpngepd", ND_CMPNGEPD },    
+    { "__builtin_ia32_cmpordpd", ND_CMPORDPD },       
+    { "__builtin_ia32_cmpunordpd", ND_CMPUNORDPD },   
+    { "__builtin_ia32_cmpeqsd", ND_CMPEQSD },         
+    { "__builtin_ia32_cmpltsd", ND_CMPLTSD },       
+    { "__builtin_ia32_cmplesd", ND_CMPLESD }, 
+    { "__builtin_ia32_cmpneqsd", ND_CMPNEQSD },     
+    { "__builtin_ia32_cmpnltsd", ND_CMPNLTSD },    
+    { "__builtin_ia32_cmpnlesd", ND_CMPNLESD },   
+    { "__builtin_ia32_cmpordsd", ND_CMPORDSD },       
+    { "__builtin_ia32_cmpunordsd", ND_CMPUNORDSD },     
+    { "__builtin_ia32_comisdeq", ND_COMISDEQ },     
+    { "__builtin_ia32_comisdlt", ND_COMISDLT},   
+    { "__builtin_ia32_comisdle", ND_COMISDLE},   
+    { "__builtin_ia32_comisdgt", ND_COMISDGT},   
+    { "__builtin_ia32_comisdge", ND_COMISDGE},    
+    { "__builtin_ia32_comisdneq", ND_COMISDNEQ},  
+    { "__builtin_ia32_ucomisdeq", ND_UCOMISDEQ },     
+    { "__builtin_ia32_ucomisdlt", ND_UCOMISDLT},   
+    { "__builtin_ia32_ucomisdle", ND_UCOMISDLE},   
+    { "__builtin_ia32_ucomisdgt", ND_UCOMISDGT},   
+    { "__builtin_ia32_ucomisdge", ND_UCOMISDGE},    
+    { "__builtin_ia32_ucomisdneq", ND_UCOMISDNEQ},    
+    { "__builtin_ia32_movq128", ND_MOVQ128},     
+    { "__builtin_ia32_cvtdq2pd", ND_CVTDQ2PD},     
+    { "__builtin_ia32_cvtdq2ps", ND_CVTDQ2PS},     
+    { "__builtin_ia32_cvtpd2dq", ND_CVTPD2DQ}, 
+    { "__builtin_ia32_cvtpd2pi", ND_CVTPD2PI},  
+    { "__builtin_ia32_cvtpd2ps", ND_CVTPD2PS},    
+    { "__builtin_ia32_cvttpd2dq", ND_CVTTPD2DQ},
+    { "__builtin_ia32_cvttpd2pi", ND_CVTTPD2PI},       
+    { "__builtin_ia32_cvtpi2pd", ND_CVTPI2PD}, 
+    { "__builtin_ia32_cvtps2dq", ND_CVTPS2DQ},  
+    { "__builtin_ia32_cvttps2dq", ND_CVTTPS2DQ},
+    { "__builtin_ia32_cvtps2pd", ND_CVTPS2PD},  
+    { "__builtin_ia32_cvtsd2si", ND_CVTSD2SI},      
+    { "__builtin_ia32_cvtsd2si64", ND_CVTSD2SI64}, 
+    { "__builtin_ia32_cvttsd2si", ND_CVTTSD2SI},   
+    { "__builtin_ia32_cvttsd2si64", ND_CVTTSD2SI64},
+    { "__builtin_ia32_cvtsd2ss", ND_CVTSD2SS},        
+    { "__builtin_ia32_cvtsi2sd", ND_CVTSI2SD},        
+    { "__builtin_ia32_cvtsi642sd", ND_CVTSI642SD},
+    { "__builtin_ia32_cvtss2sd", ND_CVTSS2SD},      
+    { "__builtin_ia32_unpckhpd", ND_UNPCKHPD},           
+    { "__builtin_ia32_unpcklpd", ND_UNPCKLPD},   
+    { "__builtin_ia32_loadhpd", ND_LOADHPD },   
+    { "__builtin_ia32_loadlpd", ND_LOADLPD },      
+    { "__builtin_ia32_movmskpd", ND_MOVMSKPD },    
+    { "__builtin_ia32_packsswb128", ND_PACKSSWB128 },  
+    { "__builtin_ia32_packssdw128", ND_PACKSSDW128 },        
+    { "__builtin_ia32_packuswb128", ND_PACKUSWB128 },       
+    { "__builtin_ia32_punpckhbw128", ND_PUNPCKHBW128 },   
+    { "__builtin_ia32_punpckhwd128", ND_PUNPCKHWD128 }, 
+    { "__builtin_ia32_punpckhdq128", ND_PUNPCKHDQ128 },    
+    { "__builtin_ia32_punpckhqdq128", ND_PUNPCKHQDQ128 },
+    { "__builtin_ia32_punpcklbw128", ND_PUNPCKLBW128 },          
+    { "__builtin_ia32_punpcklwd128", ND_PUNPCKLWD128 },    
+    { "__builtin_ia32_punpckldq128", ND_PUNPCKLDQ128 }, 
+    { "__builtin_ia32_punpcklqdq128", ND_PUNPCKLQDQ128 },        
+    { "__builtin_ia32_paddsb128", ND_PADDSB128 },     
+    { "__builtin_ia32_paddsw128", ND_PADDSW128 },   
+    { "__builtin_ia32_paddusb128", ND_PADDUSB128 },     
+    { "__builtin_ia32_paddusw128", ND_PADDUSW128 },       
+    { "__builtin_ia32_psubsb128", ND_PSUBSB128 },     
+    { "__builtin_ia32_psubsw128", ND_PSUBSW128 },   
+    { "__builtin_ia32_psubusb128", ND_PSUBUSB128 },    
+    { "__builtin_ia32_psubusw128", ND_PSUBUSW128 },          
+    { "__builtin_ia32_pmaddwd128", ND_PMADDWD128 },  
+    { "__builtin_ia32_pmulhw128", ND_PMULHW128 },      
+    { "__builtin_ia32_pmuludq", ND_PMULUDQ },          
+    { "__builtin_ia32_pmuludq128", ND_PMULUDQ128 },          
+    { "__builtin_ia32_psllwi128", ND_PSLLWI128 },   
+    { "__builtin_ia32_pslldi128", ND_PSLLDI128 },    
+    { "__builtin_ia32_psllqi128", ND_PSLLQI128 },     
+    { "__builtin_ia32_psrawi128", ND_PSRAWI128 },          
+    { "__builtin_ia32_psradi128", ND_PSRADI128 },     
+    { "__builtin_ia32_psrlwi128", ND_PSRLWI128 },    
+    { "__builtin_ia32_psrldi128", ND_PSRLDI128 },       
+    { "__builtin_ia32_psrlqi128", ND_PSRLQI128 }, 
+    { "__builtin_ia32_psllw128", ND_PSLLW128 },   
+    { "__builtin_ia32_pslld128", ND_PSLLD128 },       
+    { "__builtin_ia32_psllq128", ND_PSLLQ128 },        
+    { "__builtin_ia32_psraw128", ND_PSRAW128 },   
+    { "__builtin_ia32_psrad128", ND_PSRAD128 },  
+    { "__builtin_ia32_psrlw128", ND_PSRLW128 },  
+    { "__builtin_ia32_psrld128", ND_PSRLD128 },
+    { "__builtin_ia32_psrlq128", ND_PSRLQ128 },        
+    { "__builtin_ia32_pandn128", ND_PANDN128 },    
+    { "__builtin_ia32_pmaxsw128", ND_PMAXSW128 },   
+    { "__builtin_ia32_pmaxub128", ND_PMAXUB128 }, 
+    { "__builtin_ia32_pminsw128", ND_PMINSW128 },   
+    { "__builtin_ia32_pminub128", ND_PMINUB128 }, 
+    { "__builtin_ia32_pmovmskb128", ND_PMOVMSKB128 },  
+    { "__builtin_ia32_pmulhuw128", ND_PMULHUW128 }, 
+    { "__builtin_ia32_maskmovdqu", ND_MASKMOVDQU },     
+    { "__builtin_ia32_pavgb128", ND_PAVGB128 },   
+    { "__builtin_ia32_pavgw128", ND_PAVGW128 },   
+    { "__builtin_ia32_psadbw128", ND_PSADBW128 }, 
+    { "__builtin_ia32_movnti", ND_MOVNTI },   
+    { "__builtin_ia32_movnti64", ND_MOVNTI64 },   
+    { "__builtin_ia32_movntdq", ND_MOVNTDQ },   
+    { "__builtin_ia32_movntpd", ND_MOVNTPD },   
+};
 
+
+static int builtin_enum(Token *tok) {
+    for (size_t i = 0; i < sizeof(builtin_table) / sizeof(builtin_table[0]); i++) {
+        if (equal(tok, builtin_table[i].name))
+            return builtin_table[i].node_kind;
+    }
+    return -1; // not found
+}
+
+// scalar_to_vector now marks the node as a scalar promotion
+static Node *scalar_to_vector(Node *scalar, Type *vec_ty) {
+    Node *n = new_unary(ND_CAST, scalar, scalar->tok);
+    n->ty = vec_ty;                  // target vector type
+    n->is_scalar_promoted = true;     // renamed flag for clarity
+    return n;
+}
+
+// Promote scalars to vectors for a binary operation
+static void promote_scalar_to_vector(Node *node) {
+    add_type(node->lhs);
+    add_type(node->rhs);
+
+    if (is_vector(node->rhs->ty) && !is_vector(node->lhs->ty)) {
+        node->lhs = scalar_to_vector(node->lhs, node->rhs->ty);
+        node->lhs->is_scalar_promoted = true;
+    }
+
+    if (is_vector(node->lhs->ty) && !is_vector(node->rhs->ty)) {
+        node->rhs = scalar_to_vector(node->rhs, node->lhs->ty);
+        node->rhs->is_scalar_promoted = true;
+    }
+}

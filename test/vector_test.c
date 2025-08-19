@@ -16,7 +16,7 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-//#include "test.h"
+#include "test.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -43,18 +43,18 @@ int main(void) {
     printf(" _Alignof(double2a16) = %ld\n",  _Alignof(double2a16));
     printf(" _Alignof(double2) = %ld\n",  _Alignof(double2));
     
-  // ASSERT(16, sizeof(float4));
-  // ASSERT(16, sizeof(float4a1));
-  // ASSERT(16, sizeof(float4a16));
-  // ASSERT(16, sizeof(double2));
-  // ASSERT(16, sizeof(double2a1));
-  // ASSERT(16, sizeof(double2a16));
-  // ASSERT(16, _Alignof(float4));
-  // ASSERT(1, _Alignof(float4a1));
-  // ASSERT(16, _Alignof(float4a16));
-  // ASSERT(16, _Alignof(double2));
-  // ASSERT(1, _Alignof(double2a1));
-  // ASSERT(16, _Alignof(double2a16));
+  ASSERT(16, sizeof(float4));
+  ASSERT(16, sizeof(float4a1));
+  ASSERT(16, sizeof(float4a16));
+  ASSERT(16, sizeof(double2));
+  ASSERT(16, sizeof(double2a1));
+  ASSERT(16, sizeof(double2a16));
+  ASSERT(16, _Alignof(float4));
+  ASSERT(1, _Alignof(float4a1));
+  ASSERT(16, _Alignof(float4a16));
+  ASSERT(16, _Alignof(double2));
+  ASSERT(1, _Alignof(double2a1));
+  ASSERT(16, _Alignof(double2a16));
 
   {
     float4 v1;
@@ -65,23 +65,23 @@ int main(void) {
     memcpy(&v2, y, 16);
     v1 = v1 + v2;
     memcpy(x, &v1, 16);
-    //ASSERT(2, x[0]);
+    ASSERT(2, x[0]);
     // TODO(jart): fix me
-    /* //ASSERT(3, x[1]); */
-    /* //ASSERT(4, x[2]); */
-    /* //ASSERT(5, x[3]); */
+    ASSERT(3, x[1]); 
+    ASSERT(4, x[2]); 
+    ASSERT(5, x[3]); 
   }
 
   {
     byte16 v;
     float x1[4] = {1, 2, 3, 4};
     float x2[4];
-    //memcpy(&v, x1, 16);
+    memcpy(&v, x1, 16);
     //__builtin_ia32_movntdq(x1, &v);
-    //memcpy(x2, &v, 16);
-    //ASSERT(1, x2[0]);
-    // TODO(jart): fix me
-    /* //ASSERT(2, x[1]); */
+    memcpy(x2, &v, 16);
+    ASSERT(1, x2[0]);
+    //TODO(jart): fix me
+    ASSERT(2, x1[1]); 
   }
 
   return 0;

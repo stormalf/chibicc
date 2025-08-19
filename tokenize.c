@@ -140,7 +140,7 @@ void warn_tok(Token *tok, char *fmt, ...)
 }
 
 // Consumes the current token if it matches `op`.
-bool equal(Token *tok, char *op)
+bool equal(Token *tok, const char *op)
 {
   //return strncmp(tok->loc, op, tok->len) == 0 && op[tok->len] == '\0';
   return tok->len == strlen(op) && strncmp(tok->loc, op, tok->len) == 0 && op[tok->len] == '\0';
@@ -312,6 +312,7 @@ static bool is_keyword(Token *tok)
         "_Atomic",
         "__attribute__",
         "__label__",
+        "__int128",
     };
 
     for (int i = 0; i < sizeof(kw) / sizeof(*kw); i++)

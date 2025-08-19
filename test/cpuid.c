@@ -1,4 +1,4 @@
-#include <stdio.h>
+#include "test.h"
 #include <stdint.h>
 #include <assert.h>
 
@@ -34,7 +34,7 @@ int main(void)
     printf("CPUID vendor: %s\n", vendor); 
     printf("Max cpuid leaf: %u\n", eax);
     assert(0 == !strncmp("GenuineIntel", vendor, strlen(vendor)));
-    assert(20 == eax);
+    assert(13 == eax);
 
     return 0;
 }

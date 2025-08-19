@@ -70,6 +70,13 @@ or
         -dM Print macro definitions in -E mode instead of normal output
         -print print all tokens in a log file in /tmp/chibicc.log
         -A print Abstract Syntax Tree in a log file in /tmp/chibicc.log
+        -msse3 enabling sse3 support 
+        -msse4 enabling sse4 support 
+        -nostdlib  Do not use the standard system startup files or libraries when linking 
+        -nostdinc Do not use the standard system header files when compiling 
+        -std=c99 generates an error on implicit function declaration (without -std only a warning is emitted)
+        -std=c11 generates an error on implicit function declaration (without -std only a warning is emitted)
+        -mmmx to allow mmx instructions and builtin functions linked to mmx like __builtin_packuswb... 
         chibicc [ -o <path> ] <file>
 
 ## compile
@@ -264,8 +271,6 @@ List of options ignored :
     "-w"
     "--param=ssp-buffer-size=4"
     "-fno-lto"
-    "-c99"
-    "-std"
     "-fp-model"
     "-fprofile-arcs"
     "-ftest-coverage"
@@ -363,7 +368,7 @@ util-linux : https://github.com/util-linux/util-linux.git
     cd tests
     run.sh 
     ---------------------------------------------------------------------
-      All 280 tests PASSED
+    All 340 tests PASSED
     ---------------------------------------------------------------------
         
 
@@ -478,13 +483,20 @@ VLC : https://github.com/videolan/vlc.git
 
 postgres: https://github.com/postgres/postgres.git  (in case of bad network use git clone --filter=blob:none --depth=1 https://github.com/postgres/postgres.git --branch master)
 
-    CC=chibicc  CFLAGS="-g" ./configure --host x86_64-linux-gnu --disable-spinlocks ac_cv_type___int128=no
+    CC=chibicc  CFLAGS="-g -std=c11" ./configure --host x86_64-linux-gnu 
     make
     make check
     failed with :
     2025-06-08 23:05:39.492 CEST [206164] FATAL:  unrecognized SI message ID: -96
     2025-06-08 23:05:39.492 CEST [206164] STATEMENT:  ALTER TABLE pg_proc ADD PRIMARY KEY USING INDEX pg_proc_oid_index;
 
+## features added 
+
+    - some extended assembly syntax taken in account (only when on macro body they are failing)
+    - adding basic support on int128 (probably some operations are still not supported)
+    - adding vector management and scalar promotion to vector
+
+ 
 ## TODO
 
 - trying to compile other C projects from source to see what is missing or which bug we have with chibicc.
@@ -503,12 +515,12 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
     openssh-portable regress test failed
     curl 2 tests ko
     memcached test stuck at t/binary-extstore.t ......... 5947/?
-    
+    vim: compile OK, tests KO (depending the version of chibicc failed early or in the last tests).
+   
 
 ## projects compiled successfully with chibicc
 
-    util-linux : compile OK, tests OK
-    vim: compile OK, tests OK
+    util-linux : compile OK, tests OK    
     nginx: compile OK
     zlib: compile OK, tests OK
     nmap: compile OK, tests OK    
@@ -542,7 +554,8 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.28    Fixing ISS-188 on old C style (K&R) parameter omitted by mistake. Reporting some fixes from 1.0.23 to 1.0.22.8. Fixing ISS-186 with lscpu tests (util-linux).
+1.0.23    Reporting fixes from 1.0.22.9_dev (like implicit function declaration, -std=c11 -std=c99...). Fixing issue with \__atomic_load_n during linking of nmap. Fixing issue with vim (due to a mistake in ND_ASSIGN). Adding vector implementation (with TY_VECTOR type) in progress (basic operations seems to work fine issues with mixed non-vectors/vectors or multiple vectors parameters). Adding some builtin_ia32_xxxx (like builtin_ia32_emms...). Fixing issue with cvtpi2ps. Adding cvtps2pi builtin. Adding lots of builtin_ia32_xxxx. Reintroducing int128 management (from experimental_int128 branch). Allowing some bitwise operations for vectors of int. Fixing issue with compound literals and vectors. Adding scalar to vector promotion. Adding some missing declaration in math.h (found during postgres compile with -std=c11 that sends error on implicit function declaration). Renaming branch 1.0.22.9 to 1.0.23.
+
 
 ## old release notes
 

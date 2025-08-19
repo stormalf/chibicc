@@ -19,6 +19,9 @@ Type *ty_double = &(Type){TY_DOUBLE, 8, 8};
 Type *ty_ldouble = &(Type){TY_LDOUBLE, 16, 16};
 Type *ty_void_ptr = &(Type){TY_PTR, 8, 8, true};
 
+Type *ty_int128 = &(Type){TY_INT128, 16, 16}; 
+Type *ty_uint128 = &(Type){TY_INT128, 16, 16, true}; 
+
 
 static Type *new_type(TypeKind kind, int size, int align)
 {
@@ -28,6 +31,8 @@ static Type *new_type(TypeKind kind, int size, int align)
   ty->kind = kind;
   ty->size = size;
   ty->align = align;
+  if (ty->kind == TY_INT128)
+    ty->is_aligned = true;
   return ty;
 }
 
@@ -49,7 +54,7 @@ Type *new_qualified_type(Type *ty) {
 bool is_integer(Type *ty)
 {
   TypeKind k = ty->kind;
-  return k == TY_BOOL || k == TY_CHAR || k == TY_SHORT ||
+  return k == TY_BOOL || k == TY_CHAR || k == TY_SHORT || k == TY_INT128 ||
          k == TY_INT || k == TY_LONG || k == TY_ENUM;
 }
 
@@ -161,7 +166,8 @@ bool is_compatible(Type *t1, Type *t2)
     (t1->kind == TY_VLA && t2->kind == TY_ARRAY) ||
     (t1->kind == TY_ARRAY && t2->kind == TY_VLA))
     return is_compatible(t1->base, t2->base);
-
+  if(is_vector(t1) && is_vector(t2))
+    return is_compatible(t1->base, t2->base);
 
   switch (t1->kind)
   {
@@ -174,6 +180,8 @@ bool is_compatible(Type *t1, Type *t2)
   case TY_DOUBLE:
   case TY_LDOUBLE:
     return true;
+  case TY_INT128: 
+    return t1->is_unsigned == t2->is_unsigned;     
   case TY_PTR:
     return is_compatible(t1->base, t2->base);
   case TY_FUNC:
@@ -195,6 +203,11 @@ bool is_compatible(Type *t1, Type *t2)
       return false;
     return t1->array_len < 0 && t2->array_len < 0 &&
            t1->array_len == t2->array_len;
+  case TY_VECTOR:
+    if (!is_compatible(t1->base, t2->base))
+      return false;
+    return t1->array_len < 0 && t2->array_len < 0 &&
+           t1->array_len == t2->array_len;           
   }
   return false;
 }
@@ -216,6 +229,7 @@ Type *pointer_to(Type *base)
   ty->is_pointer = true;
   ty->pointertype = base;
   ty->is_unsigned = true;
+  ty->is_vector = base->is_vector;
   return ty;
 }
 
@@ -242,6 +256,22 @@ Type *array_of(Type *base, int len)
   ty->has_vla = base->has_vla; 
   return ty;
 }
+
+
+Type *vector_of(Type *base, int len)
+{
+  if (!base)
+    error("%s %d: in vector_of : base is null", TYPE_C, __LINE__); 
+  Type *ty = new_type(TY_VECTOR, base->size * len, base->align);
+  int total_size = base->size * len;
+  ty->size = total_size;
+  ty->base = base;
+  ty->array_len = len;  
+  ty->has_vla = base->has_vla; 
+  ty->is_vector = true;
+  return ty;
+}
+
 
 Type *vla_of(Type *base, Node *len)
 {
@@ -274,7 +304,7 @@ static Type *get_common_type(Type *ty1, Type *ty2)
   //assuming that if one is void it returns the second type that could be void also or different type.
   if (!ty2)
     return ty1;
-    
+
   if (ty1->base) {
     if (ty1->base->kind == TY_VOID)
       if (ty2->base)
@@ -293,6 +323,14 @@ static Type *get_common_type(Type *ty1, Type *ty2)
     return ty_double;
   if (ty1->kind == TY_FLOAT || ty2->kind == TY_FLOAT)
     return ty_float;
+
+  if (ty1->kind == TY_INT128 || ty2->kind == TY_INT128) {
+    if( ty1->is_unsigned || ty2->is_unsigned) 
+      return ty_uint128;
+    else
+      return ty_int128;
+  }
+
 
   if (ty1->size < 4)
     ty1 = ty_int;
@@ -321,6 +359,17 @@ static void usual_arith_conv(Node **lhs, Node **rhs)
   *rhs = new_cast(*rhs, ty);
   
 }
+
+
+bool is_vector(Type *ty) {
+  return ty && ty->kind == TY_VECTOR;
+}
+
+bool is_int128(Type *ty) {
+  return ty && ty->kind == TY_INT128;
+}
+
+
 
 void add_type(Node *node)
 {
@@ -352,9 +401,13 @@ void add_type(Node *node)
   case ND_MOD:
   case ND_BITAND:
   case ND_BITOR:
-  case ND_BITXOR:
-    usual_arith_conv(&node->lhs, &node->rhs);
-    node->ty = node->lhs->ty;
+  case ND_BITXOR:    
+    if (is_vector(node->lhs->ty) && is_vector(node->rhs->ty)) {
+          node->ty = node->lhs->ty;
+    } else {
+        usual_arith_conv(&node->lhs, &node->rhs);
+        node->ty = node->lhs->ty;
+    }
     return;
   case ND_NEG:
   {
@@ -391,9 +444,10 @@ void add_type(Node *node)
   case ND_SHL:
   case ND_SHR:
     //node->ty = node->lhs->ty;  
-    if (!is_integer(node->lhs->ty))
+    if (!is_integer(node->lhs->ty) && !is_vector(node->lhs->ty))
       error_tok(node->tok, "%s %d %d invalid operand ", TYPE_C, __LINE__, node->kind);
-    int_promotion(&node->lhs);
+    if (is_integer(node->lhs->ty))
+      int_promotion(&node->lhs);
     node->ty = node->lhs->ty;       
     return;
   case ND_VAR:
@@ -425,14 +479,8 @@ void add_type(Node *node)
   case ND_ADDR:
   {
     Type *ty = node->lhs->ty;
-  //   if (ty->kind == TY_ARRAY )
-  //     node->ty = pointer_to(ty->base);
-  //   else
-  //     node->ty = pointer_to(ty);
-  //   return;
-  // }
   //from @fuhsnn add_type():Remove overaggressive array decaying
-      node->ty = pointer_to(ty);
+    node->ty = pointer_to(ty);
     return;
   }
   case ND_DEREF:
@@ -455,10 +503,14 @@ void add_type(Node *node)
     if (node->body)
     {
       Node *stmt = node->body;
-      while (stmt->next)
+      while (stmt->next) {
         stmt = stmt->next;
-      while (stmt->kind == ND_LABEL)
+        add_type(stmt);
+      }
+      while (stmt->kind == ND_LABEL) {
         stmt = stmt->lhs;
+        add_type(stmt);
+      }
       if (stmt->kind == ND_EXPR_STMT)
       {
         node->ty = stmt->lhs->ty;
@@ -500,6 +552,107 @@ void add_type(Node *node)
     add_type(node->builtin_val);
     add_type(node->builtin_size);
     return;
+  case ND_PSADBW:
+  case ND_PMULUDQ:
+    node->ty = vector_of(ty_ulong, 1);
+    return;
+  case ND_PMULUDQ128:
+    node->ty = vector_of(ty_ulong, 2);
+    return;
+  case ND_PXOR:
+  case ND_POR:
+  case ND_PAND:
+  case ND_PANDN:
+  case ND_PSRLQ:
+  case ND_PSRLQI:
+  case ND_PSLLQI:
+  case ND_PSLLQ:
+  case ND_PSUBQ:
+  case ND_PADDQ:
+  case ND_MOVQ128:
+    node->ty = vector_of(ty_long, 1);
+    return;
+  case ND_PCMPGTD:
+  case ND_PCMPEQD:
+  case ND_PSRADI:
+  case ND_PSRAD:
+  case ND_PSLLDI:
+  case ND_PSLLD:
+  case ND_PSUBD:
+  case ND_PADDD:
+  case ND_PUNPCKLDQ:
+  case ND_PUNPCKHDQ:
+  case ND_VECINITV2SI:  
+  case ND_CVTPS2PI:  
+  case ND_CVTTPS2PI:
+  case ND_CVTPD2PI:
+  case ND_CVTTPD2PI:
+    node->ty = vector_of(ty_int, 2);
+    return;   
+  case ND_CVTPD2DQ:
+  case ND_CVTTPD2DQ:
+  case ND_CVTPS2DQ:
+  case ND_CVTTPS2DQ:
+    node->ty = vector_of(ty_int, 4);
+    return;   
+  case ND_CMPUNORDPS:
+  case ND_CMPORDPS:
+  case ND_CMPNGEPS:
+  case ND_CMPNGTPS:
+  case ND_CMPNLEPS:
+  case ND_CMPNLTPS:
+  case ND_CMPNEQPS:
+  case ND_CMPGEPS:
+  case ND_CMPGTPS:
+  case ND_CMPLEPS:
+  case ND_CMPLTPS:
+  case ND_CMPEQPS:
+  case ND_CMPUNORDSS:
+  case ND_CMPORDSS:
+  case ND_CMPNLESS:
+  case ND_CMPNLTSS:
+  case ND_CMPNEQSS:
+  case ND_MOVSS:
+  case ND_CMPLESS:
+  case ND_CMPLTSS:
+  case ND_CMPEQSS:
+  case ND_XORPS:
+  case ND_ORPS:
+  case ND_ANDNPS:
+  case ND_ANDPS:
+  case ND_MAXPS:
+  case ND_MINPS:
+  case ND_RSQRTPS:
+  case ND_RCPPS:
+  case ND_SQRTPS:   
+  case ND_MAXSS:
+  case ND_MINSS:
+  case ND_RSQRTSS:
+  case ND_RCPSS:
+  case ND_SQRTSS: 
+  case ND_DIVSS:
+  case ND_MULSS:
+  case ND_SUBSS:
+  case ND_ADDSS:
+  case ND_CVTPI2PS:
+  case ND_CVTSI2SS:
+  case ND_CVTSI642SS:
+  case ND_MOVLHPS:
+  case ND_MOVHLPS:
+  case ND_UNPCKHPS:
+  case ND_UNPCKLPS:
+  case ND_LOADHPS:
+  case ND_LOADLPS:
+  case ND_SHUFPS:
+  case ND_SHUFFLE:
+  case ND_PMAXSW:
+  case ND_PMINSW:
+  case ND_SHUFPD:
+  case ND_CVTDQ2PS:
+  case ND_CVTPD2PS:
+  case ND_CVTSD2SS:
+    node->ty = vector_of(ty_float, 4);
+    return;  
   case ND_EXPECT:
     add_type(node->rhs);
     add_type(node->lhs);
@@ -507,6 +660,20 @@ void add_type(Node *node)
     return;
   case ND_ABORT:
     return;
+  case ND_STORELPS:
+  case ND_STOREHPS:    
+  case ND_LDMXCSR:
+  case ND_STMXCSR:
+  case ND_MASKMOVQ:
+  case ND_MOVNTQ:
+  case ND_MOVNTPS:
+  case ND_MASKMOVDQU:
+  case ND_MOVNTI:
+  case ND_MOVNTI64:
+  case ND_MOVNTDQ:
+    node->ty = ty_void_ptr;
+    return;
+  case ND_CLFLUSH:
   case ND_BUILTIN_FRAME_ADDRESS:
   case ND_RETURN_ADDR:
     add_type(node->lhs);
@@ -535,6 +702,11 @@ void add_type(Node *node)
     add_type(node->builtin_val);
     node->ty = ty_int;
     return;
+  case ND_POPCOUNTL:
+  case ND_POPCOUNTLL:
+    add_type(node->builtin_val);
+    node->ty = ty_long;
+    return;
   case ND_BUILTIN_BSWAP16:
     add_type(node->builtin_val);
     node->ty = ty_short;
@@ -555,6 +727,11 @@ void add_type(Node *node)
     node->rhs = new_cast(node->rhs, node->lhs->ty->base);
     node->ty = node->lhs->ty->base;
     return;
+  case ND_EMMS:
+  case ND_SFENCE:
+  case ND_LFENCE:
+  case ND_MFENCE:
+  case ND_PAUSE:
   case ND_UNREACHABLE:
     node->ty = ty_void;
     return;
@@ -576,6 +753,205 @@ void add_type(Node *node)
   case ND_BUILTIN_NANL:  
   case ND_BUILTIN_HUGE_VALL:
     node->ty = ty_ldouble;
-    return;      
+    return;
+  case ND_CVTTSS2SI: 
+  case ND_CVTTSD2SI:     
+  case ND_VECEXTV2SI:
+  case ND_VECEXTV4SI:
+    node->ty = ty_int;
+    return;
+  case ND_CVTTSD2SI64:
+  case ND_CVTSD2SI64:
+  case ND_CVTSS2SI64:
+  case ND_CVTTSS2SI64:
+    node->ty = ty_long;
+    return;
+  case ND_VECINITV4HI:
+  case ND_PCMPGTW:
+  case ND_PCMPEQW:
+  case ND_PSRLDI:
+  case ND_PSRLD:       
+  case ND_PSRLWI:
+  case ND_PSRLW:
+  case ND_PSRAWI:
+  case ND_PSRAW: 
+  case ND_PSLLWI:
+  case ND_PSLLW:
+  case ND_PMULLW:
+  case ND_PMULHW:
+  case ND_PMADDWD:
+  case ND_PSUBSW:
+  case ND_PSUBW:
+  case ND_PADDW:
+  case ND_PADDSW:
+  case ND_PADDUSW:
+  case ND_PUNPCKLWD:
+  case ND_PUNPCKHWD:    
+  case ND_PACKSSDW:
+  case ND_PAVGW:
+  case ND_PACKSSDW128:
+    node->ty = vector_of(ty_short, 4);
+    return;
+  case ND_PCMPEQB:
+  case ND_PSUBUSB:
+  case ND_PACKUSWB:
+  case ND_PADDUSB:
+  case ND_PMAXUB:
+  case ND_PMINUB:
+  case ND_PAVGB:
+    node->ty = vector_of(ty_uchar, 8);
+    return;  
+  case ND_VECINITV8QI:    
+  case ND_PCMPGTB:
+  case ND_PSUBSB:
+  case ND_PSUBB:
+  case ND_PADDB:
+  case ND_PADDSB:
+  case ND_PUNPCKLBW:
+  case ND_PUNPCKHBW:
+  case ND_PACKSSWB:
+    node->ty = vector_of(ty_char, 8);
+    return;
+  case ND_PSUBUSW:
+  case ND_PMULHUW:
+    node->ty = vector_of(ty_ushort, 4);
+    return;
+  case ND_PSUBUSW128:
+  case ND_PMULHUW128:
+  case ND_PAVGW128:
+    node->ty = vector_of(ty_ushort, 8);
+    return;
+  case ND_PUNPCKHWD128:
+  case ND_PUNPCKLWD128:
+  case ND_PADDSW128:
+  case ND_PADDUSW128:
+  case ND_PSUBSW128:
+  case ND_PSLLWI128:
+  case ND_PSRAWI128:
+  case ND_PSRLWI128:
+  case ND_PSLLW128:
+  case ND_PSRAW128:
+  case ND_PSRLW128:
+  case ND_PMAXSW128:
+  case ND_PMINSW128:
+    node->ty = vector_of(ty_short, 8);
+    return;
+  case ND_PUNPCKHDQ128:
+  case ND_PUNPCKHQDQ128:
+  case ND_PUNPCKLDQ128:
+  case ND_PMADDWD128:
+  case ND_PMULHW128:
+  case ND_PSLLDI128:
+  case ND_PSRADI128:
+  case ND_PSRLDI128:
+  case ND_PSLLD128:
+  case ND_PSRAD128:
+  case ND_PSRLD128:
+  case ND_PANDN128:
+    node->ty = vector_of(ty_int, 4);
+    return;
+  case ND_PUNPCKLQDQ128:
+  case ND_PSLLQI128:
+  case ND_PSRLQI128:
+  case ND_PSLLQ128:
+  case ND_PSRLQ128:
+  case ND_PSADBW128:
+    node->ty = vector_of(ty_long, 2);
+    return;    
+  case ND_ADDSD:
+  case ND_SUBSD:
+  case ND_MULSD:
+  case ND_DIVSD:
+  case ND_SQRTPD:
+  case ND_MOVSD:
+  case ND_SQRTSD:
+  case ND_MINPD:
+  case ND_MINSD:
+  case ND_MAXPD:
+  case ND_MAXSD:
+  case ND_ANDPD:
+  case ND_ANDNPD:
+  case ND_ORPD:
+  case ND_XORPD:
+  case ND_CMPEQPD:
+  case ND_CMPLTPD:
+  case ND_CMPLEPD:
+  case ND_CMPGTPD:
+  case ND_CMPGEPD:
+  case ND_CMPNEQPD:
+  case ND_CMPNLTPD:
+  case ND_CMPNLEPD:
+  case ND_CMPNGTPD:
+  case ND_CMPNGEPD:
+  case ND_CMPORDPD:
+  case ND_CMPUNORDPD:
+  case ND_CMPEQSD:
+  case ND_CMPLTSD:
+  case ND_CMPLESD:
+  case ND_CMPNEQSD:
+  case ND_CMPNLTSD:
+  case ND_CMPNLESD:
+  case ND_CMPORDSD:
+  case ND_CMPUNORDSD:
+  case ND_CVTDQ2PD:
+  case ND_CVTPI2PD:
+  case ND_CVTPS2PD:
+  case ND_CVTSI2SD:
+  case ND_CVTSI642SD:
+  case ND_CVTSS2SD:
+  case ND_UNPCKHPD:
+  case ND_UNPCKLPD:
+  case ND_LOADHPD:
+  case ND_LOADLPD:
+  case ND_MOVMSKPD:
+  case ND_MOVNTPD:
+    node->ty = vector_of(ty_double, 2);
+    return;
+  case ND_PACKUSWB128:
+  case ND_PUNPCKHBW128:
+  case ND_PUNPCKLBW128:
+  case ND_PADDUSB128:
+  case ND_PSUBUSB128:
+  case ND_PMAXUB128:
+  case ND_PMINUB128:
+  case ND_PAVGB128:
+    node->ty = vector_of(ty_uchar, 16);
+    return;
+  case ND_PACKSSWB128:
+  case ND_PADDSB128:
+  case ND_PSUBSB128:
+    node->ty = vector_of(ty_char, 16);
+    return;
+  case ND_CVTSS2SI:
+  case ND_UCOMINEQ:
+  case ND_UCOMIGE:
+  case ND_UCOMIGT:
+  case ND_UCOMILE:
+  case ND_UCOMILT:
+  case ND_UCOMIEQ:    
+  case ND_COMINEQ:
+  case ND_COMIGE:
+  case ND_COMIGT:
+  case ND_COMILE:
+  case ND_COMILT:
+  case ND_COMIEQ:
+  case ND_MOVMSKPS:
+  case ND_PMOVMSKB:
+  case ND_COMISDEQ:
+  case ND_COMISDLT:
+  case ND_COMISDLE:
+  case ND_COMISDGT:
+  case ND_COMISDGE:
+  case ND_COMISDNEQ:
+  case ND_UCOMISDEQ:
+  case ND_UCOMISDLT:
+  case ND_UCOMISDLE:
+  case ND_UCOMISDGT:
+  case ND_UCOMISDGE:
+  case ND_UCOMISDNEQ:  
+  case ND_CVTSD2SI:
+  case ND_PMOVMSKB128:
+    node->ty = ty_int;
+
   }
 }

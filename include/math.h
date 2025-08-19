@@ -29,6 +29,41 @@ double sqrt(double x);
 double fabs(double x);
 double fmod(double x, double y);
 
+float       fabsf(float x);
+long double fabsl(long double x);
+double cbrt(double x);
+float  cbrtf(float x);
+long double cbrtl(long double x);
+double asinh(double x);
+float  asinhf(float x);
+long double asinhl(long double x);
+
+double acosh(double x);
+float  acoshf(float x);
+long double acoshl(long double x);
+
+double atanh(double x);
+float  atanhf(float x);
+long double atanhl(long double x);
+
+double erf(double x);
+float  erff(float x);
+long double erfl(long double x);
+
+double erfc(double x);
+float  erfcf(float x);
+long double erfcl(long double x);
+
+
+double tgamma(double x);
+float  tgammaf(float x);
+long double tgammal(long double x);
+
+double lgamma(double x);
+float  lgammaf(float x);
+long double lgammal(long double x);
+
+
 // Rounding and remainder
 double floor(double x);
 double ceil(double x);
