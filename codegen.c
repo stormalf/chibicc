@@ -1494,7 +1494,7 @@ static void scalar_to_xmm(Type *vec_ty, const char *xmm_reg) {
       break; 
     case TY_LONG:
       println("  movq %%rax, %s", xmm_reg);       
-      println("  punpckqdq %s, %s", xmm_reg, xmm_reg); 
+      println("  movddup %s, %s", xmm_reg, xmm_reg); 
       break; 
     case TY_FLOAT:
       println("  shufps $0x00, %s, %s", xmm_reg, xmm_reg);
@@ -1621,6 +1621,39 @@ static void gen_vector_op(Node *node) {
       break;      
     default:
       error_tok(node->tok, "%s: %s:%d: error: unsupported double vector operation", CODEGEN_C, __FILE__, __LINE__);
+    }
+    break;
+  case TY_LONG:
+    switch (node->kind) {
+    case ND_ADD:
+      println("  paddq %%xmm1, %%xmm0");
+      break;
+    case ND_SUB:
+      println("  psubq %%xmm1, %%xmm0");
+      break;
+    case ND_MUL:
+      println("  pmulld %%xmm1, %%xmm0"); // Note: no native 64-bit integer multiply in SSE2; might need scalar fallback
+      break;
+    case ND_BITXOR:
+      println("  pxor %%xmm1, %%xmm0");
+      break;
+    case ND_BITAND:
+      println("  pand %%xmm1, %%xmm0");
+      break;
+    case ND_BITOR:
+      println("  por %%xmm1, %%xmm0");
+      break;
+    case ND_NEG:
+      println("  pxor %%xmm1, %%xmm1");
+      println("  psubq %%xmm0, %%xmm1");
+      println("  movdqa %%xmm1, %%xmm0");
+      break;
+    case ND_BITNOT:
+      println("  pcmpeqq %%xmm1, %%xmm1"); // SSE4.1; for SSE2 use two 32-bit pcmpeqd and pack
+      println("  pxor %%xmm1, %%xmm0");
+      break;
+    default:
+      error_tok(node->tok, "%s: %s:%d: error: long vector operation not supported", CODEGEN_C, __FILE__, __LINE__);
     }
     break;
   case TY_INT:

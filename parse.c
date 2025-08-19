@@ -2196,7 +2196,8 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
 {
   if (ty->kind == TY_ARRAY)
   {
-
+    int elem_size = ty->base->size;
+    memset(buf + offset, 0, elem_size * ty->array_len);
     if (init->expr)
       error_tok(init->expr->tok, "%s %d: in write_gvar_data : array initializer must be an initializer list", PARSE_C, __LINE__);
     int sz = ty->base->size;
@@ -2207,6 +2208,7 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
   if (is_vector(ty))
   {
     int sz = ty->base->size;
+    memset(buf + offset, 0, sz * ty->array_len);
     for (int i = 0; i < ty->array_len; i++)
       cur = write_gvar_data(cur, init->children[i], ty->base, buf, offset + sz * i);
     return cur;
@@ -2215,6 +2217,8 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
   if (!init->expr) {
   if (ty->kind == TY_STRUCT)
   {
+    // Zero the whole struct first
+    memset(buf + offset, 0, ty->size);
     for (Member *mem = ty->members; mem; mem = mem->next)
     {
       if (mem->is_bitfield)

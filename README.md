@@ -483,13 +483,20 @@ VLC : https://github.com/videolan/vlc.git
 
 postgres: https://github.com/postgres/postgres.git  (in case of bad network use git clone --filter=blob:none --depth=1 https://github.com/postgres/postgres.git --branch master)
 
-    CC=chibicc  CFLAGS="-g" ./configure --host x86_64-linux-gnu --disable-spinlocks ac_cv_type___int128=no
+    CC=chibicc  CFLAGS="-g -std=c11" ./configure --host x86_64-linux-gnu 
     make
     make check
     failed with :
     2025-06-08 23:05:39.492 CEST [206164] FATAL:  unrecognized SI message ID: -96
     2025-06-08 23:05:39.492 CEST [206164] STATEMENT:  ALTER TABLE pg_proc ADD PRIMARY KEY USING INDEX pg_proc_oid_index;
 
+## features added 
+
+    - some extended assembly syntax taken in account (only when on macro body they are failing)
+    - adding basic support on int128 (probably some operations are still not supported)
+    - adding vector management and scalar promotion to vector
+
+ 
 ## TODO
 
 - trying to compile other C projects from source to see what is missing or which bug we have with chibicc.
@@ -509,9 +516,7 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
     curl 2 tests ko
     memcached test stuck at t/binary-extstore.t ......... 5947/?
     vim: compile OK, tests KO (depending the version of chibicc failed early or in the last tests).
-
-    issue with vectors in some specific case (when lots of vectors parameters, adding scalars and vectors not working, vector in compound literal not working if set in rhs side).
-    
+   
 
 ## projects compiled successfully with chibicc
 
@@ -549,7 +554,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.23    Reporting fixes from 1.0.22.9_dev (like implicit function declaration, -std=c11 -std=c99...). Fixing issue with \__atomic_load_n during linking of nmap. Fixing issue with vim (due to a mistake in ND_ASSIGN). Adding vector implementation (with TY_VECTOR type) in progress (basic operations seems to work fine issues with mixed non-vectors/vectors or multiple vectors parameters). Adding some builtin_ia32_xxxx (like builtin_ia32_emms...). Fixing issue with cvtpi2ps. Adding cvtps2pi builtin. Adding lots of builtin_ia32_xxxx. Reintroducing int128 management (from experimental_int128 branch). Allowing some bitwise operations for vectors of int. Fixing issue with compound literals and vectors.
+1.0.23    Reporting fixes from 1.0.22.9_dev (like implicit function declaration, -std=c11 -std=c99...). Fixing issue with \__atomic_load_n during linking of nmap. Fixing issue with vim (due to a mistake in ND_ASSIGN). Adding vector implementation (with TY_VECTOR type) in progress (basic operations seems to work fine issues with mixed non-vectors/vectors or multiple vectors parameters). Adding some builtin_ia32_xxxx (like builtin_ia32_emms...). Fixing issue with cvtpi2ps. Adding cvtps2pi builtin. Adding lots of builtin_ia32_xxxx. Reintroducing int128 management (from experimental_int128 branch). Allowing some bitwise operations for vectors of int. Fixing issue with compound literals and vectors. Adding scalar to vector promotion. Adding some missing declaration in math.h (found during postgres compile with -std=c11 that sends error on implicit function declaration). Renaming branc 1.0.22.9 to 1.0.23.
 
 
 ## old release notes
