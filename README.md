@@ -512,10 +512,8 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
 
     postgres execution : ko
     git 2 tests failed
-    openssh-portable regress test failed
-    curl 2 tests ko
     memcached test stuck at t/binary-extstore.t ......... 5947/?
-    vim: compile OK, tests KO (depending the version of chibicc failed early or in the last tests).
+    vim: compile OK, tests KO on test_channel.vim.
    
 
 ## projects compiled successfully with chibicc
@@ -524,6 +522,7 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
     nginx: compile OK
     zlib: compile OK, tests OK
     nmap: compile OK, tests OK    
+    openssh-portable : compile OK, tests OK
 
 
 ## debug
@@ -554,8 +553,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.23    Reporting fixes from 1.0.22.9_dev (like implicit function declaration, -std=c11 -std=c99...). Fixing issue with \__atomic_load_n during linking of nmap. Fixing issue with vim (due to a mistake in ND_ASSIGN). Adding vector implementation (with TY_VECTOR type) in progress (basic operations seems to work fine issues with mixed non-vectors/vectors or multiple vectors parameters). Adding some builtin_ia32_xxxx (like builtin_ia32_emms...). Fixing issue with cvtpi2ps. Adding cvtps2pi builtin. Adding lots of builtin_ia32_xxxx. Reintroducing int128 management (from experimental_int128 branch). Allowing some bitwise operations for vectors of int. Fixing issue with compound literals and vectors. Adding scalar to vector promotion. Adding some missing declaration in math.h (found during postgres compile with -std=c11 that sends error on implicit function declaration). Renaming branch 1.0.22.9 to 1.0.23.
-
+1.0.23.1    
 
 ## old release notes
 
