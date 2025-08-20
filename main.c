@@ -18,6 +18,7 @@ bool opt_fbuiltin = true;
 bool opt_fpic;
 bool opt_fpie;
 bool opt_shared;
+bool opt_sse;
 bool opt_sse2;
 bool opt_sse3;
 bool opt_sse4;
@@ -25,6 +26,7 @@ bool opt_mmx;
 bool opt_g;
 bool opt_c99;
 bool opt_c11;
+bool opt_c17;
 
 static FileType opt_x;
 static StringArray opt_include;
@@ -316,6 +318,38 @@ static void parse_args(int argc, char **argv)
     {
       continue;
     }
+
+    if (!strcmp(argv[i], "-mno-sse")) {
+      opt_sse = false;
+      continue;
+    }
+
+    if (!strcmp(argv[i], "-mno-sse2")) {
+      opt_sse2 = false;
+      continue;
+    }
+
+    if (!strcmp(argv[i], "-mno-sse3")) {
+      opt_sse3 = false;
+      continue;
+    }
+
+    if (startsWith(argv[i], "-mno-sse4")) {
+      opt_sse4 = false;
+      continue;
+    }
+
+    if (!strcmp(argv[i], "-mno-mmx")) {
+      opt_mmx = false;
+      continue;
+    }    
+
+
+    if (!strcmp(argv[i], "-msse")) {
+      opt_sse = true;
+      continue;
+    }
+
 
     if (!strcmp(argv[i], "-msse2")) {
       opt_sse2 = true;
@@ -848,7 +882,8 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-ansi_alias")       ||
         !strcmp(argv[i], "-ffat-lto-objects")       ||       
         !strcmp(argv[i], "-static-libstdc++")       ||    
-        !strcmp(argv[i], "-static-libgcc")       ||              
+        !strcmp(argv[i], "-static-libgcc")       ||    
+        !strcmp(argv[i], "-pipe")       ||              
         !strcmp(argv[i], "-mindirect-branch-register")         
         )
       continue;
@@ -857,10 +892,12 @@ static void parse_args(int argc, char **argv)
     {
       char *stdver = argv[i] + 5; 
 
-      if (!strcmp(stdver, "c99")) {
+      if (!strcmp(stdver, "c99") || !strcmp(stdver, "gnu99")) {
         opt_c99 = true;
-      } else if (!strcmp(stdver, "c11")) {
+      } else if (!strcmp(stdver, "c11") || !strcmp(stdver, "gnu11")) {
         opt_c11 = true;
+      } else if (!strcmp(stdver, "c17") || !strcmp(stdver, "gnu17")) {
+        opt_c17 = true;
       } else {
         error("%s : %s:%d: error: in parse_args : unsupported -std option: %s", MAIN_C, __FILE__, __LINE__, stdver);
         exit(1);
@@ -1399,7 +1436,7 @@ static void run_linker(StringArray *inputs, char *output)
 
   // Add the ending object file if not using -nostdlib
   if (!opt_nostdlib) {
-    if (opt_shared)
+    if (opt_shared || opt_fpie)
       strarray_push(&arr, format("%s/crtendS.o", gcc_libpath));
     else if(!opt_fpie)
       strarray_push(&arr, format("%s/crtend.o", gcc_libpath));

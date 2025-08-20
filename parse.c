@@ -4122,7 +4122,7 @@ static Token *type_attributes(Token *tok, void *arg)
     return skip(tok, ")", ctx);
   }
 
-    if (consume(&tok, tok, "__target__") || 
+  if (consume(&tok, tok, "__target__") || 
        consume(&tok, tok, "target")) {
     SET_CTX(ctx);          
     tok = skip(tok, "(", ctx);
@@ -4397,7 +4397,6 @@ static Token *type_attributes(Token *tok, void *arg)
 
   if (consume(&tok, tok, "sentinel") || consume(&tok, tok, "__sentinel__") ||
     consume(&tok, tok, "optimize") || consume(&tok, tok, "__optimize__") ||
-    consume(&tok, tok, "target") || consume(&tok, tok, "__target__") ||
     consume(&tok, tok, "assume_aligned") || consume(&tok, tok, "__assume_aligned__") ||
     consume(&tok, tok, "alloc_size") || consume(&tok, tok, "__alloc_size__") ||
     consume(&tok, tok, "attribute_alloc_size") || consume(&tok, tok, "__attribute_alloc_size__") ||
@@ -4512,6 +4511,16 @@ static Token *thing_attributes(Token *tok, void *arg) {
     attr->section = ".text.unlikely";
     return tok;
   }
+
+  if (consume(&tok, tok, "__target__") || 
+       consume(&tok, tok, "target")) {
+    SET_CTX(ctx);          
+    tok = skip(tok, "(", ctx);
+    ConsumeStringLiteral(&tok, tok);
+    SET_CTX(ctx);  
+    return skip(tok, ")", ctx);
+  }
+
 
   if (consume(&tok, tok, "section") || consume(&tok, tok, "__section__")) {    
     SET_CTX(ctx); 
@@ -4859,7 +4868,6 @@ static Token *thing_attributes(Token *tok, void *arg) {
 
     if (consume(&tok, tok, "sentinel") || consume(&tok, tok, "__sentinel__") ||
       consume(&tok, tok, "optimize") || consume(&tok, tok, "__optimize__") ||
-      consume(&tok, tok, "target") || consume(&tok, tok, "__target__") ||
       consume(&tok, tok, "assume_aligned") || consume(&tok, tok, "__assume_aligned__") ||
       consume(&tok, tok, "alloc_size") || consume(&tok, tok, "__alloc_size__") ||
       consume(&tok, tok, "attribute_alloc_size") || consume(&tok, tok, "__attribute_alloc_size__") ||
@@ -6453,7 +6461,7 @@ static Node *primary(Token **rest, Token *tok)
     {
       Obj *fn = find_func(token_to_string(tok));
 
-      if (!fn  && (opt_c99 || opt_c11)) {
+      if (!fn  && (opt_c99 || opt_c11 || opt_c17)) {
         error_tok(tok, "%s %d: in primary : implicit declaration of function", PARSE_C, __LINE__);
       }    
 

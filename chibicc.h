@@ -1095,6 +1095,7 @@ extern bool printTokens;
 extern bool isPrintMacro;
 extern char *extract_filename(char *tmpl);
 extern char *extract_path(char *tmpl);
+extern bool opt_sse;
 extern bool opt_sse2;
 extern bool opt_sse3;
 extern bool opt_sse4;
@@ -1104,6 +1105,7 @@ extern FILE *open_file(char *path);
 extern FILE *ofile;
 extern bool opt_c99;
 extern bool opt_c11;
+extern bool opt_c17;
 extern char *weak_symbols[MAX_WEAK];
 extern int weak_count;
 

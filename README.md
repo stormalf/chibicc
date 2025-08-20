@@ -475,7 +475,7 @@ VLC : https://github.com/videolan/vlc.git
 
     autoreconf -fiv
     ./bootstrap
-    CC=chibicc CFLAGS="-fPIC -std=c11"  LDFLAGS="-fPIC -Wl,-U,vlc_static_modules" ./configure --disable-lua --disable-xcb --disable-qt --disable-alsa
+    CC=chibicc CFLAGS="-fPIC -std=c11"  LDFLAGS="-fPIC -Wl,-U,vlc_static_modules" ./configure --disable-lua --disable-xcb --disable-qt --disable-alsa --disable-sse
     make all
     failed during linkage : /usr/bin/ld: -r and -shared may not be used together
 
@@ -486,8 +486,7 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
     make
     make check
     failed with :
-    2025-06-08 23:05:39.492 CEST [206164] FATAL:  unrecognized SI message ID: -96
-    2025-06-08 23:05:39.492 CEST [206164] STATEMENT:  ALTER TABLE pg_proc ADD PRIMARY KEY USING INDEX pg_proc_oid_index;
+    2025-08-19 21:36:40.890 CEST [1338239] PANIC: ProcKill() called in child process
 
 ## features added 
 

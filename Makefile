@@ -83,8 +83,17 @@ vim:
 
 lxc:
 	cd ../lxc && rm -rf build && CC=gcc \
-	CFLAGS="-fpic" 	meson build && cd build && sudo cp /usr/bin/gcc /usr/bin/gcc_old && \
-	sudo cp /usr/local/bin/chibicc /usr/local/gcc && meson compile && sudo cp /usr/bin/gcc_old /usr/bin/gcc
+	meson setup build && cd build &&  \
+	sudo cp /usr/local/bin/chibicc /usr/bin/gcc && meson compile && sudo cp /usr/bin/gcc_old /usr/bin/gcc
+
+vlc:
+	cd ../vlc && make clean && CC=gcc \
+	LDFLAGS="-Wl,-U,vlc_static_modules"	meson --reconfigure build && cd build &&  \
+	sudo cp /usr/local/bin/chibicc /usr/bin/gcc && meson compile && sudo cp /usr/bin/gcc_old /usr/bin/gcc
+
+# vlc2:
+# 	cd ../vlc && rm -rf build && mymeson setup build && cd build && mymeson compile
+
 
 git: 
 	cd ../git && CC=chibicc CFLAGS="-fPIC -std=c11" ./configure && make && make test
@@ -103,7 +112,7 @@ CFLAGS +=-fPIC
 
 
 libchibicc.so: $(OBJS)
-	gcc $(CFLAGS) -o $@ $^ -shared
+	$(CC) $(CFLAGS) -o $@ $^ -shared
 
 clean:
 	rm -rf $(OBJECT) tmp* $(TESTS) issues/*.s issues/*.exe issues/*.dot test/*.s test/*.exe stage2 diagram/*.png test/*.dot $(OBJECTLIB)
