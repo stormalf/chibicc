@@ -64,36 +64,36 @@ curl:
 	cd ../curl && make clean && CC=chibicc  CFLAGS="-std=c11" ./configure && make && make test
 
 zlib:
-	cd ../zlib && make clean && CC=chibicc CFLAGS=-fPIC ./configure && make && make test
+	cd ../zlib && make clean && CC=chibicc CFLAGS="-fPIC -std=c11" ./configure && make && make test
 
 nmap:
-	cd ../nmap && make clean && CC=chibicc LDFLAGS="-fPIC -ldbus-1" LIBS="-ldbus-1 -latomic" ./configure --with-dbus && make && make check
+	cd ../nmap && make clean && CC=chibicc LDFLAGS="-fPIC -std=c11 -ldbus-1" LIBS="-ldbus-1 -latomic" ./configure --with-dbus && make && make check
 
 openssl:
-	cd ../openssl && make clean && CC=chibicc ./configure && make 
+	cd ../openssl && make clean && CC=chibicc CFLAGS="-std=c11" ./configure && make 
 
 util-linux:
-	cd ../util-linux && make clean && CC=chibicc CFLAGS=-fPIC ./configure && make && make check-programs && cd tests && ./run.sh
+	cd ../util-linux && make clean && CC=chibicc CFLAGS="-fPIC -std=c11" ./configure && make && make check-programs && cd tests && ./run.sh
 
 nginx:
-	cd ../nginx && make clean && CC=chibicc CFLAGS=-fPIC ./auto/configure --with-http_ssl_module && make && make check
+	cd ../nginx && make clean && CC=chibicc CFLAGS="-fPIC -std=c11" ./auto/configure --with-http_ssl_module && make
 
 vim:
-	cd ../vim && make clean && CC=chibicc CFLAGS=-fPIC ./configure && make && make test
+	cd ../vim && make clean && CC=chibicc CFLAGS="-fPIC -std=c11" ./configure && make && make test
 
 lxc:
 	cd ../lxc && rm -rf build && CC=gcc \
-	CFLAGS="-fpic" 	meson build && cd build && cp /usr/bin/gcc /usr/bin/gcc_old && \
-	cp /usr/local/bin/chibicc /usr/local/gcc && meson compile && cp /usr/bin/gcc_old /usr/bin/gcc
+	CFLAGS="-fpic" 	meson build && cd build && sudo cp /usr/bin/gcc /usr/bin/gcc_old && \
+	sudo cp /usr/local/bin/chibicc /usr/local/gcc && meson compile && sudo cp /usr/bin/gcc_old /usr/bin/gcc
 
 git: 
-	cd ../git && CC=chibicc CFLAGS=-fPIC ./configure && make && make test
+	cd ../git && CC=chibicc CFLAGS="-fPIC -std=c11" ./configure && make && make test
 
 memcached:
 	cd ../memcached && make clean && CC=chibicc CFLAGS="-fPIC -std=c11" ./configure && make && make test
 
 openssh-portable:
-	cd ../openssh-portable && make clean && CC=chibicc ./configure && make && make tests
+	cd ../openssh-portable && make clean && CC=chibicc CFLAGS="-std=c11" ./configure && make && make tests
 
 
 # Misc.
