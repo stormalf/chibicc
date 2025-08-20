@@ -604,7 +604,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
 
 
     // Handle storage class specifiers.
-    if (equal(tok, "typedef") || equal(tok, "static") || equal(tok, "extern") ||
+    if (equal(tok, "typedef") || equal(tok, "static") || equal(tok, "extern") || equal(tok, "__inline") ||
         equal(tok, "inline") || equal(tok, "_Thread_local") || equal(tok, "__thread"))
     {
       
@@ -617,7 +617,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
         attr->is_static = true;
       else if (equal(tok, "extern"))
         attr->is_extern = true;
-      else if (equal(tok, "inline"))
+      else if (equal(tok, "inline") || equal(tok, "__inline"))
         attr->is_inline = true;
       else if (equal(tok, "_Thread_local") || equal(tok, "__thread"))
         attr->is_tls = true;
@@ -693,6 +693,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
 
     // Handle user-defined types.
     Type *ty2 = find_typedef(tok);
+    tok = attribute_list(tok, ty2, type_attributes);
     if (equal(tok, "struct") || equal(tok, "union") || equal(tok, "enum") ||
         equal(tok, "typeof") || equal(tok, "__typeof") || ty2)
     {
@@ -2357,7 +2358,7 @@ static bool is_typename(Token *tok)
         "void", "_Bool", "char", "short", "int", "long", "struct", "union",
         "typedef", "enum", "static", "extern", "_Alignas", "signed", "unsigned",
         "const", "volatile", "auto", "register", "restrict", "__restrict",
-        "__restrict__", "_Noreturn", "float", "double", "typeof", "inline",
+        "__restrict__", "_Noreturn", "float", "double", "typeof", "inline", "__inline",
         "_Thread_local", "__thread", "_Atomic", "_Complex", "__label__", "__typeof", "__int128"};
 
     for (int i = 0; i < sizeof(kw) / sizeof(*kw); i++)
@@ -2373,7 +2374,7 @@ static Node *asm_stmt(Token **rest, Token *tok)
   Node *node = new_node(ND_ASM, tok);
   tok = tok->next;
 
-  while (equal(tok, "volatile") || equal(tok, "inline"))
+  while (equal(tok, "volatile") || equal(tok, "inline")  || equal(tok, "__inline"))
     tok = tok->next;
 
   SET_CTX(ctx);   
@@ -4273,6 +4274,7 @@ static Token *type_attributes(Token *tok, void *arg)
       consume(&tok, tok, "__nonstring__") ||
       consume(&tok, tok, "no_profile_instrument_function") ||
       consume(&tok, tok, "stdcall") ||
+      consume(&tok, tok, "ms_struct") ||
       consume(&tok, tok, "__stub__") || 
       consume(&tok, tok, "__retain__") || 
       consume(&tok, tok, "transaction_pure") || 
@@ -5057,6 +5059,7 @@ static Type *union_decl(Token **rest, Token *tok)
 {
   bool no_list = false;
   Type *ty = struct_union_decl(rest, tok, &no_list);
+  tok = attribute_list(tok, ty, type_attributes);
   ty->kind = TY_UNION;
 
   if (no_list)
