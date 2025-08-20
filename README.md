@@ -315,8 +315,8 @@ curl : https://github.com/curl/curl.git
         CCLD     curl
 
     make test
-    TESTDONE: 1722 tests were considered during 3895 seconds.
-    TESTDONE: 1392 tests out of 1392 reported OK: 100%
+    TESTDONE: 1855 tests were considered during 3598 seconds.
+    TESTDONE: 1574 tests out of 1574 reported OK: 100%
 
 
 openssl : https://github.com/openssl/openssl.git
@@ -432,18 +432,20 @@ cpython: git clone git@github.com:python/cpython.git
         make && make test
         failure with  
 
-    Process terminating with default action of signal 11 (SIGSEGV): dumping core
-    ==82695==  Access not within mapped region at address 0x25
-    ==82695==    at 0xB7BC8B: ??? (pystate.c:1435)
-    ==82695==    by 0xB7BAFB: ??? (pystate.c:1534)
-    ==82695==    by 0xB89CEC: ??? (pystate.c:1576)
-    ==82695==    by 0xB6F3F6: ??? (pylifecycle.c:667)
-    ==82695==    by 0xB69FDA: ??? (pylifecycle.c:943)
-    ==82695==    by 0xB699A1: ??? (pylifecycle.c:1112)
-    ==82695==    by 0xB784E5: ??? (pylifecycle.c:1432)
-    ==82695==    by 0x4088D7: ??? (_freeze_module.c:65)
-    ==82695==    by 0x407294: ??? (_freeze_module.c:224)
-    ==82695==    by 0x497D1C9: (below main) (libc_start_call_main.h:58)
+        =1494790== Invalid write of size 1
+        ==1494790==    at 0x8995562: blake2module_init_cpu_features (stdbool.h:6)
+        ==1494790==    by 0x899439F: blake2_exec (blake2module.c:209)
+        ==1494790==    by 0x6B032A: PyModule_ExecDef (moduleobject.c:497)
+        ==1494790==    by 0xA6C1FB: exec_builtin_or_dynamic (import.c:860)
+        ==1494790==    by 0xA6DD53: _imp_exec_dynamic_impl (import.c:4780)
+        ==1494790==    by 0xA6DC93: _imp_exec_dynamic (import.c.h:516)
+        ==1494790==    by 0x6A8250: cfunction_vectorcall_O (methodobject.c:537)
+        ==1494790==    by 0x5A26FA: _PyVectorcall_Call (call.c:273)
+        ==1494790==    by 0x5A4910: _PyObject_Call (call.c:348)
+        ==1494790==    by 0x5A687B: PyObject_Call (call.c:373)
+        ==1494790==    by 0x942199: _PyEval_EvalFrameDefault (generated_cases.c.h:2616)
+        ==1494790==    by 0x92BB77: _PyEval_EvalFrame (pycore_ceval.h:121)
+        ==1494790==  Address 0x101010101010111 is not stack'd, malloc'd or (recently) free'd
 
 
 nmap : https://github.com/nmap/nmap
@@ -473,12 +475,9 @@ VLC : https://github.com/videolan/vlc.git
 
     autoreconf -fiv
     ./bootstrap
-    CC=chibicc CFLAGS="-fPIC" CXXFLAGS="" DEFS="-DHAVE_CONFIG_H -DHAVE_ATTRIBUTE_PACKED -DVLC_USED -DVLC_API -DVLC_DEPRECATED -DVLC_MALLOC" LDFLAGS="-fPIC" ./configure  --disable-xcb --disable-qt --disable-a52 --disable-sse --disable-dbus
+    CC=chibicc CFLAGS="-fPIC -std=c11"  LDFLAGS="-fPIC -Wl,-U,vlc_static_modules" ./configure --disable-lua --disable-xcb --disable-qt --disable-alsa
     make all
-
-    VLC doesn't compile with chibicc :
-    /usr/include/systemd/sd-id128.h:138: error:                 sd_id128_t b = va_arg(ap, sd_id128_t);
-                                                                         ^ tokenize.c parse.c declaration 1328: in skip : expected ','
+    failed during linkage : /usr/bin/ld: -r and -shared may not be used together
 
 
 postgres: https://github.com/postgres/postgres.git  (in case of bad network use git clone --filter=blob:none --depth=1 https://github.com/postgres/postgres.git --branch master)

@@ -632,7 +632,6 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
                   PARSE_C, __LINE__);
 
       tok = tok->next;
-
         //from COSMOPOLITAN adding other GNUC attributes
       tok = attribute_list(tok, attr, thing_attributes);
       continue;
@@ -4146,7 +4145,6 @@ static Token *type_attributes(Token *tok, void *arg)
   //from COSMOPOLITAN adding deprecated, may_alias, unused
   if (consume(&tok, tok, "deprecated") || consume(&tok, tok, "__deprecated__") ||
       consume(&tok, tok, "may_alias") ||  consume(&tok, tok, "__may_alias__") ||
-      consume(&tok, tok, "unused") || consume(&tok, tok, "__unused__") || 
       consume(&tok, tok, "__transparent_union__") || consume(&tok, tok, "transparent_union")) {
     return tok;
   }
@@ -4429,7 +4427,9 @@ static Token *type_attributes(Token *tok, void *arg)
       tok = skip(tok, "(", ctx);
       two_parent = true;
     }
+
     ConsumeStringLiteral(&tok, tok); 
+
     if (two_parent) {   
       SET_CTX(ctx); 
       tok = skip(tok, ")", ctx);
@@ -5688,6 +5688,8 @@ static Node *primary(Token **rest, Token *tok)
     equal(tok, "__builtin_ia32_rcpps") || equal(tok, "__builtin_ia32_rsqrtps") ||
     equal(tok, "__builtin_ia32_clflush") || equal(tok, "_mm_clflush") ||
     equal(tok, "__builtin_ia32_pmovmskb") || equal(tok, "__builtin_ia32_sqrtps") || 
+    equal(tok, "__builtin_parity") || equal(tok, "__builtin_parityl") ||
+    equal(tok, "__builtin_parityll") ||
     equal(tok, "__builtin_ia32_rsqrtss")) {
     int builtin = builtin_enum(tok);
     if (builtin != -1) {
@@ -6189,6 +6191,31 @@ static Node *primary(Token **rest, Token *tok)
   if (equal(tok, "__builtin_add_overflow")) {
     return parse_overflow(ND_BUILTIN_ADD_OVERFLOW, tok, rest);
   }
+
+  if (equal(tok, "__builtin_uadd_overflow")) {
+    return parse_overflow(ND_UADD_OVERFLOW, tok, rest);
+  }
+
+  if (equal(tok, "__builtin_uaddll_overflow")) {
+    return parse_overflow(ND_UADDLL_OVERFLOW, tok, rest);
+  }
+
+  if (equal(tok, "__builtin_uaddl_overflow")) {
+    return parse_overflow(ND_UADDL_OVERFLOW, tok, rest);
+  }
+  if (equal(tok, "__builtin_umul_overflow")) {
+    return parse_overflow(ND_UMUL_OVERFLOW, tok, rest);
+  }
+
+  if (equal(tok, "__builtin_umulll_overflow")) {
+    return parse_overflow(ND_UMULLL_OVERFLOW, tok, rest);
+  }
+
+  if (equal(tok, "__builtin_umull_overflow")) {
+    return parse_overflow(ND_UMULL_OVERFLOW, tok, rest);
+  }
+
+
 
   if (equal(tok, "__builtin_sub_overflow")) {
     return parse_overflow(ND_BUILTIN_SUB_OVERFLOW, tok, rest);
@@ -7115,6 +7142,12 @@ char *nodekind2str(NodeKind kind)
   case ND_BUILTIN_ADD_OVERFLOW: return "ADD_OVERFLOW";    
   case ND_BUILTIN_SUB_OVERFLOW: return "SUB_OVERFLOW";    
   case ND_BUILTIN_MUL_OVERFLOW: return "MUL_OVERFLOW"; 
+  case ND_UADD_OVERFLOW: return "UADD_OVERFLOW";  
+  case ND_UADDL_OVERFLOW: return "UADDL_OVERFLOW";    
+  case ND_UADDLL_OVERFLOW: return "UADDLL_OVERFLOW";    
+  case ND_UMUL_OVERFLOW: return "UMUL_OVERFLOW";  
+  case ND_UMULL_OVERFLOW: return "UMULL_OVERFLOW";    
+  case ND_UMULLL_OVERFLOW: return "UMULLL_OVERFLOW";      
   case ND_BUILTIN_BSWAP16:  return "BSWAP16";   
   case ND_BUILTIN_BSWAP32: return "BSWAP32";    
   case ND_BUILTIN_BSWAP64: return "BSWAP64"; 
@@ -7397,7 +7430,10 @@ char *nodekind2str(NodeKind kind)
   case ND_MOVNTI: return "MOVNTI";  
   case ND_MOVNTI64: return "MOVNTI64";  
   case ND_MOVNTDQ: return "MOVNTDQ";  
-  case ND_MOVNTPD: return "MOVNTPD";                  
+  case ND_MOVNTPD: return "MOVNTPD";     
+  case ND_PARITY: return "PARITY";    
+  case ND_PARITYL: return "PARITYL";  
+  case ND_PARITYLL: return "PARITYLL";             
   default: return "UNREACHABLE"; 
   }
 }
@@ -8001,7 +8037,10 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_movnti", ND_MOVNTI },   
     { "__builtin_ia32_movnti64", ND_MOVNTI64 },   
     { "__builtin_ia32_movntdq", ND_MOVNTDQ },   
-    { "__builtin_ia32_movntpd", ND_MOVNTPD },   
+    { "__builtin_ia32_movntpd", ND_MOVNTPD },  
+    { "__builtin_parity", ND_PARITY }, 
+    { "__builtin_parityl", ND_PARITYL }, 
+    { "__builtin_parityll", ND_PARITYLL }, 
 };
 
 

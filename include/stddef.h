@@ -19,6 +19,11 @@ typedef long ptrdiff_t;
 typedef unsigned int wchar_t;
 typedef long max_align_t;
 
+#ifndef __has_attribute
+#define __has_attribute(x) 1
+#endif
+
+
 
 #define _Pragma(message) 
 

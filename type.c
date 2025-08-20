@@ -682,6 +682,12 @@ void add_type(Node *node)
   case ND_BUILTIN_SUB_OVERFLOW:
   case ND_BUILTIN_MUL_OVERFLOW:
   case ND_BUILTIN_ADD_OVERFLOW:
+  case ND_UMULLL_OVERFLOW:
+  case ND_UMULL_OVERFLOW:
+  case ND_UMUL_OVERFLOW:  
+  case ND_UADDLL_OVERFLOW:
+  case ND_UADDL_OVERFLOW:
+  case ND_UADD_OVERFLOW:
     add_type(node->lhs);
     add_type(node->rhs);
     add_type(node->builtin_dest);
@@ -764,6 +770,8 @@ void add_type(Node *node)
   case ND_CVTSD2SI64:
   case ND_CVTSS2SI64:
   case ND_CVTTSS2SI64:
+  case ND_PARITYL:
+  case ND_PARITYLL:
     node->ty = ty_long;
     return;
   case ND_VECINITV4HI:
@@ -951,6 +959,7 @@ void add_type(Node *node)
   case ND_UCOMISDNEQ:  
   case ND_CVTSD2SI:
   case ND_PMOVMSKB128:
+  case ND_PARITY:
     node->ty = ty_int;
 
   }

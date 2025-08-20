@@ -68,6 +68,9 @@ bool printTokens = false;
 char *previousfile = " ";
 Context *ctx;
 
+char *weak_symbols[MAX_WEAK];
+int weak_count = 0;
+
 static char logFile[] = "/tmp/chibicc.log";
 static StringArray input_paths;
 static StringArray tmpfiles;
@@ -495,17 +498,34 @@ static void parse_args(int argc, char **argv)
       continue;
     }
 
-    if (!strncmp(argv[i], "-l", 2) || !strncmp(argv[i], "-Wl,", 4))
-    {
-      if (!strncmp(argv[i], "-Wl,-z", 6))
+    if (!strncmp(argv[i], "-l", 2)) {     
+        strarray_push(&input_paths, argv[i]);
         continue;
-      char *tmp = argv[i];
-      check_parms_length(tmp);
-      strarray_push(&input_paths, tmp);
-      // strarray_push(&input_paths, argv[i]);
-      continue;
     }
 
+    if (!strncmp(argv[i], "-Wl,", 4)) {
+        char *opt = argv[i] + 4;         
+        if (!strncmp(opt, "-z,", 3)) {
+            strarray_push(&input_paths, argv[i]);
+            continue;
+        }
+        if (!strncmp(opt, "-U,", 3)) {
+          char *ptr = opt + 3; 
+          while (*ptr && weak_count < MAX_WEAK) {
+              char *comma = strchr(ptr, ',');  
+              if (comma) *comma = '\0'; 
+              weak_symbols[weak_count++] = strdup(ptr); 
+              if (!comma) break;          
+              ptr = comma + 1; 
+          }
+          continue;
+      }
+
+        strarray_push(&input_paths, argv[i]);
+        continue;
+    } 
+
+    
     if (!strcmp(argv[i], "-Xlinker"))
     {
       char *tmp = argv[++i];
@@ -1305,7 +1325,8 @@ static void run_linker(StringArray *inputs, char *output)
 
   char *libpath = find_libpath();
   char *gcc_libpath = find_gcc_libpath();
-
+  if (opt_shared && !opt_fpic)
+    strarray_push(&ld_extra_args, "-fPIC");
   // Only add startup files if not using -nostdlib
   if (!opt_nostdlib) {
     if (opt_shared)

@@ -1997,6 +1997,199 @@ static void gen_single_addr_binop(Node *node, const char *insn){
   println("  %s (%%rax)", insn);
 }
 
+static void gen_add_overflow(Node *node) {
+  int c = count();  // Unique label counter
+  Type *ty = node->builtin_dest->ty;  
+  if (ty->base)
+    ty = ty->base;
+
+  gen_expr(node->lhs);
+  push();
+  gen_expr(node->rhs);
+  push();
+  gen_expr(node->builtin_dest);
+  push();
+
+  pop("%rdx");  
+  pop("%rsi");  
+  pop("%rdi"); 
+
+  if (ty->size == 1) {
+      println("  mov %%dil, %%al");
+      println("  add %%sil, %%al");
+      println("  mov %%al, (%%rdx)");
+  } else if (ty->size == 2) {
+      println("  mov %%di, %%ax");
+      println("  add %%si, %%ax");
+      println("  mov %%ax, (%%rdx)");
+  } else if (ty->size == 4) {
+      println("  mov %%edi, %%eax");
+      println("  add %%esi, %%eax");
+      println("  mov %%eax, (%%rdx)");
+  } else {
+      println("  mov %%rdi, %%rax");
+      println("  add %%rsi, %%rax");
+      println("  mov %%rax, (%%rdx)");
+  }
+
+  // Check for overflow
+  println("  seto %%al");          // Set AL if overflow occurred
+  println("  movzx %%al, %%eax");  // Zero-extend AL to EAX
+
+  // Return 0 if no overflow, 1 if overflow
+  println("  cmp $0, %%eax");
+  println("  jne .Loverflowa%d", c);
+  println("  mov $0, %%eax");
+  println("  jmp .Lenda%d", c);
+  println(".Loverflowa%d:", c);
+  println("  mov $1, %%eax");
+  println(".Lenda%d:", c);
+
+}
+
+
+static void gen_umul_overflow(Node * node) {
+  int c = count();
+  Type *ty = node->lhs->ty;
+  if (ty->base)
+      ty = ty->base;
+  int size = ty->size;
+
+  gen_expr(node->lhs);
+  push();
+  gen_expr(node->rhs);
+  push();
+  gen_expr(node->builtin_dest);
+  push();
+
+  pop("%rdx");  // result pointer
+  pop("%rsi");  // rhs
+  pop("%rdi");  // lhs
+
+  if (size == 1) {
+      println("  movzbl %%di, %%eax");
+      println("  movzbl %%si, %%ebx");
+      println("  mul %%bl");           // unsigned multiply: AL * BL -> AX
+      println("  jc .Loverflowm%d", c); // check carry flag for unsigned overflow
+      println("  mov %%al, (%%rdx)");
+      println("  mov $0, %%al");
+      println("  jmp .Ldonem%d", c);
+  } else if (size == 2) {
+      println("  movzwl %%di, %%eax");
+      println("  movzwl %%si, %%ebx");
+      println("  mul %%bx");          // unsigned multiply: AX * BX -> DX:AX
+      println("  jc .Loverflowm%d", c);
+      println("  mov %%ax, (%%rdx)");
+      println("  mov $0, %%ax");
+      println("  jmp .Ldonem%d", c);
+  } else if (size == 4) {
+      println("  mov %%edi, %%eax");
+      println("  mul %%esi");        // EAX * ESI -> EDX:EAX
+      println("  jc .Loverflowm%d", c);
+      println("  mov %%eax, (%%rdx)");
+      println("  mov $0, %%eax");
+      println("  jmp .Ldonem%d", c);
+  } else if (size == 8) {
+      println("  mov %%rdi, %%rax");
+      println("  mul %%rsi");        // RAX * RSI -> RDX:RAX
+      println("  jc .Loverflowm%d", c);
+      println("  mov %%rax, (%%rdx)");
+      println("  mov $0, %%rax");
+      println("  jmp .Ldonem%d", c);
+  }
+
+  // Overflow handling
+  println(".Loverflowm%d:", c);
+  println("  mov %%al, (%%rdx)");    // store lower byte/result
+  println("  mov $1, %%rax");        // return 1 if overflow
+  println(".Ldonem%d:", c);
+}
+
+static void gen_uadd_overflow(Node *node) {
+  int c = count(); 
+  Type *ty = node->builtin_dest->ty;
+  if (ty->base)
+      ty = ty->base;
+
+  gen_expr(node->lhs);
+  push();
+  gen_expr(node->rhs);
+  push();
+  gen_expr(node->builtin_dest);
+  push();
+
+  pop("%rdx");  
+  pop("%rsi");  
+  pop("%rdi"); 
+
+  if (ty->size == 1) {
+      println("  mov %%dil, %%al");
+      println("  add %%sil, %%al");
+      println("  mov %%al, (%%rdx)");
+  } else if (ty->size == 2) {
+      println("  mov %%di, %%ax");
+      println("  add %%si, %%ax");
+      println("  mov %%ax, (%%rdx)");
+  } else if (ty->size == 4) {
+      println("  mov %%edi, %%eax");
+      println("  add %%esi, %%eax");
+      println("  mov %%eax, (%%rdx)");
+  } else {
+      println("  mov %%rdi, %%rax");
+      println("  add %%rsi, %%rax");
+      println("  mov %%rax, (%%rdx)");
+  }
+  println("  setc %%al");          // carry flag = unsigned overflow
+  println("  movzx %%al, %%eax");  // zero-extend AL to EAX
+
+  // Return 0 if no overflow, 1 if overflow
+  println("  cmp $0, %%eax");
+  println("  jne .Loverflowa%d", c);
+  println("  mov $0, %%eax");
+  println("  jmp .Lenda%d", c);
+  println(".Loverflowa%d:", c);
+  println("  mov $1, %%eax");
+  println(".Lenda%d:", c);
+}
+
+
+static void gen_parity(Node *node) {
+  gen_expr(node->lhs);
+  if (node->lhs->kind == ND_NUM) {
+    uint64_t x = node->lhs->val;  
+    x ^= x >> 32;
+    x ^= x >> 16;
+    x ^= x >> 8;
+    x ^= x >> 4;
+    x ^= x >> 2;
+    x ^= x >> 1;
+    int parity = x & 1;
+    println("  mov $%d, %%eax", parity); 
+
+  } else {
+    println("  mov %%rax, %%rcx");   // copy to rcx
+    println("  shr $32, %%rcx");
+    println("  xor %%rcx, %%rax");
+    println("  mov %%rax, %%rcx");
+    println("  shr $16, %%rcx");
+    println("  xor %%rcx, %%rax");
+    println("  mov %%rax, %%rcx");
+    println("  shr $8, %%rcx");
+    println("  xor %%rcx, %%rax");
+    println("  mov %%rax, %%rcx");
+    println("  shr $4, %%rcx");
+    println("  xor %%rcx, %%rax");
+    println("  mov %%rax, %%rcx");
+    println("  shr $2, %%rcx");
+    println("  xor %%rcx, %%rax");
+    println("  mov %%rax, %%rcx");
+    println("  shr $1, %%rcx");
+    println("  xor %%rcx, %%rax");
+    println("  and $1, %%eax");  // final parity in eax
+
+  }
+}
+
 
 static void gen_movq128(Node *node) {
   gen_expr(node->lhs); 
@@ -2802,55 +2995,13 @@ static void gen_expr(Node *node)
     println("  mov 8(%%rax), %%rax");
     return;
   }
-  case ND_BUILTIN_ADD_OVERFLOW: {
-   int c = count();  // Unique label counter
-    Type *ty = node->builtin_dest->ty;  
-    if (ty->base)
-      ty = ty->base;
-
-    gen_expr(node->lhs);
-    push();
-    gen_expr(node->rhs);
-    push();
-    gen_expr(node->builtin_dest);
-    push();
-
-    pop("%rdx");  
-    pop("%rsi");  
-    pop("%rdi"); 
-
-    if (ty->size == 1) {
-        println("  mov %%dil, %%al");
-        println("  add %%sil, %%al");
-        println("  mov %%al, (%%rdx)");
-    } else if (ty->size == 2) {
-        println("  mov %%di, %%ax");
-        println("  add %%si, %%ax");
-        println("  mov %%ax, (%%rdx)");
-    } else if (ty->size == 4) {
-        println("  mov %%edi, %%eax");
-        println("  add %%esi, %%eax");
-        println("  mov %%eax, (%%rdx)");
-    } else {
-        println("  mov %%rdi, %%rax");
-        println("  add %%rsi, %%rax");
-        println("  mov %%rax, (%%rdx)");
-    }
-
-    // Check for overflow
-    println("  seto %%al");          // Set AL if overflow occurred
-    println("  movzx %%al, %%eax");  // Zero-extend AL to EAX
-
-    // Return 0 if no overflow, 1 if overflow
-    println("  cmp $0, %%eax");
-    println("  jne .Loverflowa%d", c);
-    println("  mov $0, %%eax");
-    println("  jmp .Lenda%d", c);
-    println(".Loverflowa%d:", c);
-    println("  mov $1, %%eax");
-    println(".Lenda%d:", c);
-    return;
-  }
+  case ND_UMULL_OVERFLOW:
+  case ND_UMULLL_OVERFLOW:
+  case ND_UMUL_OVERFLOW: gen_umul_overflow(node); return;  
+  case ND_UADDL_OVERFLOW:
+  case ND_UADDLL_OVERFLOW:
+  case ND_UADD_OVERFLOW: gen_uadd_overflow(node); return;
+  case ND_BUILTIN_ADD_OVERFLOW: gen_add_overflow(node); return;
   case ND_BUILTIN_SUB_OVERFLOW: {
     int c = count(); 
     Type *ty = node->builtin_dest->ty;  
@@ -3386,6 +3537,9 @@ static void gen_expr(Node *node)
   case ND_MOVNTI64: gen_movnti64(node); return;
   case ND_MOVNTDQ: gen_movnt_binop(node, "movntdq"); return;
   case ND_MOVNTPD: gen_movnt_binop(node, "movntpd"); return;
+  case ND_PARITYL:
+  case ND_PARITYLL:
+  case ND_PARITY: gen_parity(node); return;
 }
   
 if (is_vector(node->lhs->ty) || (node->rhs && is_vector(node->rhs->ty))) {
@@ -3767,6 +3921,14 @@ static void gen_stmt(Node *node)
 
 static void emit_data(Obj *prog)
 {
+  // Emit weak symbols from -U arguments
+  for (int i = 0; i < weak_count; i++) {
+      println("  .align 8");
+      println("  .weak %s", weak_symbols[i]);
+      println("%s:", weak_symbols[i]);
+      println("  .quad 0");
+  }
+
   for (Obj *var = prog; var; var = var->next)
   {
     //issue 35 about array not initialized completely.
@@ -3803,11 +3965,6 @@ static void emit_data(Obj *prog)
     // .data or .tdata
     if (var->init_data)
     {
-      // if (var->is_tls)
-      //   println("  .section .tdata,\"awT\",@progbits");
-      // else
-      //   println("  .section .data,\"aw\",@progbits");
-      //   //println("  .data");
       //from cosmopolitan
       if (var->section) {
         println("  .section %s,\"aw\",@progbits", var->section);
@@ -3820,7 +3977,6 @@ static void emit_data(Obj *prog)
             
       println("  .type %s, @object", var->name);
       println("  .size %s, %d", var->name, abs(var->ty->size));
-      //println("  .align %d", align);
       if (align > 1) println("  .align %d", align);
       println("%s:", var->name);
 
@@ -3864,13 +4020,6 @@ static void emit_data(Obj *prog)
       continue;
     }
 
-    // // .bss or .tbss
-    // if (var->is_tls)
-    //   println("  .section .tbss,\"awT\",@nobits");
-    // else
-    //   println("  .section .bss,\"aw\",@nobits");
-    //   //println("  .bss");
-
     if (var->section) {
       println("  .section %s,\"aw\",@nobits", var->section);
     }
@@ -3879,7 +4028,6 @@ static void emit_data(Obj *prog)
     else
       println("  .section .bss,\"aw\",@nobits");
 
-    //println("  .align %d", align);
     if (align > 1) println("  .align %d", align);
     println("%s:", var->name);
     if (var->ty->size != 0)

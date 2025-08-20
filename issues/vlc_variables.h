@@ -53,6 +53,25 @@
 #define VLC_VAR_COORDS    0x00A0
 /**@}*/
 
+typedef union
+{
+    int64_t         i_int;
+    bool            b_bool;
+    float           f_float;
+    char *          psz_string;
+    void *          p_address;
+    struct { int32_t x; int32_t y; } coords;
+
+} vlc_value_t;
+
+typedef struct vlc_callback_t vlc_callback_t;
+typedef struct vlc_list_callback_t vlc_list_callback_t;
+struct vlc_callback_t {
+    int a;
+};
+struct vlc_list_callback_t {
+    int a;
+};
 /** \defgroup var_flags Additive flags
  * These flags are added to the type field of the variable. Most as a result of
  * a var_Change() call, but some may be added at creation time

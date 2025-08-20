@@ -51,6 +51,7 @@
 #define MAXLEN 501
 #define DEFAULT_TARGET_MACHINE "x86_64-linux-gnu"
 #define MAX_BUILTIN_ARGS 8
+#define MAX_WEAK 20
 
 #define STR_HELPER(x) #x
 #define STR(x) STR_HELPER(x)
@@ -723,6 +724,15 @@ typedef enum
   ND_MOVNTPD,
   ND_POPCOUNTL,
   ND_POPCOUNTLL,
+  ND_PARITY,
+  ND_PARITYL,
+  ND_PARITYLL,
+  ND_UADD_OVERFLOW,
+  ND_UADDL_OVERFLOW,
+  ND_UADDLL_OVERFLOW,
+  ND_UMUL_OVERFLOW,
+  ND_UMULL_OVERFLOW,
+  ND_UMULLL_OVERFLOW,
 } NodeKind;
 
 // AST node type
@@ -1094,6 +1104,8 @@ extern FILE *open_file(char *path);
 extern FILE *ofile;
 extern bool opt_c99;
 extern bool opt_c11;
+extern char *weak_symbols[MAX_WEAK];
+extern int weak_count;
 
 //
 // extended_asm.c
