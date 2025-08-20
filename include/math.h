@@ -63,6 +63,9 @@ double lgamma(double x);
 float  lgammaf(float x);
 long double lgammal(long double x);
 
+double log1p(double);
+float log1pf(float);
+long double log1pl(long double);
 
 // Rounding and remainder
 double floor(double x);
@@ -78,10 +81,27 @@ double hypot(double x, double y);            // sqrt(x*x + y*y)
 double log2(double x);                       // base-2 log
 double exp2(double x);                       // base-2 exponent
 
+double fmax(double x, double y);
+float fmaxf(float x, float y);
+long double fmaxl(long double x, long double y);
+
+double fmin(double x, double y);
+float fminf(float x, float y);
+long double fminl(long double x, long double y);
+
+double nextafter(double x, double y);
+float nextafterf(float x, float y);
+long double nextafterl(long double x, long double y);
+
+
+
+double expm1(double x);
+float expm1f(float x);
+long double expm1l(long double x);
 int isnormal(double x);                      // non-zero and not subnormal
 #define isnormal(x)  ((fpclassify(x) == FP_NORMAL))
-
-
+#define signbit(x) __builtin_signbit(x)
+#define __builtin_signbit(x) ((x) < 0.0 ? 1 : 0)
 // Classification
 extern int __fpclassify(double __value);
 extern int __isnan(double __value);

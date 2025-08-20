@@ -312,6 +312,7 @@ static bool is_keyword(Token *tok)
         "_Atomic",
         "__attribute__",
         "__label__",
+        "inline",
         "__int128",
     };
 

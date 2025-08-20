@@ -1515,7 +1515,6 @@ void init_macros(void)
   define_macro("__const__", "const");
   define_macro("__gnu_linux__", "1");
   define_macro("__inline__", "inline");
-  define_macro("__inline", "inline");
   define_macro("__linux", "1");
   define_macro("__linux__", "1");
   define_macro("__signed__", "signed");
