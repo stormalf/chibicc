@@ -458,7 +458,7 @@ nmap : https://github.com/nmap/nmap
 
 ## meson
 
-to be able to use meson with chibicc (meson doesn't know chibicc compiler), I changed the detect.py file in /usr/lib/python3/dist-packages/mesonbuild/compilers/detect.py to add support for chibicc. After that I can now using meson for some projects that are configured to use it.
+to be able to use meson with chibicc (meson hack is to do the meson configure using gcc and rename gcc to gcc_old chibicc to gcc and meson compile will call chibicc).
 
 lxc: https://github.com/lxc/lxc.git
 
