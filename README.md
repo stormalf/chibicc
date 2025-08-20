@@ -475,7 +475,7 @@ VLC : https://github.com/videolan/vlc.git
 
     autoreconf -fiv
     ./bootstrap
-    CC=chibicc CFLAGS="-fPIC -std=c11"  LDFLAGS="-fPIC -Wl,-U,vlc_static_modules" ./configure --disable-lua --disable-xcb --disable-qt --disable-alsa --disable-sse
+    CC=chibicc CFLAGS="-fPIC -std=c11"  ./configure --disable-lua --disable-xcb --disable-qt --disable-alsa --disable-sse
     make all
     failed during linkage : /usr/bin/ld: -r and -shared may not be used together
 

@@ -1,16 +1,17 @@
 #include "test.h"
 
 int main() {
-    int x = 5;
-    int dst = 0;
+    int a = 10, b = 20;
+    int result;
 
-    // Extended assembly with complex operand names
+    // Extended assembly with named operand and expression inside parentheses
     __asm__ volatile (
-        "add %1, %0\n"
-        : [dst+2*x] "=r" (dst)     // output operand name
-        : [src*3] "r" (x)          // input operand name
+        "add %[src], %[dst]\n"
+        : [dst] "=r" (result)      // output operand name [dst]
+        : [src] "r" (a + b)        // input operand name [src], expression in parentheses
     );
 
-    printf("dst = %d\n", dst);
+    printf("Result = %d\n", result);
+
     return 0;
 }

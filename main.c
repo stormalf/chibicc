@@ -544,16 +544,26 @@ static void parse_args(int argc, char **argv)
             continue;
         }
         if (!strncmp(opt, "-U,", 3)) {
-          char *ptr = opt + 3; 
-          while (*ptr && weak_count < MAX_WEAK) {
-              char *comma = strchr(ptr, ',');  
-              if (comma) *comma = '\0'; 
-              weak_symbols[weak_count++] = strdup(ptr); 
-              if (!comma) break;          
-              ptr = comma + 1; 
-          }
-          continue;
-      }
+            char *ptr = opt + 3;  // skip "-U,"
+
+            while (*ptr && weak_count < MAX_WEAK) {
+                char *comma = strchr(ptr, ',');
+                if (comma) *comma = '\0';
+
+                // --- Store for codegen (weak + alias) ---
+                weak_symbols[weak_count] = strdup(ptr);       // original symbol
+                weak_count++;
+
+                // --- Pass to linker as separate args ---
+                strarray_push(&ld_extra_args, "-U");
+                strarray_push(&ld_extra_args, ptr);
+
+                if (!comma) break;
+                ptr = comma + 1;
+            }
+            continue;
+        }
+
 
         strarray_push(&input_paths, argv[i]);
         continue;

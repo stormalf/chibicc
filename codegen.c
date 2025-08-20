@@ -3921,14 +3921,6 @@ static void gen_stmt(Node *node)
 
 static void emit_data(Obj *prog)
 {
-  // Emit weak symbols from -U arguments
-  for (int i = 0; i < weak_count; i++) {
-      println("  .align 8");
-      println("  .weak %s", weak_symbols[i]);
-      println("%s:", weak_symbols[i]);
-      println("  .quad 0");
-  }
-
   for (Obj *var = prog; var; var = var->next)
   {
     //issue 35 about array not initialized completely.
