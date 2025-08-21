@@ -145,6 +145,7 @@ static void print_visibility(Obj *obj) {
     println("  .globl\t%s", obj->name);
   }
   if (obj->is_weak) {
+    
     println("  .weak\t%s", obj->name);
   }
 }
@@ -3928,7 +3929,8 @@ static void emit_data(Obj *prog)
       println("  .zero %d", abs(var->ty->size));
     if (var->alias_name)
       println("  .set \"%s\", %s", var->name, var->alias_name);
-
+    if (var->is_weak)
+      println("  .weak \"%s\"", var->name);
     if (var->is_function || !var->is_definition)
       continue;
     print_visibility(var);

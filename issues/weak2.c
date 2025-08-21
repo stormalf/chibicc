@@ -12,15 +12,15 @@ extern const vlc_plugin_cb vlc_static_modules[];
 
 // Function using the weak symbol
 void init_plugins(void) {
-    if (!vlc_static_modules) {
-        printf("vlc_static_modules not defined\n");
-        return;
-    }
+    // if (!vlc_static_modules) {
+    //     printf("vlc_static_modules not defined\n");
+    //     return;
+    // }
 
-    for (unsigned i = 0; vlc_static_modules[i]; i++) {
-        printf("Plugin %u initialized\n", i);
-        vlc_static_modules[i]();
-    }
+    // for (unsigned i = 0; vlc_static_modules[i]; i++) {
+    //     printf("Plugin %u initialized\n", i);
+    //     vlc_static_modules[i]();
+    //}
 }
 
 // Dummy plugin

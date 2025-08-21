@@ -590,6 +590,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
   Type *ty = ty_int;
   int counter = 0;
   bool is_atomic = false;
+  
   while (is_typename(tok))
   {
     tok = attribute_list(tok, ty, type_attributes);
@@ -6994,7 +6995,7 @@ Obj *parse(Token *tok)
 
   while (tok->kind != TK_EOF)
   {
-    
+
     if (equal(tok, "_Static_assert")) {
       tok = static_assertion(tok);
       continue;

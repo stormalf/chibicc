@@ -42,6 +42,10 @@ double sqrt(double x);
 double fabs(double x);
 double fmod(double x, double y);
 
+float sqrtf(float);
+long double sqrtl(long double);
+
+
 float       fabsf(float x);
 long double fabsl(long double x);
 double cbrt(double x);
