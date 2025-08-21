@@ -23,6 +23,9 @@ double log(double x);
 double log10(double x);
 double modf(double x, double *iptr);
 
+float expf(float);
+long double expl(long double);
+
 extern float powf(float x, float y);
 extern double pow(double x, double y);
 extern long double powl(long double x, long double y);
@@ -114,7 +117,7 @@ extern float asinf(float x);
 extern float acosf(float x);
 extern float atanf(float x);
 extern float atan2f(float y, float x);
-
+float floorf(float);
 
 // Rounding and remainder
 double floor(double x);
@@ -123,6 +126,8 @@ double trunc(double x);
 double round(double x);
 double nearbyint(double x);
 double rint(double x);
+long double floorl(long double);
+long double ceill(long double);
 
 double fma(double x, double y, double z);    // fused multiply-add (optional, used in numerics)
 double copysign(double x, double y);         // result has magnitude of x and sign of y
