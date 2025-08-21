@@ -6463,7 +6463,7 @@ static Node *primary(Token **rest, Token *tok)
     {
       Obj *fn = find_func(token_to_string(tok));
 
-      if (!fn  && (opt_c99 || opt_c11 || opt_c17)) {
+      if (!fn  && (opt_c99 || opt_c11 || opt_c17 || opt_implicit)) {
         error_tok(tok, "%s %d: in primary : implicit declaration of function", PARSE_C, __LINE__);
       }    
 

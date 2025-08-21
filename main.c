@@ -27,6 +27,7 @@ bool opt_g;
 bool opt_c99;
 bool opt_c11;
 bool opt_c17;
+bool opt_implicit;
 
 static FileType opt_x;
 static StringArray opt_include;
@@ -792,6 +793,14 @@ static void parse_args(int argc, char **argv)
       continue;
     } 
 
+    //-Werror-implicit-function-declaration
+    //for printing AST
+    if (!strcmp(argv[i], "-Werror-implicit-function-declaration")) {
+      opt_implicit = true;
+      continue;
+    } 
+
+
     //other options -Axxx ignored
     if (startsWith(argv[i], "-A"))
     {
@@ -837,6 +846,16 @@ static void parse_args(int argc, char **argv)
     if (!strcmp(argv[i], "-O") ||
         !strcmp(argv[i], "-P") || 
         !strcmp(argv[i], "-Wall") || 
+        !strcmp(argv[i], "-Wextra") || 
+        !strcmp(argv[i], "-Wno-switch") || 
+        !strcmp(argv[i], "-Wmissing-prototypes") ||
+        !strcmp(argv[i], "-Winit-self") ||     
+        !strcmp(argv[i], "-fno-math-errno") ||
+        !strcmp(argv[i], "-fno-rounding-math") ||   
+        !strcmp(argv[i], "-fno-signaling-nans") || 
+        !strcmp(argv[i], "-fcx-limited-range") ||
+        !strcmp(argv[i], "-funsafe-math-optimizations") ||  
+        !strcmp(argv[i], "-funroll-loops") ||
         !strcmp(argv[i], "-ffreestanding") ||
         !strcmp(argv[i], "-fno-omit-frame-pointer") ||
         !strcmp(argv[i], "-fomit-frame-pointer") ||   

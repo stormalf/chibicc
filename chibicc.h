@@ -1108,6 +1108,7 @@ extern bool opt_c11;
 extern bool opt_c17;
 extern char *weak_symbols[MAX_WEAK]; 
 extern int weak_count;
+extern bool opt_implicit;
 
 //
 // extended_asm.c

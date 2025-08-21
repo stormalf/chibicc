@@ -87,9 +87,7 @@ lxc:
 	sudo cp /usr/local/bin/chibicc /usr/bin/gcc && meson compile && sudo cp /usr/bin/gcc_old /usr/bin/gcc
 
 vlc:
-	cd ../vlc && make clean && CC=gcc \
-	LDFLAGS="-Wl,-U,vlc_static_modules"	meson --reconfigure build && cd build &&  \
-	sudo cp /usr/local/bin/chibicc /usr/bin/gcc && meson compile && sudo cp /usr/bin/gcc_old /usr/bin/gcc
+	cd ../vlc && make clean && CC=chibicc meson --reconfigure build -Dc_args="" && cd build &&  meson compile 
 
 # vlc2:
 # 	cd ../vlc && rm -rf build && mymeson setup build && cd build && mymeson compile
