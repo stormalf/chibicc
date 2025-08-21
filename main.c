@@ -836,6 +836,12 @@ static void parse_args(int argc, char **argv)
       continue;
     }
 
+    if (!strcmp(argv[i], "-print-search-dirs")) {  
+      printf("install: %s/bin\n", LIBDIR);   
+      printf("programs: =%s/bin\n", LIBDIR);
+      printf("libraries: =%s/lib\n", LIBDIR);
+      exit(0);
+    }      
 
     if (!strcmp(argv[i], "-fp-model")) {
       i++; 

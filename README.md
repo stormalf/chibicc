@@ -477,7 +477,9 @@ VLC : https://github.com/videolan/vlc.git
     ./bootstrap
     CC=chibicc CFLAGS="-fPIC -std=c11"  ./configure --disable-lua --disable-xcb --disable-qt --disable-alsa --disable-sse
     make all
-    failed during linkage : /usr/bin/ld: -r and -shared may not be used together
+    failed during linkage : with undefined references to missing dependency in their Makefile.
+    Adding the missing librtp_plugin_la-sdp.o solves this issue.
+    libg64rtp_plugin_la_OBJECTS = $(am_libg64rtp_plugin_la_OBJECTS) access/rtp/.libs/librtp_plugin_la-sdp.o
 
 
 postgres: https://github.com/postgres/postgres.git  (in case of bad network use git clone --filter=blob:none --depth=1 https://github.com/postgres/postgres.git --branch master)

@@ -30,7 +30,7 @@
         (ctx)->line_no  = __LINE__ + 1; \
     } while (0)
 
-
+#define LIBDIR "/usr/local"
 
 #define ROUNDUP(X, K)   (((X) + (K) - 1) & -(K))
 #define ROUNDDOWN(X, K) ((X) & -(K))
