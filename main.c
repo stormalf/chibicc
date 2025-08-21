@@ -842,8 +842,6 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "--no-whole-archive") ||
         !strcmp(argv[i], "-fsigned-char") ||
         !strcmp(argv[i], "-Bsymbolic") ||
-        !strcmp(argv[i], "-z") ||
-        !strcmp(argv[i], "defs") ||
         !strcmp(argv[i], "-pedantic") ||
         !strcmp(argv[i], "-mno-red-zone") ||
         !strcmp(argv[i], "-fvisibility=default") ||
