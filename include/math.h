@@ -118,6 +118,7 @@ extern float acosf(float x);
 extern float atanf(float x);
 extern float atan2f(float y, float x);
 float floorf(float);
+float ldexpf(float x, int exp);
 
 // Rounding and remainder
 double floor(double x);

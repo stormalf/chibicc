@@ -52,6 +52,7 @@ static char *r_path;
 static bool opt_nostdinc;
 static bool opt_nostdlib;
 static bool opt_v;
+static bool opt_fstack_protector;
 
 static StringArray ld_extra_args;
 static StringArray std_include_paths;
@@ -821,15 +822,21 @@ static void parse_args(int argc, char **argv)
       continue;
     }
 
+    if (!strcmp(argv[i], "-fstack-protector") || !strcmp(argv[i], "-fstack-protector-strong") || !strcmp(argv[i], "-fstack-clash-protection") ) {
+      opt_fstack_protector = true;
+      continue;
+    }
+
+
     if (!strcmp(argv[i], "-fp-model")) {
-      i++; // Skip the argument following -fp-model
+      i++; 
       continue;
     }
 
     // These options are ignored for now.
-    if (!strncmp(argv[i], "-O", 2) ||
-        !strncmp(argv[i], "-W", 2) ||
-        !strncmp(argv[i], "-P", 2) || 
+    if (!strcmp(argv[i], "-O") ||
+        !strcmp(argv[i], "-P") || 
+        !strcmp(argv[i], "-Wall") || 
         !strcmp(argv[i], "-ffreestanding") ||
         !strcmp(argv[i], "-fno-omit-frame-pointer") ||
         !strcmp(argv[i], "-fomit-frame-pointer") ||   
@@ -859,9 +866,6 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-Wlogical-op") || 
         !strcmp(argv[i], "-Wshadow=local") || 
         !strcmp(argv[i], "-Wmultistatement-macros") || 
-        !strcmp(argv[i], "-fstack-protector") || 
-        !strcmp(argv[i], "-fstack-protector-strong") || 
-        !strcmp(argv[i], "-fstack-clash-protection") || 
         !strcmp(argv[i], "-fdiagnostics-show-option") || 
         !strcmp(argv[i], "-fasynchronous-unwind-tables") || 
         !strcmp(argv[i], "-fexceptions") || 
@@ -1355,6 +1359,11 @@ static void run_linker(StringArray *inputs, char *output)
     strarray_push(&arr, ld_extra_args.data[i]);
   }
 
+  if (opt_shared) {
+    opt_nostdlib = false;
+  } else if (opt_fstack_protector) {
+      opt_nostdlib = false;
+  }
 
   //enabling verbose mode for linker in case of debug
   if (isDebug)
@@ -1430,9 +1439,9 @@ static void run_linker(StringArray *inputs, char *output)
     //strarray_push(&arr, "--no-as-needed");
   }
 
-    // Add math lib if not -nostdlib and not static (optional)
-  if (!opt_nostdlib && !opt_static)
+  if (!opt_nostdlib) {
     strarray_push(&arr, "-lm");
+  }
 
   // Add the ending object file if not using -nostdlib
   if (!opt_nostdlib) {

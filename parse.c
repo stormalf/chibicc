@@ -6442,11 +6442,12 @@ static Node *primary(Token **rest, Token *tok)
     // For "static inline" function
     if (sc && sc->var && sc->var->is_function)
     {
-
       if (current_fn)
         strarray_push(&current_fn->refs, sc->var->name);
-      else
+      else 
         sc->var->is_root = true;
+      //issue found with vlc when static inline functions are inside struct members!
+      sc->var->is_live = true;
     }
 
     if (sc)
@@ -6615,6 +6616,7 @@ static void mark_live(Obj *var)
 {
   if (!var->is_function || var->is_live)
     return;
+
   var->is_live = true;
 
   for (int i = 0; i < var->refs.len; i++)
