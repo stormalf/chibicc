@@ -7,7 +7,7 @@ int main(int argc, char**argv) {
   ASSERT(1, ({ struct { unsigned long long c : 17; } s; _Generic(~s.c, int:1 ); }) );
 
   ASSERT(1, ({ char c; _Generic(-c, int:1 ); }) );
-  //ASSERT(1, ({ short s; _Generic(+s, int:1 ); }) );
+  ASSERT(1, ({ short s; _Generic(+s, int:1 ); }) );
 
   ASSERT(1, _Generic((long){0}, long:1, long long:0) );
   ASSERT(1, _Generic((long long){0}, long long:1, long:0) );

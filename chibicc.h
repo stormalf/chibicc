@@ -733,6 +733,7 @@ typedef enum
   ND_UMUL_OVERFLOW,
   ND_UMULL_OVERFLOW,
   ND_UMULLL_OVERFLOW,
+  ND_POS,
 } NodeKind;
 
 // AST node type

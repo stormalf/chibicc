@@ -2972,6 +2972,8 @@ static int64_t eval2(Node *node, char ***label)
     if (node->ty && node->ty->is_unsigned)
       return (uint64_t)eval(node->lhs) / (uint64_t)eval(node->rhs);
     return eval(node->lhs) / eval(node->rhs);
+  case ND_POS:
+    return eval(node->lhs);    
   case ND_NEG:
     return -eval(node->lhs);
   case ND_MOD:
@@ -3146,6 +3148,7 @@ static bool is_const_expr(Node *node)
     return is_const_expr(eval(node->cond) ? node->then : node->els);
   case ND_COMMA:
     return is_const_expr(node->rhs);
+  case ND_POS:
   case ND_NEG:
   case ND_NOT:
   case ND_BITNOT:
@@ -3186,6 +3189,8 @@ static double eval_double(Node *node)
     return eval_double(node->lhs) * eval_double(node->rhs);
   case ND_DIV:
     return eval_double(node->lhs) / eval_double(node->rhs);
+  case ND_POS:
+    return eval_double(node->lhs);    
   case ND_NEG:
     return -eval_double(node->lhs);
   case ND_COND:
@@ -3805,7 +3810,8 @@ static Node *unary(Token **rest, Token *tok)
 {
   
   if (equal(tok, "+"))
-    return cast(rest, tok->next);
+    return new_unary(ND_POS, cast(rest, tok->next), tok);
+    //return cast(rest, tok->next);
 
   if (equal(tok, "-"))
     return new_unary(ND_NEG, cast(rest, tok->next), tok);
@@ -7074,6 +7080,7 @@ char *nodekind2str(NodeKind kind)
   case ND_SUB: return "SUB";
   case ND_MUL: return "MUL";
   case ND_DIV: return "DIV";
+  case ND_POS: return "POS";
   case ND_NEG: return "NEG";
   case ND_MOD: return "MOD";
   case ND_BITAND: return "BITAND";

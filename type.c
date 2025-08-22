@@ -146,6 +146,7 @@ static void int_promotion(Node **node) {
       *node = new_cast(*node, ty_int);
     return;
   }
+
 }
 
 
@@ -310,8 +311,9 @@ static Type *get_common_type(Node **lhs, Node **rhs)
   Type *ty2 = (*rhs)->ty;
   //======ISS-158 trying to fix issue with "parse.c: in struct_ref : not a struct nor a union" when in a macro definition we have (size_t)-1 ? NULL : (n) - 1
   //assuming that if one is void it returns the second type that could be void also or different type.
-  if (!ty2)
+  if (!ty2) {
     return ty1;
+  }
 
   if (ty1->base) {
     if (ty1->base->kind == TY_VOID)
@@ -341,7 +343,7 @@ static Type *get_common_type(Node **lhs, Node **rhs)
 
   if (ty1->kind == TY_STRUCT || ty1->kind == TY_UNION) {
     if (is_compatible(ty1, ty2))
-        return ty1;  // both are the same struct/union type
+        return ty1;  
   }
 
   if (ty2->kind == TY_STRUCT || ty2->kind == TY_UNION) {
@@ -447,10 +449,12 @@ void add_type(Node *node)
     if (is_vector(node->lhs->ty) && is_vector(node->rhs->ty)) {
           node->ty = node->lhs->ty;
     } else {
+
         usual_arith_conv(&node->lhs, &node->rhs);
         node->ty = node->lhs->ty;
     }
     return;
+  case ND_POS:
   case ND_NEG:
     if (!is_numeric(node->lhs->ty) && !is_vector(node->lhs->ty))
       error_tok(node->lhs->tok, "%s %d: in add_type: invalid operand", TYPE_C, __LINE__);
