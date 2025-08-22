@@ -519,58 +519,139 @@ static Token *read_char_literal(char *start, char *quote, Type *ty)
   return tok;
 }
 
-static bool convert_pp_int(Token *tok)
-{
+// static bool convert_pp_int(Token *tok)
+// {
+//   char *p = tok->loc;
+
+//   // Read a binary, octal, decimal or hexadecimal number.
+//   int base = 10;
+//   if (!strncasecmp(p, "0x", 2) && isxdigit(p[2]))
+//   {
+//     p += 2;
+//     base = 16;
+//   }
+//   else if (!strncasecmp(p, "0b", 2) && (p[2] == '0' || p[2] == '1'))
+//   {
+//     p += 2;
+//     base = 2;
+//   }
+//   else if (*p == '0')
+//   {
+//     base = 8;
+//   }
+
+//   int64_t val = strtoul(p, &p, base);
+
+//   // Read U, L or LL suffixes.
+//   bool l = false;
+//   bool u = false;
+
+//   if (startswith(p, "LLU") || startswith(p, "LLu") ||
+//       startswith(p, "llU") || startswith(p, "llu") ||
+//       startswith(p, "ULL") || startswith(p, "Ull") ||
+//       startswith(p, "uLL") || startswith(p, "ull"))
+//   {
+//     p += 3;
+//     l = u = true;
+//   }
+//   else if (!strncasecmp(p, "lu", 2) || !strncasecmp(p, "ul", 2))
+//   {
+//     p += 2;
+//     l = u = true;
+//   }
+//   else if (startswith(p, "LL") || startswith(p, "ll"))
+//   {
+//     p += 2;
+//     l = true;
+//   }
+//   else if (*p == 'L' || *p == 'l')
+//   {
+//     p++;
+//     l = true;
+//   }
+//   else if (*p == 'U' || *p == 'u')
+//   {
+//     p++;
+//     u = true;
+//   }
+
+//   if (p != tok->loc + tok->len)
+//     return false;
+
+//   // Infer a type.
+//   Type *ty;
+//   if (base == 10)
+//   {
+//     if (l && u)
+//       ty = ty_ulong;
+//     else if (l)
+//       ty = ty_long;
+//     else if (u)
+//       ty = (val >> 32) ? ty_ulong : ty_uint;
+//     else
+//       ty = (val >> 31) ? ty_long : ty_int;
+//   }
+//   else
+//   {
+//     if (l && u)
+//       ty = ty_ulong;
+//     else if (l)
+//       ty = (val >> 63) ? ty_ulong : ty_long;
+//     else if (u)
+//       ty = (val >> 32) ? ty_ulong : ty_uint;
+//     else if (val >> 63)
+//       ty = ty_ulong;
+//     else if (val >> 32)
+//       ty = ty_long;
+//     else if (val >> 31)
+//       ty = ty_uint;
+//     else
+//       ty = ty_int;
+//   }
+
+//   tok->kind = TK_NUM;
+//   tok->val = val;
+//   tok->ty = ty;
+//   return true;
+// }
+static bool convert_pp_int(Token *tok) {
   char *p = tok->loc;
 
   // Read a binary, octal, decimal or hexadecimal number.
   int base = 10;
-  if (!strncasecmp(p, "0x", 2) && isxdigit(p[2]))
-  {
+  if (!strncasecmp(p, "0x", 2) && isxdigit(p[2])) {
     p += 2;
     base = 16;
-  }
-  else if (!strncasecmp(p, "0b", 2) && (p[2] == '0' || p[2] == '1'))
-  {
+  } else if (!strncasecmp(p, "0b", 2) && (p[2] == '0' || p[2] == '1')) {
     p += 2;
     base = 2;
-  }
-  else if (*p == '0')
-  {
+  } else if (*p == '0') {
     base = 8;
   }
 
   int64_t val = strtoul(p, &p, base);
 
   // Read U, L or LL suffixes.
+  bool ll = false;
   bool l = false;
   bool u = false;
 
   if (startswith(p, "LLU") || startswith(p, "LLu") ||
       startswith(p, "llU") || startswith(p, "llu") ||
       startswith(p, "ULL") || startswith(p, "Ull") ||
-      startswith(p, "uLL") || startswith(p, "ull"))
-  {
+      startswith(p, "uLL") || startswith(p, "ull")) {
     p += 3;
-    l = u = true;
-  }
-  else if (!strncasecmp(p, "lu", 2) || !strncasecmp(p, "ul", 2))
-  {
+    ll = u = true;
+  } else if (!strncasecmp(p, "lu", 2) || !strncasecmp(p, "ul", 2)) {
     p += 2;
     l = u = true;
-  }
-  else if (startswith(p, "LL") || startswith(p, "ll"))
-  {
+  } else if (startswith(p, "LL") || startswith(p, "ll")) {
     p += 2;
-    l = true;
-  }
-  else if (*p == 'L' || *p == 'l')
-  {
+    ll = true;
+  } else if (*p == 'L' || *p == 'l') {
     p++;
     l = true;
-  }
-  else if (*p == 'U' || *p == 'u')
-  {
+  } else if (*p == 'U' || *p == 'u') {
     p++;
     u = true;
   }
@@ -580,21 +661,26 @@ static bool convert_pp_int(Token *tok)
 
   // Infer a type.
   Type *ty;
-  if (base == 10)
-  {
-    if (l && u)
+  if (base == 10) {
+    if (ll && u)
+      ty = ty_ullong;
+    else if (l && u)
       ty = ty_ulong;
+    else if (ll)
+      ty = ty_llong;
     else if (l)
       ty = ty_long;
     else if (u)
       ty = (val >> 32) ? ty_ulong : ty_uint;
     else
       ty = (val >> 31) ? ty_long : ty_int;
-  }
-  else
-  {
-    if (l && u)
+  } else {
+    if (ll && u)
+      ty = ty_ullong;
+    else if (l && u)
       ty = ty_ulong;
+    else if (ll)
+      ty = (val >> 63) ? ty_ullong : ty_llong;
     else if (l)
       ty = (val >> 63) ? ty_ulong : ty_long;
     else if (u)
@@ -614,6 +700,7 @@ static bool convert_pp_int(Token *tok)
   tok->ty = ty;
   return true;
 }
+
 
 // The definition of the numeric literal at the preprocessing stage
 // is more relaxed than the definition of that at the later stages.

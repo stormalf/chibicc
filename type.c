@@ -14,6 +14,9 @@ Type *ty_ushort = &(Type){TY_SHORT, 2, 2, true};
 Type *ty_uint = &(Type){TY_INT, 4, 4, true};
 Type *ty_ulong = &(Type){TY_LONG, 8, 8, true};
 
+Type *ty_llong = &(Type){TY_LLONG, 8, 8};
+Type *ty_ullong = &(Type){TY_LLONG, 8, 8, true};
+
 Type *ty_float = &(Type){TY_FLOAT, 4, 4};
 Type *ty_double = &(Type){TY_DOUBLE, 8, 8};
 Type *ty_ldouble = &(Type){TY_LDOUBLE, 16, 16};
@@ -55,7 +58,7 @@ bool is_integer(Type *ty)
 {
   TypeKind k = ty->kind;
   return k == TY_BOOL || k == TY_CHAR || k == TY_SHORT || k == TY_INT128 ||
-         k == TY_INT || k == TY_LONG || k == TY_ENUM;
+         k == TY_INT || k == TY_LONG ||  k == TY_LLONG || k == TY_ENUM;
 }
 
 bool is_flonum(Type *ty)
@@ -107,7 +110,10 @@ int int_rank(Type *t) {
       return 1;
     case TY_LONG:
       return 2;
+    case TY_LLONG:
+      return 3;
   }
+  printf("======%d\n", t->kind);
   unreachable();
 }
 
@@ -175,6 +181,7 @@ bool is_compatible(Type *t1, Type *t2)
   case TY_SHORT:
   case TY_INT:
   case TY_LONG:
+  case TY_LLONG:
     return t1->is_unsigned == t2->is_unsigned;
   case TY_FLOAT:
   case TY_DOUBLE:
@@ -297,9 +304,10 @@ Type *struct_type(void)
   return new_type(TY_STRUCT, 0, 1);
 }
 
-static Type *get_common_type(Type *ty1, Type *ty2)
+static Type *get_common_type(Node **lhs, Node **rhs)
 {
-
+  Type *ty1 = (*lhs)->ty;
+  Type *ty2 = (*rhs)->ty;
   //======ISS-158 trying to fix issue with "parse.c: in struct_ref : not a struct nor a union" when in a macro definition we have (size_t)-1 ? NULL : (n) - 1
   //assuming that if one is void it returns the second type that could be void also or different type.
   if (!ty2)
@@ -331,18 +339,52 @@ static Type *get_common_type(Type *ty1, Type *ty2)
       return ty_int128;
   }
 
+  if (ty1->kind == TY_STRUCT || ty1->kind == TY_UNION) {
+    if (is_compatible(ty1, ty2))
+        return ty1;  // both are the same struct/union type
+  }
 
-  if (ty1->size < 4)
-    ty1 = ty_int;
-  if (ty2->size < 4)
-    ty2 = ty_int;
+  if (ty2->kind == TY_STRUCT || ty2->kind == TY_UNION) {
+    if (is_compatible(ty1, ty2))
+        return ty2;
+  }
+
+  // if (ty1->size < 4)
+  //   ty1 = ty_int;
+  // if (ty2->size < 4)
+  //   ty2 = ty_int;
+
+  // if (ty1->size != ty2->size)
+  //   return (ty1->size < ty2->size) ? ty2 : ty1;
+
+  // if (ty2->is_unsigned)
+  //   return ty2;
+  // return ty1;
+  int_promotion(lhs);
+  int_promotion(rhs);
+  ty1 = (*lhs)->ty;
+  ty2 = (*rhs)->ty;
 
   if (ty1->size != ty2->size)
     return (ty1->size < ty2->size) ? ty2 : ty1;
 
-  if (ty2->is_unsigned)
-    return ty2;
-  return ty1;
+  Type *ranked_ty = int_rank(ty1) > int_rank(ty2) ? ty1 : ty2;
+
+  if (ty1->is_unsigned == ty2->is_unsigned)
+    return ranked_ty;
+
+  // If same size but different sign, the common type is unsigned
+  // variant of the highest-ranked type between the two.
+  switch (ranked_ty->kind) {
+    case TY_INT:
+      return ty_uint;
+    case TY_LONG:
+      return ty_ulong;
+    case TY_LLONG:
+      return ty_ullong;
+  }
+  unreachable();
+
 }
 
 // For many binary operators, we implicitly promote operands so that
@@ -354,7 +396,7 @@ static Type *get_common_type(Type *ty1, Type *ty2)
 // This operation is called the "usual arithmetic conversion".
 static void usual_arith_conv(Node **lhs, Node **rhs)
 {
-  Type *ty = get_common_type((*lhs)->ty, (*rhs)->ty);
+  Type *ty = get_common_type(lhs, rhs);
   *lhs = new_cast(*lhs, ty);
   *rhs = new_cast(*rhs, ty);
   
@@ -410,12 +452,12 @@ void add_type(Node *node)
     }
     return;
   case ND_NEG:
-  {
-    Type *ty = get_common_type(ty_int, node->lhs->ty);
-    node->lhs = new_cast(node->lhs, ty);
-    node->ty = ty;
-    return;
-  }
+    if (!is_numeric(node->lhs->ty) && !is_vector(node->lhs->ty))
+      error_tok(node->lhs->tok, "%s %d: in add_type: invalid operand", TYPE_C, __LINE__);
+    if (is_integer(node->lhs->ty))
+      int_promotion(&node->lhs);
+    node->ty = node->lhs->ty;
+    return;  
   case ND_ASSIGN:
     if (node->lhs->ty->kind == TY_ARRAY)
       error_tok(node->lhs->tok, "%s %d: not an lvalue", TYPE_C, __LINE__);
@@ -712,9 +754,12 @@ void add_type(Node *node)
     node->ty = ty_int;
     return;
   case ND_POPCOUNTL:
-  case ND_POPCOUNTLL:
     add_type(node->builtin_val);
     node->ty = ty_long;
+    return;
+  case ND_POPCOUNTLL:
+    add_type(node->builtin_val);
+    node->ty = ty_llong;
     return;
   case ND_BUILTIN_BSWAP16:
     add_type(node->builtin_val);
@@ -774,8 +819,10 @@ void add_type(Node *node)
   case ND_CVTSS2SI64:
   case ND_CVTTSS2SI64:
   case ND_PARITYL:
-  case ND_PARITYLL:
     node->ty = ty_long;
+    return;
+  case ND_PARITYLL:
+    node->ty = ty_llong;
     return;
   case ND_VECINITV4HI:
   case ND_PCMPGTW:

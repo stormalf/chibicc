@@ -743,6 +743,7 @@ static int getTypeId(Type *ty)
   case TY_INT:
     return ty->is_unsigned ? U32 : I32;
   case TY_LONG:
+  case TY_LLONG:
     return ty->is_unsigned ? U64 : I64;
   case TY_INT128:
     return ty->is_unsigned ? U128 : I128;      
@@ -3675,7 +3676,7 @@ switch (node->lhs->ty->kind)
 
   char *ax, *di, *dx;
 
-  if (node->lhs->ty->kind == TY_LONG || node->lhs->ty->base)
+  if (node->lhs->ty->size == 8 || node->lhs->ty->base)
   {
     ax = "%rax";
     di = "%rdi";

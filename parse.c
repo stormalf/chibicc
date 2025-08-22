@@ -793,19 +793,23 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
       break;
     case LONG:
     case LONG + INT:
-    case LONG + LONG:
-    case LONG + LONG + INT:
     case SIGNED + LONG:
     case SIGNED + LONG + INT:
+      ty = ty_long;
+      break;
+    case LONG + LONG:
+    case LONG + LONG + INT:      
     case SIGNED + LONG + LONG:
     case SIGNED + LONG + LONG + INT:
-      ty = ty_long;
+      ty = ty_llong;
       break;
     case UNSIGNED + LONG:
     case UNSIGNED + LONG + INT:
+      ty = ty_ulong;
+      break;
     case UNSIGNED + LONG + LONG:
     case UNSIGNED + LONG + LONG + INT:
-      ty = ty_ulong;
+      ty = ty_ullong;
       break;
     case UNSIGNED + INT128:
       ty = copy_type(ty_uint128);
@@ -999,8 +1003,9 @@ static Type *array_dimensions(Token **rest, Token *tok, Type *ty)
     ty = array_dimensions(&tok, tok->next, ty);
   *rest = tok;
 
-  if (ty->kind != TY_VLA && is_const_expr(expr))
+  if (ty->kind != TY_VLA && is_const_expr(expr) )
     return array_of(ty, eval(expr));
+
 
   return vla_of(ty, expr);
 }
@@ -3076,7 +3081,7 @@ static int64_t eval2(Node *node, char ***label)
     if (is_vector(node->var->ty))
       return 0;
     if (!label) {
-      error_tok(node->tok, "%s %d : in eval2 : not a compile-time constant", PARSE_C, __LINE__);
+      error_tok(node->tok, "%s %d : in eval2 : not a compile-time constant %d", PARSE_C, __LINE__, node->var->ty->kind);
     }
       //trying to fix ======ISS-145 compiling util-linux failed with invalid initalizer2 
     if (node->var->ty->kind != TY_ARRAY && node->var->ty->kind != TY_FUNC && node->var->ty->kind != TY_INT) {
@@ -3115,8 +3120,7 @@ static int64_t eval_rval(Node *node, char ***label)
 
 static bool is_const_expr(Node *node)
 {
-  add_type(node);
-
+  add_type(node);  
   switch (node->kind)
   {
   case ND_ADD:
@@ -3145,10 +3149,11 @@ static bool is_const_expr(Node *node)
   case ND_NEG:
   case ND_NOT:
   case ND_BITNOT:
-  case ND_CAST:
-    return is_const_expr(node->lhs) || node->lhs->kind == ND_NUM || node->lhs->kind == ND_CAST;
+  case ND_CAST:    
+    return is_const_expr(node->lhs);
   case ND_NUM:
     return true;
+    
   }
   
   return false;
@@ -5553,9 +5558,10 @@ static Node *primary(Token **rest, Token *tok)
           return new_ulong((node->ty->size - mem->ty->size), tok);
       }
 
-      
-      // if (node->ty->kind == TY_VLA)
-      //   return new_var_node(node->ty->vla_size, tok);
+      if (node->ty->kind == TY_PTR) {
+        return new_ulong(8, tok); 
+      }
+
       return new_ulong(node->ty->size, start);   
 
     }
