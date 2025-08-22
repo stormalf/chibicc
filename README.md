@@ -77,6 +77,7 @@ or
         -std=c99 generates an error on implicit function declaration (without -std only a warning is emitted)
         -std=c11 generates an error on implicit function declaration (without -std only a warning is emitted)
         -mmmx to allow mmx instructions and builtin functions linked to mmx like __builtin_packuswb... 
+        -print-search-dirs prints minimal information on install dir.
         chibicc [ -o <path> ] <file>
 
 ## compile
@@ -218,8 +219,18 @@ it means that if you don't use the ld linker or ld.lld probably some options sho
 List of options ignored :
 
     "-O"
-    "-W"
     "-P"
+    "-Wall"
+    "-Wextra"
+    "-Wno-switch"
+    "-Wmissing-prototypes"
+    "-Winit-self"     
+    "-fno-math-errno"
+    "-fno-rounding-math"
+    "-fno-signaling-nans"
+    "-fcx-limited-range"
+    "-funsafe-math-optimizations"
+    "-funroll-loops"
     "-ffreestanding"
     "-fno-omit-frame-pointer"
     "-fomit-frame-pointer"
@@ -239,8 +250,6 @@ List of options ignored :
     "-mno-red-zone"
     "-fvisibility=default"
     "-fvisibility=hidden"
-    "-Werror=invalid-command-line-argument"
-    "-Werror=unknown-warning-option"
     "-Wsign-compare"
     "-Wundef"
     "-Wpointer-arith"
@@ -267,13 +276,19 @@ List of options ignored :
     "-fdiagnostics-show-option"
     "-Xc"
     "-Aa"
-    "-rdynamic"
     "-w"
+    "-w2"
     "--param=ssp-buffer-size=4"
     "-fno-lto"
     "-fp-model"
     "-fprofile-arcs"
     "-ftest-coverage"
+    "-ansi_alias"
+    "-ffat-lto-objects"
+    "-static-libstdc++"
+    "-static-libgcc"
+    "-pipe"   
+    "-mindirect-branch-register"
 
 ## Dockerfile and devcontainer
 
@@ -564,7 +579,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.23.1    
+1.0.23.1    Removing old fix on issue166 that causes side effect. Adding ND_POS for unary +. Adding new type for long long TY_LLONG. Fixing umull_overflow. Fixing issue with weak not printed for extern global variables. Adding lots of functions declarations on math.h needed for some projects. Ignoring few arguments.
 
 ## old release notes
 

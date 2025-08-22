@@ -121,6 +121,7 @@ this " PRODUCT " contains only some differences for now like new parameters\n"
 -std=c99 generates an error on implicit function declaration (without -std only a warning is emitted) \n \
 -std=c11 generates an error on implicit function declaration (without -std only a warning is emitted) \n \
 -mmmx to allow mmx instructions and builtin functions linked to mmx like __builtin_packuswb... \n \
+-print-search-dirs prints minimal information on install dir. \n \
 chibicc [ -o <path> ] <file>\n"
 
 typedef struct Type Type;
