@@ -2055,6 +2055,7 @@ static void gen_umul_overflow(Node *node) {
         ty = ty->base;
     int size = ty->size;
 
+    // Generate expressions
     gen_expr(node->lhs);
     push();
     gen_expr(node->rhs);
@@ -2062,65 +2063,56 @@ static void gen_umul_overflow(Node *node) {
     gen_expr(node->builtin_dest);
     push();
 
-    pop("%rdx");  // result pointer
+    // Pop arguments
+    pop("%rdx");  // result pointer (can be NULL)
     pop("%rsi");  // rhs
     pop("%rdi");  // lhs
-
+    println("  mov %%rdx, %%rcx");
+    // Multiply
     if (size == 1) {
         println("  movzbl %%di, %%eax");
         println("  movzbl %%si, %%ebx");
         println("  mul %%bl");           // AL * BL -> AX
         println("  jc .Loverflowm%d", c);
-        println("  mov %%al, (%%rdx)");
-        println("  mov $0, %%eax");
-        println("  jmp .Ldonem%d", c);
-
-        println(".Loverflowm%d:", c);
-        println("  mov $1, %%eax");
-        println("  movb $0, (%%rdx)");
-        println(".Ldonem%d:", c);
-
     } else if (size == 2) {
         println("  movzwl %%di, %%eax");
         println("  movzwl %%si, %%ebx");
         println("  mul %%bx");          // AX * BX -> DX:AX
         println("  jc .Loverflowm%d", c);
-        println("  mov %%ax, (%%rdx)");
-        println("  mov $0, %%eax");
-        println("  jmp .Ldonem%d", c);
-
-        println(".Loverflowm%d:", c);
-        println("  mov $1, %%eax");
-        println("  movw $0, (%%rdx)");
-        println(".Ldonem%d:", c);
-
     } else if (size == 4) {
         println("  mov %%edi, %%eax");
         println("  mul %%esi");        // EAX * ESI -> EDX:EAX
         println("  jc .Loverflowm%d", c);
-        println("  mov %%eax, (%%rdx)");
-        println("  mov $0, %%eax");
-        println("  jmp .Ldonem%d", c);
-
-        println(".Loverflowm%d:", c);
-        println("  mov $1, %%eax");
-        println("  movl $0, (%%rdx)");
-        println(".Ldonem%d:", c);
-
-    } else if (size == 8) {
+    } else if (size >= 8) {
         println("  mov %%rdi, %%rax");
-        println("  mul %%rsi");           // RAX * RSI -> RDX:RAX
-        println("  test %%rdx, %%rdx");   // check overflow
+        println("  mul %%rsi");        // RAX * RSI -> RDX:RAX
+        println("  test %%rdx, %%rdx"); // overflow check
         println("  jnz .Loverflowm%d", c);
-        println("  mov %%rax, (%%rdx)");  // store full 64-bit result
-        println("  mov $0, %%rax");       // return 0 for no overflow
-        println("  jmp .Ldonem%d", c);
-
-        println(".Loverflowm%d:", c);
-        println("  mov $1, %%rax");       // return 1 for overflow
-        println("  movq $0, (%%rdx)");    // clear result
-        println(".Ldonem%d:", c);
     }
+
+    // Store result if destination pointer is not NULL
+    println("  test %%rcx, %%rcx");
+    println("  jz .Ldonem%d", c);
+    if (size == 1) println("  mov %%al, (%%rcx)");
+    else if (size == 2) println("  mov %%ax, (%%rcx)");
+    else if (size == 4) println("  mov %%eax, (%%rcx)");
+    else if (size == 8) println("  mov %%rax, (%%rcx)");
+    
+    println(".Ldonem%d:", c);
+    println("  mov $0, %%rax");       // return 0 for no overflow
+    println("  jmp .Lend%d", c);
+
+    // Overflow label
+    println(".Loverflowm%d:", c);
+    println("  test %%rcx, %%rcx");    // only store if pointer not NULL
+    println("  jz .Loverflow_end%d", c);
+    if (size == 1) println("  movb $0, (%%rcx)");
+    else if (size == 2) println("  movw $0, (%%rcx)");
+    else if (size == 4) println("  movl $0, (%%rcx)");
+    else if (size == 8) println("  movq $0, (%%rcx)");
+    println(".Loverflow_end%d:", c);
+    println("  mov $1, %%rax");        // return 1 for overflow
+    println(".Lend%d:", c);
 }
 
 

@@ -691,6 +691,9 @@ void add_type(Node *node)
     add_type(node->lhs);
     add_type(node->rhs);
     add_type(node->builtin_dest);
+    if (node->builtin_dest->kind == ND_NUM && node->builtin_dest->val == 0) {
+        node->builtin_dest->ty = pointer_to(ty_void);
+    }
     node->ty = ty_bool;
     return;
   case ND_BUILTIN_ISNAN:

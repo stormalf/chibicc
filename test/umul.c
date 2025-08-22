@@ -27,11 +27,13 @@ bool umul_overflow_u64(uint64_t a, uint64_t b, uint64_t *res) {
     return r > UINT64_MAX;
 }
 
+
 void test_umul_overflow() {
     uint8_t r8;
     uint16_t r16;
     uint32_t r32;
     uint64_t r64;
+    __int128 r128;
 
     // 8-bit
     printf("8-bit: %d %d -> %d, overflow=%d\n", 10, 20, r8, umul_overflow_u8(10, 20, &r8));
@@ -53,6 +55,8 @@ void test_umul_overflow() {
     printf("64-bit overflow: %llu %llu -> %llu, overflow=%d\n", 0xFFFFFFFFFFFFFFF0ULL, 2ULL, r64, umul_overflow_u64(0xFFFFFFFFFFFFFFF0ULL, 2ULL, &r64));
     ASSERT(0, umul_overflow_u64(10000000000ULL, 1000ULL, &r64));
     ASSERT(1, umul_overflow_u64(0xFFFFFFFFFFFFFFF0ULL, 2ULL, &r64));
+
+    
 }
 
 int main() {
