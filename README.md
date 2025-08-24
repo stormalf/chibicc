@@ -443,7 +443,7 @@ memcached: https://github.com/memcached/memcached.git
    
 cpython: git clone git@github.com:python/cpython.git
         
-        CC=chibicc ./configure
+        CC=chibicc ./configure  --host=x86_64-pc-linux-gnu ac_cv_have_lchflags=no ac_cv_have_chflags=no
         make && make test
         failure with  
 
@@ -473,6 +473,19 @@ nmap : https://github.com/nmap/nmap
     Ran 292 tests. 0 failures.
 
 
+vlc : https://github.com/videolan/vlc.git 
+
+    autoreconf -fiv
+    ./bootstrap
+    CC=chibicc CFLAGS="-fPIC -std=c11"  ./configure --disable-lua --disable-xcb --disable-qt --disable-alsa --disable-sse --host x86_64-linux-gnu 
+    make all
+    failed during linkage : with undefined references to missing dependency in their Makefile.
+    Adding the missing librtp_plugin_la-sdp.o solves this issue. Changes done in modules/Makefile :
+    libg64rtp_plugin_la_OBJECTS = $(am_libg64rtp_plugin_la_OBJECTS) access/rtp/.libs/librtp_plugin_la-sdp.o
+    after that make all succeeds!
+
+
+
 ## meson
 
 to be able to use meson with chibicc (meson hack is to do the meson configure using gcc and rename gcc to gcc_old chibicc to gcc and meson compile will call chibicc).
@@ -486,26 +499,6 @@ lxc: https://github.com/lxc/lxc.git
 
 Some C projects doesn't compile for now or crash after being compiled with chibicc. It helps to find some bugs and to try to fix them!
 
-VLC : https://github.com/videolan/vlc.git 
-
-    autoreconf -fiv
-    ./bootstrap
-    CC=chibicc CFLAGS="-fPIC -std=c11"  ./configure --disable-lua --disable-xcb --disable-qt --disable-alsa --disable-sse
-    make all
-    failed during linkage : with undefined references to missing dependency in their Makefile.
-    Adding the missing librtp_plugin_la-sdp.o solves this issue.
-    libg64rtp_plugin_la_OBJECTS = $(am_libg64rtp_plugin_la_OBJECTS) access/rtp/.libs/librtp_plugin_la-sdp.o
-
-    segfault during execution:
-    =1015762== Process terminating with default action of signal 11 (SIGSEGV)
-    ==1015762==  Access not within mapped region at address 0x0
-    ==1015762==    at 0x49CD85D: umulll_overflow (vlc_common.h:855)
-    ==1015762==    by 0x49CD7E3: vlc_alloc (vlc_common.h:876)
-    ==1015762==    by 0x49CA84B: config_SortConfig (core.c:417)
-    ==1015762==    by 0x49F420D: module_InitBank (bank.c:738)
-    ==1015762==    by 0x498B6F0: libvlc_InternalInit (libvlc.c:146)
-    ==1015762==    by 0x4868529: libvlc_new (core.c:69)
-    ==1015762==    by 0x402796: main (vlc.c:232)
 
 
 postgres: https://github.com/postgres/postgres.git  (in case of bad network use git clone --filter=blob:none --depth=1 https://github.com/postgres/postgres.git --branch master)
@@ -549,6 +542,7 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
     zlib: compile OK, tests OK
     nmap: compile OK, tests OK    
     openssh-portable : compile OK, tests OK
+    vlc: compile OK!
 
 
 ## debug

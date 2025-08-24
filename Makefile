@@ -83,11 +83,17 @@ vim:
 
 lxc:
 	cd ../lxc && rm -rf build && CC=gcc \
-	meson setup build && cd build &&  \
-	sudo cp /usr/local/bin/chibicc /usr/bin/gcc && meson compile && sudo cp /usr/bin/gcc_old /usr/bin/gcc
+	meson setup build && cd build && sudo cp /usr/bin/gcc /usr/bin/gcc_backup \
+	sudo cp /usr/local/bin/chibicc /usr/bin/gcc && meson compile && sudo cp /usr/bin/gcc_backup /usr/bin/gcc
 
 vlc:
-	cd ../vlc && make clean && CC=chibicc meson --reconfigure build -Dc_args="" && cd build &&  meson compile 
+	cd ../vlc && make clean && CC=chibicc CFLAGS="-fPIC -std=c11"  ./configure  \
+	--disable-lua --disable-xcb --disable-qt --disable-alsa --disable-sse --host x86_64-linux-gnu && \
+    make all
+
+cpython:
+	cd ../cpython && make clean && CC=chibicc ./configure \
+	 --build=x86_64-pc-linux-gnu ac_cv_have_lchflags=no ac_cv_have_chflags=no && make && make test
 
 # vlc2:
 # 	cd ../vlc && rm -rf build && mymeson setup build && cd build && mymeson compile

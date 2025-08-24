@@ -849,12 +849,14 @@ static void parse_args(int argc, char **argv)
     }
 
     // These options are ignored for now.
-    if (!strcmp(argv[i], "-O") ||
+    if (startsWith(argv[i], "-O") ||
         !strcmp(argv[i], "-P") || 
         !strcmp(argv[i], "-Wall") || 
         !strcmp(argv[i], "-Wextra") || 
         !strcmp(argv[i], "-Wno-switch") || 
         !strcmp(argv[i], "-Wmissing-prototypes") ||
+        !strcmp(argv[i], "-Wmissing-declarations") || 
+        !strcmp(argv[i], "-Wredundant-decls") ||                
         !strcmp(argv[i], "-Winit-self") ||     
         !strcmp(argv[i], "-fno-math-errno") ||
         !strcmp(argv[i], "-fno-rounding-math") ||   

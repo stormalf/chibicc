@@ -4286,6 +4286,7 @@ static Token *type_attributes(Token *tok, void *arg)
       consume(&tok, tok, "no_sanitize_undefined") ||
       consume(&tok, tok, "__no_sanitize_undefined__") ||
       consume(&tok, tok, "__nonstring__") ||
+      consume(&tok, tok, "nonstring") ||       
       consume(&tok, tok, "no_profile_instrument_function") ||
       consume(&tok, tok, "stdcall") ||
       consume(&tok, tok, "ms_struct") ||
@@ -4829,6 +4830,8 @@ static Token *thing_attributes(Token *tok, void *arg) {
       consume(&tok, tok, "__no_stack_limit__") ||
       consume(&tok, tok, "no_sanitize_undefined") ||
       consume(&tok, tok, "__no_sanitize_undefined__") ||
+      consume(&tok, tok, "__nonstring__") ||
+      consume(&tok, tok, "nonstring") ||       
       consume(&tok, tok, "no_profile_instrument_function") ||
       consume(&tok, tok, "stdcall") ||
       consume(&tok, tok, "__stub__") || 
