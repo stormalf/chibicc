@@ -1494,6 +1494,7 @@ static void scalar_to_xmm(Type *vec_ty, const char *xmm_reg) {
       println("  movd %%eax, %s", xmm_reg);      
       println("  pshufd $0x0, %s, %s", xmm_reg, xmm_reg); 
       break; 
+    case TY_LLONG:
     case TY_LONG:
       println("  movq %%rax, %s", xmm_reg);       
       println("  movddup %s, %s", xmm_reg, xmm_reg); 
@@ -1625,6 +1626,7 @@ static void gen_vector_op(Node *node) {
       error_tok(node->tok, "%s: %s:%d: error: unsupported double vector operation", CODEGEN_C, __FILE__, __LINE__);
     }
     break;
+  case TY_LLONG:
   case TY_LONG:
     switch (node->kind) {
     case ND_ADD:
