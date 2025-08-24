@@ -540,7 +540,7 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
     zlib: compile OK, tests OK
     nmap: compile OK, tests OK    
     openssh-portable : compile OK, tests OK
-    vlc: compile OK!
+    vlc: compile OK
 
 
 ## debug
@@ -571,7 +571,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.23.1    Removing old fix on issue166 that causes side effect. Adding ND_POS for unary +. Adding new type for long long TY_LLONG. Fixing umull_overflow. Fixing issue with weak not printed for extern global variables. Adding lots of functions declarations on math.h needed for some projects. Ignoring few arguments. Fixing issue166.
+1.0.23.1    Removing old fix on issue166 that causes side effect. Adding ND_POS for unary +. Adding new type for long long TY_LLONG. Fixing umull_overflow. Fixing issue with weak not printed for extern global variables. Adding lots of functions declarations on math.h needed for some projects. Ignoring few arguments. Fixing issue166. Fixing issue with external TLS (from @fuhsnn).
 
 ## old release notes
 

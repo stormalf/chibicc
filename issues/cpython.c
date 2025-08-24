@@ -1,90 +1,73 @@
-#include <stdio.h>
-#include <stdint.h>
-#include <assert.h>
-#include <stddef.h>
 #include <stdlib.h>
 #include <stdbool.h>
-/* ----------------- Mock CPython structs ----------------- */
+#include <stdio.h>
+#include <stdint.h>
+#include <stddef.h>
+#include <assert.h>
 
-typedef struct _obmalloc_state OMState;
-typedef struct _obmalloc_pools poolp;
-typedef struct _obmalloc_mgmt _mgmt;
-typedef struct PyDictObject PyDictObject;
+#define NB_SMALL_SIZE_CLASSES 32
+#define OBMALLOC_USED_POOLS_SIZE (2 * ((NB_SMALL_SIZE_CLASSES + 7) / 8) * 8)
+#define MAX_POOLS_IN_ARENA 8
+#define INITIAL_ARENA_OBJECTS 16
 
-/* For simplicity, we use dummy pointers/values */
+typedef void* poolp;
+
+struct arena_object { int dummy; };
+
 struct _obmalloc_pools {
-    void* used[32];
+    poolp used[OBMALLOC_USED_POOLS_SIZE];
 };
 
 struct _obmalloc_mgmt {
-    void* arenas;
-    void* unused_arena_objects;
-    void* usable_arenas;
-    void* nfp2lasta[16];
+    struct arena_object* arenas;
+    uint maxarenas;
+    struct arena_object* unused_arena_objects;
+    struct arena_object* usable_arenas;
+    struct arena_object* nfp2lasta[MAX_POOLS_IN_ARENA + 1];
     size_t narenas_currently_allocated;
     size_t ntimes_arena_allocated;
     size_t narenas_highwater;
     size_t raw_allocated_blocks;
 };
 
-struct _obmalloc_state {
+typedef struct _obmalloc_state {
     struct _obmalloc_pools pools;
     struct _obmalloc_mgmt mgmt;
-};
+} OMState;
 
-struct PyDictObject {
-    void* ma_keys;
-    void* ma_values;
-};
-
-/* ----------------- Global state ----------------- */
-static struct _obmalloc_state obmalloc_state_main;
-static bool obmalloc_state_initialized = true;
-
-/* ----------------- Inline helpers ----------------- */
-static inline OMState* get_state(void) {
+// Simulate the interpreter state
+static OMState obmalloc_state_main;
+static OMState* get_state(void) {
     return &obmalloc_state_main;
 }
 
-/* ----------------- Mock PyObject_Malloc ----------------- */
-void* PyObject_Malloc(size_t size) {
-    OMState* state = get_state();
-    void* ptr = malloc(size);
+// Simulated allocation
+void* _PyObject_Malloc(size_t nbytes) {
+    OMState *state = get_state();
+    void* ptr = malloc(nbytes);
     if (ptr) state->mgmt.raw_allocated_blocks++;
     return ptr;
 }
 
-/* ----------------- Minimal PyDict_New ----------------- */
-PyDictObject* PyDict_New(void) {
-    PyDictObject* d = PyObject_Malloc(sizeof(PyDictObject));
-    d->ma_keys = PyObject_Malloc(16);
-    d->ma_values = PyObject_Malloc(16);
-    return d;
-}
-
-/* ----------------- Minimal _PyUnicode_InitGlobalObjects ----------------- */
-void _PyUnicode_InitGlobalObjects(void) {
-    PyDictObject* interned = PyDict_New();
-    /* Write test values to verify memory */
-    *(uintptr_t*)interned->ma_keys = 0x12345678;
-    *(uintptr_t*)interned->ma_values = 0x87654321;
-
-    printf("Allocated PyDictObject: %p\n", interned);
-    printf("ma_keys: %p, ma_values: %p\n",
-           interned->ma_keys, interned->ma_values);
-    printf("ma_keys value: 0x%lx, ma_values value: 0x%lx\n",
-           *(uintptr_t*)interned->ma_keys, *(uintptr_t*)interned->ma_values);
-}
-
-/* ----------------- Main ----------------- */
 int main(void) {
-    OMState* state = get_state();
-    printf("Address of state: %p\n", state);
-    printf("Address of pools.used: %p\n", state->pools.used);
-    printf("Address of mgmt: %p\n", &state->mgmt);
-    printf("Address of mgmt.nfp2lasta: %p\n", state->mgmt.nfp2lasta);
-    printf("Address of mgmt.raw_allocated_blocks: %p\n", &state->mgmt.raw_allocated_blocks);
+    OMState *state = get_state();
 
-    _PyUnicode_InitGlobalObjects();
+    printf("State address: %p\n", state);
+    printf("Pools address: %p\n", &state->pools);
+    printf("Mgmt address: %p\n", &state->mgmt);
+
+    // Initialize pools
+    for (int i = 0; i < OBMALLOC_USED_POOLS_SIZE; i++)
+        state->pools.used[i] = (poolp)(uintptr_t)(0x1000 + i);
+
+    // Allocate multiple objects
+    void* objs[10];
+    for (int i = 0; i < 10; i++) {
+        objs[i] = _PyObject_Malloc(64);
+        printf("Allocated object[%d]: %p\n", i, objs[i]);
+    }
+
+    printf("Raw allocated blocks: %zu\n", state->mgmt.raw_allocated_blocks);
+
     return 0;
 }
