@@ -1,8 +1,9 @@
 #if defined(__slimcc__) || defined(__chibicc__)
 #include <stdio.h>
+#define static_assert(cond, msg) _Static_assert(cond, msg)
 #define ASSERT(x, y) assert(x, y, #y)
-#define DASSERT(x) static_assert(x); ASSERT(1, x)
-#define EASSERT(x,y) static_assert((x) == (y)); ASSERT(x, y)
+#define DASSERT(x) _Static_assert((x), ""); ASSERT(1, x)
+#define EASSERT(x, y) _Static_assert((x) == (y), ""); ASSERT(x, y)
 #define LASSERT(x, y) assert64(x, y, #y)
 #define ASSERT128(x, y) assert128(x, y, #y, __FILE__, __LINE__)
 void assert128(__int128, __int128, char *, char *, int);

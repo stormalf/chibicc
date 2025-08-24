@@ -3123,6 +3123,7 @@ static int64_t eval_rval(Node *node, char ***label)
 static bool is_const_expr(Node *node)
 {
   add_type(node);  
+
   switch (node->kind)
   {
   case ND_ADD:
@@ -3152,11 +3153,14 @@ static bool is_const_expr(Node *node)
   case ND_NEG:
   case ND_NOT:
   case ND_BITNOT:
-  case ND_CAST:    
+  case ND_CAST: 
     return is_const_expr(node->lhs);
   case ND_NUM:
     return true;
-    
+  case ND_MEMBER:
+  case ND_ADDR:
+  case ND_DEREF:
+    return is_const_expr(node->lhs);
   }
   
   return false;

@@ -847,7 +847,6 @@ typedef enum
   TY_SHORT,
   TY_INT,
   TY_LONG,
-  TY_LLONG,
   TY_FLOAT,
   TY_DOUBLE,
   TY_LDOUBLE,
@@ -860,6 +859,7 @@ typedef enum
   TY_UNION,
   TY_VECTOR,
   TY_INT128,
+  TY_LLONG,
 } TypeKind;
 
 
