@@ -223,7 +223,10 @@ List of options ignored :
     "-Wall"
     "-Wextra"
     "-Wno-switch"
+    "-Wno-uninitialized"
     "-Wmissing-prototypes"
+    "-Wmissing-declarations"
+    "-Wredundant-decls"
     "-Winit-self"     
     "-fno-math-errno"
     "-fno-rounding-math"
@@ -243,8 +246,6 @@ List of options ignored :
     "--no-whole-archive"
     "-fsigned-char"
     "-Bsymbolic"
-    "-z"
-    "defs"
     "-pedantic"
     "-nostdinc"
     "-mno-red-zone"
@@ -269,8 +270,6 @@ List of options ignored :
     "-fdiagnostics-show-option"
     "-fasynchronous-unwind-tables"
     "-fexceptions"
-    "--print-search-dirs"
-    "-msse4.1"
     "-fprofile-arcs"
     "-ftest-coverage"
     "-fdiagnostics-show-option"
@@ -447,20 +446,19 @@ cpython: git clone git@github.com:python/cpython.git
         make && make test
         failure with  
 
-        =1494790== Invalid write of size 1
-        ==1494790==    at 0x8995562: blake2module_init_cpu_features (stdbool.h:6)
-        ==1494790==    by 0x899439F: blake2_exec (blake2module.c:209)
-        ==1494790==    by 0x6B032A: PyModule_ExecDef (moduleobject.c:497)
-        ==1494790==    by 0xA6C1FB: exec_builtin_or_dynamic (import.c:860)
-        ==1494790==    by 0xA6DD53: _imp_exec_dynamic_impl (import.c:4780)
-        ==1494790==    by 0xA6DC93: _imp_exec_dynamic (import.c.h:516)
-        ==1494790==    by 0x6A8250: cfunction_vectorcall_O (methodobject.c:537)
-        ==1494790==    by 0x5A26FA: _PyVectorcall_Call (call.c:273)
-        ==1494790==    by 0x5A4910: _PyObject_Call (call.c:348)
-        ==1494790==    by 0x5A687B: PyObject_Call (call.c:373)
-        ==1494790==    by 0x942199: _PyEval_EvalFrameDefault (generated_cases.c.h:2616)
-        ==1494790==    by 0x92BB77: _PyEval_EvalFrame (pycore_ceval.h:121)
-        ==1494790==  Address 0x101010101010111 is not stack'd, malloc'd or (recently) free'd
+        ==241087== General Protection Fault
+        ==241087== at 0x6D2971: pymalloc_alloc (obmalloc.c:1571)
+        ==241087== by 0x6D8627: _PyObject_Malloc (obmalloc.c:2328)
+        ==241087== by 0x70F807: PyObject_Malloc (obmalloc.c:1493)
+        ==241087== by 0xA795C5: _PyObject_MallocWithType (pycore_object_alloc.h:46)
+        ==241087== by 0xA7265A: gc_alloc (gc.c:2327)
+        ==241087== by 0xA7E534: _PyObject_GC_New (gc.c:2347)
+        ==241087== by 0x67D35E: new_dict (objimpl.h:180)
+        ==241087== by 0x68CE1A: PyDict_New (dictobject.c:973)
+        ==241087== by 0x808234: init_interned_dict (unicodeobject.c:343)
+        ==241087== by 0x81E1CA: _PyUnicode_InitGlobalObjects (unicodeobject.c:15844)
+        ==241087== by 0xB3F7BE: pycore_init_global_objects (pylifecycle.c:689)
+        ==241087== by 0xB3DD55: pycore_interp_init (pylifecycle.c:873)
 
 
 nmap : https://github.com/nmap/nmap

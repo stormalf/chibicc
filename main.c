@@ -855,6 +855,7 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-Wextra") || 
         !strcmp(argv[i], "-Wno-switch") || 
         !strcmp(argv[i], "-Wmissing-prototypes") ||
+        !strcmp(argv[i], "-Wno-uninitialized") ||        
         !strcmp(argv[i], "-Wmissing-declarations") || 
         !strcmp(argv[i], "-Wredundant-decls") ||                
         !strcmp(argv[i], "-Winit-self") ||     
@@ -896,7 +897,6 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-fdiagnostics-show-option") || 
         !strcmp(argv[i], "-fasynchronous-unwind-tables") || 
         !strcmp(argv[i], "-fexceptions") || 
-        !strcmp(argv[i], "--print-search-dirs") || 
         !strcmp(argv[i], "-fdiagnostics-show-option") || 
         !strcmp(argv[i], "-Xc") ||
         !strcmp(argv[i], "-Aa") ||
