@@ -1,11 +1,24 @@
-#include <stdio.h>
+#define PY_SSIZE_T_CLEAN
+#include <Python.h>
 #include <stdbool.h>
-#include <stdint.h>
-#include <stddef.h>
+#include <stdio.h>
 
-typedef struct PyTypeObject {
-    const char *name;
-} PyTypeObject;
+#define _Py_HACL_CAN_COMPILE_VEC128 0
+#define _Py_HACL_CAN_COMPILE_VEC256 0
+
+static void __cpuid_count(int info, int subinfo,
+                          int *eax, int *ebx,
+                          int *ecx, int *edx) {
+#if defined(__x86_64__)
+    __asm__ volatile(
+        "cpuid"
+        : "=a"(*eax), "=b"(*ebx), "=c"(*ecx), "=d"(*edx)
+        : "a"(info), "c"(subinfo)
+    );
+#else
+    *eax = *ebx = *ecx = *edx = 0;
+#endif
+}
 
 typedef struct {
     PyTypeObject *blake2b_type;
@@ -14,58 +27,42 @@ typedef struct {
     bool can_run_simd256;
 } Blake2State;
 
-#if defined(__x86_64__) && defined(__GNUC__)
-static inline void cpuid_count(uint32_t leaf, uint32_t subleaf,
-                               uint32_t *eax, uint32_t *ebx,
-                               uint32_t *ecx, uint32_t *edx) {
-    __asm__ volatile(
-        "cpuid"
-        : "=a"(*eax), "=b"(*ebx), "=c"(*ecx), "=d"(*edx)
-        : "a"(leaf), "c"(subleaf));
-}
-#else
-static inline void cpuid_count(uint32_t leaf, uint32_t subleaf,
-                               uint32_t *eax, uint32_t *ebx,
-                               uint32_t *ecx, uint32_t *edx) {
-    *eax = *ebx = *ecx = *edx = 0;
-}
-#endif
+static void
+blake2module_init_cpu_features(Blake2State *state)
+{
+    int eax1 = 0, ebx1 = 0, ecx1 = 0, edx1 = 0;
+    int eax7 = 0, ebx7 = 0, ecx7 = 0, edx7 = 0;
 
-static void blake2module_init_cpu_features(Blake2State *state) {
-    uint32_t eax1=0, ebx1=0, ecx1=0, edx1=0;
-    uint32_t eax7=0, ebx7=0, ecx7=0, edx7=0;
+    __cpuid_count(1, 0, &eax1, &ebx1, &ecx1, &edx1);
+    __cpuid_count(7, 0, &eax7, &ebx7, &ecx7, &edx7);
 
-    cpuid_count(1,0,&eax1,&ebx1,&ecx1,&edx1);
-    cpuid_count(7,0,&eax7,&ebx7,&ecx7,&edx7);
+    bool avx = (ecx1 & (1 << 28)) != 0;
+    bool avx2 = (ebx7 & (1 << 5)) != 0;
 
-    const uint32_t ECX_AVX = 1 << 28;
-    const uint32_t EBX_AVX2 = 1 << 5;
-    const uint32_t EDX_SSE = 1 << 25;
-    const uint32_t EDX_SSE2 = 1 << 26;
+    bool sse = (edx1 & (1 << 25)) != 0;
+    bool sse2 = (edx1 & (1 << 26)) != 0;
+    bool cmov = (edx1 & (1 << 15)) != 0;
 
-    bool avx = (ecx1 & ECX_AVX) != 0;
-    bool avx2 = (ebx7 & EBX_AVX2) != 0;
-    bool sse = (edx1 & EDX_SSE) != 0;
-    bool sse2 = (edx1 & EDX_SSE2) != 0;
+    bool sse3 = (ecx1 & (1 << 0)) != 0;
+    bool sse41 = (ecx1 & (1 << 19)) != 0;
+    bool sse42 = (ecx1 & (1 << 20)) != 0;
 
-    // Write flags into struct
-    state->can_run_simd128 = sse && sse2;
-    state->can_run_simd256 = state->can_run_simd128 && avx && avx2;
+    state->can_run_simd128 = false;
+    state->can_run_simd256 = false;
 }
 
 int main(void) {
-    Blake2State state = {0};
-    state.blake2b_type = NULL;
-    state.blake2s_type = NULL;
+    Blake2State st = {0};
+    blake2module_init_cpu_features(&st);
 
-    printf("Before init: simd128=%d simd256=%d\n", state.can_run_simd128, state.can_run_simd256);
-    blake2module_init_cpu_features(&state);
-    printf("After init: simd128=%d simd256=%d\n", state.can_run_simd128, state.can_run_simd256);
+    printf("CPU feature detection result:\n");
+    printf("  can_run_simd128 = %s\n", st.can_run_simd128 ? "true" : "false");
+    printf("  can_run_simd256 = %s\n", st.can_run_simd256 ? "true" : "false");
 
-    printf("offset blake2b_type = %zu\n", offsetof(Blake2State, blake2b_type));
-    printf("offset blake2s_type = %zu\n", offsetof(Blake2State, blake2s_type));
-    printf("offset can_run_simd128 = %zu\n", offsetof(Blake2State, can_run_simd128));
-    printf("offset can_run_simd256 = %zu\n", offsetof(Blake2State, can_run_simd256));
+    if (st.can_run_simd256 && !st.can_run_simd128) {
+        fprintf(stderr, "Invariant violated: SIMD256 requires SIMD128!\n");
+        return 1;
+    }
 
     return 0;
 }

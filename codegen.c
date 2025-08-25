@@ -364,7 +364,7 @@ static void gen_addr(Node *node)
       if (node->var->is_tls)
       {
         println("  data16 lea \"%s\"@tlsgd(%%rip), %%rdi", node->var->name);
-        //println("  .value 0x6666");
+        println("  .value 0x6666");
         println("  rex64");
         println("  call __tls_get_addr@PLT");
         return;

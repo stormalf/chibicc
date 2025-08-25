@@ -223,6 +223,7 @@ List of options ignored :
     "-Wall"
     "-Wextra"
     "-Wno-switch"
+    "-Wno-unused-variable"    
     "-Wno-uninitialized"
     "-Wmissing-prototypes"
     "-Wmissing-declarations"

@@ -854,6 +854,7 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-Wall") || 
         !strcmp(argv[i], "-Wextra") || 
         !strcmp(argv[i], "-Wno-switch") || 
+        !strcmp(argv[i], "-Wno-unused-variable") ||        
         !strcmp(argv[i], "-Wmissing-prototypes") ||
         !strcmp(argv[i], "-Wno-uninitialized") ||        
         !strcmp(argv[i], "-Wmissing-declarations") || 
