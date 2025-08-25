@@ -1696,8 +1696,69 @@ static void gen_vector_op(Node *node) {
     }
     break;
   }
-
 }
+
+static void gen_cmpxchg(Node *node) {
+  gen_expr(node->cas_ptr);
+  println("  mov %%rax, %%rdi");
+  gen_expr(node->cas_expected);
+  println("  mov %%rax, %%rsi");
+  gen_expr(node->cas_desired);      
+  println("  mov %%rax, %%rcx");   
+  if (node->ty->size == 1) {
+    println("  movb (%%rcx), %%cl");
+  } else if (node->ty->size == 2) {
+    println("  movw (%%rcx), %%cx");
+  } else if (node->ty->size == 4) {
+    println("  movl (%%rcx), %%ecx");
+  } else if (node->ty->size == 8) {
+    println("  movq (%%rcx), %%rcx");
+  }
+  if (node->ty->size == 1) {
+    println("  movb (%%rsi), %%al");
+  } else if (node->ty->size == 2) {
+    println("  movw (%%rsi), %%ax");
+  } else if (node->ty->size == 4) {
+    println("  movl (%%rsi), %%eax");
+  } else if (node->ty->size == 8) {
+    println("  movq (%%rsi), %%rax");
+  }
+  println("  lock cmpxchg %s, (%%rdi)", reg_cx(node->ty->size));
+  println("  mov %s, (%%rsi)", reg_ax(node->ty->size));
+  println("  sete %%al");
+  println("  movzbl %%al, %%eax");
+
+  if (node->cas_success || node->cas_failure) {
+    println("  mfence");
+  }
+}
+
+
+static void gen_cmpxchgn(Node *node) {
+    gen_expr(node->cas_ptr);
+    println("  mov %%rax, %%rdi");  
+    gen_expr(node->cas_expected);
+    println("  mov %%rax, %%rsi");  
+    gen_expr(node->cas_desired);
+    println("  mov %%rax, %%rcx");
+    println("  movq (%%rsi), %%rax");
+    if (node->ty->size == 1) {
+        println("  lock cmpxchg %%cl, (%%rdi)");
+    } else if (node->ty->size == 2) {
+        println("  lock cmpxchg %%cx, (%%rdi)");
+    } else if (node->ty->size == 4) {
+        println("  lock cmpxchg %%ecx, (%%rdi)");
+    } else if (node->ty->size == 8) {
+        println("  lock cmpxchg %%rcx, (%%rdi)");
+    }
+    println("  movq %%rax, (%%rsi)");
+    println("  sete %%al");
+    println("  movzbl %%al, %%eax");
+    if (node->cas_success || node->cas_failure) {
+        println("  mfence");
+    }
+}
+
 
 static void gen_builtin(Node *node, const char *insn) {
     gen_expr(node->builtin_val); 
@@ -3172,29 +3233,34 @@ static void gen_expr(Node *node)
     push();
     gen_expr(node->rhs);
     pop("%rdi");
-    println("\txchg\t%s,(%%rdi)", reg_ax(node->ty->size));
+    println("  xchg %s, (%%rdi)", reg_ax(node->ty->size));
     return;
   }
+  case ND_CMPEXCH: gen_cmpxchg(node); return;
+  case ND_CMPEXCH_N: gen_cmpxchgn(node); return;
   case ND_TESTANDSETA: {
     gen_expr(node->lhs);
     push();
-    println("\tmov\t$1,%%eax");
+    println("  mov $1, %%eax");
     pop("%rdi");
-    println("\txchg\t%s,(%%rdi)", reg_ax(node->ty->size));
+    println("  xchg %s, (%%rdi)", reg_ax(node->ty->size));
     return;
   }
   case ND_LOAD: {
     gen_expr(node->rhs);
     push();
     gen_expr(node->lhs);
-    println("\tmov\t(%%rax),%s", reg_ax(node->ty->size));
+    println("  mov (%%rax), %s", reg_ax(node->ty->size));
     pop("%rdi");
-    println("\tmov\t%s,(%%rdi)", reg_ax(node->ty->size));
+    println("  mov %s, (%%rdi)", reg_ax(node->ty->size));
     return;
   }
   case ND_LOAD_N: {
     gen_expr(node->lhs);
-    println("\tmov\t(%%rax),%s", reg_ax(node->ty->size));
+    println(" mov (%%rax), %s", reg_ax(node->ty->size));
+    if (node->memorder) {
+        println("  mfence");
+    }
     return;
   }
   case ND_STORE: {
@@ -3202,10 +3268,10 @@ static void gen_expr(Node *node)
     push();
     gen_expr(node->rhs);
     pop("%rdi");
-    println("\tmov\t(%%rax),%s", reg_ax(node->ty->size));
-    println("\tmov\t%s,(%%rdi)", reg_ax(node->ty->size));
+    println("  mov (%%rax),%s", reg_ax(node->ty->size));
+    println("  mov %s, (%%rdi)", reg_ax(node->ty->size));
     if (node->memorder) {
-      println("\tmfence");
+      println("  mfence");
     }
     return;
   }
@@ -3214,18 +3280,18 @@ static void gen_expr(Node *node)
     push();
     gen_expr(node->rhs);
     pop("%rdi");
-    println("\tmov\t%s,(%%rdi)", reg_ax(node->ty->size));
+    println("  mov %s, (%%rdi)", reg_ax(node->ty->size));
     if (node->memorder) {
-      println("\tmfence");
+      println("  mfence");
     }
     return;
   case ND_CLEAR:
     gen_expr(node->lhs);
-    println("\tmov\t%%rax,%%rdi");
-    println("\txor\t%%eax,%%eax");
-    println("\tmov\t%s,(%%rdi)", reg_ax(node->ty->size));
+    println("  mov %%rax, %%rdi");
+    println("  xor %%eax, %%eax");
+    println("  mov %s, (%%rdi)", reg_ax(node->ty->size));
     if (node->memorder) {
-      println("\tmfence");
+      println("  mfence");
     }
     return;
   case ND_FETCHADD: gen_fetchadd(node); return;

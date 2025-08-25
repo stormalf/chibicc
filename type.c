@@ -773,6 +773,10 @@ void add_type(Node *node)
     add_type(node->builtin_val);
     node->ty = ty_long;
     return;       
+  case ND_CMPEXCH:
+  case ND_CMPEXCH_N:
+    node->ty = ty_bool;
+    return;
   case ND_EXCH_N:
   case ND_FETCHADD:
   case ND_FETCHSUB:

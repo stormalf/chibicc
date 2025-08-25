@@ -31,6 +31,8 @@ typedef enum {
   memory_order_seq_cst,
 } memory_order;
 
+#define true 1
+#define false 0
 //#define ATOMIC_FLAG_INIT(x) (x)
 #define ATOMIC_FLAG_INIT	{ 0 }
 
@@ -72,12 +74,16 @@ typedef enum {
 #define atomic_fetch_xor_explicit(obj, val, order) atomic_fetch_xor(obj, val)
 #define atomic_fetch_and_explicit(obj, val, order) atomic_fetch_and(obj, val)
 
-#define atomic_compare_exchange_strong_explicit(object, expected, desired,     \
-                                                success, failure)            false
+#define atomic_compare_exchange_weak_explicit(obj, expected, desired, succ, fail) \
+        __atomic_compare_exchange_n((obj), (expected), (desired), true, (succ), (fail))
 
-#define atomic_compare_exchange_weak_explicit(object, expected, desired,     \
-                                                success, failure)            false
+#define atomic_compare_exchange_strong_explicit(obj, expected, desired, succ, fail) \
+        __atomic_compare_exchange_n((obj), (expected), (desired), false, (succ), (fail))
+// #define atomic_compare_exchange_strong_explicit(object, expected, desired,     \
+//                                                 success, failure)            false
 
+// #define atomic_compare_exchange_weak_explicit(object, expected, desired,     \
+//                                                 success, failure)            false
 
 #define atomic_compare_exchange_weak(p, old, new) \
   __builtin_compare_and_swap((p), (old), (new))

@@ -180,6 +180,7 @@ static bool check_old_style(Token **rest, Token *tok);
 //from cosmopolitan managing builtin functions
 static Node *ParseAtomic2(NodeKind kind, Token *tok, Token **rest);
 static Node *ParseAtomic3(NodeKind kind, Token *tok, Token **rest);
+static Node *ParseAtomicCompareExchangeN(NodeKind kind, Token *tok, Token **rest);
 
 //for builtin functions
 static Node *parse_memcpy(Token *tok, Token **rest);
@@ -6266,6 +6267,16 @@ static Node *primary(Token **rest, Token *tok)
   if (equal(tok, "__builtin_atomic_exchange_n") || equal(tok, "__atomic_exchange_n")) {
     return ParseAtomic3(ND_EXCH_N, tok, rest);
   }
+
+  if (equal(tok, "__builtin_atomic_compare_exchange") || equal(tok, "__atomic_compare_exchange")) {
+    return ParseAtomicCompareExchangeN(ND_CMPEXCH, tok, rest);
+  }
+
+
+  if (equal(tok, "__builtin_atomic_compare_exchange_n") || equal(tok, "__atomic_compare_exchange_n")) {
+    return ParseAtomicCompareExchangeN(ND_CMPEXCH_N, tok, rest);
+  }
+
   if (equal(tok, "__builtin_atomic_load")) {
     return ParseAtomic3(ND_LOAD, tok, rest);
   }
@@ -6287,10 +6298,10 @@ static Node *primary(Token **rest, Token *tok)
   if (equal(tok, "__builtin_atomic_fetch_xor")) {
     return ParseAtomic3(ND_FETCHXOR, tok, rest);
   }
-  if (equal(tok, "__builtin_atomic_fetch_and")) {
+  if (equal(tok, "__builtin_atomic_fetch_and") ) {
     return ParseAtomic3(ND_FETCHAND, tok, rest);
   }
-  if (equal(tok, "__builtin_atomic_fetch_or")) {
+  if (equal(tok, "__builtin_atomic_fetch_or") ) {
     return ParseAtomic3(ND_FETCHOR, tok, rest);
   }
   if (equal(tok, "__builtin_atomic_test_and_set")) {
@@ -7129,16 +7140,18 @@ char *nodekind2str(NodeKind kind)
   case ND_CAST: return "CAST";
   case ND_MEMZERO: return "MEMZERO"; 
   case ND_ASM: return "ASM";
-  case ND_CAS:
-  case ND_CAS_N: return "CAS";
-  case ND_EXCH:
-  case ND_EXCH_N: return "EXCH";
-  case ND_LOAD:
-  case ND_LOAD_N: return "LOAD";
-  case ND_STORE:
-  case ND_STORE_N: return "STORE"; 
-  case ND_TESTANDSET:
-  case ND_TESTANDSETA: return "TESTANDSET";
+  case ND_CAS: return "CAS";
+  case ND_CAS_N: return "CAS_N";
+  case ND_EXCH: return "EXCHANGE";
+  case ND_EXCH_N: return "EXCHANGE_N";
+  case ND_CMPEXCH: return "COMPARE_EXCHANGE";
+  case ND_CMPEXCH_N: return "COMPARE_EXCHANGE_N";
+  case ND_LOAD: return "LOAD";
+  case ND_LOAD_N: return "LOAD_N";
+  case ND_STORE: return "STORE"; 
+  case ND_STORE_N: return "STORE_N"; 
+  case ND_TESTANDSET: return "TESTANDSET";
+  case ND_TESTANDSETA: return "TESTANDSETA";
   case ND_CLEAR: return "CLEAR"; 
   case ND_RELEASE: return "RELEASE"; 
   case  ND_FETCHADD: return "FETCHADD";
@@ -7624,6 +7637,33 @@ static Node *ParseAtomic3(NodeKind kind, Token *tok, Token **rest) {
   *rest = skip(tok, ")", ctx);
   return node;
 }
+
+static Node *ParseAtomicCompareExchangeN(NodeKind kind, Token *tok, Token **rest) {
+  Node *node = new_node(kind, tok);
+  SET_CTX(ctx);
+  tok = skip(tok->next, "(", ctx);
+  node->cas_ptr = assign(&tok, tok);
+  add_type(node->cas_ptr);
+  tok = skip(tok, ",", ctx);
+  node->cas_expected = assign(&tok, tok);
+  add_type(node->cas_expected);
+  tok = skip(tok, ",", ctx);
+  node->cas_desired = assign(&tok, tok);
+  add_type(node->cas_desired);
+  tok = skip(tok, ",", ctx);
+  node->cas_weak = assign(&tok, tok);
+  add_type(node->cas_weak);
+  tok = skip(tok, ",", ctx);
+  node->cas_success = assign(&tok, tok);
+  add_type(node->cas_success);
+  tok = skip(tok, ",", ctx);
+  node->cas_failure = assign(&tok, tok);
+  add_type(node->cas_failure);
+  *rest = skip(tok, ")", ctx);
+  node->ty = ty_bool;
+  return node;
+}
+
 
 //builtin function memcpy
 static Node *parse_memcpy(Token *tok, Token **rest) {

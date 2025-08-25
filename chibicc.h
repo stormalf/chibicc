@@ -401,6 +401,8 @@ typedef enum
   ND_EXCH,      // Atomic exchange
   ND_CAS_N,     //atomic compare-and-swap with value
   ND_EXCH_N,       // Atomic exchange with value
+  ND_CMPEXCH,
+  ND_CMPEXCH_N,
   ND_LOAD,         // Atomic load to pointer
   ND_LOAD_N,       // Atomic load to result
   ND_STORE,        // Atomic store to pointer
@@ -792,6 +794,14 @@ Node
   Node *cas_addr;
   Node *cas_old;
   Node *cas_new;
+  //compare and exchange
+  Node *cas_ptr;
+  Node *cas_expected;
+  Node *cas_desired;
+  Node *cas_weak;
+  Node *cas_success;
+  Node *cas_failure;
+
 //for builtin memcpy
   Node *builtin_dest;
   Node *builtin_src;
