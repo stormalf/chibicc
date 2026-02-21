@@ -536,6 +536,7 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
  
 ## TODO
 
+- trying to pass GNUC from 3 to 4
 - trying to compile other C projects from source to see what is missing or which bug we have with chibicc.
 - trying to fix issue with postgres tests
 - trying to rewrite extended assembly to be more robust
@@ -594,8 +595,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.23.3    Forbiding two arguments that cause failure with g++ when compiling vlc (-Werror=invalid-command-line-argument and -Werror=unknown-warning-option). Temporary fix for -A that causes infinite loop (ISS-194). Fixing attributes found in struct member. Updating GNUC from 2 to 3. Reporting commit 11d0bff from slimcc (new_inc_dec) and removing commit 2e138bb. Adding builtin_prefetch found with memcached (ISS-202). Reporting partial commit 32dbd2b from slimcc(initializer2). Reporting commit 6478f56 from slimcc (Change eval_double to long double, fix narrowing cast). Fixing issue with variadic and double/float/int mixed struct. Fixing assembly issue found at VIM (after a git pull). Adding enum_extensibility attribute support found during ruby compile. Adding some builtin functions found during ruby compile. Managing two forms of builtin_shuffle. Reporting commit ac2296c from slimcc and eb2bb49 from s311354 (issue 154 from rui314/chibicc). Reporting commit 2654b20 from slimcc (about global variables and removing scan_globals). Reporting commit 577a4f8 from slimcc (local stack alignment). Fixing -S that doesn't take in account the output directory. Fixing issue with alignment. Fixing issue with cpython tests (due to vfork hack using the parent frame). Fixing issue with popcount found during cpython tests. Fixing issue with segfault on cpython (ISS-204 partially). Fixing issue with variadic (function6.c). Adding FPCLASSIFY builtin from cosmopolitan. Adding builtin signbit from cosmopolitan. Optimizing the alloca_size to be used only when necessary to reduce the stack size consumption. Fixing also a bug in atomics found during cpython tests. Adding -fomit-frame-pointer and -fno-omit-frame-pointer support. Implementing basic tail call optimization. Implementing basic debug information (dwarf). Reviewing builtins to avoid register cloberring that solves the memcached issue with binary-extstore.t test.
-Fixing issue on extended_asm with wrong usage of snprintf that causes offset truncation.
+1.0.24  Passing GNUC from 3 to 4.
 
 
 

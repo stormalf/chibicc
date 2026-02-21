@@ -4441,7 +4441,9 @@ static void gen_expr(Node *node)
     
     println("  cmp $0, %%rax");
     println("  je .Lframe_address_%d", c);
-    println("  mov %s, %%rcx", lvar_ptr);
+    // Frame-chain builtins must walk canonical frame pointers (%rbp),
+    // not lvar_ptr (which may be %rbx when stack is realigned).
+    println("  mov %%rbp, %%rcx");
 
 
     println(".Lframe_address_loop%d:", c);
@@ -4458,7 +4460,7 @@ static void gen_expr(Node *node)
   println("  jmp .Lframe_address_return%d", c);
 
     println(".Lframe_address_%d:", c);
-    println("  mov %s, %%rax", lvar_ptr);  // level 0: return current frame
+    println("  mov %%rbp, %%rax");  // level 0: return current frame
   println("  jmp .Lframe_address_return%d", c);
 
   println(".Lframe_address_null%d:", c);
@@ -4485,7 +4487,8 @@ static void gen_expr(Node *node)
   }
   case ND_RETURN_ADDR: {
 
-    println("  mov %s, %%rax", lvar_ptr);
+    // Return-address builtin is also anchored on canonical frame pointer.
+    println("  mov %%rbp, %%rax");
     int tmpdepth = eval(node->lhs);
     
     for (int i = 0; i < tmpdepth; i++) {

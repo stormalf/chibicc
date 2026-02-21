@@ -1531,7 +1531,7 @@ void init_macros(void)
   define_macro("_DEFAULT_SOURCE", "1");
   //define_macro("__INTEL_COMPILER", "1");
   //define_macro("__GNUC__", "9");
-  define_macro("__GNUC__", "3");
+  define_macro("__GNUC__", "4");
   define_macro("__GNUC_MINOR__", "1");
   define_macro("__GNUC_PATCHLEVEL__ ", "1");
   //define_macro("HAVE_ATTRIBUTE_PACKED", "1");
@@ -1576,7 +1576,7 @@ void init_macros(void)
   define_macro("linux", "1");
   define_macro("unix", "1");
   define_macro("__extension__", "");
-  define_macro("__has_attribute(x)", "1");
+  //define_macro("__has_attribute(x)", "1");
   define_macro("__builtin_strlen", "strlen");
   //define_macro("nonnull", "1");
   //====fixing ISS-147 defining the two macros for the linux platform

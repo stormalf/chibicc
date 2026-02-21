@@ -47,7 +47,7 @@
 #endif
 
 #define PRODUCT "chibicc"
-#define VERSION "1.0.23.3"
+#define VERSION "1.0.24"
 #define MAXLEN 1001
 #define DEFAULT_TARGET_MACHINE "x86_64-linux-gnu"
 #define MAX_BUILTIN_ARGS 8
@@ -1161,6 +1161,7 @@ extern Type *ty_uint128;
 bool is_integer(Type *ty);
 bool is_flonum(Type *ty);
 bool is_numeric(Type *ty);
+bool is_builtin_canonical_type(Type *ty);
 bool is_compatible(Type *t1, Type *t2);
 Type *copy_type(Type *ty);
 Type *pointer_to(Type *base);

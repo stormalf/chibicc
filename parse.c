@@ -883,6 +883,9 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
   Type *cur = &head;
   bool is_variadic = false;
   int nbparms = 0;
+  // Function prototype scope: a prior parameter name is visible in
+  // subsequent parameter declarators (e.g. int f(int n, int a[n])).
+  enter_scope();
   while (!equal(tok, ")") && !equal(tok->next, "{"))
   {
 
@@ -934,11 +937,6 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
 
     if (!ty2)
       error_tok(tok, "%s %d: in func_params : ty2 is null", PARSE_C, __LINE__);
-    // if (ty2->kind == TY_PTR)
-    // {
-    //   ty2->is_pointer = true;
-    //   ty2->pointertype = backup;
-    // }
 
     Token *name = ty2->name;
 
@@ -961,8 +959,22 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
       nbparms++;
     }
 
+    //to fix issue when func(int a, int x[a]...), int x[a] a is undeclared variable  
+    if (name) {
+      VarScope *sc = push_scope(get_ident(name));
+      Obj *var = calloc(1, sizeof(Obj));
+      if (var == NULL)
+        error("%s: %s:%d: error: in func_params : var is null", PARSE_C, __FILE__, __LINE__);
+      var->name = get_ident(name);
+      var->ty = ty2;
+      var->is_local = true;
+      sc->var = var;
+    }
+
     cur = cur->next = copy_type(ty2);
   }
+
+  leave_scope();
 
   if (cur == &head)
     is_variadic = true;
@@ -991,16 +1003,6 @@ static Type *array_dimensions(Token **rest, Token *tok, Type *ty)
 
   while (equal(tok, "static") || equal(tok, "restrict") || equal(tok, "__restrict") || equal(tok, "__restrict__") || equal(tok, "const") || equal(tok, "volatile"))
     tok = tok->next;
-
-  // trying to fix issue with regex
-  //=======if the params contains a variable int __nmatch and the next parameter used this variable it fails with undefined variable
-  if (tok->kind == TK_IDENT && equal(tok->next, "]"))
-  {
-
-    VarScope *sc = find_var(tok);
-    if (sc == NULL)
-      tok = tok->next;
-  }
 
   if (consume(&tok, tok, "]") ||
       (equal(tok, "*") && consume(&tok, tok->next, "]"))) {
