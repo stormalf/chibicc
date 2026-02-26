@@ -213,6 +213,7 @@ static Node *ParseSyncFetch(NodeKind kind, Token *tok, Token **rest);
 static Node *ParseAtomicBitwise(NodeKind kind, Token *tok, Token **rest);
 static Node *ParseAtomicFence(NodeKind kind, Token *tok, Token **rest);
 static Node *ParseAtomicClear(NodeKind kind, Token *tok, Token **rest);
+static Token *skip_choose_expr_arg(Token *tok);
 
 static int align_down(int n, int align)
 {
@@ -2486,7 +2487,7 @@ static Node *asm_stmt(Token **rest, Token *tok)
   {
     //need_alloca_bottom();
     opt_omit_frame_pointer = false;
-    node->asm_str = extended_asm(node, rest, tok, locals);
+    node->asm_str = extended_asm(node, rest, tok, locals, current_fn->funcname);
     if (!node->asm_str)
       error_tok(tok, "%s %d: in asm_stmt : error during extended_asm function null returned!", PARSE_C, __LINE__);
     return node;
@@ -5816,6 +5817,56 @@ static Node *generic_selection(Token **rest, Token *tok)
   return ret;
 }
 
+static Token *skip_choose_expr_arg(Token *tok) {
+  int paren = 0;
+  int bracket = 0;
+  int brace = 0;
+
+  for (; tok->kind != TK_EOF; tok = tok->next) {
+    if (paren == 0 && bracket == 0 && brace == 0 &&
+        (equal(tok, ",") || equal(tok, ")")))
+      return tok;
+
+    if (equal(tok, "(")) {
+      paren++;
+      continue;
+    }
+    if (equal(tok, "[")) {
+      bracket++;
+      continue;
+    }
+    if (equal(tok, "{")) {
+      brace++;
+      continue;
+    }
+
+    if (equal(tok, ")")) {
+      if (paren > 0) {
+        paren--;
+        continue;
+      }
+      error_tok(tok, "%s %d: in skip_choose_expr_arg : unbalanced ')'", PARSE_C, __LINE__);
+    }
+    if (equal(tok, "]")) {
+      if (bracket > 0) {
+        bracket--;
+        continue;
+      }
+      error_tok(tok, "%s %d: in skip_choose_expr_arg : unbalanced ']'", PARSE_C, __LINE__);
+    }
+    if (equal(tok, "}")) {
+      if (brace > 0) {
+        brace--;
+        continue;
+      }
+      error_tok(tok, "%s %d: in skip_choose_expr_arg : unbalanced '}'", PARSE_C, __LINE__);
+    }
+  }
+
+  error_tok(tok, "%s %d: in skip_choose_expr_arg : unexpected end of input", PARSE_C, __LINE__);
+  return tok;
+}
+
 
 // primary = "(" "{" stmt+ "}" ")"
 //         | "(" expr ")"
@@ -6009,6 +6060,36 @@ static Node *primary(Token **rest, Token *tok)
         is_constant = true;
     }
     return new_num(is_constant ? 1 : 0, start);
+  }
+
+  if (equal(tok, "__builtin_choose_expr")) {
+    SET_CTX(ctx);
+    tok = skip(tok->next, "(", ctx);
+
+    Node *cond_node = conditional(&tok, tok);
+    if (!is_const_expr(cond_node))
+      error_tok(cond_node->tok, "%s %d: in primary : __builtin_choose_expr condition is not constant", PARSE_C, __LINE__);
+    int64_t cond = eval(cond_node);
+    SET_CTX(ctx);
+    tok = skip(tok, ",", ctx);
+
+    if (cond) {
+      Node *node = assign(&tok, tok);
+      SET_CTX(ctx);
+      tok = skip(tok, ",", ctx);
+      tok = skip_choose_expr_arg(tok);
+      SET_CTX(ctx);
+      *rest = skip(tok, ")", ctx);
+      return node;
+    }
+
+    tok = skip_choose_expr_arg(tok);
+    SET_CTX(ctx);
+    tok = skip(tok, ",", ctx);
+    Node *node = assign(&tok, tok);
+    SET_CTX(ctx);
+    *rest = skip(tok, ")", ctx);
+    return node;
   }
 
 
@@ -6713,6 +6794,26 @@ static Node *primary(Token **rest, Token *tok)
     add_type(node->rhs);
     SET_CTX(ctx); 
     *rest = skip(tok, ")", ctx);    
+    return node;
+  }
+
+  if (equal(tok, "__builtin_assume_aligned")) {
+    SET_CTX(ctx);
+    tok = skip(tok->next, "(", ctx);
+
+    Node *node = assign(&tok, tok);
+    add_type(node);
+
+    SET_CTX(ctx);
+    tok = skip(tok, ",", ctx);
+    assign(&tok, tok);
+
+    if (consume(&tok, tok, ",")) {
+      assign(&tok, tok);
+    }
+
+    SET_CTX(ctx);
+    *rest = skip(tok, ")", ctx);
     return node;
   }
 

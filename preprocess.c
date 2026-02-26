@@ -1549,7 +1549,6 @@ void init_macros(void)
   define_macro("__ATOMIC_RELEASE", "3");
   define_macro("__ATOMIC_ACQ_REL", "4");
   define_macro("__ATOMIC_SEQ_CST", "5");
-  define_macro("__builtin_choose_expr(cond, true_expr, false_expr)", "(cond ? true_expr : false_expr)");
   define_macro("__SHRT_MAX__", "32767");
   define_macro("__INT_MAX__", "2147483647");
   define_macro("__LONG_MAX__", "9223372036854775807L");
