@@ -666,19 +666,23 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
 
     // These keywords are recognized but ignored.
     // fixing issue #119 _Complex
-    if (consume(&tok, tok, "const") || consume(&tok, tok, "volatile") ||
-        consume(&tok, tok, "auto") || consume(&tok, tok, "register") ||
-        consume(&tok, tok, "_Complex") ||
-        consume(&tok, tok, "restrict") || consume(&tok, tok, "__restrict") || 
-        consume(&tok, tok, "__restrict__") || consume(&tok, tok, "_Noreturn")) {
-          if (equal(tok, "const"))
-            is_const = true;
-          else if (equal(tok, "volatile"))
-            is_volatile = true;
-          else if (equal(tok, "restrict") || equal(tok, "__restrict") || equal(tok, "__restrict__"))
-            is_restrict = true;
-        
-        continue;
+    if (equal(tok, "const")) {
+      is_const = true;
+      tok = tok->next;
+      continue;
+    }
+    if (equal(tok, "volatile")) {
+      is_volatile = true;
+      tok = tok->next;
+      continue;
+    }
+    if (equal(tok, "restrict") || equal(tok, "__restrict") || equal(tok, "__restrict__")) {
+      is_restrict = true;
+      tok = tok->next;
+      continue;
+    }
+    if (consume(&tok, tok, "auto") || consume(&tok, tok, "register") || consume(&tok, tok, "_Complex") || consume(&tok, tok, "_Noreturn")) {
+      continue;
     }
 
     if (equal(tok, "_Atomic"))
@@ -5778,6 +5782,8 @@ static Node *generic_selection(Token **rest, Token *tok)
     t1 = pointer_to(t1);
   else if (is_array(t1))
     t1 = pointer_to(t1->base);
+  else
+    t1 = unqual(t1);
 
   // try to fix issue with VLC
   Node *ret = NULL;
@@ -6042,7 +6048,7 @@ static Node *primary(Token **rest, Token *tok)
     SET_CTX(ctx);       
     *rest = skip(tok, ")", ctx);
 
-    return new_num(is_compatible(t1, t2), start);
+    return new_num(is_compatible(unqual(t1), unqual(t2)), start);
   }
 
   if (equal(tok, "__builtin_constant_p")) {

@@ -1175,6 +1175,7 @@ void add_type(Node *node);
 bool is_bitfield(Node *node);
 bool is_array(Type *ty);
 Type *new_qualified_type(Type *ty);
+Type *unqual(Type *ty);
 bool is_vector(Type *ty);
 bool is_int128(Type *ty);
 bool is_pointer(Type *ty);

@@ -54,6 +54,21 @@ Type *new_qualified_type(Type *ty) {
   return ret;
 }
 
+Type *unqual(Type *ty) {
+  if (!ty) return NULL;
+  if (ty->origin)
+    ty = ty->origin;
+
+  if (ty->is_atomic || ty->is_const || ty->is_volatile || ty->is_restrict) {
+    ty = copy_type(ty);
+    ty->is_atomic = false;
+    ty->is_const = false;
+    ty->is_volatile = false;
+    ty->is_restrict = false;
+  }
+  return ty;
+}
+
 bool is_integer(Type *ty)
 {
   TypeKind k = ty->kind;
@@ -161,11 +176,25 @@ bool is_compatible(Type *t1, Type *t2)
   if (t1 == t2)
     return true;
 
-  if (t1->origin)
-    return is_compatible(t1->origin, t2);
+  /* Compare qualifier flags (atomic/const/volatile) for all types.
+     If qualifiers differ, types are not compatible. */
+  if (t1->is_atomic != t2->is_atomic ||
+      t1->is_const != t2->is_const ||
+      t1->is_volatile != t2->is_volatile ||
+      t1->is_restrict != t2->is_restrict)
+    return false;
 
-  if (t2->origin)
-    return is_compatible(t1, t2->origin);
+  /* Walk to unqualified/origin types for structural comparison. */
+  Type *u1 = t1;
+  while (u1->origin) u1 = u1->origin;
+  Type *u2 = t2;
+  while (u2->origin) u2 = u2->origin;
+  
+  if (u1 == u2)
+    return true;
+  
+  t1 = u1;
+  t2 = u2;
 
   if (t1->kind != t2->kind)
     return false;
@@ -189,8 +218,8 @@ bool is_compatible(Type *t1, Type *t2)
   case TY_DOUBLE:
   case TY_LDOUBLE:
     return true;
-  case TY_INT128: 
-    return t1->is_unsigned == t2->is_unsigned;     
+  case TY_INT128:
+    return t1->is_unsigned == t2->is_unsigned;
   case TY_PTR:
     return is_compatible(t1->base, t2->base);
   case TY_FUNC:
@@ -216,7 +245,7 @@ bool is_compatible(Type *t1, Type *t2)
     if (!is_compatible(t1->base, t2->base))
       return false;
     return t1->array_len < 0 && t2->array_len < 0 &&
-           t1->array_len == t2->array_len;           
+           t1->array_len == t2->array_len;
   }
   return false;
 }
