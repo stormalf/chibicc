@@ -47,7 +47,6 @@ Type *new_qualified_type(Type *ty) {
   Type *ret = calloc(1, sizeof(Type));
   *ret = *ty;
   ret->origin = ty;
-
   if (ty->size < 0) {
     ret->decl_next = ty->decl_next;
     ty->decl_next = ret;

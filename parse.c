@@ -613,6 +613,9 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
   Type *ty = copy_type(ty_int);  
   int counter = 0;
   bool is_atomic = false;
+  bool is_const = false;
+  bool is_restrict = false;
+  bool is_volatile = false;
   
   while (is_typename(tok))
   {
@@ -667,8 +670,16 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
         consume(&tok, tok, "auto") || consume(&tok, tok, "register") ||
         consume(&tok, tok, "_Complex") ||
         consume(&tok, tok, "restrict") || consume(&tok, tok, "__restrict") || 
-        consume(&tok, tok, "__restrict__") || consume(&tok, tok, "_Noreturn"))
-      continue;
+        consume(&tok, tok, "__restrict__") || consume(&tok, tok, "_Noreturn")) {
+          if (equal(tok, "const"))
+            is_const = true;
+          else if (equal(tok, "volatile"))
+            is_volatile = true;
+          else if (equal(tok, "restrict") || equal(tok, "__restrict") || equal(tok, "__restrict__"))
+            is_restrict = true;
+        
+        continue;
+    }
 
     if (equal(tok, "_Atomic"))
     {
@@ -847,14 +858,19 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     tok = tok->next;
   }
 
-  if (is_atomic)
-  {
-    ty = copy_type(ty);
-    ty->is_atomic = true;
-  }
+
   *rest = tok;
   if (!ty)
     error_tok(tok, "%s %d: in declspec : ty is null!", PARSE_C, __LINE__);
+
+  if (is_atomic || is_const || is_volatile || is_restrict) {
+    Type *ty3 = new_qualified_type(ty);
+    ty3->is_atomic = is_atomic;
+    ty3->is_const = is_const;
+    ty3->is_volatile = is_volatile;
+    ty3->is_restrict = is_restrict;
+    return ty3;
+  }
   return ty;
 }
 
