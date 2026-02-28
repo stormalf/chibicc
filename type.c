@@ -239,7 +239,6 @@ Type *pointer_to(Type *base)
   ty->is_pointer = true;
   ty->pointertype = base;
   ty->is_unsigned = true;
-  ty->is_vector = base->is_vector;
   return ty;
 }
 

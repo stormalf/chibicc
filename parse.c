@@ -7220,8 +7220,7 @@ static Node *primary(Token **rest, Token *tok)
 
 static Node *parse_typedef(Token **rest, Token *tok, Type *basety, VarAttr *attr) 
 {
-  bool first = true;  
-  basety->is_vector = false; 
+  bool first = true;    
   Node *node = new_node(ND_NULL_EXPR, tok);
   while (!consume(rest, tok, ";"))
   {
