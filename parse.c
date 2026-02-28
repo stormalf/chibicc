@@ -366,6 +366,7 @@ Node *new_cast(Node *expr, Type *ty)
 {
   //fix for case when cast has __attribute__
   add_type(expr);
+  ty = unqual(ty);
 
   Node *node = calloc(1, sizeof(Node));
   if (node == NULL)
@@ -566,6 +567,7 @@ static Type *find_typedef(Token *tok)
 
 static void push_tag_scope(Token *tok, Type *ty)
 {
+  ty->tag = tok;
   hashmap_put2(&scope->tags, tok->loc, tok->len, ty);
 }
 
@@ -666,23 +668,19 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
 
     // These keywords are recognized but ignored.
     // fixing issue #119 _Complex
-    if (equal(tok, "const")) {
-      is_const = true;
-      tok = tok->next;
-      continue;
-    }
-    if (equal(tok, "volatile")) {
-      is_volatile = true;
-      tok = tok->next;
-      continue;
-    }
-    if (equal(tok, "restrict") || equal(tok, "__restrict") || equal(tok, "__restrict__")) {
-      is_restrict = true;
-      tok = tok->next;
-      continue;
-    }
-    if (consume(&tok, tok, "auto") || consume(&tok, tok, "register") || consume(&tok, tok, "_Complex") || consume(&tok, tok, "_Noreturn")) {
-      continue;
+    if (consume(&tok, tok, "const") || consume(&tok, tok, "volatile") ||
+        consume(&tok, tok, "auto") || consume(&tok, tok, "register") ||
+        consume(&tok, tok, "_Complex") ||
+        consume(&tok, tok, "restrict") || consume(&tok, tok, "__restrict") || 
+        consume(&tok, tok, "__restrict__") || consume(&tok, tok, "_Noreturn")) {
+          if (equal(tok, "const"))
+            is_const = true;
+          else if (equal(tok, "volatile"))
+            is_volatile = true;
+          else if (equal(tok, "restrict") || equal(tok, "__restrict") || equal(tok, "__restrict__"))
+            is_restrict = true;
+        
+        continue;
     }
 
     if (equal(tok, "_Atomic"))
@@ -5252,6 +5250,10 @@ static Token *thing_attributes(Token *tok, void *arg) {
 }
 
 
+bool equal_tok(Token *a, Token *b) {
+  return a->len == b->len && !memcmp(a->loc, b->loc, b->len);
+}
+
 // struct-union-decl = attribute? ident? ("{" struct-members)?
 static Type *struct_union_decl(Token **rest, Token *tok, bool *no_list)
 {
@@ -5310,7 +5312,7 @@ static Type *struct_union_decl(Token **rest, Token *tok, bool *no_list)
       }
       return ty2;
     }
-
+    ty->tag = tag;
     push_tag_scope(tag, ty);
   }
   if (!ty)
@@ -5807,7 +5809,7 @@ static Node *generic_selection(Token **rest, Token *tok)
     SET_CTX(ctx); 
     tok = skip(tok, ":", ctx);
     Node *node = assign(&tok, tok);
-    if (is_compatible(t1, t2))
+    if (is_compatible2(t1, t2))
       ret = node;
   }
 

@@ -1009,6 +1009,7 @@ Obj *find_func(char *name);
 //from COSMOPOLITAN adding function ConsumeStringLiteral
 char *ConsumeStringLiteral(Token **rest, Token *tok) ;
 int64_t eval(Node *node);
+bool equal_tok(Token *a, Token *b);
 
 extern bool opt_fbuiltin;
 //
@@ -1059,6 +1060,7 @@ struct Type
   Type *pointertype; // store the pointer type int, char...
   Type *origin;      // for type compatibility check
   Type *decl_next;    // forward declarations
+  Token *tag;
 
   // Pointer-to or array-of type. We intentionally use the same member
   // to represent pointer/array duality in C.
@@ -1163,6 +1165,7 @@ bool is_flonum(Type *ty);
 bool is_numeric(Type *ty);
 bool is_builtin_canonical_type(Type *ty);
 bool is_compatible(Type *t1, Type *t2);
+bool is_compatible2(Type *t1, Type *t2);
 Type *copy_type(Type *ty);
 Type *pointer_to(Type *base);
 Type *func_type(Type *return_ty);

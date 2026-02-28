@@ -171,30 +171,73 @@ bool is_numeric(Type *ty)
   return is_integer(ty) || is_flonum(ty);
 }
 
+static bool is_tag_compat(Type *t1, Type *t2) {
+  return  t1->tag && t2->tag && equal_tok(t1->tag, t2->tag);
+}
+
+static bool is_qual_compat(Type *t1, Type *t2) {
+  return t1->is_atomic == t2->is_atomic &&
+    t1->is_const == t2->is_const &&
+    t1->is_volatile == t2->is_volatile &&
+    t1->is_restrict == t2->is_restrict;
+}
+
+
+bool is_compatible2(Type *t1, Type *t2) {
+  return is_qual_compat(t1, t2) && is_compatible(t1, t2);
+}
+
+static bool is_record_compat(Type *t1, Type *t2) {
+  if (t1->align != t2->align ||
+    t1->is_flexible != t2->is_flexible)
+    return false;
+
+  Member *mem1 = t1->members;
+  Member *mem2 = t2->members;
+  while (mem1 && mem2) {
+    if (mem1->offset != mem2->offset ||
+      mem1->align != mem2->align ||
+      mem1->is_bitfield != mem2->is_bitfield ||
+      mem1->bit_offset != mem2->bit_offset ||
+      mem1->bit_width != mem2->bit_width)
+      return false;
+
+    if ((!mem1->name != !mem2->name) ||
+      (mem1->name && !equal_tok(mem1->name, mem2->name)))
+      return false;
+
+    Type *t1 = mem1->ty;
+    Type *t2 = mem2->ty;
+    if (t1->kind != t2->kind)
+      return false;
+
+    if (t1->kind == TY_STRUCT || t1->kind == TY_UNION) {
+      if (!mem1->name != !t1->tag || !mem2->name != !t2->tag ||
+        (t1->tag && !equal_tok(t1->tag, t2->tag)))
+        return false;
+      if (!is_qual_compat(t1, t2) || !is_record_compat(t1, t2))
+        return false;
+    } else {
+      if (!is_compatible2(t1, t2))
+        return false;
+    }
+    mem1 = mem1->next;
+    mem2 = mem2->next;
+  }
+  return !mem1 == !mem2;
+}
+
+
 bool is_compatible(Type *t1, Type *t2)
 {
   if (t1 == t2)
     return true;
 
-  /* Compare qualifier flags (atomic/const/volatile) for all types.
-     If qualifiers differ, types are not compatible. */
-  if (t1->is_atomic != t2->is_atomic ||
-      t1->is_const != t2->is_const ||
-      t1->is_volatile != t2->is_volatile ||
-      t1->is_restrict != t2->is_restrict)
-    return false;
+  if (t1->origin)
+    return is_compatible(t1->origin, t2);
 
-  /* Walk to unqualified/origin types for structural comparison. */
-  Type *u1 = t1;
-  while (u1->origin) u1 = u1->origin;
-  Type *u2 = t2;
-  while (u2->origin) u2 = u2->origin;
-  
-  if (u1 == u2)
-    return true;
-  
-  t1 = u1;
-  t2 = u2;
+  if (t2->origin)
+    return is_compatible(t1, t2->origin);
 
   if (t1->kind != t2->kind)
     return false;
@@ -218,10 +261,10 @@ bool is_compatible(Type *t1, Type *t2)
   case TY_DOUBLE:
   case TY_LDOUBLE:
     return true;
-  case TY_INT128:
-    return t1->is_unsigned == t2->is_unsigned;
+  case TY_INT128: 
+    return t1->is_unsigned == t2->is_unsigned;     
   case TY_PTR:
-    return is_compatible(t1->base, t2->base);
+    return is_compatible2(t1->base, t2->base);
   case TY_FUNC:
   {
     if (!is_compatible(t1->return_ty, t2->return_ty))
@@ -239,13 +282,16 @@ bool is_compatible(Type *t1, Type *t2)
   case TY_ARRAY:
     if (!is_compatible(t1->base, t2->base))
       return false;
-    return t1->array_len < 0 && t2->array_len < 0 &&
+    return t1->array_len < 0 || t2->array_len < 0 ||
            t1->array_len == t2->array_len;
   case TY_VECTOR:
     if (!is_compatible(t1->base, t2->base))
       return false;
-    return t1->array_len < 0 && t2->array_len < 0 &&
-           t1->array_len == t2->array_len;
+    return t1->array_len < 0 || t2->array_len < 0 ||
+           t1->array_len == t2->array_len;           
+  case TY_STRUCT:
+  case TY_UNION:
+    return is_tag_compat(t1, t2) && is_record_compat(t1, t2); 
   }
   return false;
 }
