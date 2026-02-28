@@ -166,7 +166,7 @@ static Node *postfix(Token **rest, Token *tok);
 static Node *funcall(Token **rest, Token *tok, Node *node);
 static Node *unary(Token **rest, Token *tok);
 static Node *primary(Token **rest, Token *tok);
-static Node *parse_typedef(Token **rest, Token *tok, Type *basety);
+static Node *parse_typedef(Token **rest, Token *tok, Type *basety, VarAttr *attr);
 static bool is_function(Token *tok);
 static Token *function(Token *tok, Type *basety, VarAttr *attr);
 static Token *global_variable(Token *tok, Type *basety, VarAttr *attr);
@@ -610,7 +610,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     INT128 = 1 << 19,
   };
 
-  Type *ty = ty_int;
+  Type *ty = copy_type(ty_int);
   int counter = 0;
   bool is_atomic = false;
   
@@ -773,32 +773,32 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     switch (counter)
     {
     case VOID:
-      ty = ty_void;
+      ty = copy_type(ty_void);
       break;
     case BOOL:
-      ty = ty_bool;
+      ty = copy_type(ty_bool);
       break;
     case CHAR:
     case SIGNED + CHAR:
-      ty = ty_char;
+      ty = copy_type(ty_char);
       break;
     case UNSIGNED + CHAR:
-      ty = ty_uchar;
+      ty = copy_type(ty_uchar);
       break;
     case SHORT:
     case SHORT + INT:
     case SIGNED + SHORT:
     case SIGNED + SHORT + INT:
-      ty = ty_short;
+      ty = copy_type(ty_short);
       break;
     case UNSIGNED + SHORT:
     case UNSIGNED + SHORT + INT:
-      ty = ty_ushort;
+      ty = copy_type(ty_ushort);
       break;
     case INT:
     case SIGNED:
     case SIGNED + INT:
-      ty = ty_int;
+      ty = copy_type(ty_int);
       break;
     case INT128:
     case SIGNED + INT128:
@@ -806,55 +806,45 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
       break;         
     case UNSIGNED:
     case UNSIGNED + INT:
-      ty = ty_uint;
+      ty = copy_type(ty_uint);
       break;
     case LONG:
     case LONG + INT:
     case SIGNED + LONG:
     case SIGNED + LONG + INT:
-      ty = ty_long;
+      ty = copy_type(ty_long);
       break;
     case LONG + LONG:
     case LONG + LONG + INT:      
     case SIGNED + LONG + LONG:
     case SIGNED + LONG + LONG + INT:
-      ty = ty_llong;
+      ty = copy_type(ty_llong);
       break;
     case UNSIGNED + LONG:
     case UNSIGNED + LONG + INT:
-      ty = ty_ulong;
+      ty = copy_type(ty_ulong);
       break;
     case UNSIGNED + LONG + LONG:
     case UNSIGNED + LONG + LONG + INT:
-      ty = ty_ullong;
+      ty = copy_type(ty_ullong);
       break;
     case UNSIGNED + INT128:
       ty = copy_type(ty_uint128);
       break;      
     case FLOAT:
-      ty = ty_float;
+      ty = copy_type(ty_float);
       break;
     case DOUBLE:
-      ty = ty_double;
+      ty = copy_type(ty_double);
       break;
     case LONG + DOUBLE:    
-      ty = ty_ldouble;
+      ty = copy_type(ty_ldouble);
       break;
     default:
       error_tok(tok, "%s %d: in declspec : invalid type", PARSE_C, __LINE__);
     }
 
     tok = tok->next;
-    //to fix attributes after or before the identifier
-    // if (attr && !attr->is_typedef)  {      
-    //   tok = attribute_list(tok, attr, thing_attributes);
-    //   tok->next = attribute_list(tok->next, attr, thing_attributes);
-    // } else {      
-    // tok = attribute_list(tok, ty, type_attributes);
-    //   tok->next = attribute_list(tok->next, ty, type_attributes);
-    // }
-
-
   }
 
   if (is_atomic)
@@ -1035,8 +1025,6 @@ static Type *array_dimensions(Token **rest, Token *tok, Type *ty)
 static Type *type_suffix(Token **rest, Token *tok, Type *ty)
 {
 
-  //tok->next = attribute_list(tok->next, ty, type_attributes);
-
   if (equal(tok, "("))
   {
     //in case of old style K&R we omit the parameters inside parenthesis and we parse the parameters that 
@@ -1105,7 +1093,7 @@ static Type *declarator(Token **rest, Token *tok, Type *ty)
 {
   tok = attribute_list(tok, ty, type_attributes);
   ty = pointers(&tok, tok, ty);
-  tok->next = attribute_list(tok->next, ty, type_attributes);
+  //tok->next = attribute_list(tok->next, ty, type_attributes);
 
   if (equal(tok, "(") && !is_typename(tok->next) && !equal(tok->next, ")"))
   {
@@ -1236,7 +1224,7 @@ static Type *enum_specifier(Token **rest, Token *tok)
   int val = 0;
   while (!consume_end(rest, tok))
   {
-    tok->next = attribute_list(tok->next, ty, type_attributes);
+    //tok->next = attribute_list(tok->next, ty, type_attributes);
     if (i++ > 0) {
       SET_CTX(ctx); 
       tok = skip(tok, ",", ctx);
@@ -1398,9 +1386,10 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
       error_tok(tok, "%s %d: in declaration : variable declared void", PARSE_C, __LINE__);
     if (!ty->name)
       error_tok(ty->name_pos, "%s %d: in declaration : variable name omitted", PARSE_C, __LINE__);    
-    tok = attribute_list(tok, attr, thing_attributes);
-    int alt_align = attr ? attr->align : 0;
-    if (attr && attr->is_static)
+    VarAttr decl_attr = attr ? *attr : (VarAttr){};
+    tok = attribute_list(tok, &decl_attr, thing_attributes);
+    int alt_align = decl_attr.align;
+    if (decl_attr.is_static)
     {
       // static local variable
 
@@ -1409,7 +1398,7 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
 
       Obj *var = new_anon_gvar(ty);
       //from @fuhsnn fix Handle local static _Thread_local
-      var->is_tls = attr->is_tls;
+      var->is_tls = decl_attr.is_tls;
       if (alt_align)
         var->align = alt_align;
       push_scope(get_ident(ty->name))->var = var;
@@ -1424,7 +1413,7 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
     cur = cur->next = new_unary(ND_EXPR_STMT, compute_vla_size(ty, tok), tok);
 
     //from COSMOPOLITAN adding other GNUC attributes
-    tok = attribute_list(tok, attr, thing_attributes);
+    tok = attribute_list(tok, &decl_attr, thing_attributes);
 
     if (ty->kind == TY_VLA)
     {
@@ -1438,7 +1427,7 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
       Obj *var = new_lvar(get_ident(ty->name), ty, NULL);
       Token *tok = ty->name;
       tok = attribute_list(tok, ty, type_attributes);
-      int align = (attr && attr->align) ? attr->align : 16;
+      int align = decl_attr.align ? decl_attr.align : 16;
       Node *expr = new_binary(ND_ASSIGN, new_vla_ptr(var, tok),
                               new_alloca(new_var_node(ty->vla_size, tok), align),
                               tok);
@@ -1450,16 +1439,7 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
     Obj *var = new_lvar(get_ident(ty->name), ty, NULL);
     if (alt_align)
       var->align = alt_align;
-    // if (attr && attr->align)
-    //   var->align = attr->align;
 
-
-    // if (equal(tok, "="))
-    // {
-
-    //   Node *expr = lvar_initializer(&tok, tok->next, var);
-    //   cur = cur->next = new_unary(ND_EXPR_STMT, expr, tok);
-    // }
     if (equal(tok, "=")) {
       tok = tok->next;
       Node *expr;
@@ -2889,7 +2869,7 @@ static Node *compound_stmt(Token **rest, Token *tok, Node **last)
       if (attr.is_typedef)
       {
   
-        Node *vla_calc = parse_typedef(&tok, tok, basety);
+        Node *vla_calc = parse_typedef(&tok, tok, basety, &attr);
         cur = cur->next = new_unary(ND_EXPR_STMT, vla_calc, tok);
         add_type(cur);
         continue;
@@ -2952,7 +2932,7 @@ static Node *compound_stmt2(Token **rest, Token *tok)
       Type *basety = declspec(&tok, tok, &attr);
       if (attr.is_typedef)
       {
-        Node *vla_calc = parse_typedef(&tok, tok, basety);
+        Node *vla_calc = parse_typedef(&tok, tok, basety, &attr);
         cur = cur->next = new_unary(ND_EXPR_STMT, vla_calc, tok);
         add_type(cur);
         continue;
@@ -4100,10 +4080,6 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
     // Regular struct members
     while (!consume(&tok, tok, ";"))
     {
-      
-      tok = attribute_list(tok, &attr, thing_attributes);
-      if (equal(tok, ";"))
-        break;
       if (!first) {
         SET_CTX(ctx); 
         tok = skip(tok, ",", ctx);
@@ -4111,16 +4087,21 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
 
 
       first = false;
+      VarAttr mem_attr = attr;
+      tok = attribute_list(tok, &mem_attr, thing_attributes);
+      if (equal(tok, ";"))
+        break;
 
       Member *mem = calloc(1, sizeof(Member));
       if (mem == NULL)
         error("%s: %s:%d: error: in struct_members : mem is null", PARSE_C, __FILE__, __LINE__);
       if (tok->kind == TK_KEYWORD)
-        basety = declspec(&tok, tok, &attr);
+        basety = declspec(&tok, tok, &mem_attr);
       mem->ty = declarator(&tok, tok, basety);
+      tok = attribute_list(tok, &mem_attr, thing_attributes);
       mem->name = mem->ty->name;
       //mem->idx = idx++;
-      mem->align = attr.align ? attr.align : mem->ty->align;
+      mem->align = mem_attr.align ? mem_attr.align : mem->ty->align;
 
       if (consume(&tok, tok, ":"))
       {
@@ -7237,11 +7218,10 @@ static Node *primary(Token **rest, Token *tok)
   error_tok(tok, "%s %d: in primary : expected an expression %s", PARSE_C, __LINE__, tok->loc);
 }
 
-static Node *parse_typedef(Token **rest, Token *tok, Type *basety) 
+static Node *parse_typedef(Token **rest, Token *tok, Type *basety, VarAttr *attr) 
 {
   bool first = true;  
-  //fixing ISS-177 if is_vector is set to true it impacts next typedef wrongly
-  basety->is_vector = false;
+  basety->is_vector = false; 
   Node *node = new_node(ND_NULL_EXPR, tok);
   while (!consume(rest, tok, ";"))
   {
@@ -7258,6 +7238,10 @@ static Node *parse_typedef(Token **rest, Token *tok, Type *basety)
       error_tok(ty->name_pos, "%s %d: in parse_typedef : typedef name omitted", PARSE_C, __LINE__);
     //from COSMOPOLITAN adding other GNUC attributes
     tok = attribute_list(tok, ty, type_attributes);      
+    if (attr && attr->align) {
+      ty->is_aligned = true;
+      ty->align = MAX(ty->align, attr->align);
+    }
     if (ty->is_vector  && !is_vector(ty)) {
       int len = ty->vector_size / ty->size;
       Token *name = ty->name;
@@ -7532,7 +7516,8 @@ static Token *global_variable(Token *tok, Type *basety, VarAttr *attr)
     
     
     //from COSMOPOLITAN adding other GNUC attributes
-    tok = attribute_list(tok, attr, thing_attributes);
+    VarAttr decl_attr = attr ? *attr : (VarAttr){};
+    tok = attribute_list(tok, &decl_attr, thing_attributes);
     //tok = attribute_list(tok, ty, type_attributes);
     if (consume(&tok, tok, "asm") || consume(&tok, tok, "__asm__")) {
       SET_CTX(ctx);
@@ -7542,24 +7527,24 @@ static Token *global_variable(Token *tok, Type *basety, VarAttr *attr)
       tok = skip(tok, ")", ctx);
     }
 
-    var->is_weak = attr->is_weak;
-    var->alias_name = attr->alias_name;
-    var->section = attr->section; 
-    if (!attr->section && current_section) {
+    var->is_weak = decl_attr.is_weak;
+    var->alias_name = decl_attr.alias_name;
+    var->section = decl_attr.section; 
+    if (!decl_attr.section && current_section) {
       var->section = current_section;
     } 
-    var->visibility = attr->visibility;
-    var->is_aligned = var->is_aligned | attr->is_aligned;
-    var->is_externally_visible = attr->is_externally_visible;
-    var->is_definition = !attr->is_extern;
-    var->is_static = attr->is_static;
-    var->is_tls = attr->is_tls;
-    if (attr->align)
-      var->align = MAX(var->align, attr->align);
+    var->visibility = decl_attr.visibility;
+    var->is_aligned = var->is_aligned | decl_attr.is_aligned;
+    var->is_externally_visible = decl_attr.is_externally_visible;
+    var->is_definition = !decl_attr.is_extern;
+    var->is_static = decl_attr.is_static;
+    var->is_tls = decl_attr.is_tls;
+    if (decl_attr.align)
+      var->align = MAX(var->align, decl_attr.align);
 
     if (equal(tok, "="))
       gvar_initializer(&tok, tok->next, var);
-    else if (!attr->is_extern)
+    else if (!decl_attr.is_extern)
       var->is_tentative = true;
      
     current_section=NULL;
@@ -7753,13 +7738,13 @@ Obj *parse(Token *tok)
     if (attr.is_typedef)
     {
       //checking if the typedef has attributes set at the end;
-      Token *start = tok;
-      while (!equal(tok, ";")) {
-        tok = attribute_list(tok, basety, type_attributes);
-        tok = tok->next;
-      }
-      tok = start;
-      parse_typedef(&tok, tok, basety);
+      // Token *start = tok;
+      // while (!equal(tok, ";")) {
+      //   tok = attribute_list(tok, basety, type_attributes);
+      //   tok = tok->next;
+      // }
+      // tok = start;
+      parse_typedef(&tok, tok, basety, &attr);
       continue;
     }
 
