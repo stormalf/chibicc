@@ -793,6 +793,7 @@ static void store(Type *ty)
   case TY_STRUCT:
   case TY_UNION:
     gen_mem_copy("%rdi", ty->size);
+    println("  mov %%rdi, %%rax");
     return;
   case TY_FLOAT:
     println("  movss %%xmm0, (%%rdi)");
@@ -2089,6 +2090,10 @@ static void gen_cmpxchgn(Node *node) {
     gen_expr(node->cas_expected);
     push_tmp();
     gen_expr(node->cas_desired);
+    if (node->cas_desired->ty->kind == TY_FLOAT)
+        println("  movd %%xmm0, %%eax");
+    else if (node->cas_desired->ty->kind == TY_DOUBLE)
+        println("  movq %%xmm0, %%rax");
     println("  mov %%rax, %%rcx");
 
     if (sz == 16) {
@@ -4555,6 +4560,10 @@ static void gen_expr(Node *node)
     gen_expr(node->lhs);
     push_tmp();
     gen_expr(node->rhs);    
+    if (node->ty->kind == TY_FLOAT)
+        println("  movd %%xmm0, %%eax");
+    else if (node->ty->kind == TY_DOUBLE)
+        println("  movq %%xmm0, %%rax");
     if (node->ty->size == 16) {
       if (node->rhs->ty->kind == TY_LDOUBLE) {
           println("  sub $16, %%rsp");
@@ -4574,6 +4583,10 @@ static void gen_expr(Node *node)
     }
     pop_tmp("%rdi");
     println("  xchg %s, (%%rdi)", reg_ax(node->ty->size));
+    if (node->ty->kind == TY_FLOAT)
+         println("  movd %%eax, %%xmm0");
+    else if (node->ty->kind == TY_DOUBLE)
+         println("  movq %%rax, %%xmm0");
     return;
   }
   case ND_CMPEXCH: gen_cmpxchg(node); return;
@@ -4624,6 +4637,10 @@ static void gen_expr(Node *node)
       println("  mov (%%rax), %%rax");
     } else {
       println(" mov (%%rax), %s", reg_ax(node->ty->size));
+      if (node->ty->kind == TY_FLOAT)
+         println("  movd %%eax, %%xmm0");
+      else if (node->ty->kind == TY_DOUBLE)
+         println("  movq %%rax, %%xmm0");
     }
     if (node->memorder) {
         println("  mfence");
@@ -4656,6 +4673,10 @@ static void gen_expr(Node *node)
     gen_expr(node->lhs);
     push_tmp();
     gen_expr(node->rhs);    
+    if (node->ty->kind == TY_FLOAT)
+        println("  movd %%xmm0, %%eax");
+    else if (node->ty->kind == TY_DOUBLE)
+        println("  movq %%xmm0, %%rax");
     if (node->ty->size == 16) {
       if (node->rhs->ty->kind == TY_LDOUBLE) {
           println("  sub $16, %%rsp");

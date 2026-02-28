@@ -12,9 +12,6 @@ void test_struct_assignment_return_value(void) {
     T a = {0, 0};
     T b = {1, 2};
 
-    // (a = b) should return 'a' (conceptually, address of a in implementation).
-    // If it returns 'b' (address of b), then modifying the result modifies 'b'.
-    // This validates the fix in codegen.c store() function.
     a = b;
     a.a = 5;
 

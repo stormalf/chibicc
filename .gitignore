@@ -25,3 +25,5 @@ gdb_help.txt
 .cache/
 **/*.log
 **/*.env
+/.github
+/.specify

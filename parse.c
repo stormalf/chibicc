@@ -610,7 +610,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     INT128 = 1 << 19,
   };
 
-  Type *ty = copy_type(ty_int);
+  Type *ty = copy_type(ty_int);  
   int counter = 0;
   bool is_atomic = false;
   
