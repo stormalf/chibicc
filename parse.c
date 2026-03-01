@@ -4261,7 +4261,9 @@ static Token *type_attributes(Token *tok, void *arg)
           ty->align = const_expr(&tok, tok);
           SET_CTX(ctx); 
           tok = skip(tok, ")", ctx);
-        } 
+        } else {
+          ty->align = 16;
+        }
         return tok;
       }
 
@@ -4969,6 +4971,8 @@ static Token *thing_attributes(Token *tok, void *arg) {
           attr->align = const_expr(&tok, tok);
           SET_CTX(ctx); 
           tok = skip(tok, ")", ctx);
+        } else {
+          attr->align = 16;
         }
         return tok;
       }
@@ -5411,7 +5415,7 @@ static Type *struct_decl(Token **rest, Token *tok)
 
 
         //from COSMOPOLITAN adding is_aligned
-    if (!ty->is_packed && !ty->is_aligned && ty->align < mem->align)
+    if (!ty->is_packed && ty->align < mem->align)
       ty->align = mem->align;
     cur = cur->next = mem;
   }

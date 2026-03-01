@@ -4066,7 +4066,12 @@ static void gen_expr(Node *node)
       println("  mov %%rax, %%r8");
       Member *mem = node->lhs->member;
       println("  mov %%rax, %%rdi");
-      if (mem->bit_width >= 32)
+      if (mem->bit_width >= 64)
+      {
+        println("  mov $-1, %%rax");
+        println("  and %%rax, %%rdi");
+      }
+      else if (mem->bit_width >= 32)
       {
         println("  mov $%ld, %%rax", (1L << mem->bit_width) - 1);
         println("  and %%rax, %%rdi");
@@ -4093,8 +4098,12 @@ static void gen_expr(Node *node)
       if (mem->ty->kind == TY_BOOL)
         return;
 
-      long mask2 = (1L << mem->bit_width) - 1;
-      println("  mov $%ld, %%r9", mask2);
+      if (mem->bit_width >= 64) {
+        println("  mov $-1, %%r9");
+      } else {
+        long mask2 = (1L << mem->bit_width) - 1;
+        println("  mov $%ld, %%r9", mask2);
+      }
       println("  and %%r9, %%rax");       
       int shift = 64 - mem->bit_width - mem->bit_offset;
       println("  shl $%d, %%rax", shift);
