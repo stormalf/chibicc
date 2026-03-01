@@ -802,6 +802,7 @@ static void store(Type *ty)
     println("  movsd %%xmm0, (%%rdi)");
     return;
   case TY_LDOUBLE:
+    println("  fld %%st(0)");
     println("  fstpt (%%rdi)");
     return;
   case TY_INT128:
@@ -4115,10 +4116,19 @@ static void gen_expr(Node *node)
     return;
   case ND_STMT_EXPR:
     for (Node *n = node->body; n; n = n->next)
-      gen_stmt(n);
+    {
+      if (n->next)
+        gen_stmt(n);
+      else if (n->kind == ND_EXPR_STMT)
+        gen_expr(n->lhs);
+      else
+        gen_stmt(n);
+    }
     return;
   case ND_COMMA:
     gen_expr(node->lhs);
+    if (node->lhs->ty->kind == TY_LDOUBLE)
+      println("  fstp %%st(0)");
     gen_expr(node->rhs);
     return;
   case ND_CAST:
@@ -5252,7 +5262,11 @@ switch (node->lhs->ty->kind)
   case TY_LDOUBLE:
   {
     gen_expr(node->lhs);
+    println("  sub $16, %%rsp");
+    println("  fstpt (%%rsp)");
     gen_expr(node->rhs);
+    println("  fldt (%%rsp)");
+    println("  add $16, %%rsp");
 
     switch (node->kind)
     {
@@ -5260,13 +5274,13 @@ switch (node->lhs->ty->kind)
       println("  faddp");
       return;
     case ND_SUB:
-      println("  fsubrp");
+      println("  fsubp");
       return;
     case ND_MUL:
       println("  fmulp");
       return;
     case ND_DIV:
-      println("  fdivrp");
+      println("  fdivp");
       return;
     case ND_EQ:
     case ND_NE:
@@ -5284,9 +5298,9 @@ switch (node->lhs->ty->kind)
         println("  setp %%dl");
         println("  or %%dl, %%al");
       } else if (node->kind == ND_LT) {
-        println("  seta %%al");
+        println("  setb %%al");
       } else {
-        println("  setae %%al");
+        println("  setbe %%al");
       }
 
       println("  movzbl %%al, %%eax");
@@ -5552,6 +5566,8 @@ static void gen_stmt(Node *node)
     return;
   case ND_EXPR_STMT:
     gen_expr(node->lhs);
+    if (node->lhs->ty->kind == TY_LDOUBLE)
+      println("  fstp %%st(0)");
     return;
   case ND_ASM:
     println("  %s", node->asm_str);

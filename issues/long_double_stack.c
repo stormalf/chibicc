@@ -17,8 +17,10 @@ long double sub(long double a, long double b) {
 int main(void) {
   ASSERT(1, 10.0L == (3.0L + clobber() + 5.0L));
   ASSERT(1, 71.0L == (3.0L + add(7.0L) + 5.0L));
-  ASSERT(1, 200.0L == (3.0L + sub(97.0L, 2.0L) + 5.0L));
-  ASSERT(1, 191.9L < sub(97.0L, 2.0L));
+  long double res_sub = sub(97.0L, 2.0L);
+  printf("sub(97.0L, 2.0L) = %Lf\n", res_sub);
+  ASSERT(1, 200.0L == (3.0L + res_sub + 5.0L));
+  ASSERT(1, 191.9L < res_sub);
 
   ASSERT(1, 9.0L == (3.0L + (1.0L, 1.0L, 1.0L, 1.0L, 1.0L, 1.0L, 1.0L, 1.0L) + 5.0L));
 
