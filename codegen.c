@@ -3605,7 +3605,7 @@ static void gen_cas(Node *node)   {
         println("  mov (%%rax), %%rax");
     } else {
         gen_expr(node->cas_new);
-        if (node->cas_new->ty->kind == TY_LDOUBLE) {
+        if (node->cas_new->ty && node->cas_new->ty->kind == TY_LDOUBLE) {
              println("  sub $16, %%rsp");
              println("  fstpt (%%rsp)");
              println("  pop %%rax");
@@ -3638,11 +3638,12 @@ static void gen_cas(Node *node)   {
   gen_expr(node->cas_old);
   println("  mov %%rax, %%r8");
   if (!node->cas_old->ty->base)
-    error("%s %d: in gen_expr : ND_CAS node base type is null!", CODEGEN_C, __LINE__); 
+    error("%s %d: in gen_cas :node->cas_old base type is null!", CODEGEN_C, __LINE__); 
   load(node->cas_old->ty->base);
   pop_tmp("%rdx"); // new
   pop_tmp("%rdi"); // addr
-
+  if (!node->cas_addr->ty->base)
+    error("%s %d: in gen_cas : node->cas_addr base type is null!", CODEGEN_C, __LINE__); 
   int sz = node->cas_addr->ty->base->size;
   println("  lock cmpxchg %s, (%%rdi)", reg_dx(sz));
   println("  sete %%cl");
@@ -3685,6 +3686,8 @@ static void gen_bool_cas(Node *node) {
   pop_tmp("%rax");
   pop_tmp("%rdi");
   int sz = node->cas_ptr->ty->base->size;
+  if (!node->cas_ptr->ty->base)
+    error("%s %d: in gen_bool_cas : node->cas_ptr base type is null!", CODEGEN_C, __LINE__);   
   println("  lock cmpxchg %s, (%%rdi)", reg_dx(sz)); 
   println("  sete %%al");       
   println("  movzbl %%al, %%eax"); 
@@ -3881,6 +3884,8 @@ static void gen_cas_n(Node *node)   {
   pop_tmp("%rdx"); /* new */
   pop_tmp("%rdi"); /* addr */
   int sz = node->cas_addr->ty->base->size;
+  if (!node->cas_addr->ty->base)
+    error("%s %d: in gen_cas_n : node->cas_addr base type is null!", CODEGEN_C, __LINE__);   
 
   println("  lock cmpxchg %s, (%%rdi)", reg_dx(sz));
 
