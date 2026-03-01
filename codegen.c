@@ -188,6 +188,18 @@ static void popf(int reg)
   depth--;
 }
 
+static void pushld(void) {
+  println("  sub $16, %%rsp");
+  println("  fstpt (%%rsp)");
+  depth += 2;
+}
+
+static void popld(void) {
+  println("  fldt (%%rsp)");
+  println("  add $16, %%rsp");
+  depth -= 2;
+}
+
 static void pushv(void) {
   println("  sub $16, %%rsp");
   println("  movdqu %%xmm0, (%%rsp)");
@@ -2181,6 +2193,17 @@ static void gen_signbit(Node *node) {
 }
 
 static void gen_isunordered(Node *node) {
+  if (node->lhs->ty->kind == TY_LDOUBLE || node->rhs->ty->kind == TY_LDOUBLE) {
+    gen_expr(node->lhs);
+    pushld();
+    gen_expr(node->rhs);
+    popld();
+    println("  fucomip");
+    println("  fstp %%st(0)");
+    println("  setp %%al");
+    println("  movzx %%al, %%eax");
+    return;
+  }
   gen_expr(node->lhs);
   push_tmpf();
   gen_expr(node->rhs);
@@ -5262,11 +5285,9 @@ switch (node->lhs->ty->kind)
   case TY_LDOUBLE:
   {
     gen_expr(node->lhs);
-    println("  sub $16, %%rsp");
-    println("  fstpt (%%rsp)");
+    pushld();
     gen_expr(node->rhs);
-    println("  fldt (%%rsp)");
-    println("  add $16, %%rsp");
+    popld();
 
     switch (node->kind)
     {
@@ -5566,7 +5587,6 @@ static void gen_stmt(Node *node)
     return;
   case ND_EXPR_STMT:
     gen_expr(node->lhs);
-    add_type(node->lhs);
     if (node->lhs->ty && node->lhs->ty->kind == TY_LDOUBLE)
       println("  fstp %%st(0)");
     return;
