@@ -5566,7 +5566,8 @@ static void gen_stmt(Node *node)
     return;
   case ND_EXPR_STMT:
     gen_expr(node->lhs);
-    if (node->lhs->ty->kind == TY_LDOUBLE)
+    add_type(node->lhs);
+    if (node->lhs->ty && node->lhs->ty->kind == TY_LDOUBLE)
       println("  fstp %%st(0)");
     return;
   case ND_ASM:
