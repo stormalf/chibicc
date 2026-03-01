@@ -1275,6 +1275,21 @@ void hashmap_test(void);
 //
 // main.c
 //
+typedef enum {
+  // ISO modes
+  STD_C89,
+  STD_C99,
+  STD_C11,
+  STD_C17,
+  STD_C23,
+  // GNU modes
+  STD_GNU89,
+  STD_GNU99,    
+  STD_GNU11,
+  STD_GNU17,
+  STD_GNU23,
+} Standard;
+
 
 bool file_exists(char *path);
 void dump_machine(void);
@@ -1307,11 +1322,7 @@ extern bool opt_crc32;
 extern bool opt_g;
 extern FILE *open_file(char *path);
 extern FILE *ofile;
-extern bool opt_c99;
-extern bool opt_c11;
-extern bool opt_c17;
-extern bool opt_c89;
-extern bool opt_c23;
+extern Standard current_std;
 extern char *weak_symbols[MAX_WEAK]; 
 extern int weak_count;
 extern bool opt_implicit;

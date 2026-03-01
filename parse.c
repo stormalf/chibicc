@@ -214,6 +214,7 @@ static Node *ParseAtomicBitwise(NodeKind kind, Token *tok, Token **rest);
 static Node *ParseAtomicFence(NodeKind kind, Token *tok, Token **rest);
 static Node *ParseAtomicClear(NodeKind kind, Token *tok, Token **rest);
 static Token *skip_choose_expr_arg(Token *tok);
+static bool is_c99_or_later(void) ;
 
 static int align_down(int n, int align)
 {
@@ -7234,7 +7235,7 @@ static Node *primary(Token **rest, Token *tok)
     {
       Obj *fn = find_func(token_to_string(tok));
 
-      if (!fn  && (opt_c99 || opt_c11 || opt_c17 || opt_c23 || opt_implicit)) {
+      if (!fn && (is_c99_or_later() || opt_implicit)) {
         error_tok(tok, "%s %d: in primary : implicit declaration of function", PARSE_C, __LINE__);
       }    
 
@@ -9295,4 +9296,20 @@ static Node *ParseAtomicBitwise(NodeKind kind, Token *tok, Token **rest) {
     node->atomic_fetch = true;
     *rest = skip(tok, ")", ctx);
     return node;
+}
+
+static bool is_c99_or_later(void) {
+  switch (current_std) {
+  case STD_C99:
+  case STD_C11:
+  case STD_C17:
+  case STD_C23:
+  case STD_GNU99:
+  case STD_GNU11:
+  case STD_GNU17:
+  case STD_GNU23:
+    return true;
+  default:
+    return false;
+  }
 }

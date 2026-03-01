@@ -1125,18 +1125,34 @@ static void print_macro(Macro *m) {
 }
 
 static Token *stdver_macro(Token *tok) {
-  if (opt_c99)
+  switch (current_std) {
+  case STD_C89:
+  case STD_GNU89:
+    tok->val = 0;
+    break; // __STDC_VERSION__ not defined
+
+  case STD_C99:
+  case STD_GNU99:
     tok->val = 199901L;
-  else if (opt_c11)
+    break;
+
+  case STD_C11:
+  case STD_GNU11:
     tok->val = 201112L;
-  else if (opt_c17)
+    break;
+
+  case STD_C17:
+  case STD_GNU17:
     tok->val = 201710L;
-  else if (opt_c23)
+    break;
+
+  case STD_C23:
     tok->val = 202311L;
-  else if (opt_c89)
-    tok->val =0;
-  else 
-    tok->val = 201112L;
+    break;
+
+  default:
+    unreachable();
+  }
 
   tok->kind = TK_NUM;
   tok->ty = ty_long;

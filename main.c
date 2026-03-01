@@ -16,6 +16,8 @@ typedef enum
   FILE_RSP,
 } FileType;
 
+
+Standard current_std = STD_GNU89;  // default like GCC
 StringArray include_paths;
 bool opt_fcommon = true;
 bool opt_fbuiltin = true;
@@ -29,11 +31,6 @@ bool opt_sse4;
 bool opt_mmx;
 bool opt_crc32;
 bool opt_g;
-bool opt_c99;
-bool opt_c11;
-bool opt_c17;
-bool opt_c89;
-bool opt_c23;
 bool opt_implicit;
 bool opt_werror;
 bool opt_omit_frame_pointer = false;
@@ -1032,17 +1029,27 @@ static void parse_args(int argc, char **argv)
     {
       char *stdver = argv[i] + 5; 
 
-      if (!strcmp(stdver, "c99") || !strcmp(stdver, "gnu99")) {
-        opt_c99 = true;
-      } else if (!strcmp(stdver, "c89") || !strcmp(stdver, "gnu89")) {
-        opt_c89 = true;
-      } else if (!strcmp(stdver, "c11") || !strcmp(stdver, "gnu11")) {
-        opt_c11 = true;
-      } else if (!strcmp(stdver, "c17") || !strcmp(stdver, "gnu17")) {
-        opt_c17 = true;
+      if (!strcmp(stdver, "c99")) {
+        current_std = STD_C99;      
+      } else if (!strcmp(stdver, "gnu99")) {
+        current_std = STD_GNU99;
+      } else if (!strcmp(stdver, "c89")) {
+        current_std = STD_C89;
+      } else if (!strcmp(stdver, "gnu89")) {
+        current_std = STD_GNU89;
+      } else if (!strcmp(stdver, "c11")) {
+        current_std = STD_C11;      
+      } else if (!strcmp(stdver, "gnu11")) {
+        current_std = STD_GNU11;
+      } else if (!strcmp(stdver, "c17")) {
+        current_std = STD_C17;
+      } else if (!strcmp(stdver, "gnu17")) {
+        current_std = STD_GNU17;
       } else if (!strcmp(stdver, "c23")) {
-        opt_c23 = true;
-      } else {
+        current_std = STD_C23;
+      } else if (!strcmp(stdver, "gnu23")) {
+        current_std = STD_GNU23;
+      } else{
         error("%s : %s:%d: error: in parse_args : unsupported -std option: %s", MAIN_C, __FILE__, __LINE__, stdver);
         exit(1);
       }
@@ -1813,3 +1820,8 @@ bool startsWith(const char *restrict string, const char *restrict prefix)
 
     return 1;
 }
+
+bool is_gnu_mode(void) {
+  return current_std == STD_GNU89 || current_std == STD_GNU11;
+}
+
