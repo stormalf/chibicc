@@ -2193,7 +2193,7 @@ static void gen_signbit(Node *node) {
 }
 
 static void gen_isunordered(Node *node) {
-  if (node->lhs->ty->kind == TY_LDOUBLE || node->rhs->ty->kind == TY_LDOUBLE) {
+  if (node->lhs->ty && node->rhs->ty && (node->lhs->ty->kind == TY_LDOUBLE || node->rhs->ty->kind == TY_LDOUBLE)) {
     gen_expr(node->lhs);
     pushld();
     gen_expr(node->rhs);
@@ -3599,7 +3599,7 @@ static void gen_cas(Node *node)   {
   if (node->cas_addr->ty->base->size == 16) {
     gen_expr(node->cas_addr);
     push_tmp();
-    if (node->cas_new->ty->kind == TY_LDOUBLE && node->cas_new->kind == ND_VAR) {
+    if (node->cas_new->ty && node->cas_new->ty->kind == TY_LDOUBLE && node->cas_new->kind == ND_VAR) {
         gen_addr(node->cas_new);
         println("  mov 8(%%rax), %%rdx");
         println("  mov (%%rax), %%rax");
@@ -3660,7 +3660,7 @@ static void gen_bool_cas(Node *node) {
   if (node->cas_ptr->ty->base->size == 16) {
     pushx_tmp();
     gen_expr(node->cas_desired);
-    if (node->cas_desired->ty->kind == TY_LDOUBLE) {
+    if (node->cas_desired->ty && node->cas_desired->ty->kind == TY_LDOUBLE) {
         println("  sub $16, %%rsp");
         println("  fstpt (%%rsp)");
         println("  pop %%rax");
@@ -3850,16 +3850,16 @@ static void gen_cas_n(Node *node)   {
   gen_expr(node->cas_addr);
   push_tmp();
   gen_expr(node->cas_new);  
-  if (node->cas_new->ty->kind == TY_LDOUBLE) {
+  if (node->cas_new->ty && node->cas_new->ty->kind == TY_LDOUBLE) {
       println("  sub $16, %%rsp");
       println("  fstpt (%%rsp)");
       println("  pop %%rax");
       println("  pop %%rdx");
   }
-  if (node->cas_addr->ty->base->size == 16) {
+  if (node->cas_addr->ty && node->cas_addr->ty->base && node->cas_addr->ty->base->size == 16) {
     pushx_tmp();
     gen_expr(node->cas_old);
-    if (node->cas_old->ty->kind == TY_LDOUBLE) {
+    if (node->cas_old->ty && node->cas_old->ty->kind == TY_LDOUBLE) {
         println("  sub $16, %%rsp");
         println("  fstpt (%%rsp)");
         println("  pop %%rax");
@@ -4066,7 +4066,7 @@ static void gen_expr(Node *node)
     // This avoids keeping the address on stack while evaluating RHS (which might involve calls).
     if (!is_bitfield(node->lhs) && 
         !is_int128(node->ty) && 
-        !is_vector(node->ty) &&
+        !is_vector(node->ty) && node->ty &&
         node->ty->kind != TY_STRUCT && node->ty->kind != TY_UNION &&
         node->ty->kind != TY_FLOAT && node->ty->kind != TY_DOUBLE && node->ty->kind != TY_LDOUBLE) 
     {
@@ -4150,7 +4150,7 @@ static void gen_expr(Node *node)
     return;
   case ND_COMMA:
     gen_expr(node->lhs);
-    if (node->lhs->ty->kind == TY_LDOUBLE)
+    if (node->lhs->ty && node->lhs->ty->kind == TY_LDOUBLE)
       println("  fstp %%st(0)");
     gen_expr(node->rhs);
     return;
@@ -4602,12 +4602,12 @@ static void gen_expr(Node *node)
     gen_expr(node->lhs);
     push_tmp();
     gen_expr(node->rhs);    
-    if (node->ty->kind == TY_FLOAT)
+    if (node->ty && node->ty->kind == TY_FLOAT)
         println("  movd %%xmm0, %%eax");
     else if (node->ty->kind == TY_DOUBLE)
         println("  movq %%xmm0, %%rax");
     if (node->ty->size == 16) {
-      if (node->rhs->ty->kind == TY_LDOUBLE) {
+      if (node->rhs->ty && node->rhs->ty->kind == TY_LDOUBLE) {
           println("  sub $16, %%rsp");
           println("  fstpt (%%rsp)");
           println("  pop %%rax");
@@ -4715,12 +4715,12 @@ static void gen_expr(Node *node)
     gen_expr(node->lhs);
     push_tmp();
     gen_expr(node->rhs);    
-    if (node->ty->kind == TY_FLOAT)
+    if (node->ty && node->ty->kind == TY_FLOAT)
         println("  movd %%xmm0, %%eax");
-    else if (node->ty->kind == TY_DOUBLE)
+    else if (node->ty && node->ty->kind == TY_DOUBLE)
         println("  movq %%xmm0, %%rax");
-    if (node->ty->size == 16) {
-      if (node->rhs->ty->kind == TY_LDOUBLE) {
+    if (node->ty && node->ty->size == 16) {
+      if (node->rhs->ty && node->rhs->ty->kind == TY_LDOUBLE) {
           println("  sub $16, %%rsp");
           println("  fstpt (%%rsp)");
           println("  pop %%rax");

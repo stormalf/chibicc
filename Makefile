@@ -119,11 +119,7 @@ git:
 	cd ../git && CC=chibicc CFLAGS="-fPIC -std=c11" ./configure && make && make test
 
 memcached:
-	cd ../memcached && make clean && CC=chibicc CFLAGS="-fPIC -std=c11" ./configure && make -j$$(nproc) && \
-	MC_TIMEDRUN=$${MC_TIMEDRUN:-600}; \
-	MC_TEST_JOBS=$${MC_TEST_JOBS:-2}; \
-	FAST_TESTS=$$(cd t && ls *.t | sed 's|^|t/|'); \
-	MC_TIMEDRUN=$$MC_TIMEDRUN prove -j $$MC_TEST_JOBS $$FAST_TESTS 
+	cd ../memcached && make clean && CC=chibicc CFLAGS="-fPIC -std=c11" ./configure && make -j$$(nproc) && make test
 
 openssh-portable:
 	cd ../openssh-portable && make clean && CC=chibicc CFLAGS="-std=c11" ./configure && make && make tests
