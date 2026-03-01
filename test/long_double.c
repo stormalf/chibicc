@@ -1,4 +1,5 @@
 // test-tanl.c
+#include "test.h"
 #include <math.h>
 
 
@@ -31,6 +32,7 @@ int main(void) {
   }
   double x1 = 0.5;
   ASSERT(fabs(tan(x1) - tanl((long double)x1)) < 1e-12);
+  printf("Ok \n");
 
   return 0;
 }
