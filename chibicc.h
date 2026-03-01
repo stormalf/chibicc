@@ -1101,6 +1101,7 @@ struct Type
   Type *return_ty;
   Type *params;
   bool is_variadic;
+  bool is_oldstyle;
   Type *next;
   char *alias_name; // alias name for function when weak attribute
   char *section;

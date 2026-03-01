@@ -668,19 +668,23 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
 
     // These keywords are recognized but ignored.
     // fixing issue #119 _Complex
-    if (consume(&tok, tok, "const") || consume(&tok, tok, "volatile") ||
-        consume(&tok, tok, "auto") || consume(&tok, tok, "register") ||
-        consume(&tok, tok, "_Complex") ||
-        consume(&tok, tok, "restrict") || consume(&tok, tok, "__restrict") || 
-        consume(&tok, tok, "__restrict__") || consume(&tok, tok, "_Noreturn")) {
-          if (equal(tok, "const"))
-            is_const = true;
-          else if (equal(tok, "volatile"))
-            is_volatile = true;
-          else if (equal(tok, "restrict") || equal(tok, "__restrict") || equal(tok, "__restrict__"))
-            is_restrict = true;
-        
+    if (consume(&tok, tok, "auto") || consume(&tok, tok, "register") ||
+        consume(&tok, tok, "_Complex") ||  consume(&tok, tok, "_Noreturn")) {
         continue;
+    }
+    
+    if (consume(&tok, tok, "const")) {
+      is_const = true;
+      continue;
+    }
+    if (consume(&tok, tok, "volatile")) {
+      is_volatile = true;
+      continue;
+    }
+
+    if (consume(&tok, tok, "restrict") || consume(&tok, tok, "__restrict") || consume(&tok, tok, "__restrict__")) {
+      is_restrict = true;
+      continue;
     }
 
     if (equal(tok, "_Atomic"))
@@ -891,6 +895,7 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
   Type head = {};
   Type *cur = &head;
   bool is_variadic = false;
+  bool has_ellipsis = false;
   int nbparms = 0;
   // Function prototype scope: a prior parameter name is visible in
   // subsequent parameter declarators (e.g. int f(int n, int a[n])).
@@ -922,6 +927,7 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
     if (equal(tok, "..."))
     {
       is_variadic = true;
+      has_ellipsis = true;
       tok = tok->next;
       SET_CTX(ctx); 
       skip(tok, ")", ctx);
@@ -953,7 +959,14 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
     {
       // "array of T" is converted to "pointer to T" only in the parameter
       // context. For example, *argv[] is converted to **argv by this.
-      ty2 = pointer_to(ty2->base);
+      //ty2 = pointer_to(ty2->base);
+      //ty2->name = name;
+      Type *ty3 = pointer_to(ty2->base);
+      ty3->is_atomic = ty2->is_atomic;
+      ty3->is_const = ty2->is_const;
+      ty3->is_volatile = ty2->is_volatile;
+      ty3->is_restrict = ty2->is_restrict;
+      ty2 = ty3;
       ty2->name = name;
     }
     else if (ty2->kind == TY_FUNC)
@@ -1000,6 +1013,8 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
   } else 
     ty->params = head.next;
   ty->is_variadic = is_variadic;
+  if (cur == &head && !has_ellipsis)
+    ty->is_oldstyle = true;
   *rest = tok->next;
   if (!ty)
     error_tok(tok, "%s %d: in func_params : ty is null!", PARSE_C, __LINE__);
@@ -1036,6 +1051,24 @@ static Type *array_dimensions(Token **rest, Token *tok, Type *ty)
 
   return vla_of(ty, expr);
 }
+
+
+static void pointer_qualifiers(Token **rest, Token *tok, Type *ty) {
+  for (;; tok = tok->next) {
+    if (equal(tok, "_Atomic"))
+      ty->is_atomic = true;
+    else if (equal(tok, "const"))
+      ty->is_const = true;
+    else if (equal(tok, "volatile"))
+      ty->is_volatile = true;
+    else if (equal(tok, "restrict") || equal(tok, "__restrict") || equal(tok, "__restrict__"))
+      ty->is_restrict = true;
+    else
+      break;
+  }
+  *rest = tok;
+}
+
 
 // type-suffix = "(" func-params
 //             | "[" array-dimensions
@@ -1077,26 +1110,32 @@ static Type *pointers(Token **rest, Token *tok, Type *ty)
     for (;;) {
 
       tok = attribute_list(tok, ty, type_attributes);
-      if (equal(tok, "const")) {
-        ty->is_const = true;
-        tok = tok->next;
-      } else if (equal(tok, "volatile")) {
-        ty->is_volatile = true;
-        tok = tok->next;
-      } else if (equal(tok, "restrict") || equal(tok, "__restrict") ||
-                equal(tok, "__restrict__")) {
-        ty->is_restrict = true;
-        tok = tok->next;
-      } 
-      else if (equal(tok, "_Atomic")) {
-        ty->is_atomic = true;
-        tok = tok->next;
-      } 
-      else if (equal(tok, "_Complex")) {
-        tok = tok->next;
-      } else {
-        break;
-      }
+      // if (equal(tok, "const")) {
+      //   ty->is_const = true;
+      //   tok = tok->next;
+      // } else if (equal(tok, "volatile")) {
+      //   ty->is_volatile = true;
+      //   tok = tok->next;
+      // } else if (equal(tok, "restrict") || equal(tok, "__restrict") ||
+      //           equal(tok, "__restrict__")) {
+      //   ty->is_restrict = true;
+      //   tok = tok->next;
+      // } 
+      // else if (equal(tok, "_Atomic")) {
+      //   ty->is_atomic = true;
+      //   tok = tok->next;
+      // } 
+      // else if (equal(tok, "_Complex")) {
+      //   tok = tok->next;
+      // } else {
+      //   break;
+      // }
+       pointer_qualifiers(&tok, tok, ty);
+       if (equal(tok, "_Complex")) {
+         tok = tok->next;
+       } else {
+         break;
+       }
     }
   }
   tok = attribute_list(tok, ty, type_attributes);
@@ -5258,6 +5297,7 @@ bool equal_tok(Token *a, Token *b) {
 static Type *struct_union_decl(Token **rest, Token *tok, bool *no_list)
 {
   Type *ty = struct_type();
+  ty->size = -1;
   tok = attribute_list(tok, ty, type_attributes);
 
   // Read a tag.
@@ -5307,7 +5347,6 @@ static Type *struct_union_decl(Token **rest, Token *tok, bool *no_list)
         t->members = ty->members;
         t->is_flexible = ty->is_flexible;
         t->is_packed = ty->is_packed;
-        t->origin = ty;
         t->tag_name = ty->tag_name;
       }
       return ty2;
@@ -5379,6 +5418,12 @@ static Type *struct_decl(Token **rest, Token *tok)
 
   ty->members = head.next;
   ty->size = align_to(bits, ty->align * 8) / 8;
+
+  for (Type *t = ty->decl_next; t; t = t->decl_next) {
+    t->size = ty->size;
+    t->align = ty->align;
+    t->members = ty->members;
+  }
   if (!ty)
     error_tok(tok, "%s %d: in struct_decl : ty is null!", PARSE_C, __LINE__);
   return ty;
@@ -5418,6 +5463,12 @@ static Type *union_decl(Token **rest, Token *tok)
   }
   ty->members = head.next;
   ty->size = align_to(ty->size, ty->align);
+
+  for (Type *t = ty->decl_next; t; t = t->decl_next) {
+    t->size = ty->size;
+    t->align = ty->align;
+    t->members = ty->members;
+  }
   if (!ty)
     error_tok(tok, "%s %d: in union_decl : ty is null!", PARSE_C, __LINE__);
   return ty;

@@ -269,8 +269,15 @@ bool is_compatible(Type *t1, Type *t2)
   {
     if (!is_compatible(t1->return_ty, t2->return_ty))
       return false;
-    if (t1->is_variadic != t2->is_variadic)
+    if (t1->is_variadic != t2->is_variadic) {
+      if (t1->is_oldstyle && !t2->is_variadic && !t2->params && !t2->is_oldstyle) {
+      } else if (t2->is_oldstyle && !t1->is_variadic && !t1->params && !t1->is_oldstyle) {
+      } else {
       return false;
+      }
+    } else if (t1->is_variadic && t1->is_oldstyle != t2->is_oldstyle) {
+      return false;
+    }
 
     Type *p1 = t1->params;
     Type *p2 = t2->params;
