@@ -81,6 +81,9 @@ static HashMap macros;
 static CondIncl *cond_incl;
 static HashMap pragma_once;
 static int include_next_idx;
+static int pragma_pack_current;
+static int pragma_pack_stack[128];
+static int pragma_pack_depth;
 
 
 
@@ -95,6 +98,91 @@ static Macro *find_macro(Token *tok);
 static void join_adjacent_string_literals(Token *tok);
 static Token *paste(Token *lhs, Token *rhs);
 static bool file_exists_in_include_path(const char *filename);
+static Token *skip_line(Token *tok);
+static bool handle_pragma_pack(Token **rest, Token *tok) {
+  if (!equal(tok, "pack"))
+    return false;
+
+  char *p = tok->loc + tok->len;
+  while (*p == ' ' || *p == '\t')
+    p++;
+
+  if (*p != '(') {
+    *rest = tok->next;
+    while (!(*rest)->at_bol)
+      *rest = (*rest)->next;
+    return true;
+  }
+  p++;
+
+  while (*p == ' ' || *p == '\t')
+    p++;
+
+  if (*p == ')') {
+    pragma_pack_current = 0;
+    p++;
+  } else if (!strncmp(p, "push", 4) && !is_ident2(p[4])) {
+    if (pragma_pack_depth < (int)(sizeof(pragma_pack_stack) / sizeof(pragma_pack_stack[0])))
+      pragma_pack_stack[pragma_pack_depth++] = pragma_pack_current;
+    p += 4;
+    while (*p == ' ' || *p == '\t')
+      p++;
+    if (*p == ',') {
+      p++;
+      while (*p == ' ' || *p == '\t')
+        p++;
+      char *end = NULL;
+      long n = strtol(p, &end, 10);
+      if (end != p && (n == 0 || n == 1 || n == 2 || n == 4 || n == 8 || n == 16)) {
+        pragma_pack_current = (int)n;
+        p = end;
+      }
+    }
+    while (*p == ' ' || *p == '\t')
+      p++;
+    if (*p == ')')
+      p++;
+  } else if (!strncmp(p, "pop", 3) && !is_ident2(p[3])) {
+    if (pragma_pack_depth > 0)
+      pragma_pack_current = pragma_pack_stack[--pragma_pack_depth];
+    else
+      pragma_pack_current = 0;
+    p += 3;
+    while (*p == ' ' || *p == '\t')
+      p++;
+    if (*p == ',') {
+      p++;
+      while (*p == ' ' || *p == '\t')
+        p++;
+      char *end = NULL;
+      long n = strtol(p, &end, 10);
+      if (end != p && (n == 0 || n == 1 || n == 2 || n == 4 || n == 8 || n == 16)) {
+        pragma_pack_current = (int)n;
+        p = end;
+      }
+    }
+    while (*p == ' ' || *p == '\t')
+      p++;
+    if (*p == ')')
+      p++;
+  } else {
+    char *end = NULL;
+    long n = strtol(p, &end, 10);
+    if (end != p && (n == 0 || n == 1 || n == 2 || n == 4 || n == 8 || n == 16)) {
+      pragma_pack_current = (int)n;
+      p = end;
+      while (*p == ' ' || *p == '\t')
+        p++;
+      if (*p == ')')
+        p++;
+    }
+  }
+
+  *rest = tok->next;
+  while (!(*rest)->at_bol)
+    *rest = (*rest)->next;
+  return true;
+}
 
 
 //begin
@@ -1206,6 +1294,7 @@ static Token *preprocess2(Token *tok)
     {
       tok->line_delta = tok->file->line_delta;
       tok->filename = tok->file->display_name;
+      tok->pack_align = pragma_pack_current;
       cur = cur->next = tok;
       tok = tok->next;
       continue;
@@ -1355,6 +1444,9 @@ static Token *preprocess2(Token *tok)
 
     if (equal(tok, "pragma"))
     {
+      if (handle_pragma_pack(&tok, tok->next))
+        continue;
+
       do
       {
         tok = tok->next;
@@ -1736,6 +1828,11 @@ static void join_adjacent_string_literals(Token *tok)
 // Entry point function of the preprocessor.
 Token *preprocess(Token *tok, bool isReadLine)
 {
+  if (!isReadLine) {
+    pragma_pack_current = 0;
+    pragma_pack_depth = 0;
+  }
+
   tok = preprocess2(tok);
   // to manage issue with macro used before its definition. gcc allows it
   tok = preprocess3(tok);

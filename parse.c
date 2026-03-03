@@ -5372,6 +5372,8 @@ static Type *struct_decl(Token **rest, Token *tok)
   if (no_list)
     return ty;
 
+  int pack_align = ty->is_packed ? 1 : tok->pack_align;
+
   //ty->size = MAX(ty->size, 0);
 
   // Assign offsets within the struct to members.
@@ -5381,6 +5383,10 @@ static Type *struct_decl(Token **rest, Token *tok)
 
   for (Member *mem = ty->members; mem; mem = mem->next)
   {
+    int mem_align = mem->align;
+    if (pack_align > 0)
+      mem_align = MIN(mem_align, pack_align);
+
     if (mem->is_bitfield && mem->bit_width == 0)
     {
       // Zero-width anonymous bitfield has a special meaning.
@@ -5400,7 +5406,7 @@ static Type *struct_decl(Token **rest, Token *tok)
     else
     {
       if (!ty->is_packed)
-        bits = align_to(bits, mem->align * 8);
+        bits = align_to(bits, mem_align * 8);
       mem->offset = bits / 8;
       bits += mem->ty->size * 8;
     }
@@ -5413,8 +5419,8 @@ static Type *struct_decl(Token **rest, Token *tok)
 
 
         //from COSMOPOLITAN adding is_aligned
-    if (!ty->is_packed && ty->align < mem->align)
-      ty->align = mem->align;
+    if (!ty->is_packed && ty->align < mem_align)
+      ty->align = mem_align;
     cur = cur->next = mem;
   }
 
@@ -5424,6 +5430,7 @@ static Type *struct_decl(Token **rest, Token *tok)
   for (Type *t = ty->decl_next; t; t = t->decl_next) {
     t->size = ty->size;
     t->align = ty->align;
+    t->is_packed = ty->is_packed;
     t->members = ty->members;
   }
   if (!ty)
@@ -5442,9 +5449,15 @@ static Type *union_decl(Token **rest, Token *tok)
   if (no_list)
     return ty;
 
+  int pack_align = ty->is_packed ? 1 : tok->pack_align;
+
  Member head = {0};
   Member *cur = &head;
   for (Member *mem = ty->members; mem; mem = mem->next) {
+    int mem_align = mem->align;
+    if (pack_align > 0)
+      mem_align = MIN(mem_align, pack_align);
+
     int sz;
     if (mem->is_bitfield)
       sz = align_to(mem->bit_width, 8) / 8;
@@ -5458,8 +5471,8 @@ static Type *union_decl(Token **rest, Token *tok)
       continue;
     }
 
-    if (ty->align < mem->align)
-      ty->align = mem->align;
+    if (ty->align < mem_align)
+      ty->align = mem_align;
 
     cur = cur->next = mem;
   }
@@ -5469,6 +5482,7 @@ static Type *union_decl(Token **rest, Token *tok)
   for (Type *t = ty->decl_next; t; t = t->decl_next) {
     t->size = ty->size;
     t->align = ty->align;
+    t->is_packed = ty->is_packed;
     t->members = ty->members;
   }
   if (!ty)
@@ -7753,7 +7767,6 @@ static void declare_builtin_functions(void)
 // program = (typedef | function-definition | global-variable)*
 Obj *parse(Token *tok)
 {
-
   char *path;
   char *fullpath = calloc(1, sizeof(char) * 400);;
   //char *filename;
@@ -7791,7 +7804,6 @@ Obj *parse(Token *tok)
 
   while (tok->kind != TK_EOF)
   {
-
     if (equal(tok, "_Static_assert")) {
       tok = static_assertion(tok);
       continue;
