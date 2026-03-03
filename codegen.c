@@ -4127,20 +4127,42 @@ static void gen_expr(Node *node)
       if (mem->ty->kind == TY_BOOL)
         return;
 
-      if (mem->bit_width >= 64) {
-        println("  mov $-1, %%r9");
-      } else {
+      if (mem->bit_width < 64) {
         long mask2 = (1L << mem->bit_width) - 1;
         println("  mov $%ld, %%r9", mask2);
+        println("  and %%r9, %%rax");
+
+        // Assignment to a bitfield yields the stored field value.
+        // Normalize by field width only (independent of storage bit offset).
+        if (!mem->ty->is_unsigned) {
+          int shift = 64 - mem->bit_width;
+          println("  shl $%d, %%rax", shift);
+          println("  sar $%d, %%rax", shift);
+        }
       }
-      println("  and %%r9, %%rax");       
-      int shift = 64 - mem->bit_width - mem->bit_offset;
-      println("  shl $%d, %%rax", shift);
-      println("  sar $%d, %%rax", shift);
 
       return;
     }
     store(node->ty);
+
+    // Keep assignment-expression results canonical for narrow integer types.
+    // The value in %rax may still carry wider intermediate bits even though
+    // only 1/2 bytes were stored to memory.
+    if (is_integer(node->ty)) {
+      if (node->ty->kind == TY_BOOL) {
+        println("  movzbl %%al, %%eax");
+      } else if (node->ty->size == 1) {
+        if (node->ty->is_unsigned)
+          println("  movzbl %%al, %%eax");
+        else
+          println("  movsbl %%al, %%eax");
+      } else if (node->ty->size == 2) {
+        if (node->ty->is_unsigned)
+          println("  movzwl %%ax, %%eax");
+        else
+          println("  movswl %%ax, %%eax");
+      }
+    }
     return;
   case ND_STMT_EXPR:
     for (Node *n = node->body; n; n = n->next)

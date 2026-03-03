@@ -3397,9 +3397,6 @@ static bool is_safe_lvalue(Node *node) {
   if (node->kind == ND_VAR)
     return true;
 
-  if (node->kind == ND_DEREF)
-    return node->lhs && node->lhs->kind == ND_VAR;
-
   if (node->kind == ND_MEMBER && !is_bitfield(node))
     return is_safe_lvalue(node->lhs);
 
