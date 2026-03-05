@@ -1785,7 +1785,7 @@ static void gen_int128_op(Node *node) {
       if (node->lhs->ty->is_unsigned) {
         // Handle unsigned 128-bit shift right
         println("  cmp $64, %%rcx");
-        println("  ja .Lshift_gt64_unsigned_%d", c);
+        println("  jae .Lshift_gt64_unsigned_%d", c);
 
         // Common shift logic for shifts within 64 bits
         println("  shrd %%cl, %%rdx, %%rax");  // Shift right double
@@ -1801,7 +1801,7 @@ static void gen_int128_op(Node *node) {
       } else {
         // Handle signed 128-bit shift right (arithmetic)
         println("  cmp $64, %%rcx");
-        println("  ja .Lshift_gt64_signed_%d", c);
+        println("  jae .Lshift_gt64_signed_%d", c);
 
         // Common shift logic for shifts within 64 bits
         println("  shrd %%cl, %%rdx, %%rax");  // Shift right double

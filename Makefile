@@ -71,7 +71,7 @@ test-stage2: $(TESTS:test/%=stage2/test/%)
 
 projects-all: projects projects-oth lxc vlc git memcached cpython openssl
 
-projects-oth: vim nmap curl 
+projects-oth: sqlite vim nmap curl 
 
 projects: zlib util-linux nginx
 
@@ -95,7 +95,7 @@ nginx:
 	cd ../nginx && make clean && CC=chibicc CFLAGS="-fPIC -std=c11" ./auto/configure --with-http_ssl_module && make
 
 vim:
-	cd ../vim && make clean && CC=chibicc CFLAGS="-fPIC -std=c11" ./configure && make -j$(nproc) &&  make test 
+	cd ../vim && make clean && CC=chibicc CFLAGS="-fPIC -std=c11" ./configure && make &&  make test 
 
 lxc:
 	cd ../lxc && rm -rf build && CC=gcc \
@@ -124,6 +124,8 @@ memcached:
 openssh-portable:
 	cd ../openssh-portable && make clean && CC=chibicc CFLAGS="-std=c11" ./configure && make && make tests
 
+sqlite:
+	cd ../sqlite && CC=chibicc CFLAGS="-fPIC -std=c11" ./configure && make clean && make && make test
 
 # Misc.
 

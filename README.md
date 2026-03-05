@@ -481,6 +481,22 @@ vlc : https://github.com/videolan/vlc.git
     make all
 
 
+sqlite : https://github.com/sqlite/sqlite.git
+
+    CC=chibicc CFLAGS="-std=c11" ./configure
+    make all
+    make test
+    fuzzdata1.db: 0% 10% 20% 30% 40% 50% 60% 70% 80% 90% 100% - 9917 tests
+    fuzzdata2.db: 0% 10% 20% 30% 40% 50% 60% 70% 80% 90% 100% - 9959 tests
+    fuzzdata3.db: 0% 10% 20% 30% 40% 50% 60% 70% 80% 90% 100% - 2316 tests
+    fuzzdata4.db: 0% 10% 20% 30% 40% 50% 60% 70% 80% 90% 100% - 2575 tests
+    fuzzdata5.db: 0% 10% 20% 30% 40% 50% 60% 70% 80% 90% 100% - 8834 tests
+    fuzzdata6.db: 0% 10% 20% 30% 40% 50% 60% 70% 80% 90% 100% - 3896 tests
+    fuzzdata7.db: 0% 10% 20% 30% 40% 50% 60% 70% 80% 90% 100% - 8145 tests
+    fuzzdata8.db: 0% 10% 20% 30% 40% 50% 60% 70% 80% 90% 100% - 749 tests
+    fuzzcheck: 9616 query invariants checked
+    fuzzcheck: 0 errors out of 46391 tests in 147.339 seconds
+
 
 ## meson
 

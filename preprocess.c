@@ -1616,6 +1616,7 @@ void init_macros(void)
   // define_macro("__STDC_IEC_559_COMPLEX__" , "1");
   // define_macro("__STDC_IEC_60559_COMPLEX__" , "201404L");
   // define_macro("__STDC_IEC_60559_BFP__" , "201404L");
+  define_macro("__uint128_t", "unsigned __int128");
   define_macro("__GNUC_STDC_INLINE__", "1");
   define_macro("__USER_LABEL_PREFIX__", "");
   define_macro("__alignof__", "_Alignof");

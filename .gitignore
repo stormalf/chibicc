@@ -27,3 +27,4 @@ gdb_help.txt
 **/*.env
 /.github
 /.specify
+out/
