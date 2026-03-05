@@ -97,8 +97,9 @@ static Token *preprocess2(Token *tok);
 static Macro *find_macro(Token *tok);
 static void join_adjacent_string_literals(Token *tok);
 static Token *paste(Token *lhs, Token *rhs);
-static bool file_exists_in_include_path(const char *filename);
 static Token *skip_line(Token *tok);
+static int include_next_start_idx(Token *tok);
+static bool has_include_in_paths(char *filename, int start_idx);
 static bool handle_pragma_pack(Token **rest, Token *tok) {
   if (!equal(tok, "pack"))
     return false;
@@ -401,6 +402,38 @@ static Token *new_num_token(int val, Token *tmpl)
   return tokenize(new_file(tmpl->file->name, tmpl->file->file_no, buf));
 }
 
+static int include_next_start_idx(Token *tok) {
+  if (!tok || !tok->file || !tok->file->name)
+    return 0;
+
+  char *dir = dirname(strdup(tok->file->name));
+  int best = -1;
+  size_t best_len = 0;
+
+  for (int i = 0; i < include_paths.len; i++) {
+    char *inc = include_paths.data[i];
+    size_t n = strlen(inc);
+    if (n < best_len)
+      continue;
+
+    if (!strncmp(dir, inc, n) && (dir[n] == '\0' || dir[n] == '/')) {
+      best = i;
+      best_len = n;
+    }
+  }
+
+  return best >= 0 ? best + 1 : 0;
+}
+
+static bool has_include_in_paths(char *filename, int start_idx) {
+  for (int i = start_idx; i < include_paths.len; i++) {
+    char *path = format("%s/%s", include_paths.data[i], filename);
+    if (file_exists(path))
+      return true;
+  }
+  return false;
+}
+
 
 static Token *read_const_expr(Token **rest, Token *tok)
 {
@@ -430,46 +463,67 @@ static Token *read_const_expr(Token **rest, Token *tok)
 
       cur = cur->next = new_num_token(m ? 1 : 0, start);
       continue;
-    } else if (equal(tok, "__has_include")) {
-  Token *start = tok;
-  bool has_paren = consume(&tok, tok->next, "(");
+    } else if (equal(tok, "__has_include") || equal(tok, "__has_include_next")) {
+      Token *start = tok;
+      bool is_next = equal(tok, "__has_include_next");
+      bool has_paren = consume(&tok, tok->next, "(");
 
-  if (tok->kind != TK_STR && !equal(tok, "<"))
-    error_tok(start, "%s: in read_const_expr : __has_include expects a filename", PREPROCESS_C);
+      if (tok->kind != TK_STR && !equal(tok, "<"))
+        error_tok(start, "%s: in read_const_expr : __has_include expects a filename", PREPROCESS_C);
 
-  char filename[PATH_MAX];
+      char filename[PATH_MAX] = {};
+      bool is_dquote = (tok->kind == TK_STR);
 
-  if (tok->kind == TK_STR) {
-    // __has_include("header.h")
-    snprintf(filename, sizeof(filename), "%s", tok->str);
-    filename[tok->len] = '\0';
-    tok = tok->next;
-  } else {
-    // __has_include(<header.h>)
-    tok = tok->next;
-    const char *start_str = tok->str;
-    int len = 0;
-    while (!equal(tok, ">") && tok->kind != TK_EOF) {
-      len += tok->len;
-      tok = tok->next;
+      if (is_dquote) {
+        // __has_include("header.h")
+        snprintf(filename, sizeof(filename), "%s", tok->str);
+        tok = tok->next;
+      } else {
+        // __has_include(<header.h>)
+        tok = tok->next;
+        const char *start_str = tok->loc;
+        const char *end = start_str;
+        while (!equal(tok, ">") && tok->kind != TK_EOF) {
+          end = tok->loc + tok->len;
+          tok = tok->next;
+        }
+        if (!equal(tok, ">"))
+          error_tok(start, "%s: in read_const_expr : expected closing > in __has_include", PREPROCESS_C);
+
+        int len = (int)(end - start_str);
+        if (len < 0)
+          len = 0;
+        if (len >= (int)sizeof(filename))
+          len = (int)sizeof(filename) - 1;
+        memcpy(filename, start_str, len);
+        filename[len] = '\0';
+        tok = tok->next; // consume '>'
+      }
+
+      if (has_paren) {
+        SET_CTX(ctx);
+        tok = skip(tok, ")", ctx);
+      }
+
+      bool found = false;
+
+      // Match #include search behavior for quoted headers.
+      if (!is_next && is_dquote && filename[0] != '/') {
+        char *path = format("%s/%s", dirname(strdup(start->file->name)), filename);
+        if (file_exists(path))
+          found = true;
+      }
+
+      if (!found) {
+        if (is_next)
+          found = has_include_in_paths(filename, include_next_start_idx(start));
+        else
+          found = has_include_in_paths(filename, 0);
+      }
+
+      cur = cur->next = new_num_token(found ? 1 : 0, start);
+      continue;
     }
-    if (!equal(tok, ">"))
-      error_tok(start, "%s: in read_const_expr : expected closing > in __has_include", PREPROCESS_C);
-      
-
-    snprintf(filename, sizeof(filename), "%.*s", len, start_str);
-    tok = tok->next;  // consume '>'
-  }
-
-  if (has_paren) {
-    SET_CTX(ctx); 
-    tok = skip(tok, ")", ctx);
-  }
-
-  bool found = file_exists_in_include_path(filename);
-  cur = cur->next = new_num_token(found ? 1 : 0, start);
-  continue;
-}
 
 
     cur = cur->next = tok;
@@ -1881,16 +1935,6 @@ Token *preprocess3(Token *tok)
   return head.next;
 }
 
-
-static bool file_exists_in_include_path(const char *filename) {
-  for (int i = 0; i < include_paths.len; i++) {
-    char path[PATH_MAX];
-    snprintf(path, sizeof(path), "%s/%s", include_paths.data[i], filename);
-    if (access(path, R_OK) == 0)
-      return true;
-  }
-  return false;
-}
 
 void print_all_macros(void) {
   for (int i = 0; i < macros.capacity; i++) {
