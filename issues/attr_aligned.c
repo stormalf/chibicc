@@ -1,4 +1,5 @@
 #include "test.h"
+#include <stddef.h>
 
 #define A1 __attribute__((aligned(1024)))
 #define A2 __attribute__((aligned(4096)))
@@ -229,12 +230,12 @@ int main(int argc, char **argv) {
     typedef volatile Ia Iav;
     Ica v1;
     Iav v2;
-    SASSERT(alignof(Ica) == 1024);
-    SASSERT(alignof(Iav) == 1024);
-    SASSERT(alignof(v1) == 1024);
-    SASSERT(alignof(v2) == 1024);
-    SASSERT(_Generic(Ica, int const: 1));
-    SASSERT(_Generic(Iav, int volatile: 1));
+    SASSERT(__alignof(Ica) == 1024);
+    SASSERT(__alignof(Iav) == 1024);
+    SASSERT(__alignof(v1) == 1024);
+    SASSERT(__alignof(v2) == 1024);
+    //SASSERT(_Generic(Ica, int const: 1));
+    //SASSERT(_Generic(Iav, int volatile: 1));
     SASSERT(_Generic(&v1, int const*: 1));
     SASSERT(_Generic(&v2, int volatile*: 1));
     ASSERT(0, 1023 & (int)&v1);

@@ -4115,7 +4115,7 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
   {
     VarAttr attr = {};
     tok = attribute_list(tok, &attr, thing_attributes);
-    Type *basety = declspec(&tok, tok, &attr);
+    Type *basety = declspec(&tok, tok, &attr);    
     bool first = true;
 
     // Anonymous struct member
@@ -4135,6 +4135,10 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
     // Regular struct members
     while (!consume(&tok, tok, ";"))
     {
+      VarAttr mem_attr = attr;      
+      tok = attribute_list(tok, &mem_attr, thing_attributes);
+      if (equal(tok, ";"))
+        break;
       if (!first) {
         SET_CTX(ctx); 
         tok = skip(tok, ",", ctx);
@@ -4142,10 +4146,10 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
 
 
       first = false;
-      VarAttr mem_attr = attr;
-      tok = attribute_list(tok, &mem_attr, thing_attributes);
-      if (equal(tok, ";"))
-        break;
+
+      //tok = attribute_list(tok, &mem_attr, thing_attributes);
+      // if (equal(tok, ";"))
+      //   break;
 
       Member *mem = calloc(1, sizeof(Member));
       if (mem == NULL)
