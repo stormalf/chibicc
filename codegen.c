@@ -6183,7 +6183,13 @@ static int assign_lvar_offsets2(Obj *fn, int bottom, char *ptr) {
       continue;
     }
 
-    bottom = align_to(bottom + var->ty->size, align);
+    // When the frame uses a super-aligned base pointer (stack_align > 16),
+    // each variable's slot size must be a multiple of stack_align
+    int size = var->ty->size;
+    if (fn->stack_align > 16)
+      size = align_to(size, fn->stack_align);
+
+    bottom = align_to(bottom + size, align);
     var->offset = -bottom;
     var->ptr = ptr;
   }
