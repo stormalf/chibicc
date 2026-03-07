@@ -4110,10 +4110,10 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
   Member head = {};
   Member *cur = &head;
   //int idx = 0;
-
+  VarAttr attr = {};
   while (!equal(tok, "}"))
   {
-    VarAttr attr = {};
+
     tok = attribute_list(tok, &attr, thing_attributes);
     Type *basety = declspec(&tok, tok, &attr);    
     bool first = true;
@@ -4131,11 +4131,12 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
       cur = cur->next = mem;
       continue;
     }
-
+    
+    VarAttr mem_attr = attr;   
     // Regular struct members
     while (!consume(&tok, tok, ";"))
     {
-      VarAttr mem_attr = attr;      
+         
       tok = attribute_list(tok, &mem_attr, thing_attributes);
       if (equal(tok, ";"))
         break;
@@ -4147,15 +4148,14 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
 
       first = false;
 
-      //tok = attribute_list(tok, &mem_attr, thing_attributes);
-      // if (equal(tok, ";"))
-      //   break;
+      tok = attribute_list(tok, &mem_attr, thing_attributes);
+      if (equal(tok, ";"))
+        break;
 
       Member *mem = calloc(1, sizeof(Member));
       if (mem == NULL)
         error("%s: %s:%d: error: in struct_members : mem is null", PARSE_C, __FILE__, __LINE__);
-      if (tok->kind == TK_KEYWORD)
-        basety = declspec(&tok, tok, &mem_attr);
+
       mem->ty = declarator(&tok, tok, basety);
       tok = attribute_list(tok, &mem_attr, thing_attributes);
       mem->name = mem->ty->name;

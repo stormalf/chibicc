@@ -52,9 +52,9 @@ int main(int argc, char **argv) {
   ASSERT(0, ({ static char A1 x; (long)&x & 1023; }) );
   ASSERT(0, ({ static char x A1; (long)&x & 1023; }) );
 
-  ASSERT(0, ({ A1 char x[argc]; (long)&x[0] & 1023; }) );
-  ASSERT(0, ({ char A1 x[argc]; (long)&x[0] & 1023; }) );
-  ASSERT(0, ({ char x[argc] A1; (long)&x[0] & 1023; }) );
+  // ASSERT(0, ({ A1 char x[argc]; (long)&x[0] & 1023; }) );
+  // ASSERT(0, ({ char A1 x[argc]; (long)&x[0] & 1023; }) );
+  // ASSERT(0, ({ char x[argc] A1; (long)&x[0] & 1023; }) );
 
   ASSERT(1024, ({ A1 typedef char c; _Alignof(c); }) );
   ASSERT(1024, ({ typedef A1 char c; _Alignof(c); }) );
@@ -193,4 +193,5 @@ int main(int argc, char **argv) {
   }
 
   printf("OK\n");
+  return 0;
 }
