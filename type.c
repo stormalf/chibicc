@@ -308,6 +308,13 @@ Type *copy_type(Type *ty)
   Type *ret = calloc(1, sizeof(Type));
   if (ret == NULL)
     error("%s: %s:%d: error: in copy_type ret is null!", TYPE_C, __FILE__, __LINE__);
+  Type *root = ty && ty->origin ? ty->origin : ty;
+  
+  if (root && root->size < 0) {
+    ty->decl_next = root->decl_next;
+    root->decl_next = ty;
+  }
+   
   *ret = *ty;
   ret->origin = ty;
   return ret;

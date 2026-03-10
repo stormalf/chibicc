@@ -1130,7 +1130,11 @@ struct Member
   Token *tok; // for error message
   Token *name;
   int idx;
+  // Natural alignment of the member's type (i.e. before any packing rules).
   int align;
+  // Explicit requested alignment from attributes (_Alignas / __attribute__((aligned))).
+  // This is a minimum alignment request and may override packing.
+  int attr_align;
   int offset;
 
   // Bitfield

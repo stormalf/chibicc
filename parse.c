@@ -1151,8 +1151,7 @@ static Type *declarator(Token **rest, Token *tok, Type *ty)
 {
   tok = attribute_list(tok, ty, type_attributes);
   ty = pointers(&tok, tok, ty);
-  //tok->next = attribute_list(tok->next, ty, type_attributes);
-
+  
   if (equal(tok, "(") && !is_typename(tok->next) && !equal(tok->next, ")"))
   {
 
@@ -1183,9 +1182,6 @@ static Type *declarator(Token **rest, Token *tok, Type *ty)
     error_tok(tok, "%s %d: in declarator : ty is null", PARSE_C, __LINE__);  
   ty->name = name;
   ty->name_pos = name_pos;
-  tok = attribute_list(tok, ty, type_attributes);
-  if (!ty)
-    error_tok(tok, "%s %d: in declarator : ty is null!", PARSE_C, __LINE__);
   return ty;
 }
 
@@ -4110,12 +4106,14 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
   Member head = {};
   Member *cur = &head;
   //int idx = 0;
-  VarAttr attr = {};
   while (!equal(tok, "}"))
   {
-
+    VarAttr attr = {};
     tok = attribute_list(tok, &attr, thing_attributes);
     Type *basety = declspec(&tok, tok, &attr);    
+    // Attributes placed between the type and the declarator list apply to
+    // the whole declaration (i.e. to all declarators), like GCC.
+    tok = attribute_list(tok, &attr, thing_attributes);
     bool first = true;
 
     // Anonymous struct member
@@ -4127,27 +4125,22 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
         error("%s: %s:%d: error: in struct_members : mem is null", PARSE_C, __FILE__, __LINE__);
       mem->ty = basety;
       //mem->idx = idx++;
-      mem->align = attr.align ? attr.align : mem->ty->align;
+      mem->align = mem->ty->align;
+      mem->attr_align = attr.align;
       cur = cur->next = mem;
       continue;
     }
     
-    VarAttr mem_attr = attr;   
     // Regular struct members
     while (!consume(&tok, tok, ";"))
     {
-         
-      tok = attribute_list(tok, &mem_attr, thing_attributes);
-      if (equal(tok, ";"))
-        break;
       if (!first) {
         SET_CTX(ctx); 
         tok = skip(tok, ",", ctx);
       }
-
-
       first = false;
 
+      VarAttr mem_attr = attr;
       tok = attribute_list(tok, &mem_attr, thing_attributes);
       if (equal(tok, ";"))
         break;
@@ -4160,7 +4153,7 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
       tok = attribute_list(tok, &mem_attr, thing_attributes);
       mem->name = mem->ty->name;
       //mem->idx = idx++;
-      mem->align = mem_attr.align ? mem_attr.align : mem->ty->align;
+      mem->align = mem->ty->align;
 
       if (consume(&tok, tok, ":"))
       {
@@ -4174,8 +4167,11 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
         {
           error_tok(tok, "%s %d: in struct_members : bitfield width must be positive", PARSE_C, __LINE__);
         }
+        // Attributes can appear after the bitfield width (e.g. `int : 4 __attribute__((aligned(2)))`).
+        tok = attribute_list(tok, &mem_attr, thing_attributes);
       }
 
+      mem->attr_align = mem_attr.align;
       cur = cur->next = mem;
     }
   }
@@ -4256,16 +4252,16 @@ static Token *type_attributes(Token *tok, void *arg)
   if (consume(&tok, tok, "aligned") || consume(&tok, tok, "__aligned__"))
       {
         ty->is_aligned = true;
+        int align = 16;
         if (equal(tok, "(")) {
           SET_CTX(ctx); 
           tok = skip(tok, "(", ctx);
           //from COSMOPOLITAN adding is_aligned
-          ty->align = const_expr(&tok, tok);
+          align = const_expr(&tok, tok);
           SET_CTX(ctx); 
           tok = skip(tok, ")", ctx);
-        } else {
-          ty->align = 16;
         }
+        ty->align = align;
         return tok;
       }
 
@@ -5390,15 +5386,20 @@ static Type *struct_decl(Token **rest, Token *tok)
     int mem_align = mem->align;
     if (pack_align > 0)
       mem_align = MIN(mem_align, pack_align);
+    if (mem->attr_align)
+      mem_align = MAX(mem_align, mem->attr_align);
 
     if (mem->is_bitfield && mem->bit_width == 0)
     {
       // Zero-width anonymous bitfield has a special meaning.
       // It affects only alignment.
-      bits = align_to(bits, mem->ty->size * 8);
+      bits = align_to(bits, mem_align * 8);
     }
     else if (mem->is_bitfield)
     {
+      if (mem->attr_align)
+        bits = align_to(bits, mem_align * 8);
+
       int sz = mem->ty->size;
       if (bits / (sz * 8) != (bits + mem->bit_width - 1) / (sz * 8))
         bits = align_to(bits, sz * 8);
@@ -5409,8 +5410,7 @@ static Type *struct_decl(Token **rest, Token *tok)
     }
     else
     {
-      if (!ty->is_packed)
-        bits = align_to(bits, mem_align * 8);
+      bits = align_to(bits, mem_align * 8);
       mem->offset = bits / 8;
       bits += mem->ty->size * 8;
     }
@@ -5423,7 +5423,7 @@ static Type *struct_decl(Token **rest, Token *tok)
 
 
         //from COSMOPOLITAN adding is_aligned
-    if (!ty->is_packed && ty->align < mem_align)
+    if (ty->align < mem_align)
       ty->align = mem_align;
     cur = cur->next = mem;
   }
@@ -5461,6 +5461,8 @@ static Type *union_decl(Token **rest, Token *tok)
     int mem_align = mem->align;
     if (pack_align > 0)
       mem_align = MIN(mem_align, pack_align);
+    if (mem->attr_align)
+      mem_align = MAX(mem_align, mem->attr_align);
 
     int sz;
     if (mem->is_bitfield)
