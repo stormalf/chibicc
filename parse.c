@@ -200,6 +200,7 @@ static int64_t eval_sign_extend(Type *ty, uint64_t val);
 static bool is_const_var(Obj *var);
 static int64_t eval_rval(Node *node, char ***label);
 static Obj *eval_var(Node *expr, bool allow_local);
+static Obj *find_global_by_name(char *name);
 static bool is_const_var(Obj *var) ;
 static bool is_str_tok(Token **rest, Token *tok, Token **str_tok);
 
@@ -2403,28 +2404,32 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
     int sofs = 0;
     Obj *var = eval_var(init->expr,  false);
     if (var && var->init_data && !var->is_weak && (is_const_var(var) || var->is_compound_lit)) {
+      // Don't memcpy raw bytes into a pointer; use relocation path instead.
+      bool can_copy = (ty->kind != TY_PTR);
 
-      Relocation *srel = var->rel;
-      while (srel && srel->offset < sofs)
-        srel = srel->next;
-
-      for (int pos = 0; pos < ty->size && (pos + sofs) < var->ty->size;) {
-        if (srel && srel->offset == (pos + sofs)) {
-          // Create new relocation
-          cur = cur->next = calloc(1, sizeof(Relocation));
-          cur->offset = (pos + offset);
-          cur->label = srel->label;
-          cur->addend = srel->addend;
-
+      if (can_copy) {
+        Relocation *srel = var->rel;
+        while (srel && srel->offset < sofs)
           srel = srel->next;
-          pos += 8;
-        } else {
-          // Copy initialization data from compound literal
-          buf[(pos + offset)] = var->init_data[(pos + sofs)];
-          pos++;
+
+        for (int pos = 0; pos < ty->size && (pos + sofs) < var->ty->size;) {
+          if (srel && srel->offset == (pos + sofs)) {
+            // Create new relocation
+            cur = cur->next = calloc(1, sizeof(Relocation));
+            cur->offset = (pos + offset);
+            cur->label = srel->label;
+            cur->addend = srel->addend;
+
+            srel = srel->next;
+            pos += 8;
+          } else {
+            // Copy initialization data from compound literal
+            buf[(pos + offset)] = var->init_data[(pos + sofs)];
+            pos++;
+          }
         }
+        return cur;
       }
-      return cur;
     }
   }
 
@@ -2452,8 +2457,56 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
 
   if (!label)
   {
+    if (ty->kind == TY_BOOL)
+      val = !!val;
     write_buf(buf + offset, val, ty->size);
     return cur;
+  }
+
+  // If this references a constant object with known data, fold the load.
+  Obj *cvar = *label ? find_global_by_name(*label) : NULL;
+  if (cvar && cvar->init_data &&
+      (is_const_var(cvar) || cvar->is_compound_lit)) {
+    if (is_numeric(ty) && !cvar->rel) {
+      if (val + ty->size <= cvar->ty->size) {
+        memcpy(buf + offset, cvar->init_data + val, ty->size);
+        return cur;
+      }
+    }
+    if (ty->kind == TY_PTR && cvar->rel && cvar->ty->kind == TY_PTR) {
+      for (Relocation *srel = cvar->rel; srel; srel = srel->next) {
+        if (srel->offset == (int)val) {
+          Relocation *rel = calloc(1, sizeof(Relocation));
+          if (rel == NULL)
+            error("%s: %s:%d: error: in write_gvar_data : rel is null", PARSE_C, __FILE__, __LINE__);
+          rel->offset = offset;
+          rel->label = srel->label;
+          rel->addend = srel->addend;
+          cur->next = rel;
+          return cur->next;
+        }
+      }
+    }
+    if (ty->kind == TY_PTR && cvar->rel && init->expr) {
+      Node *expr = init->expr;
+      while (expr->kind == ND_CAST)
+        expr = expr->lhs;
+      if (expr->kind == ND_MEMBER) {
+        int mofs = (int)val;
+        for (Relocation *srel = cvar->rel; srel; srel = srel->next) {
+          if (srel->offset == mofs) {
+            Relocation *rel = calloc(1, sizeof(Relocation));
+            if (rel == NULL)
+              error("%s: %s:%d: error: in write_gvar_data : rel is null", PARSE_C, __FILE__, __LINE__);
+            rel->offset = offset;
+            rel->label = srel->label;
+            rel->addend = srel->addend;
+            cur->next = rel;
+            return cur->next;
+          }
+        }
+      }
+    }
   }
 
   Relocation *rel = calloc(1, sizeof(Relocation));
@@ -3092,8 +3145,34 @@ static int64_t eval2(Node *node, char ***label)
   switch (node->kind)
   {
   case ND_ADD:
+    if (label) {
+      char **l1 = NULL;
+      char **l2 = NULL;
+      int64_t v1 = eval2(node->lhs, &l1);
+      int64_t v2 = eval2(node->rhs, &l2);
+      if (l1 && l2)
+        error_tok(node->tok, "%s %d: in eval2 : invalid constant address expression", PARSE_C, __LINE__);
+      if (l2) {
+        *label = l2;
+        return v1 + v2;
+      }
+      if (l1)
+        *label = l1;
+      return v1 + v2;
+    }
     return eval2(node->lhs, label) + eval(node->rhs);
   case ND_SUB:
+    if (label) {
+      char **l1 = NULL;
+      char **l2 = NULL;
+      int64_t v1 = eval2(node->lhs, &l1);
+      int64_t v2 = eval2(node->rhs, &l2);
+      if (l2)
+        error_tok(node->tok, "%s %d: in eval2 : invalid constant address expression", PARSE_C, __LINE__);
+      if (l1)
+        *label = l1;
+      return v1 - v2;
+    }
     return eval2(node->lhs, label) - eval(node->rhs);
   case ND_MUL:
     return eval(node->lhs) * eval(node->rhs);
@@ -8799,6 +8878,20 @@ static Obj *eval_var(Node *expr, bool allow_local) {
   if (var->is_compound_lit)
     return var;
 
+  if (!allow_local && (var->is_static || var->is_definition) &&
+      var->init_data && is_const_var(var))
+    return var;
+
+  return NULL;
+}
+
+static Obj *find_global_by_name(char *name) {
+  if (!name)
+    return NULL;
+  for (Obj *var = globals; var; var = var->next) {
+    if (var->name && !strcmp(var->name, name))
+      return var;
+  }
   return NULL;
 }
 
