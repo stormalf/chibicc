@@ -1538,41 +1538,48 @@ static void copy_struct_mem(void)
 
 static void builtin_alloca(Node *node)
 {
-  // Align size to 16 bytes.
-  // println("  add $15, %%rdi");
-  // println("  and $0xfffffff0, %%edi");
+  // Align the resulting pointer, not just the size.
   int align = node->val > 16 ? node->val : 16;
-  println("  add $%d, %%rdi", align - 1);
-  println("  and $-%d, %%rdi", align);
 
   if (!current_fn->alloca_bottom) {
-    println("  sub %%rdi, %%rsp");
+    // new_rsp = (rsp - size) & -align; return new_rsp
     println("  mov %%rsp, %%rax");
+    println("  sub %%rdi, %%rax");
+    println("  and $-%d, %%rax", align);
+    println("  mov %%rax, %%rsp");
     return;
   }
 
-  // Shift the temporary area by %rdi.
-  println("  mov %d(%s), %%rcx", current_fn->alloca_bottom->offset, current_fn->alloca_bottom->ptr);
-  println("  sub %%rsp, %%rcx");
-  println("  mov %%rsp, %%rax");
-  println("  sub %%rdi, %%rsp");
-  println("  mov %%rsp, %%rdx");
+  // Shift the temporary area by delta, where:
+  // new_bottom = (old_bottom - size) & -align
+  // delta = old_bottom - new_bottom
+  println("  mov %d(%s), %%rax", current_fn->alloca_bottom->offset, current_fn->alloca_bottom->ptr); // old_bottom
+  println("  mov %%rax, %%rcx");
+  println("  sub %%rsp, %%rcx"); // tmp_size
+  println("  mov %%rax, %%rdx");
+  println("  sub %%rdi, %%rdx");
+  println("  and $-%d, %%rdx", align); // new_bottom
+  println("  mov %%rax, %%rsi");
+  println("  sub %%rdx, %%rsi"); // delta
+
+  println("  mov %%rsp, %%r8");  // old_rsp (src)
+  println("  sub %%rsi, %%rsp"); // new_rsp
+  println("  mov %%rsp, %%r9");  // new_rsp (dst)
+
   println("1:");
   println("  cmp $0, %%rcx");
   println("  je 2f");
-  println("  mov (%%rax), %%r8b");
-  println("  mov %%r8b, (%%rdx)");
-  println("  inc %%rdx");
-  println("  inc %%rax");
+  println("  mov (%%r8), %%r10b");
+  println("  mov %%r10b, (%%r9)");
+  println("  inc %%r8");
+  println("  inc %%r9");
   println("  dec %%rcx");
   println("  jmp 1b");
   println("2:");
 
-  // Move alloca_bottom pointer.
-  println("  mov %d(%s), %%rax", current_fn->alloca_bottom->offset, current_fn->alloca_bottom->ptr);
-  println("  sub %%rdi, %%rax");
-  println("  and $-%d, %%rax", align);
-  println("  mov %%rax, %d(%s)", current_fn->alloca_bottom->offset, current_fn->alloca_bottom->ptr);
+  // Move alloca_bottom pointer and return new_bottom in rax
+  println("  mov %%rdx, %d(%s)", current_fn->alloca_bottom->offset, current_fn->alloca_bottom->ptr);
+  println("  mov %%rdx, %%rax");
 }
 
 //from cosmopolitan

@@ -1481,7 +1481,10 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
       Obj *var = new_lvar(get_ident(ty->name), ty, NULL);
       Token *tok = ty->name;
       tok = attribute_list(tok, ty, type_attributes);
-      int align = decl_attr.align ? decl_attr.align : 16;
+      int var_align = MAX(decl_attr.align, ty->align);
+      var->align = var_align;
+      var->ty->align = MAX(var->ty->align, var_align);
+      int align = MAX(16, var_align);
       Node *expr = new_binary(ND_ASSIGN, new_vla_ptr(var, tok),
                               new_alloca(new_var_node(ty->vla_size, tok), align),
                               tok);
@@ -1491,8 +1494,10 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
     }
     
     Obj *var = new_lvar(get_ident(ty->name), ty, NULL);
-    if (alt_align)
+    if (alt_align) {
       var->align = alt_align;
+      var->ty->align = MAX(var->ty->align, alt_align);
+    }
 
     if (equal(tok, "=")) {
       tok = tok->next;
@@ -6101,9 +6106,8 @@ static Node *primary(Token **rest, Token *tok)
     add_type(node);
       ty = node->ty;
     }
-    while (is_array(ty))
-      ty = ty->base;
-
+    // _Alignof does not apply array-to-pointer decay for expressions.
+    // Preserve array alignment (including _Alignas/aligned on arrays).
     return new_ulong(ty->align, start);
   }
 

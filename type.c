@@ -373,7 +373,7 @@ Type *vector_of(Type *base, int64_t len)
 Type *vla_of(Type *base, Node *len)
 {
 
-  Type *ty = new_type(TY_VLA, 8, 8);
+  Type *ty = new_type(TY_VLA, 8, base->align);
   ty->base = base;
   ty->vla_len = len;
   ty->has_vla = true;
