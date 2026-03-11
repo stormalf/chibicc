@@ -30,3 +30,4 @@ gdb_help.txt
 out/
 /.opencode
 conftest.zend 
+compile_commands.json

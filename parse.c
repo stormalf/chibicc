@@ -4345,7 +4345,12 @@ static Token *type_attributes(Token *tok, void *arg)
           SET_CTX(ctx); 
           tok = skip(tok, ")", ctx);
         }
-        ty->align = align;
+        // GCC/Clang: aligned(N) must not reduce alignment, except vector
+        // types where __attribute__((aligned(N))) can override vector_size.
+        if (ty->kind == TY_VECTOR || ty->is_vector)
+          ty->align = align;
+        else
+          ty->align = MAX(ty->align, align);
         return tok;
       }
 
