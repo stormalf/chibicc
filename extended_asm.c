@@ -39,7 +39,6 @@ typedef struct
     int index;         // store the index
     char letter;       // store the letter corresponding to input
     int offset;         // store the offset
-    char *ptr;          // base pointer register for stack slot addressing
     int size;          // store the size to determine the operation to do ex movl movb movw movq
     bool isVariable;   // store true if it's a variable otherwise false for immediate value
     bool isAddress;    // store true if it's an address pointer
@@ -72,7 +71,6 @@ typedef struct
     bool isMemory;    // m
     bool isAlpha;     // if is not r neither m is considered Alpha
     int offset;        // store the offset
-    char *ptr;         // base pointer register for stack slot addressing
     bool isVariable;  // store true if it's a variable otherwise false for immediate value
     bool isAddress;   // store true if it's an address pointer
     bool isArray;       //true if it's an array variable
@@ -153,10 +151,9 @@ static bool hasOperandName = false;
 static char *register_lower(char *reg);
 static char *register_higher(char *reg);
 static char *register_word(char *reg);
-static char *ptr_or_rbp(Obj *var);
 
 
-char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals, char *funcname)
+char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
 {
     char *input_asm_str;
     char *output_loading;
@@ -209,14 +206,6 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals, char *func
     clear_register_used();
     //mark the register used if found in template
     check_register_in_template(template);
-    // When stack is realigned, %rbx becomes the local-variable base pointer.
-    // Reserve it so extended asm constraints cannot allocate it.
-    if (funcname) {
-        update_offset(funcname, locals);
-        Obj *fn = find_func(funcname);
-        if (fn && fn->stack_align > 16)
-            add_register_used("%rbx");
-    }
     while (!equal(tok->next, ";") && !equal(tok, ";"))
     {
         switch (asmtype)
@@ -475,7 +464,6 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals, char *func
 void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
 {
     VarScope *sc;
-    asmExt->output[nbOutput]->ptr = "%rbp";
     while (!equal(tok->next, ":") && !equal(tok->next, ";"))
     {
         //case of operand named
@@ -837,11 +825,9 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 if (sc->var->funcname) {
                     update_offset(sc->var->funcname, locals);
                     asmExt->output[nbOutput]->offset = sc->var->offset;
-                    asmExt->output[nbOutput]->ptr = ptr_or_rbp(sc->var);
                 }
                 else {
                     asmExt->output[nbOutput]->offset = 0;
-                    asmExt->output[nbOutput]->ptr = "%rbp";
                 }
 
                 //managing specific case of arrays
@@ -858,7 +844,6 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     //calculate the offset for each element from the bottom to the top r[0] has the lowest offset example -48, r[1] - 44, r[2] -40, r[3] - 36
                     asmExt->output[nbOutput]->offset = (sc->var->offset ) + (asmExt->output[nbOutput]->indexArray * asmExt->output[nbOutput]->size);
                     asmExt->output[nbOutput]->offsetArray = sc->var->offset; 
-                    asmExt->output[nbOutput]->ptr = ptr_or_rbp(sc->var);
                     tok = tok->next;
                     SET_CTX(ctx);
                     tok = skip(tok, "]", ctx);
@@ -880,7 +865,6 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     //calculate the offset for each element from the bottom to the top r[0] has the lowest offset example -48, r[1] - 44, r[2] -40, r[3] - 36
                     asmExt->output[nbOutput]->offset = (asmExt->output[nbOutput]->indexArray * asmExt->output[nbOutput]->size);
                     asmExt->output[nbOutput]->offsetArray = sc->var->offset; 
-                    asmExt->output[nbOutput]->ptr = ptr_or_rbp(sc->var);
                     tok = tok->next;
                     SET_CTX(ctx);
                     tok = skip(tok, "]", ctx);
@@ -911,11 +895,9 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                         update_offset(sc->var->funcname, locals);
                         asmExt->output[nbOutput]->offset = sc->var->offset;
                         asmExt->output[nbOutput]->offsetStruct = sc->var->ty->base->members->offset ;
-                        asmExt->output[nbOutput]->ptr = ptr_or_rbp(sc->var);
                     }
                     else {
                         asmExt->output[nbOutput]->offset = 0;
-                        asmExt->output[nbOutput]->ptr = "%rbp";
                     }
                     //need to update the specific struct field offset
                     char *toktmp = calloc(1, sizeof(char) * 300);
@@ -967,11 +949,9 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     if (sc->var->funcname) {
                         update_offset(sc->var->funcname, locals);
                         asmExt->output[nbOutput]->offset = sc->var->offset;                       
-                        asmExt->output[nbOutput]->ptr = ptr_or_rbp(sc->var);
 
                     } else {
                             asmExt->output[nbOutput]->offset = 0;                        
-                            asmExt->output[nbOutput]->ptr = "%rbp";
 
                     }
                     if (!asmExt->output[nbOutput]->reg)
@@ -1020,10 +1000,8 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                             if (sc->var->funcname) {
                                 update_offset(sc->var->funcname, locals);
                                 asmExt->output[nbOutput]->offset = sc->var->offset;
-                                asmExt->output[nbOutput]->ptr = ptr_or_rbp(sc->var);
                             } else {
                                 asmExt->output[nbOutput]->offset = 0;
-                                asmExt->output[nbOutput]->ptr = "%rbp";
                             }
 
                             if (!asmExt->output[nbOutput]->reg)
@@ -1063,7 +1041,6 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
     VarScope *sc;
     char *input_value = calloc(1, sizeof(char) * 300);
     asmExt->input[nbInput]->offset = 0;
-    asmExt->input[nbInput]->ptr = "%rbp";
 
     while (!equal(tok->next, ":") && !equal(tok->next, ";"))
     {
@@ -1439,7 +1416,6 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 if (sc->var->funcname) {     
                     update_offset(sc->var->funcname, locals);
                     asmExt->input[nbInput]->offset = sc->var->offset;
-                    asmExt->input[nbInput]->ptr = ptr_or_rbp(sc->var);
                 } 
                 if (!asmExt->input[nbInput]->reg) 
                     error_tok(tok, "%s : %s:%d: error: in input_asm function input_asm :reg is null! %d", EXTASM_C, __FILE__, __LINE__, nbInput);
@@ -1458,7 +1434,6 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     //calculate the offset for each element from the bottom to the top r[0] has the lowest offset example -48, r[1] - 44, r[2] -40, r[3] - 36
                     asmExt->input[nbInput]->offset = (sc->var->offset ) + (asmExt->input[nbInput]->indexArray * asmExt->input[nbInput]->size);
                     asmExt->input[nbInput]->offsetArray = sc->var->offset; 
-                    asmExt->input[nbInput]->ptr = ptr_or_rbp(sc->var);
                     tok = tok->next;
                     SET_CTX(ctx);
                     tok = skip(tok, "]", ctx);
@@ -1479,7 +1454,6 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     //calculate the offset for each element from the bottom to the top r[0] has the lowest offset example -48, r[1] - 44, r[2] -40, r[3] - 36
                     asmExt->input[nbInput]->offset = (asmExt->input[nbInput]->indexArray * asmExt->input[nbInput]->size);
                     asmExt->input[nbInput]->offsetArray = sc->var->offset; 
-                    asmExt->input[nbInput]->ptr = ptr_or_rbp(sc->var);
                     tok = tok->next;
                     SET_CTX(ctx);
                     tok = skip(tok, "]", ctx);
@@ -1508,11 +1482,9 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     if (sc->var->funcname) {
                         update_offset(sc->var->funcname, locals);
                         asmExt->input[nbInput]->offset = sc->var->offset;
-                        asmExt->input[nbInput]->ptr = ptr_or_rbp(sc->var);
                     }
                     else {
                         asmExt->input[nbInput]->offset = 0;
-                        asmExt->input[nbInput]->ptr = "%rbp";
                     }
                     //need to update the specific struct field offset
                     char *toktmp = calloc(1, sizeof(char) * 300);                    
@@ -1576,7 +1548,6 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                         update_offset(sc->var->funcname, locals);
 
                         asmExt->input[nbInput]->offset = sc->var->offset;
-                        asmExt->input[nbInput]->ptr = ptr_or_rbp(sc->var);
                     } 
                     if (!asmExt->input[nbInput]->reg)
                         error_tok(tok,"%s : %s:%d: error: in input_asm function input_asm :reg is null!", EXTASM_C, __FILE__, __LINE__);
@@ -1626,7 +1597,6 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                         if (sc->var->funcname) {
                             update_offset(sc->var->funcname, locals);
                             asmExt->input[nbInput]->offset = sc->var->offset;
-                            asmExt->input[nbInput]->ptr = ptr_or_rbp(sc->var);
                         }
 
                         if (!asmExt->input[nbInput]->reg)
@@ -1708,7 +1678,7 @@ char *generate_input_asm(char *input_str)
     {
         strncat(tmp, "\n", 3);
         strncat(tmp, opcode(asmExt->input[nbInput]->size), strlen(opcode(asmExt->input[nbInput]->size)));
-        strncat(tmp, load_variable(asmExt->input[nbInput]->offset, asmExt->input[nbInput]->ptr), strlen(load_variable(asmExt->input[nbInput]->offset, asmExt->input[nbInput]->ptr)));
+        strncat(tmp, load_variable(asmExt->input[nbInput]->offset), strlen(load_variable(asmExt->input[nbInput]->offset)));
         strncat(tmp, ", ", 3);
         strncat(tmp, asmExt->input[nbInput]->variableNumber, strlen(asmExt->input[nbInput]->variableNumber));
         strncat(tmp, ";\n", 3);
@@ -1721,7 +1691,7 @@ char *generate_input_asm(char *input_str)
     {
         strncat(tmp, "\n", 3);
         strncat(tmp, opcode(asmExt->input[nbInput]->size), strlen(opcode(asmExt->input[nbInput]->size)));
-        strncat(tmp, load_variable(asmExt->input[nbInput]->offset, asmExt->input[nbInput]->ptr), strlen(load_variable(asmExt->input[nbInput]->offset, asmExt->input[nbInput]->ptr)));
+        strncat(tmp, load_variable(asmExt->input[nbInput]->offset), strlen(load_variable(asmExt->input[nbInput]->offset)));
         strncat(tmp, ", ", 3);
         strncat(tmp, asmExt->input[nbInput]->variableNumber, strlen(asmExt->input[nbInput]->variableNumber));
         strncat(tmp, ";\n", 3);
@@ -1731,7 +1701,7 @@ char *generate_input_asm(char *input_str)
     {
         strncat(tmp, "\n", 3);
         strncat(tmp, opcode(8), strlen(opcode(8)));
-        strncat(tmp, load_variable(asmExt->input[nbInput]->offset, asmExt->input[nbInput]->ptr), strlen(load_variable(asmExt->input[nbInput]->offset, asmExt->input[nbInput]->ptr)));
+        strncat(tmp, load_variable(asmExt->input[nbInput]->offset), strlen(load_variable(asmExt->input[nbInput]->offset)));
         strncat(tmp, ", ", 3);
         strncat(tmp, asmExt->input[nbInput]->variableNumber, strlen(asmExt->input[nbInput]->variableNumber));
         strncat(tmp, ";\n", 3);
@@ -1782,7 +1752,7 @@ char *generate_output_asm(char *output_str)
         strncat(tmp, opcode(asmExt->output[nbOutput]->size), strlen(opcode(asmExt->output[nbOutput]->size)));
         strncat(tmp, asmExt->output[nbOutput]->variableNumber, strlen(asmExt->output[nbOutput]->variableNumber));
         strncat(tmp, ", ", 3);
-        strncat(tmp, load_variable(asmExt->output[nbOutput]->offset, asmExt->output[nbOutput]->ptr), strlen(load_variable(asmExt->output[nbOutput]->offset, asmExt->output[nbOutput]->ptr)));
+        strncat(tmp, load_variable(asmExt->output[nbOutput]->offset), strlen(load_variable(asmExt->output[nbOutput]->offset)));
         strncat(tmp, ";\n", 3);
         return tmp;
     }
@@ -1801,7 +1771,7 @@ char *generate_output_asm(char *output_str)
     else if (asmExt->output[nbOutput]->isAddress && asmExt->output[nbOutput]->isArray) {
         strncat(tmp, "\n", 3);
         strncat(tmp, "  movq ", 8);
-        strncat(tmp, load_variable(asmExt->output[nbOutput]->offsetArray, asmExt->output[nbOutput]->ptr), strlen(load_variable(asmExt->output[nbOutput]->offsetArray, asmExt->output[nbOutput]->ptr)));
+        strncat(tmp, load_variable(asmExt->output[nbOutput]->offsetArray), strlen(load_variable(asmExt->output[nbOutput]->offsetArray)));
         strncat(tmp, ", %rsi\n", 8);
         strncat(tmp, opcode(asmExt->output[nbOutput]->size), strlen(opcode(asmExt->output[nbOutput]->size)));
         strncat(tmp, asmExt->output[nbOutput]->variableNumber, strlen(asmExt->output[nbOutput]->variableNumber));
@@ -1823,7 +1793,7 @@ char *generate_output_asm(char *output_str)
     else if (asmExt->output[nbOutput]->isAddress && asmExt->output[nbOutput]->isStruct && strncmp(asmExt->output[nbOutput]->prefix, "=", 2)) {
         strncat(tmp, "\n", 3);
         strncat(tmp, "  movq ", 8);
-        strncat(tmp, load_variable(asmExt->output[nbOutput]->offset, asmExt->output[nbOutput]->ptr), strlen(load_variable(asmExt->output[nbOutput]->offset, asmExt->output[nbOutput]->ptr)));
+        strncat(tmp, load_variable(asmExt->output[nbOutput]->offset), strlen(load_variable(asmExt->output[nbOutput]->offset)));
         strncat(tmp, ", %rsi\n", 8);
         strncat(tmp, opcode(asmExt->output[nbOutput]->size), strlen(opcode(asmExt->output[nbOutput]->size)));
         strncat(tmp, asmExt->output[nbOutput]->variableNumber, strlen(asmExt->output[nbOutput]->variableNumber));
@@ -1847,7 +1817,7 @@ char *generate_output_asm(char *output_str)
         if (asmExt->output[nbOutput]->letter == 'm'|| asmExt->output[nbOutput]->letter == 'r' || asmExt->output[nbOutput]->letter == 'q') {
         strncat(tmp, "\n", 3);
         strncat(tmp, "  movq ", 8);
-        strncat(tmp, load_variable(asmExt->output[nbOutput]->offset, asmExt->output[nbOutput]->ptr), strlen(load_variable(asmExt->output[nbOutput]->offset, asmExt->output[nbOutput]->ptr)));
+        strncat(tmp, load_variable(asmExt->output[nbOutput]->offset), strlen(load_variable(asmExt->output[nbOutput]->offset)));
         strncat(tmp, ", %rsi\n", 8);
         strncat(tmp, opcode(asmExt->output[nbOutput]->size), strlen(opcode(asmExt->output[nbOutput]->size)));
         strncat(tmp, " (%rsi), ", 11);
@@ -1857,7 +1827,7 @@ char *generate_output_asm(char *output_str)
         } else {
         strncat(tmp, "\n", 3);
         strncat(tmp, "  movq ", 8);
-        strncat(tmp, load_variable(asmExt->output[nbOutput]->offset, asmExt->output[nbOutput]->ptr), strlen(load_variable(asmExt->output[nbOutput]->offset, asmExt->output[nbOutput]->ptr)));
+        strncat(tmp, load_variable(asmExt->output[nbOutput]->offset), strlen(load_variable(asmExt->output[nbOutput]->offset)));
         strncat(tmp, ", %rsi\n", 8);
         strncat(tmp, opcode(asmExt->output[nbOutput]->size), strlen(opcode(asmExt->output[nbOutput]->size)));
         strncat(tmp, asmExt->output[nbOutput]->variableNumber, strlen(asmExt->output[nbOutput]->variableNumber));
@@ -1877,14 +1847,7 @@ char *generate_output_asm(char *output_str)
 // by the correct value.
 // - or trying to do the same job as codegen.c but here. It's the goal of assign_lvar_offsets_assembly in update_offset function
 // need to test in several cases
-static char *ptr_or_rbp(Obj *var)
-{
-    if (var && var->ptr)
-        return var->ptr;
-    return "%rbp";
-}
-
-char *load_variable(int offset, char *ptr)
+char *load_variable(int offset)
 {
     //generic solution to handle all values of offset 
     // if (offset == 0)
@@ -1894,10 +1857,7 @@ char *load_variable(int offset, char *ptr)
     int length = snprintf(targetaddr, 20, "%d", offset);
     if (length < 0)
         error("%s %s %d : error:in load_variable : error during snprintf function! offset=%d length=%d", EXTASM_C, __FILE__, __LINE__, offset, length);
-    char *base = ptr ? ptr : "%rbp";
-    strncat(targetaddr, "(", 2);
-    strncat(targetaddr, base, strlen(base));
-    strncat(targetaddr, ")", 2);
+    strncat(targetaddr, "(%rbp)", 7);
     return targetaddr;
 }
 
@@ -2012,7 +1972,7 @@ char *generate_input_for_output() {
                 {
                     strncat(tmp, "\n", 3);
                     strncat(tmp, opcode(asmExt->output[i]->size), strlen(opcode(asmExt->output[i]->size)));
-                    strncat(tmp, load_variable(asmExt->output[i]->offset, asmExt->output[i]->ptr), strlen(load_variable(asmExt->output[i]->offset, asmExt->output[i]->ptr)));
+                    strncat(tmp, load_variable(asmExt->output[i]->offset), strlen(load_variable(asmExt->output[i]->offset)));
                     strncat(tmp, ", ", 3);
                     strncat(tmp, asmExt->output[i]->reg, strlen(asmExt->output[i]->reg));
                     strncat(tmp, ";\n", 3);             
@@ -2020,7 +1980,7 @@ char *generate_input_for_output() {
                 }else if (asmExt->output[i]->isAddress) {
                     strncat(tmp, "\n", 3);
                     strncat(tmp, opcode(8), 8);
-                    strncat(tmp, load_variable(asmExt->output[i]->offset, asmExt->output[i]->ptr), strlen(load_variable(asmExt->output[i]->offset, asmExt->output[i]->ptr)));
+                    strncat(tmp, load_variable(asmExt->output[i]->offset), strlen(load_variable(asmExt->output[i]->offset)));
                     strncat(tmp, ", ", 3);
                     strncat(tmp, asmExt->output[i]->reg64, strlen(asmExt->output[i]->reg64));
                     strncat(tmp, ";\n", 3);                       

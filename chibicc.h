@@ -1342,7 +1342,7 @@ extern bool opt_omit_frame_pointer;
 // extended_asm.c
 //
 
-char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals, char *funcname);
+char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals);
 void output_asm(Node *node, Token **rest, Token *tok, Obj *locals);
 void input_asm(Node *node, Token **rest, Token *tok, Obj *locals);
 char *subst_asm(char *template, char *output_str, char *input_str);
@@ -1352,7 +1352,7 @@ bool check_template(char *template);
 int search_output_index(char c);
 char *int_to_string(int i);
 void update_offset(char *funcname, Obj *locals);
-char *load_variable(int order, char *ptr);
+char *load_variable(int order);
 char *generate_output_asm(char *output_str);
 char *opcode(int size);
 char *update_register_size(char *reg, int size);
