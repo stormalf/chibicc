@@ -109,7 +109,7 @@ vlc:
 
 cpython:
 	cd ../cpython &&  CC=chibicc CFLAGS="-std=c11 -O3" ./configure  \
-	 --build=x86_64-pc-linux-gnu && make clean && make -j$(nproc) && make -j$(nproc) test
+	 --build=x86_64-pc-linux-gnu && make clean && make && make -j$(nproc) test
 
 # vlc2:
 # 	cd ../vlc && rm -rf build && mymeson setup build && cd build && mymeson compile
@@ -137,7 +137,7 @@ libchibicc.so: $(OBJS)
 	$(CC) $(CFLAGS) -o $@ $^ -shared
 
 clean:
-	rm -rf $(OBJECT) tmp* $(TESTS) issues/*.s issues/*.exe issues/*.dot test/*.s test/*.exe test_spe/*.exe stage2 diagram/*.png test/*.dot $(OBJECTLIB)
+	rm -rf $(OBJECT) tmp* *.zend $(TESTS) issues/*.s issues/*.exe issues/*.dot test/*.s test/*.exe test_spe/*.exe stage2 diagram/*.png test/*.dot $(OBJECTLIB)
 	find * -type f '(' -name '*~' -o -name '*.o' ')' -exec rm {} ';'
 
 install: $(OBJECT)
