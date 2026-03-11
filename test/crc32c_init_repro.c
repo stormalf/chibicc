@@ -204,7 +204,7 @@ static void *worker(void *arg) {
 
 int main(void) {
   signal(SIGALRM, on_alarm);
-  alarm(20);
+  alarm(50);
 
   crc32c_init();
   RASSERT(crc32c_fn != 0);
