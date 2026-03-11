@@ -21,7 +21,7 @@ Type *ty_ullong = &(Type){TY_LLONG, 8, 8, true};
 Type *ty_float = &(Type){TY_FLOAT, 4, 4};
 Type *ty_double = &(Type){TY_DOUBLE, 8, 8};
 Type *ty_ldouble = &(Type){TY_LDOUBLE, 16, 16};
-Type *ty_void_ptr = &(Type){TY_PTR, 8, 8, true};
+Type *ty_void_ptr = &(Type){TY_PTR, 8, 8, true, .is_pointer = true, .pointertype = &(Type){TY_VOID, 1, 1}, .base = &(Type){TY_VOID, 1, 1}};
 
 Type *ty_int128 = &(Type){TY_INT128, 16, 16}; 
 Type *ty_uint128 = &(Type){TY_INT128, 16, 16, true}; 
@@ -418,7 +418,7 @@ static Type *get_common_type(Node **lhs, Node **rhs)
   if (ty1->base) {
     if (ty1->base->kind == TY_VOID)
       if (ty2->base)
-        return pointer_to(ty2->base);  
+        return pointer_to(ty2->base);
     return pointer_to(ty1->base);
   }
 
