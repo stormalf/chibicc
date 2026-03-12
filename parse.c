@@ -2655,7 +2655,8 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
     Node *node = new_node(ND_IF, tok);
     SET_CTX(ctx);       
     tok = skip(tok->next, "(", ctx);
-    node->cond = expr(&tok, tok);
+    node->cond = to_bool(expr(&tok, tok));
+
 
     if (isDotfile && dotf != NULL)
       fprintf(dotf, "%s%d -> %s%d\n", nodekind2str(node->kind), node->unique_number, nodekind2str(node->cond->kind), node->cond->unique_number);

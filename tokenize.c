@@ -732,6 +732,7 @@ static void convert_pp_number(Token *tok)
   if (*end == 'f' || *end == 'F')
   {
     ty = ty_float;
+    val = (float)val;
     end++;
   }
   else if (*end == 'l' || *end == 'L')
@@ -742,6 +743,7 @@ static void convert_pp_number(Token *tok)
   else
   {
     ty = ty_double;
+    val = (double)val;
   }
 
   if (tok->loc + tok->len != end)
