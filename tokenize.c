@@ -836,7 +836,7 @@ Token *tokenize(File *file)
     {
       p++;
       at_bol = true;
-      has_space = false;
+      has_space = true;
       continue;
     }
 

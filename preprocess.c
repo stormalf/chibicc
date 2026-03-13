@@ -1080,6 +1080,8 @@ static bool expand_macro(Token **rest, Token *tok)
     (*rest)->has_space = macro_token->has_space;
   } else {
     *rest = tok->next;
+    if (macro_token->has_space)
+      (*rest)->has_space = true;
   }
   return true;
 }
