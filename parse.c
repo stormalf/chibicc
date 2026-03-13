@@ -6194,7 +6194,7 @@ static Node *primary(Token **rest, Token *tok)
       Node *node = unary(rest, tok->next);
       switch (node->kind) {
         case ND_MEMBER:
-          return new_ulong(MAX(node->member->ty->align, node->member->align), start);
+          return new_ulong(MAX(node->member->align, node->member->attr_align), start);
         case ND_VAR:
           return new_ulong(node->var->align, start);
         }
