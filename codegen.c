@@ -5352,10 +5352,14 @@ switch (node->lhs->ty->kind)
         println("  setne %%al");
         println("  setp %%dl");
         println("  or %%dl, %%al");
-      } else if (node->kind == ND_LT) {
+      } else if (node->kind == ND_LT) {        
         println("  setb %%al");
+        println("  setnp %%dl");
+        println("  and %%dl, %%al");
       } else {
         println("  setbe %%al");
+        println("  setnp %%dl");
+        println("  and %%dl, %%al");   
       }
 
       println("  movzbl %%al, %%eax");
