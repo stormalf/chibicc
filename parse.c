@@ -6181,18 +6181,24 @@ static Node *primary(Token **rest, Token *tok)
     Token *start = tok;
     Type *ty;
     if (equal(tok->next, "(") && is_typename(tok->next->next)) {
+      Token *start_paren = tok->next;
       ty = typename(&tok, tok->next->next);
-    SET_CTX(ctx); 
-    *rest = skip(tok, ")", ctx);
-    } else {
-    Node *node = unary(rest, tok->next);
-      switch (node->kind) {
-      case ND_MEMBER:
-        return new_ulong(MAX(node->member->ty->align, node->member->align), start);
-      case ND_VAR:
-        return new_ulong(node->var->align, start);
+      SET_CTX(ctx); 
+      *rest = skip(tok, ")", ctx);
+      if (equal(*rest, "{")) {
+        Node *node = unary(rest, start_paren);
+        add_type(node);
+        ty = node->ty;
       }
-    add_type(node);
+    } else {
+      Node *node = unary(rest, tok->next);
+      switch (node->kind) {
+        case ND_MEMBER:
+          return new_ulong(MAX(node->member->ty->align, node->member->align), start);
+        case ND_VAR:
+          return new_ulong(node->var->align, start);
+        }
+      add_type(node);
       ty = node->ty;
     }
     // _Alignof does not apply array-to-pointer decay for expressions.
