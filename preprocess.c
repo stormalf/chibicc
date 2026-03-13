@@ -879,7 +879,7 @@ static Token *paste(Token *lhs, Token *rhs)
 static bool has_varargs(MacroArg *args)
 {
   for (MacroArg *ap = args; ap; ap = ap->next)
-    if (!strcmp(ap->name, "__VA_ARGS__"))
+    if (ap->is_va_args)
       return ap->tok->kind != TK_EOF;
   return false;
 }
@@ -980,10 +980,15 @@ static Token *subst(Macro *m, MacroArg *args)
     if (equal(tok, "__VA_OPT__") && equal(tok->next, "("))
     {
       MacroArg *arg = read_macro_arg_one(&tok, tok->next->next, true);
-      if (has_varargs(args))
-        for (Token *t = arg->tok; t->kind != TK_EOF; t = t->next)
-          cur = cur->next = t;
-      SET_CTX(ctx);            
+      if (has_varargs(args)) {
+        Macro va_opt_macro = {.body = arg->tok};
+        Token *subst_body = subst(&va_opt_macro, args);
+        for (Token *t = subst_body; t->kind != TK_EOF; t = t->next) {
+          cur = cur->next = copy_token(t);
+        }
+      }
+
+      SET_CTX(ctx);
       tok = skip(tok, ")", ctx);
       continue;
     }

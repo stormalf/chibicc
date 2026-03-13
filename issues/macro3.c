@@ -1,4 +1,5 @@
 #include "test.h"
+#include <stdlib.h>
 
 // adapted from David Mazières's "Recursive macros with C++20 __VA_OPT__"
 // https://www.scs.stanford.edu/~dm/blog/va-opt.html
@@ -63,7 +64,7 @@ void foreach(void) {
 #define FOR_EACH_AGAIN() FOR_EACH_HELPER
 
 FOR_EACH(write_arr, 11, 22, 33, 44)
-
+;
   ASSERT(11, arr[0] );
   ASSERT(22, arr[1] );
   ASSERT(33, arr[2] );
