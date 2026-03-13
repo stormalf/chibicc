@@ -1192,7 +1192,7 @@ static Type *abstract_declarator(Token **rest, Token *tok, Type *ty)
   tok = attribute_list(tok, ty, type_attributes);
   ty = pointers(&tok, tok, ty);
 
-  if (equal(tok, "("))
+  if (equal(tok, "(") && !is_typename(tok->next) && !equal(tok->next, ")"))
   {
     Token *start = tok;
     Type dummy = {};
@@ -2891,7 +2891,7 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
     return node;
   }
 
-  if (equal(tok, "asm") || equal(tok, "__asm__")) 
+  if (equal(tok, "asm") || equal(tok, "__asm__") || equal(tok, "__asm")) 
     return asm_stmt(rest, tok);
 
   if (equal(tok, "goto"))
@@ -3351,7 +3351,11 @@ static int64_t eval_rval(Node *node, char ***label)
   case ND_VAR:
     if (node->var->is_local)
       error_tok(node->tok, "%s %d: in eval2 : not a compile-time constant4", PARSE_C, __LINE__);
-    *label = &node->var->name;
+
+    // Use the symbol name that will be emitted for this variable.
+    // For variables/functions with an `asm` label, the emitted symbol
+    // differs from the C identifier.
+    *label = node->var->asmname ? &node->var->asmname : &node->var->name;
     return 0;
   case ND_DEREF:
     return eval2(node->lhs, label);
@@ -7605,7 +7609,7 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
 
   fn->is_root = !(fn->is_static && fn->is_inline);
 
-   if (consume(&tok, tok, "asm") || consume(&tok, tok, "__asm__")) {
+   if (consume(&tok, tok, "asm") || consume(&tok, tok, "__asm__") || consume(&tok, tok, "__asm")) {
     SET_CTX(ctx); 
     tok = skip(tok, "(", ctx);
     fn->asmname = ConsumeStringLiteral(&tok, tok);
@@ -7679,6 +7683,7 @@ static Token *global_variable(Token *tok, Type *basety, VarAttr *attr)
 
   while (!consume(&tok, tok, ";"))
   {
+
     if (!first) {
       SET_CTX(ctx);         
       tok = skip(tok, ",", ctx);
@@ -7695,6 +7700,7 @@ static Token *global_variable(Token *tok, Type *basety, VarAttr *attr)
         if (sc->var->is_definition && !sc->var->is_tentative && !sc->var->is_extern && equal(tok, "=") )
           error_tok(ty->name, "%s %d: in global_variable : redefinition of the variable %s", PARSE_C, __LINE__, token_to_string(ty->name));        
       }
+    
   }
     
     Obj *var = new_gvar(get_ident(ty->name), ty);
@@ -7702,14 +7708,21 @@ static Token *global_variable(Token *tok, Type *basety, VarAttr *attr)
     
     //from COSMOPOLITAN adding other GNUC attributes
     VarAttr decl_attr = attr ? *attr : (VarAttr){};
-    tok = attribute_list(tok, &decl_attr, thing_attributes);
-    //tok = attribute_list(tok, ty, type_attributes);
-    if (consume(&tok, tok, "asm") || consume(&tok, tok, "__asm__")) {
-      SET_CTX(ctx);
-      tok = skip(tok, "(", ctx);
-      var->asmname = ConsumeStringLiteral(&tok, tok);
-      SET_CTX(ctx);
-      tok = skip(tok, ")", ctx);
+    while (true) {
+      if (consume(&tok, tok, "asm") || consume(&tok, tok, "__asm__") || consume(&tok, tok, "__asm")) {
+        SET_CTX(ctx);
+        tok = skip(tok, "(", ctx);
+        var->asmname = ConsumeStringLiteral(&tok, tok);
+        SET_CTX(ctx);
+        tok = skip(tok, ")", ctx);
+        continue;
+      }
+
+      Token *old2 = tok;
+      tok = attribute_list(tok, &decl_attr, thing_attributes);
+      if (tok != old2)
+        continue;
+      break;
     }
 
     var->is_weak = decl_attr.is_weak;
@@ -7904,7 +7917,7 @@ Obj *parse(Token *tok)
       continue;
     }
     //fixing ISS-192 found during php-src compile
-    if (equal(tok, "asm") || equal(tok, "__asm__")) {
+    if (equal(tok, "asm") || equal(tok, "__asm__") || equal(tok, "__asm")) {
       Node *node = asm_stmt(&tok, tok);
       add_type(node);
       continue;

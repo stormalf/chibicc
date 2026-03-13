@@ -57,6 +57,10 @@ struct {
   int bottom;
 } static tmp_stack;
 
+static char *sym(Obj *var) {
+  return var->asmname ? var->asmname : var->name;
+}
+
 __attribute__((format(printf, 1, 2))) void println(char *fmt, ...)
 {
   va_list ap;
@@ -276,19 +280,19 @@ int align_to(int n, int align)
 static void print_visibility(Obj *obj) {
   if (obj->visibility) {
     if (!strcmp(obj->visibility, "hidden")) {
-      println("  .hidden\t%s", obj->name);
+      println("  .hidden\t%s", sym(obj));
     } else if (!strcmp(obj->visibility, "protected")) {
-      println("  .protected %s", obj->name);
+      println("  .protected %s", sym(obj));
     }
   } 
   if (obj->is_static) {
-    println("  .local\t%s", obj->name);
+    println("  .local\t%s", sym(obj));
   } else {
-    println("  .globl\t%s", obj->name);
+    println("  .globl\t%s", sym(obj));
   }
   if (obj->is_weak) {
     
-    println("  .weak\t%s", obj->name);
+    println("  .weak\t%s", sym(obj));
   }
 }
 
@@ -491,7 +495,7 @@ static void gen_addr(Node *node)
       // Thread-local variable
       if (node->var->is_tls)
       {
-        println("  data16 lea \"%s\"@tlsgd(%%rip), %%rdi", node->var->name);
+        println("  data16 lea \"%s\"@tlsgd(%%rip), %%rdi", sym(node->var));
         println("  .value 0x6666");
         println("  rex64");
         println("  call __tls_get_addr@PLT");
@@ -499,7 +503,7 @@ static void gen_addr(Node *node)
       }
 
       // Function or global variable
-      println("  mov \"%s\"@GOTPCREL(%%rip), %%rax", node->var->name);
+      println("  mov \"%s\"@GOTPCREL(%%rip), %%rax", sym(node->var));
       return;
     }
 
@@ -508,9 +512,9 @@ static void gen_addr(Node *node)
     {
       println("  mov %%fs:0, %%rax");
       if (node->var->is_definition)
-        println("  add $\"%s\"@tpoff, %%rax", node->var->name);
+        println("  add $\"%s\"@tpoff, %%rax", sym(node->var));
       else 
-        println("  add %s@gottpoff(%%rip), %%rax", node->var->name);
+        println("  add %s@gottpoff(%%rip), %%rax", sym(node->var));
       return;
     }
 
@@ -541,14 +545,14 @@ static void gen_addr(Node *node)
     if (node->ty->kind == TY_FUNC)
     {
       if (node->var->is_definition)
-        println("  lea \"%s\"(%%rip), %%rax", node->var->name);
+        println("  lea \"%s\"(%%rip), %%rax", sym(node->var));
       else
-        println("  mov \"%s\"@GOTPCREL(%%rip), %%rax", node->var->name);
+        println("  mov \"%s\"@GOTPCREL(%%rip), %%rax", sym(node->var));
       return;
     }
 
     // Global variable
-    println("  lea \"%s\"(%%rip), %%rax", node->var->name);
+    println("  lea \"%s\"(%%rip), %%rax", sym(node->var));
     return;
   case ND_DEREF:
     gen_expr(node->lhs);
@@ -4285,7 +4289,7 @@ static void gen_expr(Node *node)
   }
   case ND_FUNCALL:
   {
-    if (node->lhs->kind == ND_VAR && (!strcmp(node->lhs->var->name, "alloca") ||  !strcmp(node->lhs->var->name, "__builtin_alloca")))
+    if (node->lhs->kind == ND_VAR && (!strcmp(sym(node->lhs->var), "alloca") ||  !strcmp(sym(node->lhs->var), "__builtin_alloca")))
     {
       gen_expr(node->args);
       println("  mov %%rax, %%rdi");
@@ -4367,9 +4371,9 @@ static void gen_expr(Node *node)
     if (node->is_tail && opt_optimize_level3) {
         char *funcname = NULL;
         if (node->lhs->kind == ND_VAR && node->lhs->var->is_function)
-            funcname = node->lhs->var->name;
+            funcname = sym(node->lhs->var);
 
-        if (funcname && strcmp(funcname, current_fn->name) == 0) {
+        if (funcname && strcmp(funcname, sym(current_fn)) == 0) {
             // Recursive tail call optimization
             Node *arg = node->args;
             Obj *param = current_fn->params;
@@ -4403,7 +4407,7 @@ static void gen_expr(Node *node)
             }
 
             depth -= stack_args;
-            println("  jmp .L.body.%s", current_fn->name);
+            println("  jmp .L.body.%s", sym(current_fn));
             return;
         }
 
@@ -5628,7 +5632,7 @@ static void gen_stmt(Node *node)
       }
     }
 
-    println("  jmp .L.return.%s", current_fn->name);
+    println("  jmp .L.return.%s", sym(current_fn));
     return;
   case ND_EXPR_STMT:
     gen_expr(node->lhs);
@@ -5652,18 +5656,12 @@ static void emit_data(Obj *prog)
     if (var->ty->size != 0)
       println("  .zero %ld", labs(var->ty->size));
     if (var->alias_name)
-      println("  .set \"%s\", %s", var->name, var->alias_name);
+      println("  .set \"%s\", %s", sym(var), var->alias_name);
     if (var->is_weak)
-      println("  .weak \"%s\"", var->name);
+      println("  .weak \"%s\"", sym(var));
     if (var->is_function || !var->is_definition)
       continue;
     print_visibility(var);
-    // if (var->is_static)
-    //   println("  .local %s", var->name);
-    // else if (var->ty->is_weak)
-    //   println("  .weak \"%s\"", var->name);
-    // else
-    //   println("  .globl %s", var->name);
 
     int align = (var->ty->kind == TY_ARRAY && var->ty->size >= 16)
                     ? MAX(16, var->align)
@@ -5672,10 +5670,12 @@ static void emit_data(Obj *prog)
     // Common symbol
     if (opt_fcommon && var->is_tentative && !var->is_tls && !var->section && !var->is_static)
     {
+      if (var->ty->kind == TY_FUNC)
+         continue;
       //from @fuhsnn incomplete array assuming to have one element
       if (var->ty->kind == TY_ARRAY && var->ty->size < 0)
         var->ty->size = var->ty->base->size;
-      println("  .comm %s, %ld, %d", var->name, var->ty->size, align);
+      println("  .comm %s, %ld, %d", sym(var), var->ty->size, align);
       continue;
     }
     
@@ -5693,10 +5693,10 @@ static void emit_data(Obj *prog)
         println("  .section .data,\"aw\",@progbits");
 
             
-      println("  .type %s, @object", var->name);
-      println("  .size %s, %ld", var->name, labs(var->ty->size));
+      println("  .type %s, @object", sym(var));
+      println("  .size %s, %ld", sym(var), labs(var->ty->size));
       if (align > 1) println("  .align %d", align);
-      println("%s:", var->name);
+      println("%s:", sym(var));
 
 
       Relocation *rel = var->rel;
@@ -5741,7 +5741,7 @@ static void emit_data(Obj *prog)
       }
 
 
-      println("  .size %s, %ld", var->name, var->ty->size);
+      println("  .size %s, %ld", sym(var), var->ty->size);
       continue;
     }
 
@@ -5754,7 +5754,7 @@ static void emit_data(Obj *prog)
       println("  .section .bss,\"aw\",@nobits");
 
     if (align > 1) println("  .align %d", align);
-    println("%s:", var->name);
+    println("%s:", sym(var));
     if (var->ty->size != 0)
       println("  .zero %ld", labs(var->ty->size));
   }
@@ -5840,7 +5840,7 @@ static void emit_text(Obj *prog)
         priority = 65535;
 
       CtorFunc *f = calloc(1, sizeof(CtorFunc));
-      f->name = fn->name;
+      f->name = sym(fn);
       f->priority = priority;
       constructors[constructor_cnt++] = f;
     }
@@ -5854,7 +5854,7 @@ static void emit_text(Obj *prog)
         priority = 65535;
 
       CtorFunc *f = calloc(1, sizeof(CtorFunc));
-      f->name = fn->name;
+      f->name = sym(fn);
       f->priority = priority;
       destructors[destructor_cnt++] = f;
     }
@@ -5868,8 +5868,8 @@ static void emit_text(Obj *prog)
     // Emit alias if fn->alias_name is set
     if (fn->alias_name) {
       // Handle weak alias
-      println("  .weak %s", fn->name);                 // Mark the function as weak
-      println("  .set %s, %s", fn->name, fn->alias_name);  // Define alias
+      println("  .weak %s", sym(fn));                 // Mark the function as weak
+      println("  .set %s, %s", sym(fn), fn->alias_name);  // Define alias
     }
 
     if (!fn->is_function || !fn->is_definition)
@@ -5882,17 +5882,17 @@ static void emit_text(Obj *prog)
       continue;
 
     if (fn->is_static)
-      println("  .local %s", fn->name);
+      println("  .local %s", sym(fn));
     else 
-      println("  .globl %s", fn->name);
+      println("  .globl %s", sym(fn));
 
     // Respect section attribute if set
     if (fn->section)
       println("  .section %s,\"ax\",@progbits", fn->section);
     else
       println("  .section .text,\"ax\",@progbits");
-    println("  .type %s, @function", fn->name);
-    println("%s:", fn->name);
+    println("  .type %s, @function", sym(fn));
+    println("%s:", sym(fn));
 
     current_fn = fn;
     tmp_stack.bottom = fn->stack_size;
@@ -5923,13 +5923,13 @@ static void emit_text(Obj *prog)
     // - AFTER sub for omit-fp functions (avoids re-allocating stack on each jump)
     // Note: Recursive TCO is disabled for omit-fp with stack params, so no offset issues
     if (!is_omit_fp(fn))
-      println(".L.body.%s:", fn->name);
+      println(".L.body.%s:", sym(fn));
     
     reserved_pos = ftell(output_file);
     println("                           ");
     
     if (is_omit_fp(fn))
-      println(".L.body.%s:", fn->name);
+      println(".L.body.%s:", sym(fn));
     
     // Save RSP for alloca/VLA support if needed
     if (fn->alloca_bottom && fn->alloca_bottom->offset)
@@ -6109,12 +6109,12 @@ static void emit_text(Obj *prog)
     // a special rule for the main function. Reaching the end of the
     // main function is equivalent to returning 0, even though the
     // behavior is undefined for the other functions.
-    if (strcmp(fn->name, "main") == 0) {
+    if (strcmp(sym(fn), "main") == 0) {
       println("  mov $0, %%rax");
     } 
 
     // Epilogue
-    println(".L.return.%s:", fn->name);
+    println(".L.return.%s:", sym(fn));
     if (use_rbx)
       println("  mov -8(%%rbp), %%rbx");
     if (!is_omit_fp(fn)) {
@@ -6127,8 +6127,8 @@ static void emit_text(Obj *prog)
     println("  ret");
     if (!is_omit_fp(fn)) 
       println("  .cfi_endproc");
-    println("  .size %s, .-%s", fn->name, fn->name);
-    println(".L.end.%s:", fn->name);
+    println("  .size %s, .-%s", sym(fn), sym(fn));
+    println(".L.end.%s:", sym(fn));
   }
   println(".L.text_end:");
   emit_constructors(); 
@@ -6165,14 +6165,14 @@ static void print_offset(Obj *prog)
       
     for (Obj *var = fn->params; var; var = var->next)
     {
-    printf("=====fn_name=%s var_name=%s offset=%d stack_size=%d var_alignment=%d\n", fn->name, var->name, var->offset, fn->stack_size, var->stack_align );
+    printf("=====fn_name=%s var_name=%s offset=%d stack_size=%d var_alignment=%d\n", sym(fn), sym(var), var->offset, fn->stack_size, var->stack_align );
     }
     for (Obj *var = fn->locals; var; var = var->next)
     {
-      printf("=====fn_name=%s var_name=%s offset=%d stack_size=%d var_alignment=%d\n", fn->name, var->name, var->offset, fn->stack_size, var->align );
+      printf("=====fn_name=%s var_name=%s offset=%d stack_size=%d var_alignment=%d\n", sym(fn), sym(var), var->offset, fn->stack_size, var->align );
       //update the function name if it's missing
       if (!var->funcname)
-        var->funcname = fn->name;
+        var->funcname = sym(fn);
     }
 
   }
