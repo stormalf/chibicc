@@ -55,13 +55,14 @@ void foreach(void) {
 #define EXPAND(...) EXPAND2(EXPAND2(__VA_ARGS__))
 #define EXPAND2(...) EXPAND1(EXPAND1(__VA_ARGS__))
 #define EXPAND1(...) __VA_ARGS__
+#define FOR_EACH_AGAIN() FOR_EACH_HELPER
 
 #define FOR_EACH(macro, ...)                                    \
   __VA_OPT__(EXPAND(FOR_EACH_HELPER(macro, __VA_ARGS__)))
 #define FOR_EACH_HELPER(macro, a1, ...)                         \
   macro(a1);                                                    \
   __VA_OPT__(FOR_EACH_AGAIN PRNS (macro, __VA_ARGS__))
-#define FOR_EACH_AGAIN() FOR_EACH_HELPER
+
 
 FOR_EACH(write_arr, 11, 22, 33, 44)
 ;
