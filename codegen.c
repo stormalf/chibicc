@@ -1047,7 +1047,14 @@ static void cast(Type *from, Type *to)
   if (to->kind == TY_BOOL)
   {
     cmp_zero(from);
-    println("  setne %%al");
+    if (is_flonum(from)) {
+      println("  setne %%al");
+      println("  setp %%dl");
+      println("  or %%dl, %%al");
+   } else {
+      println("  setne %%al");
+   }
+
     println("  movzx %%al, %%eax");
     return;
   }
