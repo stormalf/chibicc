@@ -127,6 +127,9 @@ openssh-portable:
 sqlite:
 	cd ../sqlite && CC=chibicc CFLAGS="-fPIC -std=c11" ./configure && make clean && make && make test
 
+php-src:
+	cd ../php-src && CC=chibicc CFLAGS="-fPIC -std=c11" ./buildconf && ./configure && make clean && make && make test
+
 # Misc.
 
 libchibicc:  $(OBJECT) $(OBJECTLIB).so

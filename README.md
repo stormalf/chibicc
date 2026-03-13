@@ -433,11 +433,7 @@ vim: https://github.com/vim/vim.git
     CC=chibicc CFLAGS="-fPIC" ./configure
     make
     make test    
-    == SUMMARY SYNTAX TESTS ==
-    Test run on 2025 Dec 10 18:09:21
-    OK: 192
-    FAILED: 0: []
-    skipped: 0 
+
 
 
 libwepb: https://github.com/webmproject/libwebp.git
@@ -498,6 +494,18 @@ sqlite : https://github.com/sqlite/sqlite.git
     fuzzcheck: 0 errors out of 46391 tests in 147.339 seconds
 
 
+php-src: https://github.com/php/php-src.git
+
+    CC=chibicc CFLAGS="-fPIC -std=c11" ./buildconf && ./configure && make clean && make && make test
+    Number of tests : 21533             15498
+    Tests skipped   :  6035 ( 28.0%) --------
+    Tests warned    :     3 (  0.0%) (  0.0%)
+    Tests failed    :     0 (  0.0%) (  0.0%)
+    Expected fail   :     8 (  0.0%) (  0.1%)
+    Tests passed    : 15487 ( 71.9%) ( 99.9%)
+
+
+
 ## meson
 
 to be able to use meson with chibicc (meson hack is to do the meson configure using gcc and rename gcc to gcc_old chibicc to gcc and meson compile will call chibicc).
@@ -521,18 +529,18 @@ cpython: git clone https://github.com/python/cpython.git
         test_recursion_limit (test.test_marshal.BugsTestCase.test_recursion_limit) ... Fatal Python error: Segmentation fault
         test_repr_deep (test.test_userlist.UserListTest.test_repr_deep) ... Fatal Python error: Segmentation fault
 
-        27 tests skipped:
-        3 tests skipped (resource denied):
-        5 re-run tests:
-        4 tests failed:
-            test.test_gdb.test_pretty_print test_call test_faulthandler
-            test_frame_pointer_unwind
-        466 tests OK.
+        25 tests skipped
+        3 tests skipped (resource denied)
+        6 re-run tests
+        5 tests failed:
+            test.test_gdb.test_pretty_print test_call test_ctypes
+            test_faulthandler test_frame_pointer_unwind
 
-        Total duration: 34 min 51 sec
-        Total tests: run=47,247 failures=44 skipped=2,658
-        Total test files: run=502/500 failed=4 skipped=27 resource_denied=3 rerun=5
-        Result: FAILURE then FAILURE
+        467 tests OK.
+
+        Total duration: 32 min 1 sec
+        Total tests: run=47,875 failures=3,170 skipped=2,621
+        Total test files: run=503/500 failed=5 skipped=25 resource_denied=3 rerun=6
 
 
 postgres: https://github.com/postgres/postgres.git  (in case of bad network use git clone --filter=blob:none --depth=1 https://github.com/postgres/postgres.git --branch master)
@@ -543,11 +551,15 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
     failed with :
     2025-08-19 21:36:40.890 CEST [1338239] PANIC: ProcKill() called in child process
 
+
 ## features added 
 
     - some extended assembly syntax taken in account (only when on macro body they are failing)
     - adding basic support on int128 (probably some operations are still not supported)
     - adding vector management and scalar promotion to vector    
+    - alignment attributes supported (like GNUC level 4)
+    - some basic optimization
+    - some basic debug information (dwarf information)
 
  
 ## TODO
@@ -566,10 +578,10 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
 
 ## known issues
 
-    postgres execution : ko
+    postgres execution : tests KO
     git 2 tests failed    
-    vim: compile OK, tests OK except one test : on test_channel.vim (Test_error_callback_terminal).
-    cpython : compile OK, some tests ko (4 on 500)
+    vim: compile OK, tests OK except 3.
+    cpython : compile OK, some tests KO     
            
 
 ## projects compiled successfully with chibicc
@@ -580,7 +592,8 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
     nmap: compile OK, tests OK    
     openssh-portable : compile OK, tests OK
     vlc: compile OK  
-    memcached : compile OK, tests OK  
+    memcached : compile OK, tests OK      
+    php-src : compile OK, tests OK
 
 
 ## debug
