@@ -310,7 +310,7 @@ char *reg_dx(int sz)
   case 8:
     return "%rdx";
   }
-  unreachable();
+  return "%rdx";
 }
 
 
@@ -327,7 +327,7 @@ char *reg_di(int sz)
   case 8:
     return "%rdi";
   }
-  unreachable();
+  return "%rdi";
 }
 
 char *reg_si(int sz)
@@ -343,7 +343,7 @@ char *reg_si(int sz)
   case 8:
     return "%rsi";
   }
-  unreachable();
+  return "%rsi";
 }
 
 
@@ -360,7 +360,7 @@ char *reg_r8w(int sz)
   case 8:
     return "%r8";
   }
-  unreachable();
+  return "%r8";
 }
 
 char *reg_r9w(int sz)
@@ -376,7 +376,7 @@ char *reg_r9w(int sz)
   case 8:
     return "%r9";
   }
-  unreachable();
+  return "%r9";
 }
 
 
@@ -393,7 +393,7 @@ char *reg_r10w(int sz)
   case 8:
     return "%r10";
   }
-  unreachable();
+  return "%r10";
 }
 
 char *reg_r11w(int sz)
@@ -409,7 +409,7 @@ char *reg_r11w(int sz)
   case 8:
     return "%r11";
   }
-  unreachable();
+  return "%r11";
 }
 
 
@@ -426,7 +426,7 @@ char *reg_bx(int sz)
   case 8:
     return "%rbx";
   }
-  unreachable();
+  return "%rbx";
 }
 
 char *reg_cx(int sz)
@@ -442,7 +442,7 @@ char *reg_cx(int sz)
   case 8:
     return "%rcx";
   }
-  unreachable();
+  return "%rcx";
 }
 
 char *reg_ax(int sz)
@@ -459,7 +459,7 @@ char *reg_ax(int sz)
   case 8:
     return "%rax";
   }
-  unreachable();
+  return "%rax";
 }
 
 // Compute the absolute address of a given node.
