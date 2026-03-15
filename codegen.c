@@ -1,5 +1,4 @@
 #include "chibicc.h"
-#define CODEGEN_C "codegen.c"
 
 #define GP_MAX 6
 #define FP_MAX 8
@@ -623,7 +622,7 @@ static void gen_addr(Node *node)
   
   }
 
-  error_tok(node->tok, "%s:%d not an lvalue %d", CODEGEN_C, __LINE__, node->kind);
+  error_tok(node->tok, "%s:%d not an lvalue %d", __FILE__, __LINE__, node->kind);
 }
 
 // Copy n bytes from the source address in %rax to the destination in dst_reg.
@@ -728,7 +727,7 @@ static void gen_mem_zero(int offset, int n) {
 static void load(Type *ty)
 {
   if (!ty)
-    error("%s: %s:%d: error: in load : ty is null!", CODEGEN_C, __FILE__, __LINE__);
+    error("%s: %s:%d: error: in load : ty is null!", __FILE__, __FILE__, __LINE__);
 
   switch (ty->kind)
   {
@@ -739,7 +738,7 @@ static void load(Type *ty)
      
       println("  movdqu (%%rax), %%xmm0"); 
     } else {
-      error("%s: %s:%d: error: in load : unsupported vector base type %d", CODEGEN_C, __FILE__, __LINE__, ty->base->kind);
+      error("%s: %s:%d: error: in load : unsupported vector base type %d", __FILE__, __FILE__, __LINE__, ty->base->kind);
     }
     return;
   }
@@ -791,7 +790,7 @@ static void load(Type *ty)
 static void store(Type *ty)
 {
   if (!ty)
-    error("%s %d: in store : ty is null!", CODEGEN_C, __LINE__);
+    error("%s %d: in store : ty is null!", __FILE__, __LINE__);
   pop_tmp("%rdi");
 
 
@@ -803,7 +802,7 @@ static void store(Type *ty)
     } else if (is_integer(ty->base)) {
       println("  movdqu %%xmm0, (%%rdi)");
     } else {
-      error("%s %d: in store : unsupported vector base type %d", CODEGEN_C, __LINE__, ty->base->kind);
+      error("%s %d: in store : unsupported vector base type %d", __FILE__, __LINE__, ty->base->kind);
     }
     return;
   case TY_STRUCT:
@@ -840,7 +839,7 @@ static void store(Type *ty)
 static void cmp_zero(Type *ty)
 {
   if (!ty)
-    error("%s %d: in cmp_zero : ty is null!", CODEGEN_C, __LINE__);
+    error("%s %d: in cmp_zero : ty is null!", __FILE__, __LINE__);
   switch (ty->kind)
   {
   case TY_FLOAT:
@@ -1042,7 +1041,7 @@ static const char *const cast_table[13][13] = /* clang-format off */ {
 static void cast(Type *from, Type *to)
 {
   if (!to)
-    error("%s %d: in cast : to type is null!", CODEGEN_C, __LINE__);    
+    error("%s %d: in cast : to type is null!", __FILE__, __LINE__);    
   if (!from)
     from = copy_type(to);    
   if (to->kind == TY_VOID)
@@ -1333,7 +1332,7 @@ static int push_args(Node *node)
   {
     Type *ty = arg->ty;
     if (!ty)
-      error("%s %d: in push_args : type is null!", CODEGEN_C, __LINE__);  
+      error("%s %d: in push_args : type is null!", __FILE__, __LINE__);  
 
     switch (ty->kind)
     {
@@ -1415,7 +1414,7 @@ static void copy_ret_buffer(Obj *var)
 {
   Type *ty = var->ty;
   if (!ty)
-    error("%s %d: in copy_ret_buffer : type is null!", CODEGEN_C, __LINE__);  
+    error("%s %d: in copy_ret_buffer : type is null!", __FILE__, __LINE__);  
 
   int gp = 0, fp = 0;
 
@@ -1482,7 +1481,7 @@ static void copy_struct_reg(void)
 {
   Type *ty = current_fn->ty->return_ty;
   if (!ty)
-    error("%s %d: in copy_struct_reg : type is null!", CODEGEN_C, __LINE__);  
+    error("%s %d: in copy_struct_reg : type is null!", __FILE__, __LINE__);  
   int gp = 0, fp = 0;
 
   println("  mov %%rax, %%rdi");
@@ -1536,7 +1535,7 @@ static void copy_struct_mem(void)
   Type *ty = current_fn->ty->return_ty;
 
   if (!ty)
-    error("%s %d: in copy_struct_mem : type is null!", CODEGEN_C, __LINE__);  
+    error("%s %d: in copy_struct_mem : type is null!", __FILE__, __LINE__);  
   Obj *var = current_fn->params;
   if (is_omit_fp(current_fn))
     println("  mov %d(%%rsp), %%rdi", var->offset + current_fn->stack_size + depth * 8);
@@ -1837,7 +1836,7 @@ static void gen_int128_op(Node *node) {
       break;
     }
     default:
-        error_tok(node->tok,"%s: %s:%d: error: in gen_int128_op : unsupported int128 operation %d", CODEGEN_C, __FILE__, __LINE__, node->kind);
+        error_tok(node->tok,"%s: %s:%d: error: in gen_int128_op : unsupported int128 operation %d", __FILE__, __FILE__, __LINE__, node->kind);
     }
 }
 
@@ -1859,7 +1858,7 @@ static void scalar_to_xmm(Type *vec_ty, const char *xmm_reg) {
       println("  shufpd $0x00, %s, %s", xmm_reg, xmm_reg);
       break;
     default:
-      error("%s: %s:%d: error: in scalar_to_xmm : unsupported vector base type for scalar promotion %d", CODEGEN_C, __FILE__, __LINE__, vec_ty->base->kind);
+      error("%s: %s:%d: error: in scalar_to_xmm : unsupported vector base type for scalar promotion %d", __FILE__, __FILE__, __LINE__, vec_ty->base->kind);
     }
 }
 
@@ -1893,13 +1892,13 @@ static void gen_vector_op(Node *node) {
     break;
   case ND_DIV:
     if (is_integer(node->lhs->ty->base))
-      error_tok(node->tok, "%s: %s:%d: error: in gen_vector_op :  integer vector division not supported", CODEGEN_C, __FILE__, __LINE__);
+      error_tok(node->tok, "%s: %s:%d: error: in gen_vector_op :  integer vector division not supported", __FILE__, __FILE__, __LINE__);
     break;
   case ND_NEG:
     //gen_expr(node->lhs);          // materialize operand in %xmm0
     break;    
   default:
-    error_tok(node->tok, "%s: %s:%d: error: in gen_vector_op :  unsupported vector operation %d", CODEGEN_C, __FILE__, __LINE__, node->kind);
+    error_tok(node->tok, "%s: %s:%d: error: in gen_vector_op :  unsupported vector operation %d", __FILE__, __FILE__, __LINE__, node->kind);
   }
 
   Type *vec_ty = node->lhs->ty;
@@ -1907,7 +1906,7 @@ static void gen_vector_op(Node *node) {
     vec_ty = vec_ty->base;
 
   if (vec_ty->kind != TY_VECTOR)
-    error_tok(node->tok, "%s: %s:%d: error: in gen_vector_op : lhs is not a vector", CODEGEN_C, __FILE__, __LINE__);
+    error_tok(node->tok, "%s: %s:%d: error: in gen_vector_op : lhs is not a vector", __FILE__, __FILE__, __LINE__);
 
   // if (node->rhs)
   //   load_vector_operand(node->rhs, "%xmm1");    
@@ -1944,7 +1943,7 @@ static void gen_vector_op(Node *node) {
         println("  movups %%xmm1, %%xmm0"); 
         break;                
       default:
-        error_tok(node->tok, "%s: %s:%d: error: unsupported float vector operation", CODEGEN_C, __FILE__, __LINE__);
+        error_tok(node->tok, "%s: %s:%d: error: unsupported float vector operation", __FILE__, __FILE__, __LINE__);
       }
       break;
   case TY_DOUBLE:
@@ -1976,7 +1975,7 @@ static void gen_vector_op(Node *node) {
       println("  movapd %%xmm1, %%xmm0");  
       break;      
     default:
-      error_tok(node->tok, "%s: %s:%d: error: unsupported double vector operation", CODEGEN_C, __FILE__, __LINE__);
+      error_tok(node->tok, "%s: %s:%d: error: unsupported double vector operation", __FILE__, __FILE__, __LINE__);
     }
     break;
   case TY_LLONG:
@@ -2010,7 +2009,7 @@ static void gen_vector_op(Node *node) {
       println("  pxor %%xmm1, %%xmm0");
       break;
     default:
-      error_tok(node->tok, "%s: %s:%d: error: long vector operation not supported", CODEGEN_C, __FILE__, __LINE__);
+      error_tok(node->tok, "%s: %s:%d: error: long vector operation not supported", __FILE__, __FILE__, __LINE__);
     }
     break;
   case TY_INT:
@@ -2043,7 +2042,7 @@ static void gen_vector_op(Node *node) {
       println("  pxor %%xmm1, %%xmm0");  
       break;      
     default:
-      error_tok(node->tok, "%s: %s:%d: error: integer vector operation not supported", CODEGEN_C, __FILE__, __LINE__);
+      error_tok(node->tok, "%s: %s:%d: error: integer vector operation not supported", __FILE__, __FILE__, __LINE__);
     }
     break;
   }
@@ -2309,7 +2308,7 @@ static void gen_psll_binop(Node *node, const char *insn) {
 // Walk node to find a numeric constant. Works for ND_ASSIGN, ND_COMMA, ND_CAST etc.
 static int get_const_int_from_node(Node *node) {
   if (!node)
-    error("%s: %s:%d: error: in get_const_int_from_node : expected constant node", CODEGEN_C, __FILE__, __LINE__);
+    error("%s: %s:%d: error: in get_const_int_from_node : expected constant node", __FILE__, __FILE__, __LINE__);
   while (true) {
     if (node->kind == ND_NUM) return node->val;
     if (node->kind == ND_CAST) { node = node->lhs; continue; }
@@ -2318,7 +2317,7 @@ static int get_const_int_from_node(Node *node) {
     break;
   }
 
-  error_tok(node->tok, "%s: %s:%d: error: in get_const_int_from_node : not a compile-time integer constant", CODEGEN_C, __FILE__, __LINE__);
+  error_tok(node->tok, "%s: %s:%d: error: in get_const_int_from_node : not a compile-time integer constant", __FILE__, __FILE__, __LINE__);
  
 }
 
@@ -2332,7 +2331,7 @@ static Node *unwrap_casts(Node *node) {
 static void get_mask_values(Node *mask_node, int *vals, int expected_len) {
   mask_node = unwrap_casts(mask_node);
   if (!mask_node->var || !mask_node->var->init)
-    error_tok(mask_node->tok, "%s: %s:%d: error: in get_mask_values : shuffle mask must be a constant vector initializer! %d", CODEGEN_C, __FILE__, __LINE__, mask_node->kind);
+    error_tok(mask_node->tok, "%s: %s:%d: error: in get_mask_values : shuffle mask must be a constant vector initializer! %d", __FILE__, __FILE__, __LINE__, mask_node->kind);
 
   Initializer *init = mask_node->var->init;
   int len = mask_node->var->ty->array_len;
@@ -3656,12 +3655,12 @@ static void gen_cas(Node *node)   {
   gen_expr(node->cas_old);
   println("  mov %%rax, %%r8");
   if (!node->cas_old->ty->base)
-    error("%s %d: in gen_cas :node->cas_old base type is null!", CODEGEN_C, __LINE__); 
+    error("%s %d: in gen_cas :node->cas_old base type is null!", __FILE__, __LINE__); 
   load(node->cas_old->ty->base);
   pop_tmp("%rdx"); // new
   pop_tmp("%rdi"); // addr
   if (!node->cas_addr->ty->base)
-    error("%s %d: in gen_cas : node->cas_addr base type is null!", CODEGEN_C, __LINE__); 
+    error("%s %d: in gen_cas : node->cas_addr base type is null!", __FILE__, __LINE__); 
   int sz = node->cas_addr->ty->base->size;
   println("  lock cmpxchg %s, (%%rdi)", reg_dx(sz));
   println("  sete %%cl");
@@ -3705,7 +3704,7 @@ static void gen_bool_cas(Node *node) {
   pop_tmp("%rdi");
   int sz = node->cas_ptr->ty->base->size;
   if (!node->cas_ptr->ty->base)
-    error("%s %d: in gen_bool_cas : node->cas_ptr base type is null!", CODEGEN_C, __LINE__);   
+    error("%s %d: in gen_bool_cas : node->cas_ptr base type is null!", __FILE__, __LINE__);   
   println("  lock cmpxchg %s, (%%rdi)", reg_dx(sz)); 
   println("  sete %%al");       
   println("  movzbl %%al, %%eax"); 
@@ -3850,7 +3849,7 @@ static void gen_fetchnand(Node *node) {
         case 2: println("  movzwl (%%rdi), %%rax"); break;
         case 4: println("  movl (%%rdi), %%eax");   break;
         case 8: println("  movq (%%rdi), %%rax");   break;
-        default: error("%s %d: in gen_fetchnand : unsupported size %d!", CODEGEN_C, __LINE__, sz); 
+        default: error("%s %d: in gen_fetchnand : unsupported size %d!", __FILE__, __LINE__, sz); 
     }
     int label = count();
     println(".L.fetchnand_loop_%d:", label);
@@ -3903,7 +3902,7 @@ static void gen_cas_n(Node *node)   {
   pop_tmp("%rdi"); /* addr */
   int sz = node->cas_addr->ty->base->size;
   if (!node->cas_addr->ty->base)
-    error("%s %d: in gen_cas_n : node->cas_addr base type is null!", CODEGEN_C, __LINE__);   
+    error("%s %d: in gen_cas_n : node->cas_addr base type is null!", __FILE__, __LINE__);   
 
   println("  lock cmpxchg %s, (%%rdi)", reg_dx(sz));
 
@@ -3951,7 +3950,7 @@ static void gen_cvt_binop(Node *node, const char *insn) {
 static void gen_expr(Node *node)
 {
   if (!node)
-    error("%s: %s:%d: error: in gen_expr : node is null!", CODEGEN_C, __FILE__, __LINE__);
+    error("%s: %s:%d: error: in gen_expr : node is null!", __FILE__, __FILE__, __LINE__);
   if (node->tok && node->tok->line_no != last_loc_line) {
   println("  .loc %d %u", node->tok->file->file_no, node->tok->line_no);
       last_loc_line = node->tok->line_no;
@@ -4055,7 +4054,7 @@ static void gen_expr(Node *node)
   {
     gen_addr(node);
     if (!node->ty)
-      error("%s %d: in gen_expr : ND_MEMBER node type is null!", CODEGEN_C, __LINE__);  
+      error("%s %d: in gen_expr : ND_MEMBER node type is null!", __FILE__, __LINE__);  
     load(node->ty);
 
     Member *mem = node->member;
@@ -4078,7 +4077,7 @@ static void gen_expr(Node *node)
   case ND_DEREF:    
     gen_expr(node->lhs);
     if (!node->ty)
-      error("%s %d: in gen_expr : ND_DEREF node type is null!", CODEGEN_C, __LINE__); 
+      error("%s %d: in gen_expr : ND_DEREF node type is null!", __FILE__, __LINE__); 
     load(node->ty);
     return;
   case ND_ADDR:
@@ -4202,7 +4201,7 @@ static void gen_expr(Node *node)
   case ND_CAST:
     gen_expr(node->lhs);    
     if (!node->ty)   
-      error("%s %d: in gen_expr : ND_CAST node type is null!", CODEGEN_C, __LINE__); 
+      error("%s %d: in gen_expr : ND_CAST node type is null!", __FILE__, __LINE__); 
     cast(node->lhs->ty, node->ty);
     return;
   case ND_MEMZERO:
@@ -4312,7 +4311,7 @@ static void gen_expr(Node *node)
     {
       Type *ty = arg->ty;
       if (!ty)
-        error("%s %d: in gen_expr : type is null!", CODEGEN_C, __LINE__);  
+        error("%s %d: in gen_expr : type is null!", __FILE__, __LINE__);  
 
       switch (ty->kind)
       {
@@ -5325,7 +5324,7 @@ switch (node->lhs->ty->kind)
       return;
     }
 
-    error_tok(node->tok, "%s invalid expression", CODEGEN_C);
+    error_tok(node->tok, "%s invalid expression", __FILE__);
   }
   case TY_LDOUBLE:
   {
@@ -5378,7 +5377,7 @@ switch (node->lhs->ty->kind)
     }
 
 
-    error_tok(node->tok, "%s invalid expression", CODEGEN_C);
+    error_tok(node->tok, "%s invalid expression", __FILE__);
   }
   }
 
@@ -5493,13 +5492,13 @@ switch (node->lhs->ty->kind)
     return;
   }
 
-  error_tok(node->tok, "%s invalid expression", CODEGEN_C);
+  error_tok(node->tok, "%s invalid expression", __FILE__);
 }
 
 static void gen_stmt(Node *node)
 {
   if (!node)
-    error("%s: %s:%d: error: in gen_stmt : node is null!", CODEGEN_C, __FILE__, __LINE__);
+    error("%s: %s:%d: error: in gen_stmt : node is null!", __FILE__, __FILE__, __LINE__);
   if (node->tok && node->tok->line_no != last_loc_line) {
   println("  .loc %d %u", node->tok->file->file_no, node->tok->line_no);
         last_loc_line = node->tok->line_no;
@@ -5644,7 +5643,7 @@ static void gen_stmt(Node *node)
     return;
   }
 
-  error_tok(node->tok, "%s invalid statement", CODEGEN_C);
+  error_tok(node->tok, "%s invalid statement", __FILE__);
 }
 
 
@@ -5954,7 +5953,7 @@ static void emit_text(Obj *prog)
       {
         Type *ty = var->ty;
         if (!ty)
-          error("%s %d: in emit_text : type is null!", CODEGEN_C, __LINE__);  
+          error("%s %d: in emit_text : type is null!", __FILE__, __LINE__);  
         switch (ty->kind)
         {
           case TY_STRUCT:
@@ -6051,7 +6050,7 @@ static void emit_text(Obj *prog)
 
       Type *ty = var->ty;
       if (!ty)
-        error("%s %d: in emit_text : type is null!", CODEGEN_C, __LINE__);  
+        error("%s %d: in emit_text : type is null!", __FILE__, __LINE__);  
       switch (ty->kind)
       {
       case TY_VECTOR:
@@ -6060,7 +6059,7 @@ static void emit_text(Obj *prog)
         } else if (is_integer(ty->base)) {
           store_fp(fp++, offset, ty->size, var->ptr);
         } else {
-          error("%s %d: in emit_text : Unsupported vector base type", CODEGEN_C, __LINE__);  
+          error("%s %d: in emit_text : Unsupported vector base type", __FILE__, __LINE__);  
         }
         break;
       case TY_STRUCT:
@@ -6236,7 +6235,7 @@ void assign_lvar_offsets(Obj *prog) {
       if (var->offset) continue;
 
       Type *ty = var->ty;
-      if (!ty) error("%s %d: type is null!", CODEGEN_C, __LINE__);
+      if (!ty) error("%s %d: type is null!", __FILE__, __LINE__);
 
       // ABI: Check if passed in registers
       if (ty->kind == TY_STRUCT || ty->kind == TY_UNION) {
@@ -6303,7 +6302,7 @@ char *register_available() {
       }
   }
   //no registry available
-  error("%s: %s:%d: error: in register_available : no register available!", CODEGEN_C, __FILE__, __LINE__);
+  error("%s: %s:%d: error: in register_available : no register available!", __FILE__, __FILE__, __LINE__);
 }
 
 //check if a specific register is available in priority if not try to found a new available
@@ -6331,7 +6330,7 @@ int i;
           return newargreg64[i];
       }
   }
-  error("%s: %s:%d: error: in register8_to_64 : unexpected error!", CODEGEN_C, __FILE__, __LINE__);
+  error("%s: %s:%d: error: in register8_to_64 : unexpected error!", __FILE__, __FILE__, __LINE__);
 }
 
 //convert register 16 to register 64
@@ -6347,7 +6346,7 @@ int i;
           return newargreg64[i];
       }
   }
-  error("%s: %s:%d: error: in register16_to_64 : unexpected error!", CODEGEN_C, __FILE__, __LINE__);
+  error("%s: %s:%d: error: in register16_to_64 : unexpected error!", __FILE__, __FILE__, __LINE__);
 }
 
 //convert register 32 to register 64
@@ -6363,7 +6362,7 @@ int i;
           return newargreg64[i];
       }
   }
-  error("%s: %s:%d: error: in register32_to_64 : unexpected error!", CODEGEN_C, __FILE__, __LINE__);
+  error("%s: %s:%d: error: in register32_to_64 : unexpected error!", __FILE__, __FILE__, __LINE__);
 }
 
 //add a register in the list of used registers

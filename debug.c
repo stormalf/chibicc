@@ -1,5 +1,4 @@
 #include "chibicc.h"
-#define DEBUG_C "debug.c"
 
 //  for debug needs
 char *tokenkind2str(TokenKind kind)

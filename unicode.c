@@ -1,5 +1,4 @@
 #include "chibicc.h"
-#define UNICODE_C "unicode.c"
 
 // Encode a given character in UTF-8.
 int encode_utf8(char *buf, uint32_t c)
@@ -68,13 +67,13 @@ uint32_t decode_utf8(char **new_pos, char *p)
   }
   else
   {
-    error_at(start, "%s invalid UTF-8 sequence", UNICODE_C);
+    error_at(start, "%s invalid UTF-8 sequence", __FILE__);
   }
 
   for (int i = 1; i < len; i++)
   {
     if ((unsigned char)p[i] >> 6 != 0b10)
-      error_at(start, "%s invalid UTF-8 sequence", UNICODE_C);
+      error_at(start, "%s invalid UTF-8 sequence", __FILE__);
     c = (c << 6) | (p[i] & 0b111111);
   }
 

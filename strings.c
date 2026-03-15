@@ -1,5 +1,4 @@
 #include "chibicc.h"
-#define STRINGS_C "strings.c"
 
 // void strarray_push(StringArray *arr, char *s) {
 
@@ -12,7 +11,7 @@
 //     char **tmp;
 //     tmp = realloc(arr->data, sizeof(char *) * arr->capacity * 2);
 //     if (tmp == NULL)
-//       error("%s: %s:%d: error: in strarray_push reallocation of arr->data failed!", STRINGS_C, __FILE__, __LINE__);
+//       error("%s: %s:%d: error: in strarray_push reallocation of arr->data failed!", __FILE__, __FILE__, __LINE__);
 //     arr->data = tmp;
 //     arr->capacity *= 2;
 //     for (int i = arr->len; i < arr->capacity; i++) {
@@ -31,7 +30,7 @@ void strarray_push(StringArray *arr, char *s) {
   if (arr->capacity == arr->len) {
     char **tmp = realloc(arr->data, sizeof(char *) * arr->capacity * 2);
     if (tmp == NULL)
-      error("%s: %s:%d: error: in strarray_push reallocation of arr->data failed!", STRINGS_C, __FILE__, __LINE__);
+      error("%s: %s:%d: error: in strarray_push reallocation of arr->data failed!", __FILE__, __FILE__, __LINE__);
     arr->data = tmp;
     arr->capacity *= 2;
   }
@@ -47,7 +46,7 @@ char *format(const char *fmt, ...) {
   size_t buflen;
   FILE *out = open_memstream(&buf, &buflen);
   if (out == NULL)
-    error("%s: %s:%d: error: in strarray_push out is null", STRINGS_C, __FILE__, __LINE__);
+    error("%s: %s:%d: error: in strarray_push out is null", __FILE__, __FILE__, __LINE__);
      
   va_list ap;
   va_start(ap, fmt);

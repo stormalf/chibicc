@@ -13,7 +13,7 @@ typedef unsigned long uintptr_t;
 extern int printf(const char *fmt, ...);
 
 #define va_start(ap, last) \
-  do { *(ap) = *(__va_elem *)__va_area__; } while (0)
+  ({ *(ap) = *(__va_elem *)__va_area__; (void)0; })
 
 #define va_end(ap)
 

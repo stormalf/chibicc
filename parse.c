@@ -17,7 +17,6 @@
 // parser.
 
 #include "chibicc.h"
-#define PARSE_C "parse.c"
 
 
 
@@ -227,7 +226,7 @@ static void enter_scope(void)
 
   Scope *sc = calloc(1, sizeof(Scope));
   if (sc == NULL)
-    error("%s %s:%d: in enter_scope : sc pointer is null!", PARSE_C, __FILE__, __LINE__ );
+    error("%s %s:%d: in enter_scope : sc pointer is null!", __FILE__, __FILE__, __LINE__ );
   sc->next = scope;
   scope = sc;
 }
@@ -272,7 +271,7 @@ static Node *new_node(NodeKind kind, Token *tok)
   static int count = 0;
   Node *node = calloc(1, sizeof(Node));
   if (node == NULL)
-    error("%s:%s:%d: error: in new_node : node is null", PARSE_C, __FILE__, __LINE__);
+    error("%s:%s:%d: error: in new_node : node is null", __FILE__, __FILE__, __LINE__);
   node->kind = kind;
   node->unique_number = count++;
   node->tok = tok;
@@ -293,7 +292,7 @@ static Node *new_binary(NodeKind kind, Node *lhs, Node *rhs, Token *tok)
   add_type(node->rhs);
   if (kind == ND_ASSIGN && node->rhs->ty->kind == TY_VOID  )
   {
-    error_tok(node->rhs->tok, "%s %d: in new_binary : Cannot assign void type expression", PARSE_C, __LINE__);
+    error_tok(node->rhs->tok, "%s %d: in new_binary : Cannot assign void type expression", __FILE__, __LINE__);
   }
 
   // TODO type check other binary expressions, e.g., ND_ADD
@@ -372,12 +371,12 @@ Node *new_cast(Node *expr, Type *ty)
 
   Node *node = calloc(1, sizeof(Node));
   if (node == NULL)
-    error("%s: %s:%d: error: in new_cast : node is null", PARSE_C, __FILE__, __LINE__);
+    error("%s: %s:%d: error: in new_cast : node is null", __FILE__, __FILE__, __LINE__);
   node->kind = ND_CAST;
   node->tok = expr->tok;
   node->lhs = expr;
   if (!ty)
-    error("%s: %s:%d: error: in new_cast : type is null", PARSE_C, __FILE__, __LINE__);
+    error("%s: %s:%d: error: in new_cast : type is null", __FILE__, __FILE__, __LINE__);
   node->ty = copy_type(ty);
   return node;
 }
@@ -401,7 +400,7 @@ static VarScope *push_scope(char *name)
 {
   VarScope *sc = calloc(1, sizeof(VarScope));
   if (sc == NULL)
-    error("%s: %s:%d: error: in push_scope : sc is null!", PARSE_C, __FILE__, __LINE__);
+    error("%s: %s:%d: error: in push_scope : sc is null!", __FILE__, __FILE__, __LINE__);
 
   hashmap_put(&scope->vars, name, sc);
   return sc;
@@ -411,7 +410,7 @@ static Initializer *new_initializer(Type *ty, bool is_flexible)
 {
   Initializer *init = calloc(1, sizeof(Initializer));
   if (init == NULL)
-    error("%s: %s:%d: error: in new_initializer : init is null", PARSE_C, __FILE__, __LINE__);
+    error("%s: %s:%d: error: in new_initializer : init is null", __FILE__, __FILE__, __LINE__);
   init->ty = ty;
 
   if (ty->kind == TY_ARRAY)
@@ -424,7 +423,7 @@ static Initializer *new_initializer(Type *ty, bool is_flexible)
 
     init->children = calloc(ty->array_len, sizeof(Initializer *));
     if (init->children == NULL)
-      error("%s: %s:%d: error: in new_initializer : init->children is null %ld %ld", PARSE_C, __FILE__, __LINE__, ty->array_len, ty->size);
+      error("%s: %s:%d: error: in new_initializer : init->children is null %ld %ld", __FILE__, __FILE__, __LINE__, ty->array_len, ty->size);
     for (int i = 0; i < ty->array_len; i++)
       init->children[i] = new_initializer(ty->base, false);
     return init;
@@ -436,7 +435,7 @@ static Initializer *new_initializer(Type *ty, bool is_flexible)
 
     init->children = calloc(ty->array_len, sizeof(Initializer *));
     if (init->children == NULL)
-      error("%s: %s:%d: error: in new_initializer : init->children is null %ld %ld", PARSE_C, __FILE__, __LINE__, ty->array_len, ty->size);
+      error("%s: %s:%d: error: in new_initializer : init->children is null %ld %ld", __FILE__, __FILE__, __LINE__, ty->array_len, ty->size);
     for (int i = 0; i < ty->array_len; i++)
       init->children[i] = new_initializer(ty->base, false);
     return init;
@@ -452,14 +451,14 @@ static Initializer *new_initializer(Type *ty, bool is_flexible)
 
     init->children = calloc(len, sizeof(Initializer *));
     if (init->children == NULL)
-      error("%s: %s:%d: error: in new_initializer : init->children is null (bis)", PARSE_C, __FILE__, __LINE__);
+      error("%s: %s:%d: error: in new_initializer : init->children is null (bis)", __FILE__, __FILE__, __LINE__);
     for (Member *mem = ty->members; mem; mem = mem->next)
     {
       if (is_flexible && ty->is_flexible && !mem->next)
       {
         Initializer *child = calloc(1, sizeof(Initializer));
         if (child == NULL)
-          error("%s: %s:%d: error: in new_initializer : child is null", PARSE_C, __FILE__, __LINE__);
+          error("%s: %s:%d: error: in new_initializer : child is null", __FILE__, __FILE__, __LINE__);
         child->ty = mem->ty;
         child->is_flexible = true;
         init->children[mem->idx] = child;
@@ -481,7 +480,7 @@ static Obj *new_var(char *name, Type *ty)
 
   Obj *var = calloc(1, sizeof(Obj));
   if (var == NULL)
-    error("%s: %s:%d: error: in new_var : var is null", PARSE_C, __FILE__, __LINE__);
+    error("%s: %s:%d: error: in new_var : var is null", __FILE__, __FILE__, __LINE__);
   var->name = name;
   var->ty = ty;
   var->align = ty->align;
@@ -541,7 +540,7 @@ static Obj *new_string_literal(char *p, Type *ty)
 static char *get_ident(Token *tok)
 {
   if (tok->kind != TK_IDENT)
-    error_tok(tok, "%s %d: in get_ident : expected an identifier", PARSE_C, __LINE__);
+    error_tok(tok, "%s %d: in get_ident : expected an identifier", __FILE__, __LINE__);
   return strndup(tok->loc, tok->len);
 }
 
@@ -640,7 +639,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     {
       
       if (!attr) 
-        error_tok(tok, "%s %d: in declspec : storage class specifier is not allowed in this context", PARSE_C, __LINE__);
+        error_tok(tok, "%s %d: in declspec : storage class specifier is not allowed in this context", __FILE__, __LINE__);
 
       if (equal(tok, "typedef"))
         attr->is_typedef = true;
@@ -653,14 +652,14 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
       else if (equal(tok, "_Thread_local") || equal(tok, "__thread"))
         attr->is_tls = true;
       else        
-        error_tok(tok, "%s %d: in declspec : unknown storage class specifier", PARSE_C, __LINE__);
+        error_tok(tok, "%s %d: in declspec : unknown storage class specifier", __FILE__, __LINE__);
 
       //fixing  check for typedef specifier/attribute not strict enough #142 suggested by @samkho
       if (attr->is_typedef &&
           attr->is_static + attr->is_extern + attr->is_inline + attr->is_tls >= 1)
         error_tok(tok, "%s %d: in declspec : typedef may not be used together with static,"
                        " extern, inline, __thread or _Thread_local",
-                  PARSE_C, __LINE__);
+                  __FILE__, __LINE__);
 
       tok = tok->next;
         //from COSMOPOLITAN adding other GNUC attributes
@@ -705,7 +704,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     if (equal(tok, "_Alignas"))
     {
       if (!attr)
-        error_tok(tok, "%s %d: in declspec : _Alignas is not allowed in this context", PARSE_C, __LINE__);
+        error_tok(tok, "%s %d: in declspec : _Alignas is not allowed in this context", __FILE__, __LINE__);
       SET_CTX(ctx); 
       tok = skip(tok->next, "(", ctx);
       int align;
@@ -860,7 +859,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
       ty = copy_type(ty_ldouble);
       break;
     default:
-      error_tok(tok, "%s %d: in declspec : invalid type", PARSE_C, __LINE__);
+      error_tok(tok, "%s %d: in declspec : invalid type", __FILE__, __LINE__);
     }
 
     tok = tok->next;
@@ -869,7 +868,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
 
   *rest = tok;
   if (!ty)
-    error_tok(tok, "%s %d: in declspec : ty is null!", PARSE_C, __LINE__);
+    error_tok(tok, "%s %d: in declspec : ty is null!", __FILE__, __LINE__);
 
   if (is_atomic || is_const || is_volatile || is_restrict) {
     Type *ty3 = new_qualified_type(ty);
@@ -915,7 +914,7 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
       else if (!equal(tok, ",")) {
         Node *node = expr(&tok, tok);
         if (eval(node->lhs) == 0) { 
-          error("%s: %s:%d: tatic assert error : %s",  PARSE_C, __FILE__, __LINE__, node->rhs->tok->loc);
+          error("%s: %s:%d: tatic assert error : %s",  __FILE__, __FILE__, __LINE__, node->rhs->tok->loc);
         }
         while(!equal(tok->next, ";")) 
           tok = tok->next;
@@ -944,7 +943,7 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
         tok = tok->next;
       }
       if (tok->kind != TK_IDENT)
-        error_tok(tok, "%s %d: in func_params : expected identifier old source code not managed yet", PARSE_C, __LINE__);
+        error_tok(tok, "%s %d: in func_params : expected identifier old source code not managed yet", __FILE__, __LINE__);
       ArrayToken[nbFunc][nbparms] = tok;
       tok = backup;
     }
@@ -953,7 +952,7 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
     tok = attribute_list(tok, ty2, type_attributes);
 
     if (!ty2)
-      error_tok(tok, "%s %d: in func_params : ty2 is null", PARSE_C, __LINE__);
+      error_tok(tok, "%s %d: in func_params : ty2 is null", __FILE__, __LINE__);
 
     Token *name = ty2->name;
 
@@ -988,7 +987,7 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
       VarScope *sc = push_scope(get_ident(name));
       Obj *var = calloc(1, sizeof(Obj));
       if (var == NULL)
-        error("%s: %s:%d: error: in func_params : var is null", PARSE_C, __FILE__, __LINE__);
+        error("%s: %s:%d: error: in func_params : var is null", __FILE__, __FILE__, __LINE__);
       var->name = get_ident(name);
       var->ty = ty2;
       var->is_local = true;
@@ -1019,7 +1018,7 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
     ty->is_oldstyle = true;
   *rest = tok->next;
   if (!ty)
-    error_tok(tok, "%s %d: in func_params : ty is null!", PARSE_C, __LINE__);
+    error_tok(tok, "%s %d: in func_params : ty is null!", __FILE__, __LINE__);
   return ty;
 }
 
@@ -1099,7 +1098,7 @@ static Type *type_suffix(Token **rest, Token *tok, Type *ty)
 
   *rest = tok;
   if (!ty)
-    error_tok(tok, "%s %d: in type_suffix : ty is null!", PARSE_C, __LINE__);
+    error_tok(tok, "%s %d: in type_suffix : ty is null!", __FILE__, __LINE__);
   return ty;
 }
 
@@ -1143,7 +1142,7 @@ static Type *pointers(Token **rest, Token *tok, Type *ty)
   tok = attribute_list(tok, ty, type_attributes);
   *rest = tok;
   if (!ty)
-    error_tok(tok, "%s %d: in pointers : ty is null!", PARSE_C, __LINE__);
+    error_tok(tok, "%s %d: in pointers : ty is null!", __FILE__, __LINE__);
   return ty;
 }
 
@@ -1165,7 +1164,7 @@ static Type *declarator(Token **rest, Token *tok, Type *ty)
     }
     ty = type_suffix(rest, tok, ty);
     if (!ty)
-      error_tok(tok, "%s %d: in declarator : ty is null", PARSE_C, __LINE__);
+      error_tok(tok, "%s %d: in declarator : ty is null", __FILE__, __LINE__);
     return declarator(&tok, start->next, ty);
   }
   tok = attribute_list(tok, ty, type_attributes);  
@@ -1180,7 +1179,7 @@ static Type *declarator(Token **rest, Token *tok, Type *ty)
 
   ty = type_suffix(rest, tok, ty);
   if (!ty)
-    error_tok(tok, "%s %d: in declarator : ty is null", PARSE_C, __LINE__);  
+    error_tok(tok, "%s %d: in declarator : ty is null", __FILE__, __LINE__);  
   ty->name = name;
   ty->name_pos = name_pos;
   return ty;
@@ -1201,7 +1200,7 @@ static Type *abstract_declarator(Token **rest, Token *tok, Type *ty)
     tok = skip(tok, ")", ctx);
     ty = type_suffix(rest, tok, ty);
     if (!ty)
-      error_tok(tok, "%s %d: in declarator : ty is null", PARSE_C, __LINE__);
+      error_tok(tok, "%s %d: in declarator : ty is null", __FILE__, __LINE__);
     return abstract_declarator(&tok, start->next, ty);
   }
   tok = attribute_list(tok, ty, type_attributes);
@@ -1260,15 +1259,15 @@ static Type *enum_specifier(Token **rest, Token *tok)
   {
     Type *ty2 = find_tag(tag);
     if (!ty2)
-      warn_tok(tag, "%s %d: in enum_specifier : unknown enum type", PARSE_C, __LINE__);
+      warn_tok(tag, "%s %d: in enum_specifier : unknown enum type", __FILE__, __LINE__);
     if (ty2 && ty2->kind != TY_ENUM)
-      error_tok(tag, "%s %d: in enum_specifier : not an enum tag", PARSE_C, __LINE__);
+      error_tok(tag, "%s %d: in enum_specifier : not an enum tag", __FILE__, __LINE__);
     *rest = tok;
     if (ty2)
       return ty2;
 
     if (!ty)
-      error_tok(tok, "%s %d: in enum_specifier : ty is null!", PARSE_C, __LINE__);  
+      error_tok(tok, "%s %d: in enum_specifier : ty is null!", __FILE__, __LINE__);  
     return ty;
   }
   SET_CTX(ctx); 
@@ -1300,7 +1299,7 @@ static Type *enum_specifier(Token **rest, Token *tok)
   if (tag)
     push_tag_scope(tag, ty);
   if (!ty)
-    error_tok(tok, "%s %d: in enum_specifier : ty is null!", PARSE_C, __LINE__);    
+    error_tok(tok, "%s %d: in enum_specifier : ty is null!", __FILE__, __LINE__);    
   return ty;
 }
 
@@ -1324,7 +1323,7 @@ static Type *typeof_specifier(Token **rest, Token *tok)
   SET_CTX(ctx); 
   *rest = skip(tok, ")", ctx);
   if (!ty)
-    error_tok(tok, "%s %d: in typeof_specifier : ty is null!", PARSE_C, __LINE__);
+    error_tok(tok, "%s %d: in typeof_specifier : ty is null!", __FILE__, __LINE__);
   return ty;
 }
 
@@ -1381,7 +1380,7 @@ static Node *compute_vla_size(Type *ty, Token *tok)
 
   ty->vla_size = new_lvar("", ty_ulong, NULL);
   if (!ty->vla_len)
-    error_tok(tok, "%s %d: in compute_vla_size : vla_len is null", PARSE_C, __LINE__);
+    error_tok(tok, "%s %d: in compute_vla_size : vla_len is null", __FILE__, __LINE__);
     //ty->vla_len = new_var_node(ty->vla_size, tok);
 
   Node *expr = new_binary(ND_ASSIGN, new_var_node(ty->vla_size, tok),
@@ -1436,11 +1435,11 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
     }
     Type *ty = declarator(&tok, tok, basety);
     if (!ty)
-      error_tok(tok, "%s %d: in declaration : ty is null", PARSE_C, __LINE__);
+      error_tok(tok, "%s %d: in declaration : ty is null", __FILE__, __LINE__);
     if (ty->kind == TY_VOID)
-      error_tok(tok, "%s %d: in declaration : variable declared void", PARSE_C, __LINE__);
+      error_tok(tok, "%s %d: in declaration : variable declared void", __FILE__, __LINE__);
     if (!ty->name)
-      error_tok(ty->name_pos, "%s %d: in declaration : variable name omitted", PARSE_C, __LINE__);    
+      error_tok(ty->name_pos, "%s %d: in declaration : variable name omitted", __FILE__, __LINE__);    
     VarAttr decl_attr = attr ? *attr : (VarAttr){};
     tok = attribute_list(tok, &decl_attr, thing_attributes);
     int alt_align = decl_attr.align;
@@ -1449,7 +1448,7 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
       // static local variable
 
       if (ty->kind == TY_VLA)
-        error_tok(tok, "%s %d: in declaration: variable length arrays cannot be 'static'", PARSE_C, __LINE__);
+        error_tok(tok, "%s %d: in declaration: variable length arrays cannot be 'static'", __FILE__, __LINE__);
 
       Obj *var = new_anon_gvar(ty);
       //from @fuhsnn fix Handle local static _Thread_local
@@ -1473,7 +1472,7 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
     if (ty->kind == TY_VLA)
     {
       if (equal(tok, "="))
-        error_tok(tok, "%s %d: in declaration: variable-sized object may not be initialized", PARSE_C, __LINE__);
+        error_tok(tok, "%s %d: in declaration: variable-sized object may not be initialized", __FILE__, __LINE__);
 
       // Variable length arrays (VLAs) are translated to alloca() calls.
       // For example, `int x[n+2]` is translated to `tmp = n + 2,
@@ -1510,10 +1509,10 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
     }
     //ISS-146
     if (var->ty->size < 0)
-      error_tok(ty->name, "%s %d: in declaration : variable has incomplete type", PARSE_C, __LINE__);
+      error_tok(ty->name, "%s %d: in declaration : variable has incomplete type", __FILE__, __LINE__);
 
     if (var->ty->kind == TY_VOID)
-      error_tok(ty->name, "%s %d: in declaration : variable declared void", PARSE_C, __LINE__);
+      error_tok(ty->name, "%s %d: in declaration : variable declared void", __FILE__, __LINE__);
   }
 
   Node *node = new_node(ND_BLOCK, tok);
@@ -1597,7 +1596,7 @@ static void string_initializer(Token **rest, Token *tok, Initializer *init)
     break;
   }
   default:
-    error_tok(tok, "%s %d: in string_initializer : array of inappropriate type initialized from string constant", PARSE_C, __LINE__);
+    error_tok(tok, "%s %d: in string_initializer : array of inappropriate type initialized from string constant", __FILE__, __LINE__);
     // unreachable();
   }
 
@@ -1634,15 +1633,15 @@ static void array_designator(Token **rest, Token *tok, Type *ty, int *begin, int
 
   *begin = const_expr(&tok, tok->next);
   if (*begin >= ty->array_len)
-    error_tok(tok, "%s %d: in array_designator : array designator index exceeds array bounds", PARSE_C, __LINE__);
+    error_tok(tok, "%s %d: in array_designator : array designator index exceeds array bounds", __FILE__, __LINE__);
 
   if (equal(tok, "..."))
   {
     *end = const_expr(&tok, tok->next);
     if (*end >= ty->array_len)
-      error_tok(tok, "%s %d: in array designator : index exceeds array bounds", PARSE_C, __LINE__);
+      error_tok(tok, "%s %d: in array designator : index exceeds array bounds", __FILE__, __LINE__);
     if (*end < *begin)
-      error_tok(tok, "%s %d: in array designator : range [%d, %d] is empty", PARSE_C, __LINE__, *begin, *end);
+      error_tok(tok, "%s %d: in array designator : range [%d, %d] is empty", __FILE__, __LINE__, *begin, *end);
   }
   else
   {
@@ -1662,7 +1661,7 @@ static Member *struct_designator(Token **rest, Token *tok, Type *ty)
     tok = skip(tok, ".", ctx);
   }
   if (tok->kind != TK_IDENT)
-    error_tok(tok, "%s %d: in struct_designator : expected a field designator", PARSE_C, __LINE__);
+    error_tok(tok, "%s %d: in struct_designator : expected a field designator", __FILE__, __LINE__);
 
   for (Member *mem = ty->members; mem; mem = mem->next)
   {
@@ -1690,7 +1689,7 @@ static Member *struct_designator(Token **rest, Token *tok, Type *ty)
     }
   }
 
-  error_tok(tok, "%s %d: in struct_designator : struct has no such member", PARSE_C, __LINE__);
+  error_tok(tok, "%s %d: in struct_designator : struct has no such member", __FILE__, __LINE__);
 }
 
 // designation = ("[" const-expr "]" | "." ident)* "="? initializer
@@ -1700,7 +1699,7 @@ static void designation(Token **rest, Token *tok, Initializer *init)
   if (equal(tok, "["))
   {
     if (init->ty->kind != TY_ARRAY)
-      error_tok(tok, "%s %d: in designation : array index in non-array initializer", PARSE_C, __LINE__);
+      error_tok(tok, "%s %d: in designation : array index in non-array initializer", __FILE__, __LINE__);
 
     int begin, end;
     array_designator(&tok, tok, init->ty, &begin, &end);
@@ -1736,7 +1735,7 @@ static void designation(Token **rest, Token *tok, Initializer *init)
   }
 
   if (equal(tok, "."))
-    error_tok(tok, "%s %d: in designation: field name not in struct or union initializer", PARSE_C, __LINE__);
+    error_tok(tok, "%s %d: in designation: field name not in struct or union initializer", __FILE__, __LINE__);
 
   if (equal(tok, "=")) {
     SET_CTX(ctx); 
@@ -2043,7 +2042,7 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
   if (equal(tok, ","))
     return;
   if (!init)
-    error("%s: %s:%d: error: in initializer2 :  init is null %s", PARSE_C, __FILE__, __LINE__, tok->loc);
+    error("%s: %s:%d: error: in initializer2 :  init is null %s", __FILE__, __FILE__, __LINE__, tok->loc);
 
   if (init->ty->kind == TY_ARRAY && is_integer(init->ty->base)) {
     Token *start = tok;
@@ -2093,7 +2092,7 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
     }
 
     if (!init->ty->members)
-      error_tok(tok, "%s: %s:%d: error: in initializer2 :  initializer for empty aggregate requires explicit braces", PARSE_C, __FILE__, __LINE__);
+      error_tok(tok, "%s: %s:%d: error: in initializer2 :  initializer for empty aggregate requires explicit braces", __FILE__, __FILE__, __LINE__);
 
     struct_initializer2(rest, tok, init, init->ty->members, false);
     return;
@@ -2112,7 +2111,7 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
       return;
     }
     if (!init->ty->members)
-      error_tok(tok, "%s: %s:%d: error: in initializer2 :  initializer for empty aggregate requires explicit braces", PARSE_C, __FILE__, __LINE__);
+      error_tok(tok, "%s: %s:%d: error: in initializer2 :  initializer for empty aggregate requires explicit braces", __FILE__, __FILE__, __LINE__);
 
     init->mem = init->ty->members;
     initializer2(rest, tok, init->children[0]);
@@ -2148,14 +2147,14 @@ static Type *copy_struct_type(Type *ty)
   {
     Member *m = calloc(1, sizeof(Member));
     if (m == NULL)
-      error("%s: %s:%d: error: in copy_struct_type :  m is null", PARSE_C, __FILE__, __LINE__);
+      error("%s: %s:%d: error: in copy_struct_type :  m is null", __FILE__, __FILE__, __LINE__);
     *m = *mem;
     cur = cur->next = m;
   }
 
   ty->members = head.next;
   if (!ty)
-    error("%s %d: in copy_struct_type : ty is null!", PARSE_C, __LINE__);
+    error("%s %d: in copy_struct_type : ty is null!", __FILE__, __LINE__);
   return ty;
 }
 
@@ -2329,7 +2328,7 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
     int elem_size = ty->base->size;
     memset(buf + offset, 0, elem_size * ty->array_len);
     if (init->expr)
-      error_tok(init->expr->tok, "%s %d: in write_gvar_data : array initializer must be an initializer list", PARSE_C, __LINE__);
+      error_tok(init->expr->tok, "%s %d: in write_gvar_data : array initializer must be an initializer list", __FILE__, __LINE__);
     int sz = ty->base->size;
     for (int i = 0; i < ty->array_len; i++)
       cur = write_gvar_data(cur, init->children[i], ty->base, buf, offset + sz * i);
@@ -2470,7 +2469,7 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
         if (srel->offset == (int)val) {
           Relocation *rel = calloc(1, sizeof(Relocation));
           if (rel == NULL)
-            error("%s: %s:%d: error: in write_gvar_data : rel is null", PARSE_C, __FILE__, __LINE__);
+            error("%s: %s:%d: error: in write_gvar_data : rel is null", __FILE__, __FILE__, __LINE__);
           rel->offset = offset;
           rel->label = srel->label;
           rel->addend = srel->addend;
@@ -2489,7 +2488,7 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
           if (srel->offset == mofs) {
             Relocation *rel = calloc(1, sizeof(Relocation));
             if (rel == NULL)
-              error("%s: %s:%d: error: in write_gvar_data : rel is null", PARSE_C, __FILE__, __LINE__);
+              error("%s: %s:%d: error: in write_gvar_data : rel is null", __FILE__, __FILE__, __LINE__);
             rel->offset = offset;
             rel->label = srel->label;
             rel->addend = srel->addend;
@@ -2503,7 +2502,7 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
 
   Relocation *rel = calloc(1, sizeof(Relocation));
   if (rel == NULL)
-    error("%s: %s:%d: error: in write_gvar_data : rel is null", PARSE_C, __FILE__, __LINE__);
+    error("%s: %s:%d: error: in write_gvar_data : rel is null", __FILE__, __FILE__, __LINE__);
   rel->offset = offset;
   rel->label = label;
   rel->addend = val;
@@ -2523,7 +2522,7 @@ static void gvar_initializer(Token **rest, Token *tok, Obj *var)
   Relocation head = {};
   char *buf = calloc(1, var->ty->size);
   if (buf == NULL)
-    error("%s: %s:%d: error: in gvar_initializer : buf is null!", PARSE_C, __FILE__, __LINE__);
+    error("%s: %s:%d: error: in gvar_initializer : buf is null!", __FILE__, __FILE__, __LINE__);
   write_gvar_data(&head, init, var->ty, buf, 0);
   var->init_data = buf;
   var->rel = head.next;
@@ -2564,7 +2563,7 @@ static Node *asm_stmt(Token **rest, Token *tok)
   SET_CTX(ctx);   
   tok = skip(tok, "(", ctx);
   if (tok->kind != TK_STR || tok->ty->base->kind != TY_CHAR)
-    error_tok(tok, "%s %d: in asm_stmt : expected string literal", PARSE_C, __LINE__);
+    error_tok(tok, "%s %d: in asm_stmt : expected string literal", __FILE__, __LINE__);
 
   // extended assembly like asm ( assembler_template: output operands (optional) : input operands (optional) : list of clobbered registers (optional))
   if (equal(tok->next, ":"))
@@ -2573,7 +2572,7 @@ static Node *asm_stmt(Token **rest, Token *tok)
     opt_omit_frame_pointer = false;
     node->asm_str = extended_asm(node, rest, tok, locals);
     if (!node->asm_str)
-      error_tok(tok, "%s %d: in asm_stmt : error during extended_asm function null returned!", PARSE_C, __LINE__);
+      error_tok(tok, "%s %d: in asm_stmt : error during extended_asm function null returned!", __FILE__, __LINE__);
     return node;
   }
   node->asm_str = tok->str;
@@ -2609,7 +2608,7 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
     {
       if (ret_ty->kind != TY_VOID)
       {
-        error_tok(tok, "%s %d: in stmt : Non-void function must return something", PARSE_C, __LINE__);
+        error_tok(tok, "%s %d: in stmt : Non-void function must return something", __FILE__, __LINE__);
       }
       return node;
     }
@@ -2624,16 +2623,16 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
     //   exp = new_cast(exp, current_fn->ty->return_ty);
 
     if (!exp->ty)
-      error_tok(exp->tok, "%s %d: in stmt : exp->ty is null", PARSE_C, __LINE__);
+      error_tok(exp->tok, "%s %d: in stmt : exp->ty is null", __FILE__, __LINE__);
       
     if (ret_ty->kind == TY_VOID && exp->ty->kind != TY_VOID)
     {
-      error_tok(exp->tok, "%s %d: in stmt : Void function must return void type expression", PARSE_C, __LINE__);
+      error_tok(exp->tok, "%s %d: in stmt : Void function must return void type expression", __FILE__, __LINE__);
     }
     if (ret_ty->kind != TY_VOID && exp->ty->kind == TY_VOID)
     {
       error_tok(exp->tok,
-                "%s %d: in stmt : Non-void function cannot return void type expression", PARSE_C, __LINE__);
+                "%s %d: in stmt : Non-void function cannot return void type expression", __FILE__, __LINE__);
     }
 
     if (ret_ty->kind != TY_STRUCT && ret_ty->kind != TY_UNION)
@@ -2704,7 +2703,7 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
   if (equal(tok, "case"))
   {
     if (!current_switch)
-      error_tok(tok, "%s %d: in stmt : stray case", PARSE_C, __LINE__);
+      error_tok(tok, "%s %d: in stmt : stray case", __FILE__, __LINE__);
 
     Node *node = new_node(ND_CASE, tok);
 
@@ -2718,7 +2717,7 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
       // [GNU] Case ranges, e.g. "case 1 ... 5:"
       end = const_expr(&tok, tok->next);
       // if (end < begin)
-      //   error_tok(tok, "%s %d: in stmt : empty case range specified", PARSE_C, __LINE__);
+      //   error_tok(tok, "%s %d: in stmt : empty case range specified", __FILE__, __LINE__);
     }
     else
     {
@@ -2737,7 +2736,7 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
 
     if ((!current_switch->cond->ty->is_unsigned && (end < begin)) ||
       ((current_switch->cond->ty->is_unsigned && ((uint64_t)end < begin))))
-      error_tok(tok, "%s %d: in stmt : empty case range specified", PARSE_C, __LINE__);
+      error_tok(tok, "%s %d: in stmt : empty case range specified", __FILE__, __LINE__);
 
     SET_CTX(ctx); 
     tok = skip(tok, ":", ctx);
@@ -2756,7 +2755,7 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
     for (Node *c = current_switch->case_next; c; c = c->case_next)
     {
       if (!(end < c->begin || begin > c->end))
-        error_tok(tok, "%s %d: in stmt : duplicated case value or overlapping range %ld", PARSE_C, __LINE__, begin);
+        error_tok(tok, "%s %d: in stmt : duplicated case value or overlapping range %ld", __FILE__, __LINE__, begin);
     }
     node->begin = begin;
     node->end = end;
@@ -2768,7 +2767,7 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
   if (equal(tok, "default"))
   {
     if (!current_switch)
-      error_tok(tok, "%s %d: in stmt : stray default", PARSE_C, __LINE__);
+      error_tok(tok, "%s %d: in stmt : stray default", __FILE__, __LINE__);
 
     Node *node = new_node(ND_CASE, tok);
     SET_CTX(ctx);        
@@ -2910,7 +2909,7 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
   if (equal(tok, "break"))
   {
     if (!brk_label)
-      error_tok(tok, "%s %d: in stmt : stray break", PARSE_C, __LINE__);
+      error_tok(tok, "%s %d: in stmt : stray break", __FILE__, __LINE__);
     Node *node = new_node(ND_GOTO, tok);
     node->unique_label = brk_label;
     SET_CTX(ctx);     
@@ -2921,7 +2920,7 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
   if (equal(tok, "continue"))
   {
     if (!cont_label)
-      error_tok(tok, "%s %d: in stmt : stray continue", PARSE_C, __LINE__);
+      error_tok(tok, "%s %d: in stmt : stray continue", __FILE__, __LINE__);
     Node *node = new_node(ND_GOTO, tok);
     node->unique_label = cont_label;
     SET_CTX(ctx);        
@@ -3144,7 +3143,7 @@ static int64_t eval2(Node *node, char ***label)
       int64_t v1 = eval2(node->lhs, &l1);
       int64_t v2 = eval2(node->rhs, &l2);
       if (l1 && l2)
-        error_tok(node->tok, "%s %d: in eval2 : invalid constant address expression", PARSE_C, __LINE__);
+        error_tok(node->tok, "%s %d: in eval2 : invalid constant address expression", __FILE__, __LINE__);
       if (l2) {
         *label = l2;
         return v1 + v2;
@@ -3161,7 +3160,7 @@ static int64_t eval2(Node *node, char ***label)
       int64_t v1 = eval2(node->lhs, &l1);
       int64_t v2 = eval2(node->rhs, &l2);
       if (l2)
-        error_tok(node->tok, "%s %d: in eval2 : invalid constant address expression", PARSE_C, __LINE__);
+        error_tok(node->tok, "%s %d: in eval2 : invalid constant address expression", __FILE__, __LINE__);
       if (l1)
         *label = l1;
       return v1 - v2;
@@ -3172,11 +3171,11 @@ static int64_t eval2(Node *node, char ***label)
   case ND_DIV:
     // Check for division overflow
     if (eval(node->lhs) == LLONG_MIN && eval(node->rhs) == -1) {
-      warn_tok(node->tok, "in eval2: %s %d: integer overflow!", PARSE_C, __LINE__);
+      warn_tok(node->tok, "in eval2: %s %d: integer overflow!", __FILE__, __LINE__);
       return 0;  // Return 0 or any other value you think is appropriate
     }
     if (eval(node->rhs) == 0)
-          error_tok(node->tok, "%s  %d: in eval2 : eval(node->rhs) caused a division by zero!", PARSE_C, __LINE__ );
+          error_tok(node->tok, "%s  %d: in eval2 : eval(node->rhs) caused a division by zero!", __FILE__, __LINE__ );
     if (node->ty && node->ty->is_unsigned)
       return (uint64_t)eval(node->lhs) / (uint64_t)eval(node->rhs);
     return eval(node->lhs) / eval(node->rhs);
@@ -3192,11 +3191,11 @@ static int64_t eval2(Node *node, char ***label)
   case ND_MOD:
     // Check for division overflow
     if (eval(node->lhs) == LLONG_MIN && eval(node->rhs) == -1) {
-      warn_tok(node->tok, "in eval2: %s %d: integer overflow!", PARSE_C, __LINE__);
+      warn_tok(node->tok, "in eval2: %s %d: integer overflow!", __FILE__, __LINE__);
       return 0;  
     }
     if (eval(node->rhs) == 0)
-          error_tok(node->tok, "%s  %d: in eval2 : eval(node->rhs) caused a division by zero!", PARSE_C, __LINE__ );    
+          error_tok(node->tok, "%s  %d: in eval2 : eval(node->rhs) caused a division by zero!", __FILE__, __LINE__ );    
     if (node->ty && node->ty->is_unsigned)
       return (uint64_t)eval(node->lhs) % eval(node->rhs);
     return eval(node->lhs) % eval(node->rhs);
@@ -3295,15 +3294,15 @@ static int64_t eval2(Node *node, char ***label)
   //from @fuhsnn eval2():Evaluate ND_DEREF for TY_ARRAY
   case ND_DEREF:
     // if (node->ty->kind != TY_ARRAY && !is_vector(node->ty))
-    //   error_tok(node->tok, "%s:%d: in eval2 : not a compile-time constant node->ty->kind=%d ", PARSE_C, __LINE__, node->ty->kind);
+    //   error_tok(node->tok, "%s:%d: in eval2 : not a compile-time constant node->ty->kind=%d ", __FILE__, __LINE__, node->ty->kind);
     return eval2(node->lhs, label);    
   case ND_MEMBER:
     
     if (!label) {
-      error_tok(node->tok, "%s:%d: in eval2 : not a compile-time constant", PARSE_C, __LINE__ );
+      error_tok(node->tok, "%s:%d: in eval2 : not a compile-time constant", __FILE__, __LINE__ );
     }
     // if (node->ty->kind != TY_ARRAY) {
-    //   error_tok(node->tok, "%s %d: in eval2 : invalid initializer", PARSE_C, __LINE__);
+    //   error_tok(node->tok, "%s %d: in eval2 : invalid initializer", __FILE__, __LINE__);
     // }
     return eval_rval(node->lhs, label) + node->member->offset;
   case ND_VAR:
@@ -3318,13 +3317,13 @@ static int64_t eval2(Node *node, char ***label)
     
     //trying to fix ======ISS-145 compiling util-linux failed with invalid initalizer2 
     // if (node->var->ty->kind != TY_ARRAY && node->var->ty->kind != TY_FUNC && node->var->ty->kind != TY_INT) {
-    //   error_tok(node->tok, "%s %d: in eval2 : invalid initializer2 %d", PARSE_C, __LINE__, node->var->ty->kind);
+    //   error_tok(node->tok, "%s %d: in eval2 : invalid initializer2 %d", __FILE__, __LINE__, node->var->ty->kind);
     // }
     //trying to fix ======ISS-145 compiling util-linux failed with invalid initalizer2 
     if (is_integer(node->var->ty))
       return 0;
     if (!label) {
-      error_tok(node->tok, "%s %d : in eval2 : not a compile-time constant %d", PARSE_C, __LINE__, node->var->ty->kind);
+      error_tok(node->tok, "%s %d : in eval2 : not a compile-time constant %d", __FILE__, __LINE__, node->var->ty->kind);
     }
     *label = &node->var->name;
     return 0;
@@ -3332,7 +3331,7 @@ static int64_t eval2(Node *node, char ***label)
     return node->val;
 
   }
-  error_tok(node->tok, "%s %d: in eval2 : not a compile-time constant3", PARSE_C, __LINE__);
+  error_tok(node->tok, "%s %d: in eval2 : not a compile-time constant3", __FILE__, __LINE__);
 }
 
 
@@ -3342,7 +3341,7 @@ static int64_t eval_rval(Node *node, char ***label)
   {
   case ND_VAR:
     if (node->var->is_local)
-      error_tok(node->tok, "%s %d: in eval2 : not a compile-time constant4", PARSE_C, __LINE__);
+      error_tok(node->tok, "%s %d: in eval2 : not a compile-time constant4", __FILE__, __LINE__);
 
     // Use the symbol name that will be emitted for this variable.
     // For variables/functions with an `asm` label, the emitted symbol
@@ -3357,7 +3356,7 @@ static int64_t eval_rval(Node *node, char ***label)
     return 1;
   }
 
-  error_tok(node->tok, "%s %d: in eval2 : invalid initializer3", PARSE_C, __LINE__);
+  error_tok(node->tok, "%s %d: in eval2 : invalid initializer3", __FILE__, __LINE__);
 }
 
 static bool is_const_expr(Node *node)
@@ -3462,7 +3461,7 @@ static long double eval_double(Node *node)
     return node->fval;
   }
 
-  error_tok(node->tok, "%s %d: in eval_double : not a compile-time constant %d", PARSE_C, __LINE__, node->kind);
+  error_tok(node->tok, "%s %d: in eval_double : not a compile-time constant %d", __FILE__, __LINE__, node->kind);
 }
 
 // Check if it is safe to re-evaluate an lvalue without introducing a temp.
@@ -3888,7 +3887,7 @@ static Node *new_add(Node *lhs, Node *rhs, Token *tok, bool is_op)
   if (is_vector(lhs->ty) && is_vector(rhs->ty)) {
     
     if (lhs->ty->array_len != rhs->ty->array_len)
-      error_tok(tok, "%s %d: in new_add: incompatible vector types", PARSE_C, __LINE__);
+      error_tok(tok, "%s %d: in new_add: incompatible vector types", __FILE__, __LINE__);
     Node *node = new_binary(ND_ADD, lhs, rhs, tok);
     node->ty =  lhs->ty;
     return node;
@@ -3899,7 +3898,7 @@ static Node *new_add(Node *lhs, Node *rhs, Token *tok, bool is_op)
     return new_binary(ND_ADD, lhs, rhs, tok);
   
   if ((lhs->ty->base == NULL && rhs->ty->base == NULL) || (lhs->ty->base != NULL && rhs->ty->base != NULL)) {
-    error_tok(tok, "%s %d: in new_add : invalid operands", PARSE_C, __LINE__);
+    error_tok(tok, "%s %d: in new_add : invalid operands", __FILE__, __LINE__);
   }
 
   // Canonicalize `num + ptr` to `ptr + num`.
@@ -3946,7 +3945,7 @@ static Node *new_sub(Node *lhs, Node *rhs, Token *tok, bool is_op)
   // case of vectors
   if (is_vector(lhs->ty) && is_vector(rhs->ty)) {
     if (lhs->ty->array_len != rhs->ty->array_len || lhs->ty->base->kind != rhs->ty->base->kind)
-      error_tok(tok, "%s %d: in new_sub : incompatible vector types", PARSE_C, __LINE__);
+      error_tok(tok, "%s %d: in new_sub : incompatible vector types", __FILE__, __LINE__);
 
     Node *node = new_binary(ND_SUB, lhs, rhs, tok);
     node->ty = lhs->ty; 
@@ -3985,7 +3984,7 @@ static Node *new_sub(Node *lhs, Node *rhs, Token *tok, bool is_op)
     return new_binary(ND_DIV, node, new_num(lhs->ty->base->size, tok), tok);
   }
 
-  error_tok(tok, "%s %d: in new_sub : invalid operands", PARSE_C, __LINE__);
+  error_tok(tok, "%s %d: in new_sub : invalid operands", __FILE__, __LINE__);
 }
 
 // add = mul ("+" mul | "-" mul)*
@@ -4124,7 +4123,7 @@ static Node *unary(Token **rest, Token *tok)
     add_type(lhs);
     //if (lhs->kind == ND_MEMBER && lhs->member->is_bitfield)
     if (is_bitfield(lhs))
-      error_tok(tok, "%s %d: in unary : cannot take address of bitfield", PARSE_C, __LINE__);
+      error_tok(tok, "%s %d: in unary : cannot take address of bitfield", __FILE__, __LINE__);
 
     if (lhs->kind == ND_VAR && lhs->var && lhs->var->is_function) {
         lhs->var->is_address_used = true;
@@ -4203,7 +4202,7 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
     {
       Member *mem = calloc(1, sizeof(Member));
       if (mem == NULL)
-        error("%s: %s:%d: error: in struct_members : mem is null", PARSE_C, __FILE__, __LINE__);
+        error("%s: %s:%d: error: in struct_members : mem is null", __FILE__, __FILE__, __LINE__);
       mem->ty = basety;
       //mem->idx = idx++;
       mem->align = mem->ty->align;
@@ -4228,7 +4227,7 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
 
       Member *mem = calloc(1, sizeof(Member));
       if (mem == NULL)
-        error("%s: %s:%d: error: in struct_members : mem is null", PARSE_C, __FILE__, __LINE__);
+        error("%s: %s:%d: error: in struct_members : mem is null", __FILE__, __FILE__, __LINE__);
 
       mem->ty = declarator(&tok, tok, basety);
       tok = attribute_list(tok, &mem_attr, thing_attributes);
@@ -4240,13 +4239,13 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
       {
         if (!is_integer(mem->ty))
         {
-          error_tok(tok, "%s %d: in struct_members : only integers can be bitfields", PARSE_C, __LINE__);
+          error_tok(tok, "%s %d: in struct_members : only integers can be bitfields", __FILE__, __LINE__);
         }
         mem->is_bitfield = true;
         mem->bit_width = const_expr(&tok, tok);
         if (mem->bit_width < 0)
         {
-          error_tok(tok, "%s %d: in struct_members : bitfield width must be positive", PARSE_C, __LINE__);
+          error_tok(tok, "%s %d: in struct_members : bitfield width must be positive", __FILE__, __LINE__);
         }
         // Attributes can appear after the bitfield width (e.g. `int : 4 __attribute__((aligned(2)))`).
         tok = attribute_list(tok, &mem_attr, thing_attributes);
@@ -4313,7 +4312,7 @@ static Token *type_attributes(Token *tok, void *arg)
 {
   Type *ty = arg;
   if (!ty) {
-    warn_tok(tok, "in type_attributes: %s %d: ty is null", PARSE_C, __LINE__);
+    warn_tok(tok, "in type_attributes: %s %d: ty is null", __FILE__, __LINE__);
     return tok;
   }
 
@@ -4370,7 +4369,7 @@ static Token *type_attributes(Token *tok, void *arg)
         ty->constructor_priority = tok->val;
         tok = tok->next;
       } else {
-        warn_tok(tok, "in type_attributes: %s %d: expected integer priority in constructor attribute", PARSE_C, __LINE__);
+        warn_tok(tok, "in type_attributes: %s %d: expected integer priority in constructor attribute", __FILE__, __LINE__);
       }
 
       SET_CTX(ctx); 
@@ -4399,7 +4398,7 @@ static Token *type_attributes(Token *tok, void *arg)
         ty->destructor_priority = tok->val;
         tok = tok->next;
       } else {
-        warn_tok(tok, "in type_attributes: %s %d: expected integer priority in destructor attribute", PARSE_C, __LINE__);
+        warn_tok(tok, "in type_attributes: %s %d: expected integer priority in destructor attribute", __FILE__, __LINE__);
       }
       SET_CTX(ctx); 
       tok = skip(tok, ")", ctx);
@@ -4414,7 +4413,7 @@ static Token *type_attributes(Token *tok, void *arg)
     tok = skip(tok, "(", ctx);
     int vs = const_expr(&tok, tok);
     if (vs != 2 && vs != 4 && vs != 8 && vs != 16 && vs != 32 && vs != 64) {
-        error_tok(tok, "%s %d: unsupported vector_size %d; only 2, 4, 8, 16, 32 and 64 are supported", PARSE_C, __LINE__, vs);
+        error_tok(tok, "%s %d: unsupported vector_size %d; only 2, 4, 8, 16, 32 and 64 are supported", __FILE__, __LINE__, vs);
     }
     if (vs != ty->vector_size) {
         //ty->size = vs;
@@ -4423,7 +4422,7 @@ static Token *type_attributes(Token *tok, void *arg)
     }
     int base_size = ty->size;
     if (base_size == 0) {
-        error_tok(tok, "%s %d: in types_attributes: incorrect base size %d;", PARSE_C, __LINE__, base_size);
+        error_tok(tok, "%s %d: in types_attributes: incorrect base size %d;", __FILE__, __LINE__, base_size);
     }  
     int n = vs / base_size;
     
@@ -4488,7 +4487,7 @@ static Token *type_attributes(Token *tok, void *arg)
       SET_CTX(ctx); 
       tok = skip(tok, "(", ctx);  
       if (tok->kind != TK_IDENT)  
-          error_tok(tok, "%s %d: in type_attributes: expected identifier in __cleanup__", PARSE_C, __LINE__);
+          error_tok(tok, "%s %d: in type_attributes: expected identifier in __cleanup__", __FILE__, __LINE__);
 
       // Store the cleanup function name
       current_type = copy_type(ty); 
@@ -4516,7 +4515,7 @@ static Token *type_attributes(Token *tok, void *arg)
         tok = skip(tok, "(", ctx);
         // Parse the deallocator function name (e.g., rpl_free)
         if (tok->kind != TK_IDENT)
-            error_tok(tok, "%s %d: expected identifier in __malloc__ attribute", PARSE_C, __LINE__);
+            error_tok(tok, "%s %d: expected identifier in __malloc__ attribute", __FILE__, __LINE__);
         tok = tok->next;
 
         // Optionally consume comma and size argument
@@ -4739,7 +4738,7 @@ static Token *type_attributes(Token *tok, void *arg)
           tok = skip(tok, "(",ctx);
           while (!equal(tok, ")")) {
               if (tok->kind != TK_NUM) {
-                  error_tok(tok, "%s %d: expected parameter index in __nonnull__", PARSE_C, __LINE__);
+                  error_tok(tok, "%s %d: expected parameter index in __nonnull__", __FILE__, __LINE__);
               }
               tok = tok->next;
               if (equal(tok, ","))
@@ -4869,7 +4868,7 @@ static Token *type_attributes(Token *tok, void *arg)
 static Token *thing_attributes(Token *tok, void *arg) {
   VarAttr *attr = arg;
   if (!attr) {
-    warn_tok(tok, "in thing_attributes: %s %d: attr is null", PARSE_C, __LINE__);
+    warn_tok(tok, "in thing_attributes: %s %d: attr is null", __FILE__, __LINE__);
     return tok;
   }
 
@@ -5014,7 +5013,7 @@ static Token *thing_attributes(Token *tok, void *arg) {
         attr->constructor_priority = tok->val;
         tok = tok->next;
       } else {
-        warn_tok(tok, "in thing_attributes: %s %d: expected integer priority in constructor attribute", PARSE_C, __LINE__);
+        warn_tok(tok, "in thing_attributes: %s %d: expected integer priority in constructor attribute", __FILE__, __LINE__);
       }
       SET_CTX(ctx); 
       tok = skip(tok, ")", ctx);
@@ -5035,7 +5034,7 @@ static Token *thing_attributes(Token *tok, void *arg) {
         attr->destructor_priority = tok->val;
         tok = tok->next;
       } else {
-        warn_tok(tok, "in thing_attributes: %s %d: expected integer priority in destructor attribute", PARSE_C, __LINE__);
+        warn_tok(tok, "in thing_attributes: %s %d: expected integer priority in destructor attribute", __FILE__, __LINE__);
       }
       SET_CTX(ctx); 
       tok = skip(tok, ")", ctx);
@@ -5133,7 +5132,7 @@ static Token *thing_attributes(Token *tok, void *arg) {
       SET_CTX(ctx); 
       tok = skip(tok, "(", ctx);  
       if (tok->kind != TK_IDENT)  
-          error_tok(tok, "%s %d: expected identifier in __cleanup__", PARSE_C, __LINE__);
+          error_tok(tok, "%s %d: expected identifier in __cleanup__", __FILE__, __LINE__);
 
       // Store the cleanup function name
       current_attr = attr;
@@ -5150,7 +5149,7 @@ static Token *thing_attributes(Token *tok, void *arg) {
         SET_CTX(ctx); 
         tok = skip(tok, "(", ctx);        
         if (tok->kind != TK_IDENT)
-            error_tok(tok, "%s %d: expected identifier in __malloc__ attribute", PARSE_C, __LINE__);
+            error_tok(tok, "%s %d: expected identifier in __malloc__ attribute", __FILE__, __LINE__);
         tok = tok->next;
         if (equal(tok, ",")) {
             tok = tok->next;
@@ -5282,7 +5281,7 @@ static Token *thing_attributes(Token *tok, void *arg) {
           tok = skip(tok, "(",ctx);
           while (!equal(tok, ")")) {
               if (tok->kind != TK_NUM) {
-                  error_tok(tok, "%s %d: expected parameter index in __nonnull__", PARSE_C, __LINE__);
+                  error_tok(tok, "%s %d: expected parameter index in __nonnull__", __FILE__, __LINE__);
               }
               tok = tok->next;
               if (equal(tok, ","))
@@ -5412,7 +5411,7 @@ static Type *struct_union_decl(Token **rest, Token *tok, bool *no_list)
     ty->size = -1;
     push_tag_scope(tag, ty);
     if (!ty)
-      error_tok(tok, "%s %d: in struct_union_decl : ty is null!", PARSE_C, __LINE__);
+      error_tok(tok, "%s %d: in struct_union_decl : ty is null!", __FILE__, __LINE__);
     return ty;
   }
 
@@ -5443,7 +5442,7 @@ static Type *struct_union_decl(Token **rest, Token *tok, bool *no_list)
     push_tag_scope(tag, ty);
   }
   if (!ty)
-    error_tok(tok, "%s %d: in struct_union_decl : ty is null!", PARSE_C, __LINE__);
+    error_tok(tok, "%s %d: in struct_union_decl : ty is null!", __FILE__, __LINE__);
   return ty;
 }
 
@@ -5524,7 +5523,7 @@ static Type *struct_decl(Token **rest, Token *tok)
     t->members = ty->members;
   }
   if (!ty)
-    error_tok(tok, "%s %d: in struct_decl : ty is null!", PARSE_C, __LINE__);
+    error_tok(tok, "%s %d: in struct_decl : ty is null!", __FILE__, __LINE__);
   return ty;
 }
 
@@ -5578,7 +5577,7 @@ static Type *union_decl(Token **rest, Token *tok)
     t->members = ty->members;
   }
   if (!ty)
-    error_tok(tok, "%s %d: in union_decl : ty is null!", PARSE_C, __LINE__);
+    error_tok(tok, "%s %d: in union_decl : ty is null!", __FILE__, __LINE__);
   return ty;
 }
 
@@ -5624,14 +5623,14 @@ static Node *struct_ref(Node *node, Token *tok)
 {
   add_type(node);
   if (node->ty->kind != TY_STRUCT && node->ty->kind != TY_UNION) 
-    error_tok(node->tok, "%s %d: in struct_ref : not a struct nor a union", PARSE_C, __LINE__);
+    error_tok(node->tok, "%s %d: in struct_ref : not a struct nor a union", __FILE__, __LINE__);
 
   Type *ty = node->ty;
   for (;;)
   {
     Member *mem = get_struct_member(ty, tok);
     if (!mem)
-      error_tok(tok, "%s %d: in struct_ref : no such member", PARSE_C, __LINE__);
+      error_tok(tok, "%s %d: in struct_ref : no such member", __FILE__, __LINE__);
     node = new_unary(ND_MEMBER, node, tok);
     node->member = mem;
     if (mem->name)
@@ -5733,7 +5732,7 @@ static Node *postfix(Token **rest, Token *tok)
     Type *ty = typename(&tok, tok->next);
     tok = attribute_list(tok, ty, type_attributes);
     if (ty->kind == TY_VLA)
-      error_tok(tok, "%s %d: in postfix : compound literals cannot be VLA", PARSE_C, __LINE__);
+      error_tok(tok, "%s %d: in postfix : compound literals cannot be VLA", __FILE__, __LINE__);
     SET_CTX(ctx);     
     tok = skip(tok, ")", ctx);
 
@@ -5855,7 +5854,7 @@ static Node *funcall(Token **rest, Token *tok, Node *fn)
 
   if (fn->ty->kind != TY_FUNC &&
       (fn->ty->kind != TY_PTR || fn->ty->base->kind != TY_FUNC))
-    error_tok(fn->tok, "%s %d: in funcall : not a function %d %s", PARSE_C, __LINE__, fn->ty->kind, tok->loc);
+    error_tok(fn->tok, "%s %d: in funcall : not a function %d %s", __FILE__, __LINE__, fn->ty->kind, tok->loc);
 
   Type *ty = (fn->ty->kind == TY_FUNC) ? fn->ty : fn->ty->base;
   Type *param_ty = ty->params;
@@ -5875,7 +5874,7 @@ static Node *funcall(Token **rest, Token *tok, Node *fn)
 
 
     if (!param_ty && !ty->is_variadic)
-      error_tok(tok, "%s %d: in funcall : too many arguments", PARSE_C, __LINE__);
+      error_tok(tok, "%s %d: in funcall : too many arguments", __FILE__, __LINE__);
 
     //can't be done later because param_ty will be set to the next value
     //if param_ty is null it means that it's a variadic argument.
@@ -5906,7 +5905,7 @@ static Node *funcall(Token **rest, Token *tok, Node *fn)
   }
 
   if (param_ty)
-    error_tok(tok, "%s %d: in funcall : too few arguments", PARSE_C, __LINE__);
+    error_tok(tok, "%s %d: in funcall : too few arguments", __FILE__, __LINE__);
   SET_CTX(ctx);    
   *rest = skip(tok, ")", ctx);
 
@@ -6009,25 +6008,25 @@ static Token *skip_choose_expr_arg(Token *tok) {
         paren--;
         continue;
       }
-      error_tok(tok, "%s %d: in skip_choose_expr_arg : unbalanced ')'", PARSE_C, __LINE__);
+      error_tok(tok, "%s %d: in skip_choose_expr_arg : unbalanced ')'", __FILE__, __LINE__);
     }
     if (equal(tok, "]")) {
       if (bracket > 0) {
         bracket--;
         continue;
       }
-      error_tok(tok, "%s %d: in skip_choose_expr_arg : unbalanced ']'", PARSE_C, __LINE__);
+      error_tok(tok, "%s %d: in skip_choose_expr_arg : unbalanced ']'", __FILE__, __LINE__);
     }
     if (equal(tok, "}")) {
       if (brace > 0) {
         brace--;
         continue;
       }
-      error_tok(tok, "%s %d: in skip_choose_expr_arg : unbalanced '}'", PARSE_C, __LINE__);
+      error_tok(tok, "%s %d: in skip_choose_expr_arg : unbalanced '}'", __FILE__, __LINE__);
     }
   }
 
-  error_tok(tok, "%s %d: in skip_choose_expr_arg : unexpected end of input", PARSE_C, __LINE__);
+  error_tok(tok, "%s %d: in skip_choose_expr_arg : unexpected end of input", __FILE__, __LINE__);
   return tok;
 }
 
@@ -6112,7 +6111,7 @@ static Node *primary(Token **rest, Token *tok)
       }
 
       if ((ty->kind == TY_UNION || ty->kind == TY_STRUCT) && ty->size < 0)
-          error_tok(tok, "%s %d: in primary : incomplete type for sizeof", PARSE_C, __LINE__);
+          error_tok(tok, "%s %d: in primary : incomplete type for sizeof", __FILE__, __LINE__);
 
 
       if (ty->kind == TY_VLA) {
@@ -6132,7 +6131,7 @@ static Node *primary(Token **rest, Token *tok)
 
       // Check if the type is incomplete
         if ((node->ty->kind == TY_UNION || node->ty->kind == TY_STRUCT) && node->ty->size < 0)
-        error_tok(tok, "%s %d: in primary : incomplete type for sizeof", PARSE_C, __LINE__);
+        error_tok(tok, "%s %d: in primary : incomplete type for sizeof", __FILE__, __LINE__);
             
       //trying to fix =====ISS-166 segmentation fault 
       if (node->ty->kind == TY_VLA)
@@ -6142,7 +6141,7 @@ static Node *primary(Token **rest, Token *tok)
         return compute_vla_size(node->ty, tok);
       }
       if (node->ty->size < 0)
-        error_tok(tok, "%s %d: in primary : incomplete type for sizeof", PARSE_C, __LINE__);
+        error_tok(tok, "%s %d: in primary : incomplete type for sizeof", __FILE__, __LINE__);
 
         
       if ((node->ty->kind == TY_STRUCT || node->ty->kind == TY_UNION) && node->ty->has_vla) {
@@ -6237,7 +6236,7 @@ static Node *primary(Token **rest, Token *tok)
 
     Node *cond_node = conditional(&tok, tok);
     if (!is_const_expr(cond_node))
-      error_tok(cond_node->tok, "%s %d: in primary : __builtin_choose_expr condition is not constant", PARSE_C, __LINE__);
+      error_tok(cond_node->tok, "%s %d: in primary : __builtin_choose_expr condition is not constant", __FILE__, __LINE__);
     int64_t cond = eval(cond_node);
     SET_CTX(ctx);
     tok = skip(tok, ",", ctx);
@@ -6268,7 +6267,7 @@ static Node *primary(Token **rest, Token *tok)
     //   Token *stok = tok;
     //   Type *tstruct = typename(&tok, tok);
     //   if (tstruct->kind != TY_STRUCT && tstruct->kind != TY_UNION) {
-    //     error_tok(stok, "%s %d: in primary : not a structure or union type", PARSE_C, __LINE__);
+    //     error_tok(stok, "%s %d: in primary : not a structure or union type", __FILE__, __LINE__);
     //   }
     //   SET_CTX(ctx);   
     //   tok = skip(tok, ",", ctx);
@@ -6282,7 +6281,7 @@ static Node *primary(Token **rest, Token *tok)
     //       return new_ulong(m->offset, start);
     //     }
     //   }
-    //   error_tok(member, "%s %d: in primary : no such member", PARSE_C, __LINE__);
+    //   error_tok(member, "%s %d: in primary : no such member", __FILE__, __LINE__);
 
     // }
 
@@ -6778,7 +6777,7 @@ static Node *primary(Token **rest, Token *tok)
       node->fpc->node = expr(&tok, tok);
       add_type(node->fpc->node);
       if (!is_flonum(node->fpc->node->ty)) {        
-        error_tok(tok, "%s %d: in primary : need floating point", PARSE_C, __LINE__);
+        error_tok(tok, "%s %d: in primary : need floating point", __FILE__, __LINE__);
       }
       SET_CTX(ctx);
       *rest = skip(tok, ")", ctx);
@@ -7279,7 +7278,7 @@ static Node *primary(Token **rest, Token *tok)
     else if (equal(tok, "4"))
       node = new_binary(ND_BITAND, obj, val, tok);
     else
-      error_tok(tok, "%s %d: in primary : invalid fetch operator", PARSE_C, __LINE__);
+      error_tok(tok, "%s %d: in primary : invalid fetch operator", __FILE__, __LINE__);
 
     node->atomic_fetch = true;
     SET_CTX(ctx);     
@@ -7344,11 +7343,11 @@ static Node *primary(Token **rest, Token *tok)
       Obj *fn = find_func(token_to_string(tok));
 
       if (!fn && (is_c99_or_later() || opt_implicit)) {
-        error_tok(tok, "%s %d: in primary : implicit declaration of function", PARSE_C, __LINE__);
+        error_tok(tok, "%s %d: in primary : implicit declaration of function", __FILE__, __LINE__);
       }    
 
       if (!fn) {
-        warn_tok(tok, "%s %d: in primary : implicit declaration of function", PARSE_C, __LINE__);
+        warn_tok(tok, "%s %d: in primary : implicit declaration of function", __FILE__, __LINE__);
         Type *ty = func_type(ty_int);        
         ty->is_variadic = true;
         fn = new_gvar(token_to_string(tok), ty);
@@ -7361,11 +7360,11 @@ static Node *primary(Token **rest, Token *tok)
       }
       Node *node = unary(rest, tok->next);      
       return node;
-      // error_tok(tok, "%s %d: in primary : implicit declaration of a function", PARSE_C, __LINE__);
+      // error_tok(tok, "%s %d: in primary : implicit declaration of a function", __FILE__, __LINE__);
     }
 
     //printf("=======%s %d\n", tok->loc, __LINE__);
-    error_tok(tok, "%s %d: in primary : error: undefined variable %s", PARSE_C, __LINE__, tok->loc);
+    error_tok(tok, "%s %d: in primary : error: undefined variable %s", __FILE__, __LINE__, tok->loc);
   }
 
   if (tok->kind == TK_STR)
@@ -7405,7 +7404,7 @@ static Node *primary(Token **rest, Token *tok)
     return node;
   }
 
-  error_tok(tok, "%s %d: in primary : expected an expression %s", PARSE_C, __LINE__, tok->loc);
+  error_tok(tok, "%s %d: in primary : expected an expression %s", __FILE__, __LINE__, tok->loc);
 }
 
 static Node *parse_typedef(Token **rest, Token *tok, Type *basety, VarAttr *attr) 
@@ -7422,9 +7421,9 @@ static Node *parse_typedef(Token **rest, Token *tok, Type *basety, VarAttr *attr
 
     Type *ty = declarator(&tok, tok, basety);
     if (!ty)
-      error_tok(tok, "%s %d: in parse_typedef : ty is null", PARSE_C, __LINE__);
+      error_tok(tok, "%s %d: in parse_typedef : ty is null", __FILE__, __LINE__);
     if (!ty->name)
-      error_tok(ty->name_pos, "%s %d: in parse_typedef : typedef name omitted", PARSE_C, __LINE__);
+      error_tok(ty->name_pos, "%s %d: in parse_typedef : typedef name omitted", __FILE__, __LINE__);
     //from COSMOPOLITAN adding other GNUC attributes
     tok = attribute_list(tok, ty, type_attributes);      
     if (attr && attr->align) {
@@ -7481,7 +7480,7 @@ static void resolve_goto_labels(void)
     }
 
     if (x->unique_label == NULL)
-      error_tok(x->tok->next, "%s %d: in resolve_goto_labels : use of undeclared label", PARSE_C, __LINE__);
+      error_tok(x->tok->next, "%s %d: in resolve_goto_labels : use of undeclared label", __FILE__, __LINE__);
   }
 
   gotos = labels = NULL;
@@ -7557,9 +7556,9 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   
   tok = attribute_list(tok, attr, thing_attributes); 
   if (!ty)
-    error_tok(tok, "%s %d: in function : ty is null", PARSE_C, __LINE__);
+    error_tok(tok, "%s %d: in function : ty is null", __FILE__, __LINE__);
   if (!ty->name)
-    error_tok(ty->name_pos, "%s %d: in function : function name omitted", PARSE_C, __LINE__);  
+    error_tok(ty->name_pos, "%s %d: in function : function name omitted", __FILE__, __LINE__);  
 
   char *name_str = get_ident(ty->name);
 
@@ -7568,11 +7567,11 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   {
     // Redeclaration
     if (!fn->is_function)
-      error_tok(tok, "%s %d: in function : redeclared as a different kind of symbol", PARSE_C, __LINE__);
+      error_tok(tok, "%s %d: in function : redeclared as a different kind of symbol", __FILE__, __LINE__);
     if (fn->is_definition && equal(tok, "{"))
-      error_tok(tok, "%s %d: in function : redefinition of %s", PARSE_C, __LINE__, name_str);
+      error_tok(tok, "%s %d: in function : redefinition of %s", __FILE__, __LINE__, name_str);
     if (!fn->is_static && attr->is_static)
-      error_tok(tok, "%s %d: in function : static declaration follows a non-static declaration", PARSE_C, __LINE__);
+      error_tok(tok, "%s %d: in function : static declaration follows a non-static declaration", __FILE__, __LINE__);
     fn->is_definition = fn->is_definition || equal(tok, "{");
   }
   else
@@ -7691,14 +7690,14 @@ static Token *global_variable(Token *tok, Type *basety, VarAttr *attr)
     first = false;
     Type *ty = declarator(&tok, tok, basety);
     if (!ty)
-      error_tok(tok, "%s %d: in global_variable : ty is null", PARSE_C, __LINE__);    
+      error_tok(tok, "%s %d: in global_variable : ty is null", __FILE__, __LINE__);    
     if (!ty->name)
-      error_tok(ty->name_pos, "%s %d: in global_variable : variable name omitted", PARSE_C, __LINE__);
+      error_tok(ty->name_pos, "%s %d: in global_variable : variable name omitted", __FILE__, __LINE__);
     if (ty->name) {
       VarScope *sc = find_var(ty->name);
       if (sc && sc->var) {
         if (sc->var->is_definition && !sc->var->is_tentative && !sc->var->is_extern && equal(tok, "=") )
-          error_tok(ty->name, "%s %d: in global_variable : redefinition of the variable %s", PARSE_C, __LINE__, token_to_string(ty->name));        
+          error_tok(ty->name, "%s %d: in global_variable : redefinition of the variable %s", __FILE__, __LINE__, token_to_string(ty->name));        
       }
     
   }
@@ -7761,7 +7760,7 @@ static bool is_function(Token *tok)
   Type dummy = {};
   Type *ty = declarator(&tok, tok, &dummy);
   if (!ty)
-    error_tok(tok, "%s %d: in is_function : ty is null", PARSE_C, __LINE__);
+    error_tok(tok, "%s %d: in is_function : ty is null", __FILE__, __LINE__);
 
   return ty->kind == TY_FUNC;
 }
@@ -7800,7 +7799,7 @@ static void scan_globals(void)
     
     for (; var2; var2 = var2->next) {
       if (var != var2 && var2->is_definition && !strcmp(var->name, var2->name)) {
-        //warn_tok(var->tok, "%s %d: in scan_globals : duplicated tentative definition", PARSE_C, __LINE__);  
+        //warn_tok(var->tok, "%s %d: in scan_globals : duplicated tentative definition", __FILE__, __LINE__);  
         if (var2->is_tentative && !var_in_array(var->name, varArr, i + 1 ) && (i + 1) < MAX_GLOBAL_VAR) {
           varArr[i++] = var;                
         }
@@ -7882,7 +7881,7 @@ Obj *parse(Token *tok)
   {
     if (base_file == NULL && opt_o == NULL)
     {
-      fprintf(stderr, "%s: in parse base_file and opt_o are null!\n", PARSE_C);
+      fprintf(stderr, "%s: in parse base_file and opt_o are null!\n", __FILE__);
       exit(1);
     }
     path = replace_extn(opt_o ? opt_o : base_file, ".dot");
@@ -7897,7 +7896,7 @@ Obj *parse(Token *tok)
     dotf = fopen(fullpath, "w");
     if (dotf == NULL)
     {
-      fprintf(stderr, "%s: in parse dot file cannot be opend\n", PARSE_C);
+      fprintf(stderr, "%s: in parse dot file cannot be opend\n", __FILE__);
       exit(1);
     } 
     fprintf(dotf, "digraph A { \n");
@@ -7951,7 +7950,7 @@ Obj *parse(Token *tok)
         is_old_style = true;
         tok = function(tok, basety, &attr);
         continue;
-        //error_tok(tok, "%s: in function : old C style function definition is not supported", PARSE_C);
+        //error_tok(tok, "%s: in function : old C style function definition is not supported", __FILE__);
      }
       is_old_style = false;
       tok = function(tok, basety, &attr);
@@ -8505,7 +8504,7 @@ char *ConsumeStringLiteral(Token **rest, Token *tok) {
   char *s;
   if (tok->kind != TK_STR || tok->ty->base->kind != TY_CHAR) {
    
-    error_tok(tok, "%s %d: in ConsumeStringLiteral : expected string literal but got tok->kind %d", PARSE_C, __LINE__, tok->kind);
+    error_tok(tok, "%s %d: in ConsumeStringLiteral : expected string literal but got tok->kind %d", __FILE__, __LINE__, tok->kind);
   }
   s = tok->str;
   *rest = tok->next;
@@ -8533,7 +8532,7 @@ static Token *static_assertion(Token *tok) {
   SET_CTX(ctx);  
   tok = skip(tok, ";", ctx);
   if (!cond) {
-    error_tok(start, "%s %d: in static_assertion : %s %s", PARSE_C, __LINE__, msg, errmsg->loc);
+    error_tok(start, "%s %d: in static_assertion : %s %s", __FILE__, __LINE__, msg, errmsg->loc);
 
   }
   return tok;
@@ -8686,7 +8685,7 @@ static Node *ParseAtomicFetch(NodeKind kind, Token *tok, Token **rest) {
     else if (!strncmp("xor", loc, len))
       binary = new_binary(ND_BITXOR, obj, val, start);
     else      
-      error_tok(start, "%s %d: in ParseAtomicFetch: unsupported atomic fetch op!", PARSE_C, __LINE__);
+      error_tok(start, "%s %d: in ParseAtomicFetch: unsupported atomic fetch op!", __FILE__, __LINE__);
     binary->memorder = memorder;
     add_type(binary->lhs);
     add_type(binary->rhs);
