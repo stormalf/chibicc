@@ -1926,15 +1926,7 @@ static void struct_initializer2(Token **rest, Token *tok, Initializer *init, Mem
     }
 
 
-    //fixing c-Testsuite 205.
-    //initializer2(&tok, tok, init->children[mem->idx]);
-    // Arrays and vectors inside structs need to handle their elements with braces
-      if (mem->ty->kind == TY_ARRAY) {
-            array_initializer2(&tok, tok, init->children[mem->idx], 0);
-      } else {
-          // For scalar members, just assign directly
     initializer2(&tok, tok, init->children[mem->idx]);
-      }
 
   }
   *rest = tok;
@@ -7378,7 +7370,9 @@ static Node *primary(Token **rest, Token *tok)
 
   if (tok->kind == TK_STR)
   {
-    Obj *var = new_string_literal(tok->str, tok->ty);
+    Type *ty = copy_type(tok->ty);
+    ty->is_const = true;
+    Obj *var = new_string_literal(tok->str, ty);
     *rest = tok->next;
     return new_var_node(var, tok);
   }

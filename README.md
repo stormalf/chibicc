@@ -624,7 +624,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.24  Passing GNUC from 3 to 4. Adding const, volatile, restrict support from slimcc/fuhsnn. Fixing issue ISS-195 prockill due to leakage attributes. Managing pragma pack. Fixing issue with attributes and alignment. Fixing issue with some edge cases initializer. Fixing some float comparisons issues with NaN. Fixing alignof issue and managing asm name.
+1.0.24  Passing GNUC from 3 to 4. Adding const, volatile, restrict support from slimcc/fuhsnn. Fixing issue ISS-195 prockill due to leakage attributes. Managing pragma pack. Fixing issue with attributes and alignment. Fixing issue with some edge cases initializer. Fixing some float comparisons issues with NaN. Fixing alignof issue and managing asm name. Fixing issue with string char array members initialization.
 
 
 
