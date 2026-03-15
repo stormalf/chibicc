@@ -497,123 +497,43 @@ static Token *read_utf32_string_literal(char *start, char *quote, Type *ty)
   return tok;
 }
 
-static Token *read_char_literal(char *start, char *quote, Type *ty)
-{
+static Token *read_char_literal(char *start, char *quote, Type *ty) {
   char *p = quote + 1;
   if (*p == '\0')
     error_at(start, "%s: in read_char_literal : unclosed char literal", TOKENIZE_C);
 
-  int c;
-  if (*p == '\\')
-    c = read_escaped_char(&p, p + 1);
-  else
-    c = decode_utf8(&p, p);
+  int64_t c = 0;
+  int n = 0;
 
-  char *end = strchr(p, '\'');
-  if (!end)
-    error_at(p, "%s: in read_char_literal : unclosed char literal", TOKENIZE_C);
+  while (*p != '\'') {
+    if (*p == '\0' || *p == '\n')
+      error_at(start, "unclosed char literal");
 
-  Token *tok = new_token(TK_NUM, start, end + 1);
+    if (n > 0)
+      c <<= 8;
+
+    if (*p == '\\')
+      c |= read_escaped_char(&p, p + 1);
+    else
+      c |= decode_utf8(&p, p);
+    n++;
+  }
+
+  if (n > 4 && ty->kind == TY_INT)
+    warn_tok(new_token(TK_NUM, start, p + 1),
+             "character constant too long for its type");
+
+  // For a single-byte character literal, the value should be sign-extended
+  // as if it were a char.
+  if (n == 1 && (quote - start) == 0)
+    c = (char)c;
+
+  Token *tok = new_token(TK_NUM, start, p + 1);
   tok->val = c;
   tok->ty = ty;
   return tok;
 }
 
-// static bool convert_pp_int(Token *tok)
-// {
-//   char *p = tok->loc;
-
-//   // Read a binary, octal, decimal or hexadecimal number.
-//   int base = 10;
-//   if (!strncasecmp(p, "0x", 2) && isxdigit(p[2]))
-//   {
-//     p += 2;
-//     base = 16;
-//   }
-//   else if (!strncasecmp(p, "0b", 2) && (p[2] == '0' || p[2] == '1'))
-//   {
-//     p += 2;
-//     base = 2;
-//   }
-//   else if (*p == '0')
-//   {
-//     base = 8;
-//   }
-
-//   int64_t val = strtoul(p, &p, base);
-
-//   // Read U, L or LL suffixes.
-//   bool l = false;
-//   bool u = false;
-
-//   if (startswith(p, "LLU") || startswith(p, "LLu") ||
-//       startswith(p, "llU") || startswith(p, "llu") ||
-//       startswith(p, "ULL") || startswith(p, "Ull") ||
-//       startswith(p, "uLL") || startswith(p, "ull"))
-//   {
-//     p += 3;
-//     l = u = true;
-//   }
-//   else if (!strncasecmp(p, "lu", 2) || !strncasecmp(p, "ul", 2))
-//   {
-//     p += 2;
-//     l = u = true;
-//   }
-//   else if (startswith(p, "LL") || startswith(p, "ll"))
-//   {
-//     p += 2;
-//     l = true;
-//   }
-//   else if (*p == 'L' || *p == 'l')
-//   {
-//     p++;
-//     l = true;
-//   }
-//   else if (*p == 'U' || *p == 'u')
-//   {
-//     p++;
-//     u = true;
-//   }
-
-//   if (p != tok->loc + tok->len)
-//     return false;
-
-//   // Infer a type.
-//   Type *ty;
-//   if (base == 10)
-//   {
-//     if (l && u)
-//       ty = ty_ulong;
-//     else if (l)
-//       ty = ty_long;
-//     else if (u)
-//       ty = (val >> 32) ? ty_ulong : ty_uint;
-//     else
-//       ty = (val >> 31) ? ty_long : ty_int;
-//   }
-//   else
-//   {
-//     if (l && u)
-//       ty = ty_ulong;
-//     else if (l)
-//       ty = (val >> 63) ? ty_ulong : ty_long;
-//     else if (u)
-//       ty = (val >> 32) ? ty_ulong : ty_uint;
-//     else if (val >> 63)
-//       ty = ty_ulong;
-//     else if (val >> 32)
-//       ty = ty_long;
-//     else if (val >> 31)
-//       ty = ty_uint;
-//     else
-//       ty = ty_int;
-//   }
-
-//   tok->kind = TK_NUM;
-//   tok->val = val;
-//   tok->ty = ty;
-//   return true;
-// }
 static bool convert_pp_int(Token *tok) {
   char *p = tok->loc;
 
@@ -903,7 +823,7 @@ Token *tokenize(File *file)
     if (*p == '\'')
     {
       cur = cur->next = read_char_literal(p, p, ty_int);
-      cur->val = (char)cur->val;
+      //cur->val = (char)cur->val;
       p += cur->len;
       continue;
     }
