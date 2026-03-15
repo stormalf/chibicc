@@ -198,21 +198,12 @@ bool startswith(char *p, char *q)
 
 // Read an identifier and returns the length of it.
 // If p does not point to a valid identifier, 0 is returned.
-static int read_ident(char *start, char *previous, bool isNotANumber)
+static int read_ident(char *start)
 {
   char *p = start;
   uint32_t c = decode_utf8(&p, p);
-  // allows identifier starting by a number if previous character was an hashtag
-  if (*previous == '#' || isNotANumber)
-  {
-    if (!is_ident3(c))
-      return 0;
-  }
-  else
-  {
-    if (!is_ident1(c))
-      return 0;
-  }
+  if (!is_ident1(c))
+    return 0;
   for (;;)
   {
     char *q;
@@ -801,7 +792,6 @@ Token *tokenize(File *file)
   char *p = file->contents;
   Token head = {};
   Token *cur = &head;
-  bool isNotANumber = false;
 
   at_bol = true;
   has_space = false;
@@ -848,38 +838,25 @@ Token *tokenize(File *file)
       continue;
     }
     
-
-    // to manage particular cases see issue 116, 117, 118
-    char *previous = p;    
-    char *current = p;
-    if (p != file->contents)
-      previous = p - 1; 
     // Numeric literal
-    // to fix issue #117, checking that previous character is not an hashtag!
-    if ((isdigit(*p) || (*p == '.' && isdigit(p[1]))) && *(previous) != '#')
-    {
-      char *q = p++;
+    if (isdigit(*p) || (*p == '.' && isdigit(p[1]))) {
+      char *q = p;
       for (;;)
       {
-
-        if (p[0] && p[1] && strchr("eEpP", p[0]) && strchr("+-", p[1]))
+        if (p[0] && p[1] && strchr("eEpP", p[0]) && strchr("+-", p[1])) {
           p += 2;
-        else if (isalnum(*p) || *p == '.')
-          p++;
+          continue;
+        }
+
+        char *p2;
+        uint32_t c = decode_utf8(&p2, p);
+        if (c == '.' || is_ident2(c))
+          p = p2;
         else
           break;
       }
-      // fixing issue #116 with wrong number detected 1024_160 was considered as number 1024 and other token _160!
-      if (*p != '_')
-      {
-        cur = cur->next = new_token(TK_PP_NUM, q, p);
-        continue;
-      }
-      else
-      {
-        p = current;
-        isNotANumber = true;
-      }
+      cur = cur->next = new_token(TK_PP_NUM, q, p);
+      continue;
     }
 
     // String literal
@@ -931,6 +908,14 @@ Token *tokenize(File *file)
       continue;
     }
 
+    // UTF-8 character literal
+    if (startswith(p, "u8'"))
+    {
+      cur = cur->next = read_char_literal(p, p + 2, ty_char);
+      p += cur->len;
+      continue;
+    }
+
     // UTF-16 character literal
     if (startswith(p, "u'"))
     {
@@ -957,7 +942,7 @@ Token *tokenize(File *file)
     }
 
     // Identifier or keyword
-    int ident_len = read_ident(p, previous, isNotANumber);
+    int ident_len = read_ident(p);
     if (ident_len)
     {
       cur = cur->next = new_token(TK_IDENT, p, p + ident_len);
@@ -1196,4 +1181,3 @@ Token *tokenize_file(char *path)
 
   return tokenize(file);
 }
-
