@@ -223,6 +223,18 @@ static int from_hex(char c)
   return c - 'A' + 10;
 }
 
+static uint32_t read_universal_char(char *p, int len)
+{
+  uint32_t c = 0;
+  for (int i = 0; i < len; i++)
+  {
+    if (!isxdigit(p[i]))
+      return 0;
+    c = (c << 4) | from_hex(p[i]);
+  }
+  return c;
+}
+
 // Read a punctuator token from p and returns its length.
 static int read_punct(char *p)
 {
@@ -344,7 +356,7 @@ static int read_escaped_char(char **new_pos, char *p)
     // Read a hexadecimal number.
     p++;
     if (!isxdigit(*p))
-      error_at(p, "%s: in read_escaped_char : invalid hex escape sequence", TOKENIZE_C);
+      error_at(p, "%s:%d: in read_escaped_char : invalid hex escape sequence", TOKENIZE_C, __LINE__);
 
     int c = 0;
     for (; isxdigit(*p); p++)
@@ -353,19 +365,18 @@ static int read_escaped_char(char **new_pos, char *p)
     return c;
   }
 
+  if (*p == 'u' || *p == 'U')
+  {
+    int len = (*p == 'u' ? 4 : 8);
+    uint32_t c = read_universal_char(p + 1, len);
+    if (!c)
+      error_at(p, "%s:%d: in read_escaped_char : invalid universal character name", TOKENIZE_C, __LINE__);
+    *new_pos = p + 1 + len;
+    return c;
+  }
+
   *new_pos = p + 1;
 
-  // Escape sequences are defined using themselves here. E.g.
-  // '\n' is implemented using '\n'. This tautological definition
-  // works because the compiler that compiles our compiler knows
-  // what '\n' actually is. In other words, we "inherit" the ASCII
-  // code of '\n' from the compiler that compiles our compiler,
-  // so we don't have to teach the actual code here.
-  //
-  // This fact has huge implications not only for the correctness
-  // of the compiler but also for the security of the generated code.
-  // For more info, read "Reflections on Trusting Trust" by Ken Thompson.
-  // https://github.com/rui314/chibicc/wiki/thompson1984.pdf
   switch (*p)
   {
   case 'a':
@@ -415,7 +426,9 @@ static Token *read_string_literal(char *start, char *quote)
 
   for (char *p = quote + 1; p < end;)
   {
-    if (*p == '\\')
+    if (*p == '\\' && (p[1] == 'u' || p[1] == 'U'))
+      len += encode_utf8(buf + len, read_escaped_char(&p, p + 1));
+    else if (*p == '\\')
       buf[len++] = read_escaped_char(&p, p + 1);
     else
       buf[len++] = *p++;
@@ -444,13 +457,12 @@ static Token *read_utf16_string_literal(char *start, char *quote)
 
   for (char *p = quote + 1; p < end;)
   {
+    uint32_t c;
     if (*p == '\\')
-    {
-      buf[len++] = read_escaped_char(&p, p + 1);
-      continue;
-    }
+      c = read_escaped_char(&p, p + 1);
+    else
+      c = decode_utf8(&p, p);
 
-    uint32_t c = decode_utf8(&p, p);
     if (c < 0x10000)
     {
       // Encode a code point in 2 bytes.
@@ -1011,25 +1023,37 @@ static void remove_backslash_newline(char *p)
   p[j] = '\0';
 }
 
-static uint32_t read_universal_char(char *p, int len)
-{
-  uint32_t c = 0;
-  for (int i = 0; i < len; i++)
-  {
-    if (!isxdigit(p[i]))
-      return 0;
-    c = (c << 4) | from_hex(p[i]);
-  }
-  return c;
-}
+
 
 // Replace \u or \U escape sequences with corresponding UTF-8 bytes.
-static void convert_universal_chars(char *p)
+void convert_universal_chars(char *p)
 {
   char *q = p;
 
   while (*p)
   {
+    if (*p == '"' || *p == '\'')
+    {
+      char quote = *p;
+      *q++ = *p++;
+      while (*p && *p != quote)
+      {
+        if (*p == '\\')
+        {
+          *q++ = *p++;
+          if (*p)
+            *q++ = *p++;
+        }
+        else
+        {
+          *q++ = *p++;
+        }
+      }
+      if (*p)
+        *q++ = *p++;
+      continue;
+    }
+
     if (startswith(p, "\\u"))
     {
       uint32_t c = read_universal_char(p + 2, 4);

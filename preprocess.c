@@ -864,6 +864,7 @@ static Token *paste(Token *lhs, Token *rhs)
 {
   // Paste the two tokens.
   char *buf = format("%.*s%.*s", lhs->len, lhs->loc, rhs->len, rhs->loc);
+  convert_universal_chars(buf);
   // Tokenize the resulting string.
   Token *tok = tokenize(new_file(lhs->file->name, lhs->file->file_no, buf));
   // if (tok->next->kind != TK_EOF)

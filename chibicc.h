@@ -232,6 +232,7 @@ File *new_file(char *name, unsigned int file_no, char *contents);
 Token *tokenize_string_literal(Token *tok, Type *basety);
 Token *tokenize(File *file);
 Token *tokenize_file(char *filename);
+void convert_universal_chars(char *p);
 bool startswith(char *p, char *q);
 
 #define unreachable() \
