@@ -31,4 +31,3 @@ out/
 /.opencode
 conftest.zend 
 compile_commands.json
-compare.txt
