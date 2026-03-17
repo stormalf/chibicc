@@ -15,8 +15,8 @@ typedef struct {
 
 void va_fn(int i, ...) {
   va_list ap;
-//  ASSERT(55, ( va_start(ap,i), va_arg(ap, M).i[ ({ S1 s = {}; 0; }) ] ));
-//  ASSERT(66, ( va_start(ap,i), va_arg(ap, M).d[ ({ S1 s = {}; 0; }) ] ));
+ ASSERT(55, ( va_start(ap,i), va_arg(ap, M).i[ ({ S1 s = {}; 0; }) ] ));
+ ASSERT(66, ( va_start(ap,i), va_arg(ap, M).d[ ({ S1 s = {}; 0; }) ] ));
 }
 
 int decl_scope(void) {

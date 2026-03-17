@@ -901,7 +901,7 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
   // Function prototype scope: a prior parameter name is visible in
   // subsequent parameter declarators (e.g. int f(int n, int a[n])).
   enter_scope();
-  while (!equal(tok, ")") && !equal(tok->next, "{"))
+  while (!equal(tok, ")"))
   {
 
     tok = attribute_list(tok, ty, type_attributes);
@@ -942,6 +942,8 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
       while(equal(tok, "*")) {
         tok = tok->next;
       }
+      if (equal(tok, "{")) 
+        break;
       if (tok->kind != TK_IDENT)
         error_tok(tok, "%s %d: in func_params : expected identifier old source code not managed yet", __FILE__, __LINE__);
       ArrayToken[nbFunc][nbparms] = tok;
@@ -1016,7 +1018,10 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
   ty->is_variadic = is_variadic;
   if (cur == &head && !has_ellipsis)
     ty->is_oldstyle = true;
-  *rest = tok->next;
+  if (is_old_style && equal(tok, "{"))
+    *rest = tok;
+  else
+    *rest = tok->next;
   if (!ty)
     error_tok(tok, "%s %d: in func_params : ty is null!", __FILE__, __LINE__);
   return ty;
