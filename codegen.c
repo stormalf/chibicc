@@ -6230,6 +6230,15 @@ void assign_lvar_offsets(Obj *prog) {
     int max_align = 8;
     int stack = 0;
 
+    // If variables already have offsets (assigned during parsing for inline asm),
+    // ensure 'bottom' reflects the space they occupy.
+    for (Obj *var = fn->locals; var; var = var->next) {
+      if (var->offset && !var->is_param) {
+        int limit = -var->offset; // offsets are negative
+        if (limit > bottom) bottom = limit;
+      }
+    }
+
     for (Obj *var = fn->params; var; var = var->next) {
       var->is_param = true;
       if (var->offset) continue;

@@ -244,21 +244,19 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             // generate input instruction to load the parameter into register
             if (asmExt->input[nbInput]->variableNumber) {
                 hasInput = true;
-                if (!hasOperandName) {                                         
-                    input_asm_str = generate_input_asm(asmExt->input[nbInput]->variableNumber);
-                    //replace %9, by the correct
-                    if (!input_asm_str)
-                        error("%s %s:%d: error: in extended_asm function extended_asm :input_asm_str is null!", __FILE__, __FILE__, __LINE__);
-                    if (!asmExt->input[nbInput]->reg)
-                        error("%s %s:%d: error: in extended_asm function extended_asm :asmExt->input[nbInput]->reg is null!", __FILE__, __FILE__, __LINE__);
-                    if (asmExt->input[nbInput]->isAddress)
-                        input_asm_str = subst_asm(input_asm_str, asmExt->input[nbInput]->reg64, asmExt->input[nbInput]->variableNumber);
-                    else
-                        input_asm_str = subst_asm(input_asm_str, asmExt->input[nbInput]->reg, asmExt->input[nbInput]->variableNumber);
-                    // concatenate the input final strings to add to the assembly
-                    
-                    strncat(input_final, input_asm_str, strlen(input_asm_str));
-                }
+                input_asm_str = generate_input_asm(asmExt->input[nbInput]->variableNumber);
+                //replace %9, by the correct
+                if (!input_asm_str)
+                    error("%s %s:%d: error: in extended_asm function extended_asm :input_asm_str is null!", __FILE__, __FILE__, __LINE__);
+                if (!asmExt->input[nbInput]->reg)
+                    error("%s %s:%d: error: in extended_asm function extended_asm :asmExt->input[nbInput]->reg is null!", __FILE__, __FILE__, __LINE__);
+                if (asmExt->input[nbInput]->isAddress)
+                    input_asm_str = subst_asm(input_asm_str, asmExt->input[nbInput]->reg64, asmExt->input[nbInput]->variableNumber);
+                else
+                    input_asm_str = subst_asm(input_asm_str, asmExt->input[nbInput]->reg, asmExt->input[nbInput]->variableNumber);
+                // concatenate the input final strings to add to the assembly
+                
+                strncat(input_final, input_asm_str, strlen(input_asm_str));
             }  else { //to manage the case of no input
                 tok = tok->next;
                 *rest = tok;
@@ -1636,6 +1634,36 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     if (!asmExt->input[nbInput]->reg)
                          error_tok(tok, "reg is null in input_asm");
                     asmExt->input[nbInput]->reg = update_register_size(asmExt->input[nbInput]->reg, 8);
+                    tok = tok->next;
+                    SET_CTX(ctx);
+                    *rest = skip(tok, ")", ctx);
+                    return;
+                }
+            }
+            else if (equal(tok, "&"))
+            {
+                consume(&tok, tok, "&");
+                if (tok->kind == TK_IDENT)
+                {
+                    asmExt->output[nbOutput]->output = tok;
+                    sc = find_var(tok);
+                    if (!sc)
+                        error_tok(tok, "%s %d: in output_asm function : variable undefined", __FILE__, __LINE__);
+                    if (!sc->var->ty)
+                        error_tok(tok, "%s %d: in output_asm function : variable type unknown", __FILE__, __LINE__);
+                    
+                    asmExt->output[nbOutput]->size = sc->var->ty->size;
+                    if (sc->var->funcname) {
+                        update_offset(sc->var->funcname, locals);
+                        asmExt->output[nbOutput]->offset = sc->var->offset;
+                    } else {
+                        asmExt->output[nbOutput]->offset = 0;
+                    }
+                    asmExt->output[nbOutput]->isVariable = true;
+                    if (!asmExt->output[nbOutput]->reg)
+                        error_tok(tok, "%s %d: in output_asm function : reg is null", __FILE__, __LINE__);
+                    asmExt->output[nbOutput]->reg = update_register_size(asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->size);
+                    asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
                     tok = tok->next;
                     SET_CTX(ctx);
                     *rest = skip(tok, ")", ctx);

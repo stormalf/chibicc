@@ -12,6 +12,7 @@ int main() {
   );
   printf("y = %d\n", y);
   ASSERT(5, y);
-  return y;
+
+  return 0;
 }
 
