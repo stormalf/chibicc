@@ -50,6 +50,7 @@ typedef struct
     bool isq;   //true if  q: 8-bit registers (al, bl, cl, dl)
     bool isl;  //true if l: 32-bit registers (eax, ebx, ecx, edx)
     bool is_pure_register; // true if the input is a pure register
+    bool isLea; // true if it's a lea operation like &var
 } AsmInput;
 
 typedef struct
@@ -1615,13 +1616,40 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                         return;
                     }
             }
+            else if (equal(tok, "&"))
+            {
+                consume(&tok, tok, "&");
+                if (tok->kind == TK_IDENT)
+                {
+                    asmExt->input[nbInput]->input = tok;
+                    sc = find_var(tok);
+                    if (!sc)
+                        error_tok(tok, "variable undefined in input_asm");
+                    asmExt->input[nbInput]->input = tok;
+                    asmExt->input[nbInput]->isVariable = true;
+                    asmExt->input[nbInput]->isLea = true;
+                    asmExt->input[nbInput]->size = 8;
+                    if (sc->var->funcname) {
+                        update_offset(sc->var->funcname, locals);
+                        asmExt->input[nbInput]->offset = sc->var->offset;
+                    }
+                    if (!asmExt->input[nbInput]->reg)
+                         error_tok(tok, "reg is null in input_asm");
+                    asmExt->input[nbInput]->reg = update_register_size(asmExt->input[nbInput]->reg, 8);
+                    tok = tok->next;
+                    SET_CTX(ctx);
+                    *rest = skip(tok, ")", ctx);
+                    return;
+                }
+            }
         }
         else if (equal(tok, ",")) {
             SET_CTX(ctx);
             tok = skip(tok, ",", ctx);
         }
-        // else
-        //     error_tok(tok, "%s : in input_asm function : input complex constraint not managed yet!", __FILE__);
+        else {            
+            error_tok(tok, "%s : in input_asm function : input complex constraint not managed yet! %.*s", __FILE__, tok->len, tok->loc);
+        }
 
         tok = tok->next;
         *rest = tok;
@@ -1682,6 +1710,15 @@ char *generate_input_asm(char *input_str)
         strncat(tmp, asmExt->input[nbInput]->variableNumber, strlen(asmExt->input[nbInput]->variableNumber));
         strncat(tmp, ";\n", 3);
         strncat(tmp, "neg ", 5);
+        strncat(tmp, asmExt->input[nbInput]->variableNumber, strlen(asmExt->input[nbInput]->variableNumber));
+        strncat(tmp, ";\n", 3);
+        return tmp;
+    }
+    else if (asmExt->input[nbInput]->isVariable && asmExt->input[nbInput]->isLea)
+    {
+        strncat(tmp, "\n  leaq ", 10);
+        strncat(tmp, load_variable(asmExt->input[nbInput]->offset), strlen(load_variable(asmExt->input[nbInput]->offset)));
+        strncat(tmp, ", ", 3);
         strncat(tmp, asmExt->input[nbInput]->variableNumber, strlen(asmExt->input[nbInput]->variableNumber));
         strncat(tmp, ";\n", 3);
         return tmp;
