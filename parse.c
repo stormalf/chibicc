@@ -6093,7 +6093,9 @@ static Node *primary(Token **rest, Token *tok)
     Type *ty;
 
     if (equal(tok->next, "(") && is_typename(tok->next->next)) {      
+      enter_scope();
       ty = typename(&tok, tok->next->next);
+      leave_scope();
       SET_CTX(ctx); 
       *rest = skip(tok, ")", ctx);
      
@@ -6178,7 +6180,9 @@ static Node *primary(Token **rest, Token *tok)
     Type *ty;
     if (equal(tok->next, "(") && is_typename(tok->next->next)) {
       Token *start_paren = tok->next;
+      enter_scope();
       ty = typename(&tok, tok->next->next);
+      leave_scope();
       SET_CTX(ctx); 
       *rest = skip(tok, ")", ctx);
       if (equal(*rest, "{")) {
