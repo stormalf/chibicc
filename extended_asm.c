@@ -1138,6 +1138,19 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             asmExt->input[nbInput]->regl = register_lower(asmExt->input[nbInput]->reg64);
             asmExt->input[nbInput]->regw = register_word(asmExt->input[nbInput]->reg64);            
         }
+        else if (tok->kind == TK_STR && (tok->len == 1 && tok->str[0] >= '4' && tok->str[0] <= '9'))
+        {
+            int digit = tok->str[0] - '0';
+            asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(digit);
+            asmExt->input[nbInput]->index = digit;
+            asmExt->input[nbInput]->reg = asmExt->output[digit]->reg;
+            if (!asmExt->input[nbInput]->reg)
+                error("%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__);            
+            asmExt->input[nbInput]->reg64 = asmExt->output[digit]->reg64;
+            asmExt->input[nbInput]->regh = register_higher(asmExt->input[nbInput]->reg64);
+            asmExt->input[nbInput]->regl = register_lower(asmExt->input[nbInput]->reg64);
+            asmExt->input[nbInput]->regw = register_word(asmExt->input[nbInput]->reg64);            
+        }
         else if (tok->kind == TK_STR && !strncmp(tok->str, "a", tok->len))
         {
             asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(nbOutput + nbInput);
@@ -1297,6 +1310,31 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             asmExt->input[nbInput]->regh = register_higher(asmExt->input[nbInput]->reg64);
             asmExt->input[nbInput]->regl = register_lower(asmExt->input[nbInput]->reg64);
             asmExt->input[nbInput]->regw = register_word(asmExt->input[nbInput]->reg64);
+        }
+        else if (tok->kind == TK_STR && (!strncmp(tok->str, "I", tok->len) || !strncmp(tok->str, "i", tok->len) || !strncmp(tok->str, "n", tok->len)))
+        {
+            asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(nbOutput + nbInput);
+            asmExt->input[nbInput]->index = nbOutput + nbInput;            
+            asmExt->input[nbInput]->letter = tok->str[0];
+            // Treat as immediate/general register if no output matches
+            if (retrieve_output_index_from_letter(tok->str[0]) == -1) {
+                asmExt->input[nbInput]->reg = specific_register_available("%rax");
+                if (!asmExt->input[nbInput]->reg)
+                    error("%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__); 
+                asmExt->input[nbInput]->reg64 = asmExt->input[nbInput]->reg;
+                asmExt->input[nbInput]->regh = register_higher(asmExt->input[nbInput]->reg64);
+                asmExt->input[nbInput]->regl = register_lower(asmExt->input[nbInput]->reg64);
+                asmExt->input[nbInput]->regw = register_word(asmExt->input[nbInput]->reg64);
+                asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(nbOutput + nbInput);
+            }
+            else {
+                int out_idx = retrieve_output_index_from_letter(tok->str[0]);
+                asmExt->input[nbInput]->reg = asmExt->output[out_idx]->reg;
+                asmExt->input[nbInput]->reg64 = asmExt->output[out_idx]->reg64;
+                asmExt->input[nbInput]->regh = register_higher(asmExt->input[nbInput]->reg64);
+                asmExt->input[nbInput]->regl = register_lower(asmExt->input[nbInput]->reg64);
+                asmExt->input[nbInput]->regw = register_word(asmExt->input[nbInput]->reg64);
+            }
         }
  
         else if (tok->kind == TK_STR && (!strncmp(tok->str, "m", tok->len) ||  !strncmp(tok->str, "rm", tok->len)))
