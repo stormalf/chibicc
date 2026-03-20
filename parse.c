@@ -6512,15 +6512,18 @@ static Node *primary(Token **rest, Token *tok)
       tok = skip(tok->next, "(", ctx);
       node->builtin_args[0] = assign(&tok, tok);
       add_type(node->builtin_args[0]);
-      SET_CTX(ctx); 
-      tok = skip(tok, ",", ctx);
-      node->builtin_args[1] = assign(&tok, tok);
-      add_type(node->builtin_args[1]);
-      SET_CTX(ctx); 
-      tok = skip(tok, ",", ctx);
-      node->builtin_args[2] = assign(&tok, tok);
-      add_type(node->builtin_args[2]);
-      node->builtin_nargs = 3;
+      int nargs = 1;
+      while (equal(tok, ",")) {
+          tok = tok->next;
+          if (nargs < 16) {
+              node->builtin_args[nargs] = assign(&tok, tok);
+              add_type(node->builtin_args[nargs]);
+              nargs++;
+          } else {
+              error_tok(tok, "too many arguments to builtin");
+          }
+      }
+      node->builtin_nargs = nargs;
       SET_CTX(ctx);       
       *rest = skip(tok, ")", ctx);
     return node;
