@@ -1,4 +1,4 @@
-#include <stdio.h>
+#include "test.h"
 #include <stdint.h>
 
 typedef long zend_long;
@@ -46,6 +46,7 @@ int main(void) {
         printf("Overflow detected, double result: %f\n", Z_DVAL_P(result));
     else
         printf("Result fits in long: %ld\n", Z_LVAL_P(result));
-
+    ASSERT(0, overflow);
+    ASSERT(121932631112635269, Z_LVAL_P(result));
     return 0;
 }
