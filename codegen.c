@@ -412,6 +412,71 @@ char *reg_r11w(int sz)
 }
 
 
+char *reg_r12w(int sz)
+{
+  switch (sz)
+  {
+  case 1:
+    return "%r12b";
+  case 2:
+    return "%r12w";
+  case 4:
+    return "%r12d";
+  case 8:
+    return "%r12";
+  }
+  return "%r12";
+}
+
+char *reg_r13w(int sz)
+{
+  switch (sz)
+  {
+  case 1:
+    return "%r13b";
+  case 2:
+    return "%r13w";
+  case 4:
+    return "%r13d";
+  case 8:
+    return "%r13";
+  }
+  return "%r13";
+}
+
+char *reg_r14w(int sz)
+{
+  switch (sz)
+  {
+  case 1:
+    return "%r14b";
+  case 2:
+    return "%r14w";
+  case 4:
+    return "%r14d";
+  case 8:
+    return "%r14";
+  }
+  return "%r14";
+}
+
+char *reg_r15w(int sz)
+{
+  switch (sz)
+  {
+  case 1:
+    return "%r15b";
+  case 2:
+    return "%r15w";
+  case 4:
+    return "%r15d";
+  case 8:
+    return "%r15";
+  }
+  return "%r15";
+}
+
+
 char *reg_bx(int sz)
 {
   switch (sz)

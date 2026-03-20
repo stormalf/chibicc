@@ -809,7 +809,8 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
         else if (equal(tok, "("))
         {
             SET_CTX(ctx);
-            tok = skip(tok, "(", ctx);
+            while (equal(tok, "("))
+                tok = tok->next;
             // check if the variable is defined
             if (tok->kind == TK_IDENT)
             {
@@ -838,9 +839,11 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 }
 
                 //managing specific case of arrays
-                if (sc->var->ty->kind == TY_ARRAY) {
+                Token *bracket = tok->next;
+                while (equal(bracket, ")")) bracket = bracket->next;
+                if (sc->var->ty->kind == TY_ARRAY && equal(bracket, "[")) {
                     SET_CTX(ctx);
-                    tok = skip(tok->next, "[", ctx);
+                    tok = skip(bracket, "[", ctx);
                     asmExt->output[nbOutput]->isArray = true;
                     asmExt->output[nbOutput]->isAddress = false;
                     asmExt->output[nbOutput]->indexArray = tok->val;
@@ -860,9 +863,11 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     return;
                 }                
                 //special case of array pointer it means that the parameter received is an address.
-                if (sc->var->ty->kind == TY_PTR && equal(tok->next, "[")) {
+                Token *bracket_ptr = tok->next;
+                while (equal(bracket_ptr, ")")) bracket_ptr = bracket_ptr->next;
+                if (sc->var->ty->kind == TY_PTR && equal(bracket_ptr, "[")) {
                     SET_CTX(ctx);
-                    tok = skip(tok->next, "[", ctx);
+                    tok = skip(bracket_ptr, "[", ctx);
                     asmExt->output[nbOutput]->isArray = true;
                     asmExt->output[nbOutput]->isAddress = true;
                     asmExt->output[nbOutput]->indexArray = tok->val;
@@ -883,12 +888,14 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 }
 
                 //Trying to fix ISS-164 special case of ptr->value form (ptr to a struct)
-                if (sc->var->ty->kind == TY_PTR && equal(tok->next, "->")) {
+                Token *arrow = tok->next;
+                while (equal(arrow, ")")) arrow = arrow->next;
+                if (sc->var->ty->kind == TY_PTR && equal(arrow, "->")) {
                     if (!sc->var->ty->base)
                         error_tok(tok, "%s %d: in output_asm function : expecting struct base but base is null!", __FILE__, __LINE__);
                     asmExt->output[nbOutput]->output = tok;
                     SET_CTX(ctx);
-                    tok = skip(tok->next, "->", ctx);
+                    tok = skip(arrow, "->", ctx);
                     Token * tokmbr = tok;
                     // retrieve the size of the variable to determine the register to use here we use RAX variation
                     asmExt->output[nbOutput]->isAddress = true;  
@@ -1133,7 +1140,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
         }
         else if (tok->kind == TK_STR && !strncmp(tok->str, "a", tok->len))
         {
-            asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(retrieve_output_index_from_letter('a'));
+            asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(nbOutput + nbInput);
             asmExt->input[nbInput]->index = nbOutput + nbInput;
             asmExt->input[nbInput]->letter = 'a';
             //=====ISS-156 case we have no output for the letter
@@ -1160,7 +1167,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
         }
         else if (tok->kind == TK_STR && !strncmp(tok->str, "b", tok->len))
         {
-            asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(retrieve_output_index_from_letter('b'));
+            asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(nbOutput + nbInput);
             asmExt->input[nbInput]->index = nbOutput + nbInput;
             asmExt->input[nbInput]->letter = 'b';
             //=====ISS-156 case we have no output for the letter
@@ -1187,7 +1194,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
         else if (tok->kind == TK_STR && !strncmp(tok->str, "c", tok->len))
         {
 
-            asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(retrieve_output_index_from_letter('c'));
+            asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(nbOutput + nbInput);
             asmExt->input[nbInput]->index = nbOutput + nbInput;
             asmExt->input[nbInput]->letter = 'c';
             //=====ISS-156 case we have no output for the letter
@@ -1215,7 +1222,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
         else if (tok->kind == TK_STR && !strncmp(tok->str, "d", tok->len))
         {
 
-            asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(retrieve_output_index_from_letter('d'));
+            asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(nbOutput + nbInput);
             asmExt->input[nbInput]->index = nbOutput + nbInput;            
             asmExt->input[nbInput]->letter = 'd';            
             //=====ISS-156 case we have no output for the letter
@@ -1242,7 +1249,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
         else if (tok->kind == TK_STR && !strncmp(tok->str, "g", tok->len))
         {
 
-            asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(retrieve_output_index_from_letter('g'));
+            asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(nbOutput + nbInput);
             asmExt->input[nbInput]->index = nbOutput + nbInput;            
             asmExt->input[nbInput]->letter = 'g';            
             //=====ISS-156 case we have no output for the letter
@@ -1270,7 +1277,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             else if (tok->kind == TK_STR && !strncmp(tok->str, "Nd", tok->len))
         {
 
-            asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(retrieve_output_index_from_letter('d'));
+            asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(nbOutput + nbInput);
             asmExt->input[nbInput]->index = nbOutput + nbInput;            
             asmExt->input[nbInput]->letter = 'N';            
             //=====ISS-156 case we have no output for the letter
@@ -1405,7 +1412,8 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
         else if (equal(tok, "("))
         {
             SET_CTX(ctx);
-            tok = skip(tok, "(", ctx);
+            while (equal(tok, "("))
+                tok = tok->next;
             // check if the variable is defined
             if (equal(tok, "-")) 
             {
@@ -1436,9 +1444,11 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 }
 
                 //managing specific case of arrays
-                if (sc->var->ty->kind == TY_ARRAY) {
+                Token *bracket = tok->next;
+                while (equal(bracket, ")")) bracket = bracket->next;
+                if (sc->var->ty->kind == TY_ARRAY && equal(bracket, "[")) {
                     SET_CTX(ctx);
-                    tok = skip(tok->next, "[", ctx);
+                    tok = skip(bracket, "[", ctx);
                     asmExt->input[nbInput]->isArray = true;
                     asmExt->input[nbInput]->indexArray = tok->val;
                     asmExt->input[nbInput]->isAddress = false;
@@ -1457,9 +1467,12 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     *rest = tok;
                     return;
                 }        
-                else if (sc->var->ty->kind == TY_PTR && equal(tok->next, "[")) {
+                else if ((sc->var->ty->kind == TY_PTR || sc->var->ty->kind == TY_ARRAY) && 
+                         ({ Token *p = tok->next; while(equal(p, ")")) p = p->next; equal(p, "["); })) {
+                    Token *bracket_ptr = tok->next;
+                    while (equal(bracket_ptr, ")")) bracket_ptr = bracket_ptr->next;
                     SET_CTX(ctx);
-                    tok = skip(tok->next, "[", ctx);
+                    tok = skip(bracket_ptr, "[", ctx);
                     asmExt->input[nbInput]->isArray = true;
                     asmExt->input[nbInput]->isAddress = true;
                     asmExt->input[nbInput]->indexArray = tok->val;
@@ -1479,14 +1492,15 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     return;                    
                 }
                //Trying to fix ISS-164 special case of ptr->value form (ptr to a struct)
-                else if (sc->var->ty->kind == TY_PTR && (equal(tok->next, "->") || (equal(tok->next, ")") && (equal(tok->next->next, "->") || equal(tok->next->next, ".") )) )) {
-                    if (equal(tok->next, ")"))
-                         tok = tok->next;
+                else if (sc->var->ty->kind == TY_PTR && 
+                         ({ Token *p = tok->next; while(equal(p, ")")) p = p->next; (equal(p, "->") || equal(p, ".")); })) {
+                    Token *arrow = tok->next;
+                    while (equal(arrow, ")")) arrow = arrow->next;
                     if (!sc->var->ty->base)
                         error_tok(tok, "%s %d: in input_asm function : expecting struct base but base is null!", __FILE__, __LINE__);
                     asmExt->input[nbInput]->input = tok;
                     SET_CTX(ctx);
-                    tok = skip(tok->next, "->", ctx);
+                    tok = skip(arrow, (char *)(equal(arrow, "->") ? "->" : "."), ctx);
                     Token * tokmbr = tok;
                     // retrieve the size of the variable to determine the register to use here we use RAX variation
                     asmExt->input[nbInput]->isAddress = true;  
@@ -1528,6 +1542,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 }
 
                 asmExt->input[nbInput]->reg = update_register_size(asmExt->input[nbInput]->reg, asmExt->input[nbInput]->size);
+                if (isDebug) printf("input_asm: TK_IDENT name=%.*s size=%d reg=%s\n", tok->len, tok->loc, asmExt->input[nbInput]->size, asmExt->input[nbInput]->reg);
                 tok = tok->next;
                 SET_CTX(ctx);
                 while (equal(tok, ")"))
@@ -1547,7 +1562,8 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 asmExt->input[nbInput]->isVariable = false;
                 asmExt->input[nbInput]->isAddress = false;
                 asmExt->input[nbInput]->input_value = input_value;
-                asmExt->input[nbInput]->size = tok->ty->size;
+                asmExt->input[nbInput]->size = 8;
+                if (isDebug) printf("input_asm: TK_NUM val=%ld size=%d\n", tok->val, asmExt->input[nbInput]->size);
                 asmExt->input[nbInput]->reg = update_register_size(asmExt->input[nbInput]->reg, asmExt->input[nbInput]->size);                                
                 tok = tok->next;
                 SET_CTX(ctx);
@@ -2003,26 +2019,34 @@ char *update_register_size(char *reg, int size)
 {
     if (!reg)
         error("%s:%d: error: in update_register_size : reg is null!", __FILE__, __LINE__);
-    if (!strncmp(reg, "%rax", strlen(reg)) || !strncmp(reg, "%eax", strlen(reg)) || !strncmp(reg, "%ax", strlen(reg)) || !strncmp(reg, "%ah", strlen(reg)) || !strncmp(reg, "%al", strlen(reg)))
+    if (!strncmp(reg, "%rax", 4) || !strncmp(reg, "%eax", 4) || !strncmp(reg, "%ax", 3) || !strncmp(reg, "%ah", 3) || !strncmp(reg, "%al", 3))
         return reg_ax(size);
-    else if (!strncmp(reg, "%rbx", strlen(reg)) || !strncmp(reg, "%ebx", strlen(reg)) || !strncmp(reg, "%bx", strlen(reg)) || !strncmp(reg, "%bh", strlen(reg)) || !strncmp(reg, "%bl", strlen(reg)))
+    else if (!strncmp(reg, "%rbx", 4) || !strncmp(reg, "%ebx", 4) || !strncmp(reg, "%bx", 3) || !strncmp(reg, "%bh", 3) || !strncmp(reg, "%bl", 3))
         return reg_bx(size);
-    else if (!strncmp(reg, "%rcx", strlen(reg)) || !strncmp(reg, "%ecx", strlen(reg)) || !strncmp(reg, "%cx", strlen(reg)) || !strncmp(reg, "%ch", strlen(reg)) || !strncmp(reg, "%cl", strlen(reg)))
+    else if (!strncmp(reg, "%rcx", 4) || !strncmp(reg, "%ecx", 4) || !strncmp(reg, "%cx", 3) || !strncmp(reg, "%ch", 3) || !strncmp(reg, "%cl", 3))
         return reg_cx(size);
-    else if (!strncmp(reg, "%rdx", strlen(reg)) || !strncmp(reg, "%edx", strlen(reg)) || !strncmp(reg, "%dx", strlen(reg)) || !strncmp(reg, "%dh", strlen(reg)) || !strncmp(reg, "%dl", strlen(reg)))
+    else if (!strncmp(reg, "%rdx", 4) || !strncmp(reg, "%edx", 4) || !strncmp(reg, "%dx", 3) || !strncmp(reg, "%dh", 3) || !strncmp(reg, "%dl", 3))
         return reg_dx(size);
-    else if (!strncmp(reg, "%rdi", strlen(reg)) || !strncmp(reg, "%edi", strlen(reg)) || !strncmp(reg, "%di", strlen(reg)) || !strncmp(reg, "%dih", strlen(reg)) || !strncmp(reg, "%dil", strlen(reg)))
+    else if (!strncmp(reg, "%rdi", 4) || !strncmp(reg, "%edi", 4) || !strncmp(reg, "%di", 3) || !strncmp(reg, "%dil", 4))
         return reg_di(size);       
-    else if (!strncmp(reg, "%rsi", strlen(reg)) || !strncmp(reg, "%esi", strlen(reg)) || !strncmp(reg, "%si", strlen(reg)) || !strncmp(reg, "%sih", strlen(reg)) || !strncmp(reg, "%sil", strlen(reg)))
+    else if (!strncmp(reg, "%rsi", 4) || !strncmp(reg, "%esi", 4) || !strncmp(reg, "%si", 3) || !strncmp(reg, "%sil", 4))
         return reg_si(size);       
-    else if (!strncmp(reg, "%r8", strlen(reg)) || !strncmp(reg, "%r8d", strlen(reg)) || !strncmp(reg, "%r8w", strlen(reg)) || !strncmp(reg, "%r8h", strlen(reg)) || !strncmp(reg, "%r8b", strlen(reg)))
-        return reg_r8w(size);                    
-    else if (!strncmp(reg, "%r9", strlen(reg)) || !strncmp(reg, "%r9d", strlen(reg)) || !strncmp(reg, "%r9w", strlen(reg)) || !strncmp(reg, "%r9h", strlen(reg)) || !strncmp(reg, "%r9b", strlen(reg)))
-        return reg_r9w(size);    
-    else if (!strncmp(reg, "%r10", strlen(reg)) || !strncmp(reg, "%r10d", strlen(reg)) || !strncmp(reg, "%r10w", strlen(reg)) || !strncmp(reg, "%r10h", strlen(reg)) || !strncmp(reg, "%r10b", strlen(reg)))
-        return reg_r10w(size); 
-    else if (!strncmp(reg, "%r11", strlen(reg)) || !strncmp(reg, "%r11d", strlen(reg)) || !strncmp(reg, "%r11w", strlen(reg)) || !strncmp(reg, "%r11h", strlen(reg)) || !strncmp(reg, "%r11b", strlen(reg)))
-        return reg_r11w(size);                               
+    else if (!strncmp(reg, "%r8", 3))
+        return reg_r8w(size);
+    else if (!strncmp(reg, "%r9", 3))
+        return reg_r9w(size);
+    else if (!strncmp(reg, "%r10", 4))
+        return reg_r10w(size);
+    else if (!strncmp(reg, "%r11", 4))
+        return reg_r11w(size);
+    else if (!strncmp(reg, "%r12", 4))
+        return reg_r12w(size);
+    else if (!strncmp(reg, "%r13", 4))
+        return reg_r13w(size);
+    else if (!strncmp(reg, "%r14", 4))
+        return reg_r14w(size);
+    else if (!strncmp(reg, "%r15", 4))
+        return reg_r15w(size);
     else
         return reg;
 }
@@ -2114,8 +2138,14 @@ static char *register_lower(char *reg) {
     if (!strncmp(reg, "%rdx", 4) || !strncmp(reg, "%edx", 4) || !strncmp(reg, "%dx", 3)) return "%dl";
     if (!strncmp(reg, "%r8", 3)) return "%r8b";
     if (!strncmp(reg, "%r9", 3)) return "%r9b";
-    if (!strncmp(reg, "%rdi", 4)) return "%dil";
-    if (!strncmp(reg, "%rsi", 4)) return "%sil";
+    if (!strncmp(reg, "%r10", 4)) return "%r10b";
+    if (!strncmp(reg, "%r11", 4)) return "%r11b";
+    if (!strncmp(reg, "%r12", 4)) return "%r12b";
+    if (!strncmp(reg, "%r13", 4)) return "%r13b";
+    if (!strncmp(reg, "%r14", 4)) return "%r14b";
+    if (!strncmp(reg, "%r15", 4)) return "%r15b";
+    if (!strncmp(reg, "%rdi", 4) || !strncmp(reg, "%edi", 4)) return "%dil";
+    if (!strncmp(reg, "%rsi", 4) || !strncmp(reg, "%esi", 4)) return "%sil";
     return NULL;
 }
 
@@ -2127,8 +2157,16 @@ static char *register_word(char *reg) {
     if (!strncmp(reg, "%rbx", 4) || !strncmp(reg, "%ebx", 4)) return "%bx";
     if (!strncmp(reg, "%rcx", 4) || !strncmp(reg, "%ecx", 4)) return "%cx";
     if (!strncmp(reg, "%rdx", 4) || !strncmp(reg, "%edx", 4)) return "%dx";
-    if (!strncmp(reg, "%rsi", 5) || !strncmp(reg, "%esi", 4)) return "%si";
-    if (!strncmp(reg, "%rdi", 5) || !strncmp(reg, "%edi", 4)) return "%di";
+    if (!strncmp(reg, "%rsi", 4) || !strncmp(reg, "%esi", 4)) return "%si";
+    if (!strncmp(reg, "%rdi", 4) || !strncmp(reg, "%edi", 4)) return "%di";
+    if (!strncmp(reg, "%r8", 3)) return "%r8w";
+    if (!strncmp(reg, "%r9", 3)) return "%r9w";
+    if (!strncmp(reg, "%r10", 4)) return "%r10w";
+    if (!strncmp(reg, "%r11", 4)) return "%r11w";
+    if (!strncmp(reg, "%r12", 4)) return "%r12w";
+    if (!strncmp(reg, "%r13", 4)) return "%r13w";
+    if (!strncmp(reg, "%r14", 4)) return "%r14w";
+    if (!strncmp(reg, "%r15", 4)) return "%r15w";
     if (!strncmp(reg, "%rbp", 5) || !strncmp(reg, "%ebp", 4)) return "%bp";
     if (!strncmp(reg, "%rsp", 5) || !strncmp(reg, "%esp", 4)) return "%sp";
 
