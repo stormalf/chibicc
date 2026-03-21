@@ -581,7 +581,7 @@ static Initializer *new_initializer(Type *ty, bool is_flexible)
       {
         Initializer *child = calloc(1, sizeof(Initializer));
         if (child == NULL)
-          error("%s: %s:%d: error: in new_initializer : child is null", __FILE__, __FILE__, __LINE__);
+          error("%s:%d: error: in new_initializer : child is null", __FILE__, __LINE__);
         child->ty = mem->ty;
         child->is_flexible = true;
         init->children[mem->idx] = child;
@@ -603,7 +603,7 @@ static Obj *new_var(char *name, Type *ty)
 
   Obj *var = calloc(1, sizeof(Obj));
   if (var == NULL)
-    error("%s: %s:%d: error: in new_var : var is null", __FILE__, __FILE__, __LINE__);
+    error("%s:%d: error: in new_var : var is null", __FILE__, __LINE__);
   var->name = name;
   var->ty = ty;
   var->align = ty->align;
@@ -1054,7 +1054,7 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
       else if (!equal(tok, ",")) {
         Node *node = expr(&tok, tok);
         if (eval(node->lhs) == 0) { 
-          error("%s: %s:%d: tatic assert error : %s",  __FILE__, __FILE__, __LINE__, node->rhs->tok->loc);
+          error("%s:%d: static assert error : %s",  __FILE__, __LINE__, node->rhs->tok->loc);
         }
         while(!equal(tok->next, ";")) 
           tok = tok->next;
@@ -1129,7 +1129,7 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
       VarScope *sc = push_scope(get_ident(name));
       Obj *var = calloc(1, sizeof(Obj));
       if (var == NULL)
-        error("%s: %s:%d: error: in func_params : var is null", __FILE__, __FILE__, __LINE__);
+        error("%s:%d: error: in func_params : var is null", __FILE__, __LINE__);
       var->name = get_ident(name);
       var->ty = ty2;
       var->is_local = true;
@@ -2198,7 +2198,7 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
   if (equal(tok, ","))
     return;
   if (!init)
-    error("%s: %s:%d: error: in initializer2 :  init is null %s", __FILE__, __FILE__, __LINE__, tok->loc);
+    error("%s:%d: error: in initializer2 :  init is null %s", __FILE__, __LINE__, tok->loc);
 
   if (init->ty->kind == TY_ARRAY && is_integer(init->ty->base)) {
     Token *start = tok;
@@ -2248,7 +2248,7 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
     }
 
     if (!init->ty->members)
-      error_tok(tok, "%s: %s:%d: error: in initializer2 :  initializer for empty aggregate requires explicit braces", __FILE__, __FILE__, __LINE__);
+      error_tok(tok, "%s:%d: error: in initializer2 :  initializer for empty aggregate requires explicit braces", __FILE__, __LINE__);
 
     struct_initializer2(rest, tok, init, init->ty->members, false);
     return;
@@ -2267,7 +2267,7 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
       return;
     }
     if (!init->ty->members)
-      error_tok(tok, "%s: %s:%d: error: in initializer2 :  initializer for empty aggregate requires explicit braces", __FILE__, __FILE__, __LINE__);
+      error_tok(tok, "%s:%d: error: in initializer2 :  initializer for empty aggregate requires explicit braces", __FILE__, __LINE__);
 
     init->mem = init->ty->members;
     initializer2(rest, tok, init->children[0]);
@@ -2303,7 +2303,7 @@ static Type *copy_struct_type(Type *ty)
   {
     Member *m = calloc(1, sizeof(Member));
     if (m == NULL)
-      error("%s: %s:%d: error: in copy_struct_type :  m is null", __FILE__, __FILE__, __LINE__);
+      error("%s:%d: error: in copy_struct_type :  m is null", __FILE__, __LINE__);
     *m = *mem;
     cur = cur->next = m;
   }
@@ -2625,7 +2625,7 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
         if (srel->offset == (int)val) {
           Relocation *rel = calloc(1, sizeof(Relocation));
           if (rel == NULL)
-            error("%s: %s:%d: error: in write_gvar_data : rel is null", __FILE__, __FILE__, __LINE__);
+            error("%s:%d: error: in write_gvar_data : rel is null", __FILE__, __LINE__);
           rel->offset = offset;
           rel->label = srel->label;
           rel->addend = srel->addend;
@@ -2644,7 +2644,7 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
           if (srel->offset == mofs) {
             Relocation *rel = calloc(1, sizeof(Relocation));
             if (rel == NULL)
-              error("%s: %s:%d: error: in write_gvar_data : rel is null", __FILE__, __FILE__, __LINE__);
+              error("%s:%d: error: in write_gvar_data : rel is null", __FILE__, __LINE__);
             rel->offset = offset;
             rel->label = srel->label;
             rel->addend = srel->addend;
@@ -2658,7 +2658,7 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
 
   Relocation *rel = calloc(1, sizeof(Relocation));
   if (rel == NULL)
-    error("%s: %s:%d: error: in write_gvar_data : rel is null", __FILE__, __FILE__, __LINE__);
+    error("%s:%d: error: in write_gvar_data : rel is null", __FILE__, __LINE__);
   rel->offset = offset;
   rel->label = label;
   rel->addend = val;
@@ -2678,7 +2678,7 @@ static void gvar_initializer(Token **rest, Token *tok, Obj *var)
   Relocation head = {};
   char *buf = calloc(1, var->ty->size);
   if (buf == NULL)
-    error("%s: %s:%d: error: in gvar_initializer : buf is null!", __FILE__, __FILE__, __LINE__);
+    error("%s:%d: error: in gvar_initializer : buf is null!", __FILE__, __LINE__);
   write_gvar_data(&head, init, var->ty, buf, 0);
   var->init_data = buf;
   var->rel = head.next;
@@ -4373,7 +4373,7 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
     {
       Member *mem = calloc(1, sizeof(Member));
       if (mem == NULL)
-        error("%s: %s:%d: error: in struct_members : mem is null", __FILE__, __FILE__, __LINE__);
+        error("%s:%d: error: in struct_members : mem is null", __FILE__, __LINE__);
       mem->ty = basety;
       //mem->idx = idx++;
       mem->align = mem->ty->align;
@@ -4398,7 +4398,7 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
 
       Member *mem = calloc(1, sizeof(Member));
       if (mem == NULL)
-        error("%s: %s:%d: error: in struct_members : mem is null", __FILE__, __FILE__, __LINE__);
+        error("%s:%d: error: in struct_members : mem is null", __FILE__, __LINE__);
 
       mem->ty = declarator(&tok, tok, basety);
       tok = attribute_list(tok, &mem_attr, thing_attributes);

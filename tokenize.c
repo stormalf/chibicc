@@ -420,7 +420,7 @@ static Token *read_string_literal(char *start, char *quote)
   char *end = string_literal_end(quote + 1);
   char *buf = calloc(1, end - quote);
   if (buf == NULL)
-    error("%s: %s:%d: error: in read_string_literal buf is null!", __FILE__, __FILE__, __LINE__);
+    error("%s:%d: error: in read_string_literal buf is null!", __FILE__, __LINE__);
   int len = 0;
 
   for (char *p = quote + 1; p < end;)
@@ -451,7 +451,7 @@ static Token *read_utf16_string_literal(char *start, char *quote)
   char *end = string_literal_end(quote + 1);
   uint16_t *buf = calloc(2, end - start);
   if (buf == NULL)
-    error("%s: %s:%d: error: in read_utf16_string_literal buf is null!", __FILE__, __FILE__, __LINE__);
+    error("%s:%d: error: in read_utf16_string_literal buf is null!", __FILE__, __LINE__);
   int len = 0;
 
   for (char *p = quote + 1; p < end;)
@@ -491,7 +491,7 @@ static Token *read_utf32_string_literal(char *start, char *quote, Type *ty)
   char *end = string_literal_end(quote + 1);
   uint32_t *buf = calloc(4, end - quote);
   if (buf == NULL)
-    error("%s: %s:%d: error: in read_utf32_string_literal buf is null!", __FILE__, __FILE__, __LINE__);
+    error("%s:%d: error: in read_utf32_string_literal buf is null!", __FILE__, __LINE__);
   int len = 0;
 
   for (char *p = quote + 1; p < end;)
@@ -954,7 +954,7 @@ File *new_file(char *name, unsigned int file_no, char *contents)
 {
   File *file = calloc(1, sizeof(File));
   if (file == NULL)
-    error("%s: %s:%d: error: in new_file file is null!", __FILE__, __FILE__, __LINE__);
+    error("%s:%d: error: in new_file file is null!", __FILE__, __LINE__);
   file->name = name;
   file->display_name = name;
   file->file_no = file_no;
@@ -1117,7 +1117,7 @@ Token *tokenize_file(char *path)
   // Save the filename for assembler .file directive.
   input_files = realloc(input_files, sizeof(char *) * (file_no + 2));
   if (input_files == NULL)
-    error("%s: %s:%d: error: in tokenize_file input_files is null!", __FILE__, __FILE__, __LINE__);
+    error("%s:%d: error: in tokenize_file input_files is null!", __FILE__, __LINE__);
   input_files[file_no] = file;
   input_files[file_no + 1] = NULL;
   file_no++;

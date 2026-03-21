@@ -792,7 +792,7 @@ static void gen_mem_zero(int offset, int n) {
 static void load(Type *ty)
 {
   if (!ty)
-    error("%s: %s:%d: error: in load : ty is null!", __FILE__, __FILE__, __LINE__);
+    error("%s:%d: error: in load : ty is null!", __FILE__, __LINE__);
 
   switch (ty->kind)
   {
@@ -803,7 +803,7 @@ static void load(Type *ty)
      
       println("  movdqu (%%rax), %%xmm0"); 
     } else {
-      error("%s: %s:%d: error: in load : unsupported vector base type %d", __FILE__, __FILE__, __LINE__, ty->base->kind);
+      error("%s:%d: error: in load : unsupported vector base type %d", __FILE__, __LINE__, ty->base->kind);
     }
     return;
   }
@@ -1901,7 +1901,7 @@ static void gen_int128_op(Node *node) {
       break;
     }
     default:
-        error_tok(node->tok,"%s: %s:%d: error: in gen_int128_op : unsupported int128 operation %d", __FILE__, __FILE__, __LINE__, node->kind);
+        error_tok(node->tok,"%s:%d: error: in gen_int128_op : unsupported int128 operation %d", __FILE__, __LINE__, node->kind);
     }
 }
 
@@ -1923,7 +1923,7 @@ static void scalar_to_xmm(Type *vec_ty, const char *xmm_reg) {
       println("  shufpd $0x00, %s, %s", xmm_reg, xmm_reg);
       break;
     default:
-      error("%s: %s:%d: error: in scalar_to_xmm : unsupported vector base type for scalar promotion %d", __FILE__, __FILE__, __LINE__, vec_ty->base->kind);
+      error("%s:%d: error: in scalar_to_xmm : unsupported vector base type for scalar promotion %d", __FILE__, __LINE__, vec_ty->base->kind);
     }
 }
 
@@ -1957,13 +1957,13 @@ static void gen_vector_op(Node *node) {
     break;
   case ND_DIV:
     if (is_integer(node->lhs->ty->base))
-      error_tok(node->tok, "%s: %s:%d: error: in gen_vector_op :  integer vector division not supported", __FILE__, __FILE__, __LINE__);
+      error_tok(node->tok, "%s:%d: error: in gen_vector_op :  integer vector division not supported", __FILE__, __LINE__);
     break;
   case ND_NEG:
     //gen_expr(node->lhs);          // materialize operand in %xmm0
     break;    
   default:
-    error_tok(node->tok, "%s: %s:%d: error: in gen_vector_op :  unsupported vector operation %d", __FILE__, __FILE__, __LINE__, node->kind);
+    error_tok(node->tok, "%s:%d: error: in gen_vector_op :  unsupported vector operation %d", __FILE__, __LINE__, node->kind);
   }
 
   Type *vec_ty = node->lhs->ty;
@@ -1971,7 +1971,7 @@ static void gen_vector_op(Node *node) {
     vec_ty = vec_ty->base;
 
   if (vec_ty->kind != TY_VECTOR)
-    error_tok(node->tok, "%s: %s:%d: error: in gen_vector_op : lhs is not a vector", __FILE__, __FILE__, __LINE__);
+    error_tok(node->tok, "%s:%d: error: in gen_vector_op : lhs is not a vector", __FILE__, __LINE__);
 
   // if (node->rhs)
   //   load_vector_operand(node->rhs, "%xmm1");    
@@ -2008,7 +2008,7 @@ static void gen_vector_op(Node *node) {
         println("  movups %%xmm1, %%xmm0"); 
         break;                
       default:
-        error_tok(node->tok, "%s: %s:%d: error: unsupported float vector operation", __FILE__, __FILE__, __LINE__);
+        error_tok(node->tok, "%s:%d: error: unsupported float vector operation", __FILE__, __LINE__);
       }
       break;
   case TY_DOUBLE:
@@ -2040,7 +2040,7 @@ static void gen_vector_op(Node *node) {
       println("  movapd %%xmm1, %%xmm0");  
       break;      
     default:
-      error_tok(node->tok, "%s: %s:%d: error: unsupported double vector operation", __FILE__, __FILE__, __LINE__);
+      error_tok(node->tok, "%s:%d: error: unsupported double vector operation", __FILE__, __LINE__);
     }
     break;
   case TY_LLONG:
@@ -2074,7 +2074,7 @@ static void gen_vector_op(Node *node) {
       println("  pxor %%xmm1, %%xmm0");
       break;
     default:
-      error_tok(node->tok, "%s: %s:%d: error: long vector operation not supported", __FILE__, __FILE__, __LINE__);
+      error_tok(node->tok, "%s:%d: error: long vector operation not supported", __FILE__, __LINE__);
     }
     break;
   case TY_INT:
@@ -2107,7 +2107,7 @@ static void gen_vector_op(Node *node) {
       println("  pxor %%xmm1, %%xmm0");  
       break;      
     default:
-      error_tok(node->tok, "%s: %s:%d: error: integer vector operation not supported", __FILE__, __FILE__, __LINE__);
+      error_tok(node->tok, "%s:%d: error: integer vector operation not supported", __FILE__, __LINE__);
     }
     break;
   }
@@ -2373,7 +2373,7 @@ static void gen_psll_binop(Node *node, const char *insn) {
 // Walk node to find a numeric constant. Works for ND_ASSIGN, ND_COMMA, ND_CAST etc.
 static int get_const_int_from_node(Node *node) {
   if (!node)
-    error("%s: %s:%d: error: in get_const_int_from_node : expected constant node", __FILE__, __FILE__, __LINE__);
+    error("%s:%d: error: in get_const_int_from_node : expected constant node", __FILE__, __LINE__);
   while (true) {
     if (node->kind == ND_NUM) return node->val;
     if (node->kind == ND_CAST) { node = node->lhs; continue; }
@@ -2382,7 +2382,7 @@ static int get_const_int_from_node(Node *node) {
     break;
   }
 
-  error_tok(node->tok, "%s: %s:%d: error: in get_const_int_from_node : not a compile-time integer constant", __FILE__, __FILE__, __LINE__);
+  error_tok(node->tok, "%s:%d: error: in get_const_int_from_node : not a compile-time integer constant", __FILE__, __LINE__);
  
 }
 
@@ -2396,7 +2396,7 @@ static Node *unwrap_casts(Node *node) {
 static void get_mask_values(Node *mask_node, int *vals, int expected_len) {
   mask_node = unwrap_casts(mask_node);
   if (!mask_node->var || !mask_node->var->init)
-    error_tok(mask_node->tok, "%s: %s:%d: error: in get_mask_values : shuffle mask must be a constant vector initializer! %d", __FILE__, __FILE__, __LINE__, mask_node->kind);
+    error_tok(mask_node->tok, "%s:%d: error: in get_mask_values : shuffle mask must be a constant vector initializer! %d", __FILE__, __LINE__, mask_node->kind);
 
   Initializer *init = mask_node->var->init;
   int len = mask_node->var->ty->array_len;
@@ -4030,7 +4030,7 @@ static void gen_atomic_is_lock_free(Node *node) {
 static void gen_expr(Node *node)
 {
   if (!node)
-    error("%s: %s:%d: error: in gen_expr : node is null!", __FILE__, __FILE__, __LINE__);
+    error("%s:%d: error: in gen_expr : node is null!", __FILE__, __LINE__);
   if (node->tok && node->tok->line_no != last_loc_line) {
   println("  .loc %d %u", node->tok->file->file_no, node->tok->line_no);
       last_loc_line = node->tok->line_no;
@@ -5579,7 +5579,7 @@ switch (node->lhs->ty->kind)
 static void gen_stmt(Node *node)
 {
   if (!node)
-    error("%s: %s:%d: error: in gen_stmt : node is null!", __FILE__, __FILE__, __LINE__);
+    error("%s:%d: error: in gen_stmt : node is null!", __FILE__, __LINE__);
   if (node->tok && node->tok->line_no != last_loc_line) {
   println("  .loc %d %u", node->tok->file->file_no, node->tok->line_no);
         last_loc_line = node->tok->line_no;
@@ -6392,7 +6392,7 @@ char *register_available() {
       }
   }
   //no registry available
-  error("%s: %s:%d: error: in register_available : no register available!", __FILE__, __FILE__, __LINE__);
+  error("%s:%d: error: in register_available : no register available!", __FILE__, __LINE__);
 }
 
 //check if a specific register is available in priority if not try to found a new available
@@ -6420,7 +6420,7 @@ int i;
           return newargreg64[i];
       }
   }
-  error("%s: %s:%d: error: in register8_to_64 : unexpected error!", __FILE__, __FILE__, __LINE__);
+  error("%s:%d: error: in register8_to_64 : unexpected error!", __FILE__, __LINE__);
 }
 
 //convert register 16 to register 64
@@ -6436,7 +6436,7 @@ int i;
           return newargreg64[i];
       }
   }
-  error("%s: %s:%d: error: in register16_to_64 : unexpected error!", __FILE__, __FILE__, __LINE__);
+  error("%s:%d: error: in register16_to_64 : unexpected error!", __FILE__, __LINE__);
 }
 
 //convert register 32 to register 64
@@ -6452,7 +6452,7 @@ int i;
           return newargreg64[i];
       }
   }
-  error("%s: %s:%d: error: in register32_to_64 : unexpected error!", __FILE__, __FILE__, __LINE__);
+  error("%s:%d: error: in register32_to_64 : unexpected error!", __FILE__, __LINE__);
 }
 
 //add a register in the list of used registers
