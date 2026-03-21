@@ -6660,6 +6660,20 @@ static Node *primary(Token **rest, Token *tok)
   }
 
 
+  if (equal(tok, "__atomic_is_lock_free")) {
+    Node *node = new_node(ND_ATOMIC_IS_LOCK_FREE, tok);
+    SET_CTX(ctx);
+    tok = skip(tok->next, "(", ctx);
+    node->lhs = assign(&tok, tok);
+    SET_CTX(ctx);
+    if (consume(&tok, tok, ",")) {
+      node->rhs = assign(&tok, tok);
+    }
+    SET_CTX(ctx);
+    *rest = skip(tok, ")", ctx);
+    return node;
+  }
+
   if (equal(tok, "__builtin_compare_and_swap"))
   {
     Node *node = new_node(ND_CAS, tok);
@@ -8507,6 +8521,7 @@ char *nodekind2str(NodeKind kind)
   case ND_SIGNBIT: return "SIGNBIT";
   case ND_SIGNBITF: return "SIGNBITF";
   case ND_SIGNBITL: return "SIGNBITL";
+  case ND_ATOMIC_IS_LOCK_FREE: return "ATOMIC_IS_LOCK_FREE";
   default: return "UNREACHABLE"; 
   }
 }

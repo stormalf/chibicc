@@ -4011,6 +4011,21 @@ static void gen_cvt_binop(Node *node, const char *insn) {
   }
 }
 
+static void gen_atomic_is_lock_free(Node *node) {
+  gen_expr(node->lhs);
+  int label = count();
+  println("  cmp $0, %%rax");
+  println("  jle .L.not_lock_free.%d", label);
+  println("  cmp $8, %%rax");
+  println("  jle .L.lock_free.%d", label);
+  println(".L.not_lock_free.%d:", label);
+  println("  mov $0, %%rax");
+  println("  jmp .L.lock_free_done.%d", label);
+  println(".L.lock_free.%d:", label);
+  println("  mov $1, %%rax");
+  println(".L.lock_free_done.%d:", label);
+}
+
 // Generate code for a given node.
 static void gen_expr(Node *node)
 {
@@ -4534,6 +4549,7 @@ static void gen_expr(Node *node)
     return;
   case ND_CAS: gen_cas(node); return;
   case ND_CAS_N: gen_cas_n(node); return;
+  case ND_ATOMIC_IS_LOCK_FREE: gen_atomic_is_lock_free(node); return;
   case ND_FETCHNAND:
   case ND_NANDFETCH: gen_fetchnand(node); return;
   case ND_ADD_AND_FETCH: gen_add_and_fetch(node); return;

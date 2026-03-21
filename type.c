@@ -683,6 +683,11 @@ void add_type(Node *node)
   case ND_CAS_N:
     node->ty = ty_bool;
     return;
+  case ND_ATOMIC_IS_LOCK_FREE:
+    add_type(node->lhs);
+    add_type(node->rhs);
+    node->ty = ty_bool;
+    return;
   case ND_BUILTIN_MEMSET:    
   case ND_BUILTIN_MEMCPY:
     node->ty = ty_void_ptr;

@@ -356,18 +356,12 @@ curl : https://github.com/curl/curl.git
 
 openssl : https://github.com/openssl/openssl.git
 
-    CC=chibicc ./Configure
-    
+    CC=chibicc ./Configure    
     You need to remove from the file from openssl/crypto/perlasm/x86_64-xlate.pl
-
     	my $section='.note.gnu.property, #alloc';
-
     by :
-
     	my $section='.note.gnu.property';
-
     make
-
     make test
     
 
@@ -624,7 +618,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.24  Passing GNUC from 3 to 4. Adding const, volatile, restrict support from slimcc/fuhsnn. Fixing issue ISS-195 prockill due to leakage attributes. Managing pragma pack. Fixing issue with attributes and alignment. Fixing issue with some edge cases initializer. Fixing some float comparisons issues with NaN. Fixing alignof issue and managing asm name. Fixing issue with string char array members initialization. Fixing issue with unicode characters. Managing anonymous enums. Fixing issue with extended assembly and &x in input. Fixing issue with extended assembly and macro expansion. Fixing issue with builtin_prefetch found during openssl compile.
+1.0.24  Passing GNUC from 3 to 4. Adding const, volatile, restrict support from slimcc/fuhsnn. Fixing issue ISS-195 prockill due to leakage attributes. Managing pragma pack. Fixing issue with attributes and alignment. Fixing issue with some edge cases initializer. Fixing some float comparisons issues with NaN. Fixing alignof issue and managing asm name. Fixing issue with string char array members initialization. Fixing issue with unicode characters. Managing anonymous enums. Fixing issue with extended assembly and &x in input. Fixing issue with extended assembly and macro expansion. Fixing issue with builtin_prefetch found during openssl compile. Managing \__atomic_is_lock_free.
 
 
 

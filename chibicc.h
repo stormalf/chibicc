@@ -902,6 +902,7 @@ typedef enum
   ND_SIGNBIT,
   ND_SIGNBITF,
   ND_SIGNBITL,
+  ND_ATOMIC_IS_LOCK_FREE, //builtin atomic is lock free
 } NodeKind;
 
 // AST node type
