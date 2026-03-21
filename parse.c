@@ -671,20 +671,24 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     // fixing issue #119 _Complex
     if (consume(&tok, tok, "auto") || consume(&tok, tok, "register") ||
         consume(&tok, tok, "_Complex") ||  consume(&tok, tok, "_Noreturn")) {
+        tok = attribute_list(tok, attr, thing_attributes);
         continue;
     }
     
     if (consume(&tok, tok, "const")) {
       is_const = true;
+      tok = attribute_list(tok, attr, thing_attributes);
       continue;
     }
     if (consume(&tok, tok, "volatile")) {
       is_volatile = true;
+      tok = attribute_list(tok, attr, thing_attributes);
       continue;
     }
 
     if (consume(&tok, tok, "restrict") || consume(&tok, tok, "__restrict") || consume(&tok, tok, "__restrict__")) {
       is_restrict = true;
+      tok = attribute_list(tok, attr, thing_attributes);
       continue;
     }
 
@@ -698,6 +702,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
         tok = skip(tok, ")", ctx);
       }
       is_atomic = true;
+      tok = attribute_list(tok, attr, thing_attributes);
       continue;
     }
 
@@ -759,6 +764,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
       }
 
       counter += OTHER;
+      tok = attribute_list(tok, attr, thing_attributes);
       continue;
     }
 
