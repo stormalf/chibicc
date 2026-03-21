@@ -358,6 +358,7 @@ struct Obj
   Initializer *init;
   bool is_address_used;
   bool is_param;
+  char *cleanup_name;
   bool force_frame_pointer;
 };
 
