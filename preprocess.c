@@ -434,6 +434,19 @@ static bool has_include_in_paths(char *filename, int start_idx) {
 }
 
 
+static bool is_builtin_name(Token *tok)
+{
+  static const char prefix[] = "__builtin_";
+
+  if (!tok || tok->kind != TK_IDENT)
+    return false;
+  if (tok->len < (int)sizeof(prefix) - 1)
+    return false;
+  return !strncmp(tok->loc, prefix, sizeof(prefix) - 1);
+}
+
+static MacroArg *read_macro_arg_one(Token **rest, Token *tok, bool read_rest);
+
 static Token *read_const_expr(Token **rest, Token *tok)
 {
   tok = copy_line(rest, tok);
@@ -445,22 +458,39 @@ static Token *read_const_expr(Token **rest, Token *tok)
   {
     // "defined(foo)" or "defined foo" becomes "1" if macro "foo"
     // is defined. Otherwise "0".
-    if (equal(tok, "defined") || equal(tok, "__has_attribute"))
+    if (equal(tok, "defined") || equal(tok, "__has_attribute") || equal(tok, "__has_builtin"))
     {
       Token *start = tok;
+      bool is_has_builtin = equal(tok, "__has_builtin");
       bool has_paren = consume(&tok, tok->next, "(");
 
       if (tok->kind != TK_IDENT)
         error_tok(start, "%s: in read_const_expr : macro name must be an identifier", __FILE__);
-      Macro *m = find_macro(tok);
-      tok = tok->next;
+      bool found = false;
+      if (is_has_builtin) {
+        if (has_paren) {
+          MacroArg *arg = read_macro_arg_one(&tok, tok, true);
+          Token *argtok = preprocess2(arg->tok);
+          if (argtok->kind != TK_IDENT || argtok->next->kind != TK_EOF)
+            error_tok(start, "%s: in read_const_expr : __has_builtin expects a single identifier", __FILE__);
+          found = is_builtin_name(argtok) || find_macro(argtok);
+          SET_CTX(ctx);
+          tok = skip(tok, ")", ctx);
+        } else {
+          found = is_builtin_name(tok) || find_macro(tok);
+          tok = tok->next;
+        }
+      } else {
+        found = !!find_macro(tok);
+        tok = tok->next;
+      }
 
-      if (has_paren) {
-        SET_CTX(ctx); 
+      if (!is_has_builtin && has_paren) {
+        SET_CTX(ctx);
         tok = skip(tok, ")", ctx);
-      } 
+      }
 
-      cur = cur->next = new_num_token(m ? 1 : 0, start);
+      cur = cur->next = new_num_token(found ? 1 : 0, start);
       continue;
     } else if (equal(tok, "__has_include") || equal(tok, "__has_include_next")) {
       Token *start = tok;
@@ -1027,6 +1057,21 @@ static bool expand_macro(Token **rest, Token *tok)
   if (!m)
     return false;
 
+  if (equal(tok, "__has_builtin") && equal(tok->next, "(")) {
+    Token *t = tok->next->next;
+    if (t->kind != TK_IDENT)
+      error_tok(t, "%s: in expand_macro : __has_builtin expects an identifier", __FILE__);
+
+    bool found = is_builtin_name(t) || find_macro(t);
+    t = t->next;
+    SET_CTX(ctx);
+    t = skip(t, ")", ctx);
+
+    Token *num = new_num_token(found ? 1 : 0, tok);
+    num->next = t;
+    *rest = num;
+    return true;
+  }
 
   
   // Built-in dynamic macro application such as __LINE__
@@ -1672,6 +1717,7 @@ void init_macros(void)
   define_macro("__STDC_UTF_32__", "1");
   //define_macro("__STDC_VERSION__", "201112L");
   define_macro("__STDC__", "1");
+  define_macro("__has_builtin", "1");
   // define_macro("__STDC_IEC_559__" , "1");
   // define_macro("__STDC_ISO_10646__" , "201706L");
   // define_macro("__STDC_IEC_559_COMPLEX__" , "1");
