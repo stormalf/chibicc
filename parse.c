@@ -6269,30 +6269,92 @@ static Node *primary(Token **rest, Token *tok)
     return node;
   }
 
+  if (equal(tok, "__builtin_rotateleft32")) {
+    SET_CTX(ctx);
+    tok = skip(tok->next, "(", ctx);
+    Node *x = assign(&tok, tok);
+    SET_CTX(ctx);
+    tok = skip(tok, ",", ctx);
+    Node *y = assign(&tok, tok);
+    SET_CTX(ctx);
+    *rest = skip(tok, ")", ctx);
 
-    // if (equal(tok, "__builtin_offsetof")) {
-    //   SET_CTX(ctx);   
-    //   tok = skip(tok->next, "(", ctx);
-    //   Token *stok = tok;
-    //   Type *tstruct = typename(&tok, tok);
-    //   if (tstruct->kind != TY_STRUCT && tstruct->kind != TY_UNION) {
-    //     error_tok(stok, "%s %d: in primary : not a structure or union type", __FILE__, __LINE__);
-    //   }
-    //   SET_CTX(ctx);   
-    //   tok = skip(tok, ",", ctx);
-    //   Token *member = tok;
-    //   tok = tok->next;
-    //   SET_CTX(ctx); 
-    //   *rest = skip(tok, ")", ctx);
-    //   for (Member *m = tstruct->members; m; m = m->next) {
-    //     if (m->name->len == member->len &&
-    //         !memcmp(m->name->loc, member->loc, m->name->len)) {
-    //       return new_ulong(m->offset, start);
-    //     }
-    //   }
-    //   error_tok(member, "%s %d: in primary : no such member", __FILE__, __LINE__);
+    Node *x_u = new_cast(x, ty_uint);
+    Node *y_u = new_cast(y, ty_uint);
+    Node *mask1 = new_num(31, start);
+    Node *mask2 = new_num(31, start);
 
-    // }
+    Node *y_mask1 = new_binary(ND_BITAND, y_u, mask1, start);
+    Node *y_mask2 = new_binary(ND_BITAND, y_u, mask2, start);
+    Node *left = new_binary(ND_SHL, x_u, y_mask1, start);
+
+    Node *sub = new_binary(ND_SUB, new_num(32, start), y_mask2, start);
+    Node *sub_mask = new_binary(ND_BITAND, sub, new_num(31, start), start);
+    Node *right = new_binary(ND_SHR, x_u, sub_mask, start);
+
+    return new_binary(ND_BITOR, left, right, start);
+  }
+
+  if (equal(tok, "__builtin_rotateleft64")) {
+    SET_CTX(ctx);
+    tok = skip(tok->next, "(", ctx);
+    Node *x = assign(&tok, tok);
+    SET_CTX(ctx);
+    tok = skip(tok, ",", ctx);
+    Node *y = assign(&tok, tok);
+    SET_CTX(ctx);
+    *rest = skip(tok, ")", ctx);
+
+    Node *x_u = new_cast(x, ty_ulong);
+    Node *y_u = new_cast(y, ty_ulong);
+    Node *mask1 = new_num(63, start);
+    Node *mask2 = new_num(63, start);
+
+    Node *y_mask1 = new_binary(ND_BITAND, y_u, mask1, start);
+    Node *y_mask2 = new_binary(ND_BITAND, y_u, mask2, start);
+    Node *left = new_binary(ND_SHL, x_u, y_mask1, start);
+
+    Node *sub = new_binary(ND_SUB, new_num(64, start), y_mask2, start);
+    Node *sub_mask = new_binary(ND_BITAND, sub, new_num(63, start), start);
+    Node *right = new_binary(ND_SHR, x_u, sub_mask, start);
+
+    return new_binary(ND_BITOR, left, right, start);
+  }
+
+
+ if (equal(tok, "__builtin_offsetof") || equal(tok, "offsetof")) {
+    SET_CTX(ctx);     
+    tok = skip(tok->next, "(", ctx);
+    Type *ty = typename(&tok, tok);
+    SET_CTX(ctx);       
+    tok = skip(tok, ",", ctx);
+
+    Node *node = NULL;
+    int offset = 0;
+    do {
+      Member *mem;
+      do {
+        mem = struct_designator(&tok, tok, ty);
+        offset += mem->offset;
+        ty = mem->ty;
+      } while (!mem->name);
+      SET_CTX(ctx);   
+      for (; ty->base && consume(&tok, tok, "["); tok = skip(tok, "]", ctx)) {
+        ty = ty->base;
+        Node *expr = conditional(&tok, tok);
+        if (!node)
+          node = new_binary(ND_MUL, expr, new_long(ty->size, tok), tok);
+        else
+          node = new_binary(ND_ADD, node, new_binary(ND_MUL, expr, new_long(ty->size, tok), tok), tok);
+      }
+    } while (consume(&tok, tok, "."));
+    SET_CTX(ctx);   
+    *rest = skip(tok, ")", ctx);
+    if (!node)
+      return new_ulong(offset, tok);
+    return new_binary(ND_ADD, node, new_ulong(offset, tok), tok);
+  }
+
 
 
   //trying to fix ===== some builtin functions linked to mmx/emms

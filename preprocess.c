@@ -1687,7 +1687,7 @@ void init_macros(void)
 {
   // Define predefined macros
   define_macro("__VERSION__", "\"" VERSION "\"");
-  define_macro("__builtin_offsetof", "offsetof");
+  //define_macro("__builtin_offsetof", "offsetof");
   define_macro("_LP64", "1");
   define_macro("__C99_MACRO_WITH_VA_ARGS", "1");
   define_macro("__ELF__", "1");
