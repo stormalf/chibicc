@@ -1,3 +1,6 @@
+#include <stddef.h>
+#include "test.h"
+
 typedef union {
   void *ptr;
   int fd;

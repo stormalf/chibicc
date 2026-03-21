@@ -1392,7 +1392,7 @@ static Token *preprocess2(Token *tok)
 
     // // // If it is a macro, expand it.
     //if (expand_macro(&tok, tok)) 
-    if (tok->kind == TK_IDENT && !equal(tok, "__attribute__") && expand_macro(&tok, tok))  
+    if (tok->kind == TK_IDENT && expand_macro(&tok, tok))
       continue;
 
     // Pass through if it is not a "#".
@@ -1973,10 +1973,10 @@ Token *preprocess3(Token *tok)
 
     Macro *m = find_macro(tok);
 
-    if (m != NULL && m->body->len == 0)
+    if (m != NULL && m->is_objlike && m->body->len == 0)
     {
       //if (expand_macro(&tok, tok))
-      if (tok->kind == TK_IDENT && !equal(tok, "__attribute__") && expand_macro(&tok, tok))  
+      if (tok->kind == TK_IDENT && expand_macro(&tok, tok))
         continue;
     }
 
