@@ -215,7 +215,7 @@ int main(void) {
   //ASSERT(1, 99wb == large_bitint_rtn());
   //ASSERT(100, rec[0]);
 
-  //ASSERT(1, stmt_expr());
+  ASSERT(1, stmt_expr());
 
   {
     rec_idx = 0;

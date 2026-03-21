@@ -33,7 +33,6 @@ struct Scope
   // the other is for struct/union/enum tags.
   HashMap vars;
   HashMap tags;
-  struct Cleanup *cleanups;
 };
 typedef struct VarAttr VarAttr;
 // Variable attributes such as typedef or extern.
@@ -63,7 +62,6 @@ struct VarAttr
   int destructor_priority;
   int constructor_priority;
   bool is_packed;
-  char *cleanup_name;
 };
 
 
@@ -90,15 +88,8 @@ static Token* ArrayToken[50][50];
 static Token* ArrayTokenOrder[50][50];
 static int order = 0;
 static bool is_old_style = false;
-typedef struct Cleanup Cleanup;
-struct Cleanup {
-  Cleanup *next;
-  Obj *var;
-  char *name;
-  Token *tok;
-};
-
-static VarAttr *current_attr;
+static Type * current_type;
+static VarAttr * current_attr;
 // All local variable instances created during parsing are
 // accumulated to this list.
 static Obj *locals;
@@ -250,113 +241,6 @@ static void enter_scope(void)
 static void leave_scope(void)
 {
   scope = scope->next;
-}
-
-static void push_cleanup(Obj *var, char *name, Token *tok)
-{
-  if (!scope || !name)
-    return;
-
-  Cleanup *cl = calloc(1, sizeof(Cleanup));
-  if (!cl)
-    error("%s:%d: in push_cleanup : cl pointer is null!", __FILE__, __LINE__);
-  cl->var = var;
-  cl->name = name;
-  cl->tok = tok;
-  cl->next = scope->cleanups;
-  scope->cleanups = cl;
-}
-
-static Obj *cleanup_func(char *name, Token *tok)
-{
-  Obj *fn = find_func(name);
-  if (fn)
-    return fn;
-
-  if (is_c99_or_later() || opt_implicit)
-    error_tok(tok, "%s:%d: in cleanup_func : implicit declaration of function", __FILE__, __LINE__);
-
-  warn_tok(tok, "%s:%d: in cleanup_func : implicit declaration of function", __FILE__, __LINE__);
-  Type *ty = func_type(ty_void);
-  ty->is_variadic = true;
-  fn = new_gvar(name, ty);
-  fn->name = name;
-  fn->is_function = true;
-  fn->is_definition = false;
-  fn->is_tentative = true;
-  fn->is_static = false;
-  fn->is_extern = true;
-  return fn;
-}
-
-static Node *new_cleanup_call(Obj *var, char *name, Token *tok)
-{
-  Obj *fn = cleanup_func(name, tok);
-  Node *fnnode = new_var_node(fn, tok);
-  Node *arg = new_unary(ND_ADDR, new_var_node(var, tok), tok);
-
-  Node *node = new_unary(ND_FUNCALL, fnnode, tok);
-  node->func_ty = fn->ty;
-  node->args = arg;
-  return node;
-}
-
-static void append_scope_cleanups(Node **cur, Scope *sc)
-{
-  for (Cleanup *cl = sc ? sc->cleanups : NULL; cl; cl = cl->next)
-  {
-    Node *call = new_cleanup_call(cl->var, cl->name, cl->tok);
-    *cur = (*cur)->next = new_unary(ND_EXPR_STMT, call, cl->tok);
-    add_type(*cur);
-  }
-}
-
-static Node *wrap_with_cleanups(Node *stmt, Token *tok)
-{
-  Node head = {};
-  Node *cur = &head;
-  bool has_cleanup = false;
-  Node *prefix = NULL;
-
-  if (stmt->kind == ND_RETURN && stmt->lhs) {
-    Node *expr = stmt->lhs;
-    add_type(expr);
-    Obj *tmp = new_lvar("", expr->ty, NULL);
-    Node *assign = new_binary(ND_ASSIGN, new_var_node(tmp, tok), expr, tok);
-    add_type(assign);
-    prefix = new_unary(ND_EXPR_STMT, assign, tok);
-    stmt->lhs = new_var_node(tmp, tok);
-  }
-
-  for (Scope *sc = scope; sc; sc = sc->next) {
-    if (sc->cleanups) {
-      has_cleanup = true;
-      break;
-    }
-  }
-
-  if (!has_cleanup)
-    return stmt;
-
-  if (prefix) {
-    cur = cur->next = prefix;
-    add_type(cur);
-  }
-
-  for (Scope *sc = scope; sc; sc = sc->next)
-  {
-    for (Cleanup *cl = sc->cleanups; cl; cl = cl->next)
-    {
-      Node *call = new_cleanup_call(cl->var, cl->name, cl->tok);
-      cur = cur->next = new_unary(ND_EXPR_STMT, call, cl->tok);
-      add_type(cur);
-    }
-  }
-
-  cur = cur->next = stmt;
-  Node *block = new_node(ND_BLOCK, tok);
-  block->body = head.next;
-  return block;
 }
 
 // Find a variable by name.
@@ -745,13 +629,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
   
   while (is_typename(tok))
   {
-    Token *tok2 = tok;
-    if (attr)
-      current_attr = attr;
     tok = attribute_list(tok, ty, type_attributes);
-    current_attr = NULL;
-    if (tok != tok2)
-      continue;
     //fixing =====ISS-155 __label__ out;  
     if (equal(tok, "__label__")) {
       consume(&tok, tok, "__label__");
@@ -863,10 +741,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
 
     // Handle user-defined types.
     Type *ty2 = find_typedef(tok);
-    if (attr)
-      current_attr = attr;
     tok = attribute_list(tok, ty2, type_attributes);
-    current_attr = NULL;
     if (equal(tok, "struct") || equal(tok, "union") || equal(tok, "enum") ||
         equal(tok, "typeof") || equal(tok, "__typeof") || ty2)
     {
@@ -1627,10 +1502,6 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
       // x = alloca(tmp)`.
       
       Obj *var = new_lvar(get_ident(ty->name), ty, NULL);
-      if (decl_attr.cleanup_name) {
-        var->cleanup_name = decl_attr.cleanup_name;
-        push_cleanup(var, decl_attr.cleanup_name, ty->name ? ty->name : tok);
-      }
       Token *tok = ty->name;
       tok = attribute_list(tok, ty, type_attributes);
       int var_align = MAX(decl_attr.align, ty->align);
@@ -1646,10 +1517,6 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
     }
     
     Obj *var = new_lvar(get_ident(ty->name), ty, NULL);
-    if (decl_attr.cleanup_name) {
-      var->cleanup_name = decl_attr.cleanup_name;
-      push_cleanup(var, decl_attr.cleanup_name, ty->name ? ty->name : tok);
-    }
     if (alt_align) {
       var->align = alt_align;
       var->ty->align = MAX(var->ty->align, alt_align);
@@ -2766,7 +2633,7 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
       {
         error_tok(tok, "%s %d: in stmt : Non-void function must return something", __FILE__, __LINE__);
       }
-      return wrap_with_cleanups(node, tok);
+      return node;
     }
 
 
@@ -2794,7 +2661,7 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
     if (ret_ty->kind != TY_STRUCT && ret_ty->kind != TY_UNION)
       exp = new_cast(exp, ret_ty);
     node->lhs = exp;
-    return wrap_with_cleanups(node, tok);
+    return node;
   }
 
   if (equal(tok, "if"))
@@ -3161,20 +3028,6 @@ static Node *compound_stmt(Token **rest, Token *tok, Node **last)
   if (last)
     *last = cur;
 
-  if (last && scope->cleanups && *last && (*last)->kind == ND_EXPR_STMT) {
-    Node *expr = (*last)->lhs;
-    add_type(expr);
-    Obj *tmp = new_lvar("", expr->ty, NULL);
-    Node *assign = new_binary(ND_ASSIGN, new_var_node(tmp, (*last)->tok), expr, (*last)->tok);
-    add_type(assign);
-    (*last)->lhs = assign;
-    append_scope_cleanups(&cur, scope);
-    Node *final = new_unary(ND_EXPR_STMT, new_var_node(tmp, (*last)->tok), (*last)->tok);
-    cur = cur->next = final;
-    add_type(cur);
-  } else {
-    append_scope_cleanups(&cur, scope);
-  }
   leave_scope();
 
   node->body = head.next;
@@ -3239,7 +3092,6 @@ static Node *compound_stmt2(Token **rest, Token *tok)
     //add_type(cur);
   }
 
-  append_scope_cleanups(&cur, scope);
   leave_scope();
 
   node->body = head.next;
@@ -4660,9 +4512,8 @@ static Token *type_attributes(Token *tok, void *arg)
       if (tok->kind != TK_IDENT)  
           error_tok(tok, "%s %d: in type_attributes: expected identifier in __cleanup__", __FILE__, __LINE__);
 
-      // Store the cleanup function name for the current declaration if available
-      if (current_attr)
-        current_attr->cleanup_name = token_to_string(tok);
+      // Store the cleanup function name
+      current_type = copy_type(ty); 
 
       tok = tok->next;  
       SET_CTX(ctx); 
@@ -5307,7 +5158,7 @@ static Token *thing_attributes(Token *tok, void *arg) {
           error_tok(tok, "%s %d: expected identifier in __cleanup__", __FILE__, __LINE__);
 
       // Store the cleanup function name
-      attr->cleanup_name = token_to_string(tok);
+      current_attr = attr;
 
       tok = tok->next;
       SET_CTX(ctx); 
