@@ -363,6 +363,12 @@ openssl : https://github.com/openssl/openssl.git
     	my $section='.note.gnu.property';
     make
     make test
+    Test Summary Report
+    -------------------
+    80-test_ca.t                           (Wstat: 256 (exited 1) Tests: 20 Failed: 1)
+    Failed test:  5
+    Non-zero exit status: 1
+    Files=350, Tests=4899, 1078 wallclock secs (15.69 usr  1.47 sys + 646.15 cusr 374.31 csys = 1037.62 CPU)
     
 
 openssh-portable : https://github.com/openssh/openssh-portable.git
@@ -575,7 +581,8 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
     postgres execution : tests KO
     git 2 tests failed    
     vim: compile OK, tests OK except 3.
-    cpython : compile OK, some tests KO     
+    cpython : compile OK, some tests KO
+    openssl: compile OK, 5 tests KO     
            
 
 ## projects compiled successfully with chibicc
@@ -587,7 +594,7 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
     openssh-portable : compile OK, tests OK
     vlc: compile OK  
     memcached : compile OK, tests OK      
-    php-src : compile OK, tests OK
+    php-src : compile OK, tests OK    
 
 
 ## debug

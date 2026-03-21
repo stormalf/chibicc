@@ -166,7 +166,7 @@ static Node *funcall(Token **rest, Token *tok, Node *node);
 static Node *unary(Token **rest, Token *tok);
 static Node *primary(Token **rest, Token *tok);
 static Node *parse_typedef(Token **rest, Token *tok, Type *basety, VarAttr *attr);
-static bool is_function(Token *tok);
+static bool is_function(Token *tok, Type *basety);
 static Token *function(Token *tok, Type *basety, VarAttr *attr);
 static Token *global_variable(Token *tok, Type *basety, VarAttr *attr);
 //static void initializer3(Token **rest, Token *tok, Initializer *init);
@@ -2984,7 +2984,7 @@ static Node *compound_stmt(Token **rest, Token *tok, Node **last)
         continue;
       }
 
-      if (is_function(tok))
+      if (is_function(tok, basety))
       {
         tok = function(tok, basety, &attr);
         continue;
@@ -3047,7 +3047,7 @@ static Node *compound_stmt2(Token **rest, Token *tok)
         continue;
       }
 
-      if (is_function(tok))
+      if (is_function(tok, basety))
       {
         tok = function(tok, basety, &attr);
         continue;
@@ -7778,13 +7778,13 @@ static Token *global_variable(Token *tok, Type *basety, VarAttr *attr)
 
 // Lookahead tokens and returns true if a given token is a start
 // of a function definition or declaration.
-static bool is_function(Token *tok)
+static bool is_function(Token *tok, Type *basety)
 {
 
   if (equal(tok, ";"))
     return false;
-  Type dummy = {};
-  Type *ty = declarator(&tok, tok, &dummy);
+  //Type dummy = {};
+  Type *ty = declarator(&tok, tok, basety);
   if (!ty)
     error_tok(tok, "%s %d: in is_function : ty is null", __FILE__, __LINE__);
 
@@ -7958,25 +7958,17 @@ Obj *parse(Token *tok)
     // Typedef
     if (attr.is_typedef)
     {
-      //checking if the typedef has attributes set at the end;
-      // Token *start = tok;
-      // while (!equal(tok, ";")) {
-      //   tok = attribute_list(tok, basety, type_attributes);
-      //   tok = tok->next;
-      // }
-      // tok = start;
       parse_typedef(&tok, tok, basety, &attr);
       continue;
     }
 
     // Function
-    if (is_function(tok))
+    if (is_function(tok, basety))
     {
       if (check_old_style(&tok, tok)) {
         is_old_style = true;
         tok = function(tok, basety, &attr);
-        continue;
-        //error_tok(tok, "%s: in function : old C style function definition is not supported", __FILE__);
+        continue;        
      }
       is_old_style = false;
       tok = function(tok, basety, &attr);
