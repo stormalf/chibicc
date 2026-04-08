@@ -33,3 +33,4 @@ conftest.zend
 compile_commands.json
 .gdbinit
 vgcore.*
+.codex

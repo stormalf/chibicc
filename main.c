@@ -1154,7 +1154,7 @@ static char *create_tmpfile(void)
 {
   char *path = strdup("/tmp/chibicc-XXXXXX");
   if (path == NULL)
-    error("%s : in create_tmpfile path path is null", __FILE__);
+    error("%s:%d: error: in create_tmpfile path path is null", __FILE__, __LINE__);
   int fd = mkstemp(path);
   if (fd == -1)
     error("%s:%d: error: in create_tmpfile mkstemp failed: %s", __FILE__, __LINE__, strerror(errno));

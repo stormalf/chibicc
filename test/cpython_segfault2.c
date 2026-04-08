@@ -2,7 +2,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include <stdio.h>
+#include "test.h"
 
 /* ---------------- CPython core stubs ---------------- */
 
@@ -129,6 +129,7 @@ int main(void)
 
     printf("Type name: %s\n", _PyMemoryIter_Type.tp_name);
     printf("Size: %zu\n", sizeof(memoryiterobject));
+    ASSERT(48, sizeof(memoryiterobject));
 
     _PyMemoryIter_Type.tp_iter(o);
     _PyMemoryIter_Type.tp_iternext(o);

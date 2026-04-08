@@ -333,8 +333,6 @@ struct Obj
   bool is_no_caller_saved_registers;
   
   // Function calls vfork returns twice unsafe with stack frames
-
-
   Obj *params;
   Node *body;
   Obj *locals;
@@ -1079,6 +1077,7 @@ struct Type
   // Declaration
   Token *name;
   Token *name_pos;
+  Obj *param_var; // placeholder var for function parameter (used by VLA sizes)
 
   // Array
   int64_t array_len;

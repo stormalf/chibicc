@@ -408,7 +408,7 @@ static char *string_literal_end(char *p)
   {
     
     if (*p == '\n' || *p == '\0')
-      error_at(start, "%s %d: in string_literal_end : unclosed string literal", __FILE__, __LINE__);
+      error_at(start, "%s:%d: in string_literal_end : unclosed string literal", __FILE__, __LINE__);
     if (*p == '\\')
       p++;
   }
@@ -511,7 +511,7 @@ static Token *read_utf32_string_literal(char *start, char *quote, Type *ty)
 static Token *read_char_literal(char *start, char *quote, Type *ty) {
   char *p = quote + 1;
   if (*p == '\0')
-    error_at(start, "%s: in read_char_literal : unclosed char literal", __FILE__);
+    error_at(start, "%s:%d: in read_char_literal : unclosed char literal", __FILE__, __LINE__);
 
   int64_t c = 0;
   int n = 0;
@@ -669,7 +669,7 @@ static void convert_pp_number(Token *tok)
   }
 
   if (tok->loc + tok->len != end)
-    error_tok(tok, "%s: in convert_pp_number : invalid numeric constant", __FILE__);  
+    error_tok(tok, "%s:%d: in convert_pp_number : invalid numeric constant", __FILE__, __LINE__);  
   tok->kind = TK_NUM;
   tok->fval = val;
   tok->ty = ty;
@@ -746,7 +746,7 @@ Token *tokenize(File *file)
     {
       char *q = strstr(p + 2, "*/");
       if (!q)
-        error_at(p, "%s: in tokenize : unclosed block comment", __FILE__);
+        error_at(p, "%s:%d: in tokenize : unclosed block comment", __FILE__, __LINE__);
       p = q + 2;
       has_space = true;
       continue;
@@ -890,7 +890,7 @@ Token *tokenize(File *file)
       continue;
     }
 
-    error_at(p, "%s: in tokenize : invalid token", __FILE__);
+    error_at(p, "%s:%d: in tokenize : invalid token", __FILE__, __LINE__);
   }
 
   cur = cur->next = new_token(TK_EOF, p, p);

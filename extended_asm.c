@@ -51,6 +51,16 @@ typedef struct
     bool isl;  //true if l: 32-bit registers (eax, ebx, ecx, edx)
     bool is_pure_register; // true if the input is a pure register
     bool isLea; // true if it's a lea operation like &var
+    bool isBinaryExpr; // true if input is a simple binary expression
+    char bin_op; // '+' or '-'
+    bool bin_lhs_is_imm;
+    bool bin_rhs_is_imm;
+    long bin_lhs_imm;
+    long bin_rhs_imm;
+    int bin_lhs_offset;
+    int bin_rhs_offset;
+    int bin_lhs_size;
+    int bin_rhs_size;
 } AsmInput;
 
 typedef struct
@@ -151,6 +161,8 @@ static bool hasOperandName = false;
 static char *register_lower(char *reg);
 static char *register_higher(char *reg);
 static char *register_word(char *reg);
+static bool parse_simple_binary_input(Token **rest, Token *tok, Obj *locals);
+static char *arith_opcode(char op, int size);
 
 
 char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
@@ -272,17 +284,15 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             // if (equal(tok, ","))
             //     tok = tok->next;
             *rest = tok;
-            nbClobber++;
-            //error_tok(tok, "%s : in extended_asm function : clobber not managed yet!", __FILE__);
+            nbClobber++;            
             break;
         case AT_LABEL: // labels
             //nbLabel++;
             tok = tok->next;
-            *rest = tok;
-            //error_tok(tok, "%s : in extended_asm function : label not managed yet!", __FILE__);
+            *rest = tok;            
             break;
         default: // error
-            error_tok(tok, "%s : in extended_asm function : too much parameters or complex extended assembly not managed!", __FILE__);
+            error_tok(tok, "%s:%d : in extended_asm function : too much parameters or complex extended assembly not managed!", __FILE__, __LINE__);
         }
         if (equal(tok, ":")) {
             asmtype += 1;
@@ -463,6 +473,91 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
     // free(input_final);
     free(asmExt);
     return asm_str;
+}
+
+static bool parse_simple_binary_input(Token **rest, Token *tok, Obj *locals)
+{
+    Token *p = tok;
+    while (equal(p, "("))
+        p = p->next;
+
+    if (p->kind != TK_IDENT && p->kind != TK_NUM)
+        return false;
+
+    Token *lhs = p;
+    Token *op = lhs->next;
+    if (!equal(op, "+") && !equal(op, "-"))
+        return false;
+
+    Token *rhs = op->next;
+    if (rhs->kind != TK_IDENT && rhs->kind != TK_NUM)
+        return false;
+
+    Token *end = rhs->next;
+    if (!equal(end, ")"))
+        return false;
+    while (equal(end, ")"))
+        end = end->next;
+
+    AsmInput *in = asmExt->input[nbInput];
+    in->isBinaryExpr = true;
+    in->bin_op = op->loc[0];
+    in->isVariable = false;
+    in->isAddress = false;
+
+    if (lhs->kind == TK_IDENT) {
+        VarScope *sc = find_var(lhs);
+        if (!sc)
+            error_tok(lhs, "%s:%d: in input_asm function : variable undefined", __FILE__, __LINE__);
+        if (!sc->var->ty)
+            error_tok(lhs, "%s:%d: in input_asm function : variable type unknown", __FILE__, __LINE__);
+        in->bin_lhs_is_imm = false;
+        in->bin_lhs_offset = sc->var->offset;
+        in->bin_lhs_size = sc->var->ty->size;
+        if (sc->var->funcname) {
+            update_offset(sc->var->funcname, locals);
+            in->bin_lhs_offset = sc->var->offset;
+        }
+    } else {
+        in->bin_lhs_is_imm = true;
+        in->bin_lhs_imm = lhs->val;
+        in->bin_lhs_size = 8;
+    }
+
+    if (rhs->kind == TK_IDENT) {
+        VarScope *sc = find_var(rhs);
+        if (!sc)
+            error_tok(rhs, "%s:%d: in input_asm function : variable undefined", __FILE__, __LINE__);
+        if (!sc->var->ty)
+            error_tok(rhs, "%s:%d: in input_asm function : variable type unknown", __FILE__, __LINE__);
+        in->bin_rhs_is_imm = false;
+        in->bin_rhs_offset = sc->var->offset;
+        in->bin_rhs_size = sc->var->ty->size;
+        if (sc->var->funcname) {
+            update_offset(sc->var->funcname, locals);
+            in->bin_rhs_offset = sc->var->offset;
+        }
+    } else {
+        in->bin_rhs_is_imm = true;
+        in->bin_rhs_imm = rhs->val;
+        in->bin_rhs_size = 8;
+    }
+
+    int size = 8;
+    if (!in->bin_lhs_is_imm && !in->bin_rhs_is_imm)
+        size = MAX(in->bin_lhs_size, in->bin_rhs_size);
+    else if (!in->bin_lhs_is_imm)
+        size = in->bin_lhs_size;
+    else if (!in->bin_rhs_is_imm)
+        size = in->bin_rhs_size;
+
+    in->size = size;
+    if (!in->reg)
+        error_tok(lhs, "%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__);
+    in->reg = update_register_size(in->reg, size);
+
+    *rest = end;
+    return true;
 }
 
 
@@ -808,6 +903,8 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
         // manage the variable inside parenthesis
         else if (equal(tok, "("))
         {
+            if (parse_simple_binary_input(rest, tok, locals))
+                return;
             SET_CTX(ctx);
             while (equal(tok, "("))
                 tok = tok->next;
@@ -819,13 +916,13 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 asmExt->output[nbOutput]->output = tok;
                 sc = find_var(tok);
                 if (!sc)
-                    error_tok(tok, "%s %d: in output_asm function : variable undefined", __FILE__, __LINE__);
+                    error_tok(tok, "%s:%d: in output_asm function : variable undefined", __FILE__, __LINE__);
                 if (!sc->var->ty)
-                    error_tok(tok, "%s %d: in output_asm function : variable type unknown", __FILE__, __LINE__);
+                    error_tok(tok, "%s:%d: in output_asm function : variable type unknown", __FILE__, __LINE__);
                 // retrieve the size of the variable to determine the register to use here we use RAX variation
                 asmExt->output[nbOutput]->size = sc->var->ty->size;
                 if (!asmExt->output[nbOutput]->reg)
-                    error_tok(tok, "%s %d: in output_asm function : reg is null extended assembly not managed yet", __FILE__, __LINE__);
+                    error_tok(tok, "%s:%d: in output_asm function : reg is null extended assembly not managed yet", __FILE__, __LINE__);
                 asmExt->output[nbOutput]->isVariable = true;
                 asmExt->output[nbOutput]->output = tok;
                 asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
@@ -873,7 +970,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->output[nbOutput]->indexArray = tok->val;
                     asmExt->output[nbOutput]->size = sc->var->ty->base->size;
                     if (!asmExt->output[nbOutput]->reg)
-                        error_tok(tok, "%s %d: in output_asm function : reg is null extended assembly not managed yet", __FILE__, __LINE__);
+                        error_tok(tok, "%s:%d: in output_asm function : reg is null extended assembly not managed yet", __FILE__, __LINE__);
                     asmExt->output[nbOutput]->reg = update_register_size(asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->size);
                     //calculate the offset for each element from the bottom to the top r[0] has the lowest offset example -48, r[1] - 44, r[2] -40, r[3] - 36
                     asmExt->output[nbOutput]->offset = (asmExt->output[nbOutput]->indexArray * asmExt->output[nbOutput]->size);
@@ -892,7 +989,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 while (equal(arrow, ")")) arrow = arrow->next;
                 if (sc->var->ty->kind == TY_PTR && equal(arrow, "->")) {
                     if (!sc->var->ty->base)
-                        error_tok(tok, "%s %d: in output_asm function : expecting struct base but base is null!", __FILE__, __LINE__);
+                        error_tok(tok, "%s:%d: in output_asm function : expecting struct base but base is null!", __FILE__, __LINE__);
                     asmExt->output[nbOutput]->output = tok;
                     SET_CTX(ctx);
                     tok = skip(arrow, "->", ctx);
@@ -902,11 +999,11 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->output[nbOutput]->isStruct = true;     
                     asmExt->output[nbOutput]->size = sc->var->ty->size;
                     if (!asmExt->output[nbOutput]->reg)
-                        error_tok(tok, "%s %d: in output_asm function : reg is null extended assembly not managed yet", __FILE__, __LINE__);                
+                        error_tok(tok, "%s:%d: in output_asm function : reg is null extended assembly not managed yet", __FILE__, __LINE__);                
                     asmExt->output[nbOutput]->reg = update_register_size(asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->size);
                     asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
                     if (!sc->var->ty->base->members)
-                        error_tok(tok, "%s %d: in output_asm function : expecting members but members is null", __FILE__, __LINE__);
+                        error_tok(tok, "%s:%d: in output_asm function : expecting members but members is null", __FILE__, __LINE__);
                     if (sc->var->funcname) {
                         update_offset(sc->var->funcname, locals);
                         asmExt->output[nbOutput]->offset = sc->var->offset;
@@ -919,13 +1016,13 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     char *toktmp = calloc(1, sizeof(char) * 300);
                     for (Member *mbr = sc->var->ty->base->members; mbr; mbr = mbr->next) {
                         if (mbr->name->len > 59)
-                            error_tok(tok, "%s %d %d: in output_asm function : not enough size for toktmp", __FILE__, __LINE__, mbr->name->len);
+                            error_tok(tok, "%s:%d %d: in output_asm function : not enough size for toktmp", __FILE__, __LINE__, mbr->name->len);
                         strncat(toktmp, mbr->name->loc, mbr->name->len);
                         if (equal(tokmbr, toktmp)) {
                             asmExt->output[nbOutput]->offsetStruct = mbr->offset ;
                             asmExt->output[nbOutput]->size = mbr->ty->size ;
                             if (!asmExt->output[nbOutput]->reg)
-                                error_tok(tok, "%s %d: in output_asm function : reg is null extended assembly not managed yet", __FILE__, __LINE__);
+                                error_tok(tok, "%s:%d: in output_asm function : reg is null extended assembly not managed yet", __FILE__, __LINE__);
                             asmExt->output[nbOutput]->reg = update_register_size(asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->size);
                         }
                     }
@@ -942,7 +1039,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 // tok = tok->next;
                 tok = tok->next;                
                 if (!equal(tok, ")"))
-                    error_tok(tok, "%s %d: in output_asm function : extended assembly not managed yet", __FILE__, __LINE__);
+                    error_tok(tok, "%s:%d: in output_asm function : extended assembly not managed yet", __FILE__, __LINE__);
                 SET_CTX(ctx);
                 while (equal(tok, ")")) tok = tok->next;
                     *rest = tok;
@@ -958,9 +1055,9 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->output[nbOutput]->output = tok;                    
                     sc = find_var(tok);
                     if (!sc)
-                        error_tok(tok, "%s %d: in output_asm function : variable undefined2", __FILE__, __LINE__);
+                        error_tok(tok, "%s:%d: in output_asm function : variable undefined2", __FILE__, __LINE__);
                     if (!sc->var->ty)
-                        error_tok(tok, "%s %d: in output_asm function : variable type unknown2", __FILE__, __LINE__);
+                        error_tok(tok, "%s:%d: in output_asm function : variable type unknown2", __FILE__, __LINE__);
                     // retrieve the size of the variable to determine the register to use here we use RAX variation
                     // skip the variable to go to next token that should be a ")"
                 
@@ -974,7 +1071,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
 
                     }
                     if (!asmExt->output[nbOutput]->reg)
-                        error_tok(tok, "%s %d: in output_asm function : reg is null extended assembly not managed yet", __FILE__, __LINE__);
+                        error_tok(tok, "%s:%d: in output_asm function : reg is null extended assembly not managed yet", __FILE__, __LINE__);
                     asmExt->output[nbOutput]->reg = update_register_size(asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->size);
                     asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
                     tok = tok->next;
@@ -987,7 +1084,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                             // Skip '(('
                             tok = tok->next->next;
                             if (!equal(tok, "void"))
-                                error_tok(tok, "%s %d: in output_asm function : expected cast to (void **)", __FILE__, __LINE__);
+                                error_tok(tok, "%s:%d: in output_asm function : expected cast to (void **)", __FILE__, __LINE__);
 
                             tok = tok->next;
 
@@ -998,12 +1095,12 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                             }
 
                             if (!equal(tok, ")"))
-                                error_tok(tok, "%s %d: in output_asm function : expected ')' after cast type", __FILE__, __LINE__);
+                                error_tok(tok, "%s:%d: in output_asm function : expected ')' after cast type", __FILE__, __LINE__);
 
                             tok = tok->next; 
 
                             if (tok->kind != TK_IDENT)
-                                error_tok(tok, "%s %d: in output_asm function : expected identifier after cast", __FILE__, __LINE__);
+                                error_tok(tok, "%s:%d: in output_asm function : expected identifier after cast", __FILE__, __LINE__);
 
                             // At this point: we are at the identifier (like 'ofs')
                             asmExt->output[nbOutput]->isAddress = true;
@@ -1011,9 +1108,9 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
 
                             VarScope *sc = find_var(tok);
                             if (!sc)
-                                error_tok(tok, "%s %d: in output_asm function : variable undefined after cast", __FILE__, __LINE__);
+                                error_tok(tok, "%s:%d: in output_asm function : variable undefined after cast", __FILE__, __LINE__);
                             if (!sc->var->ty)
-                                error_tok(tok, "%s %d: in output_asm function : variable type unknown after cast", __FILE__, __LINE__);                                
+                                error_tok(tok, "%s:%d: in output_asm function : variable type unknown after cast", __FILE__, __LINE__);                                
 
                             asmExt->output[nbOutput]->size = sc->var->ty->size;
 
@@ -1025,14 +1122,14 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                             }
 
                             if (!asmExt->output[nbOutput]->reg)
-                                error_tok(tok, "%s %d: in output_asm function : reg is null", __FILE__, __LINE__);          
+                                error_tok(tok, "%s:%d: in output_asm function : reg is null", __FILE__, __LINE__);          
 
                             asmExt->output[nbOutput]->reg = update_register_size(asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->size);
                             asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
                             tok = tok->next;
 
                             if (!equal(tok, ")"))
-                                error_tok(tok, "%s %d: in output_asm function : expected ')' after cast type", __FILE__, __LINE__);
+                                error_tok(tok, "%s:%d: in output_asm function : expected ')' after cast type", __FILE__, __LINE__);
 
                             tok = tok->next; //first parenthesis
                             
@@ -1045,7 +1142,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
 
                                     
                 else {
-                    error_tok(tok, "%s %d: in output_asm function : extended assembly not managed yet", __FILE__, __LINE__);
+                    error_tok(tok, "%s:%d: in output_asm function : extended assembly not managed yet", __FILE__, __LINE__);
                 }
             }
         }
@@ -1452,6 +1549,8 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             SET_CTX(ctx);
             while (equal(tok, "("))
                 tok = tok->next;
+            if (parse_simple_binary_input(rest, tok, locals))
+                return;
             // check if the variable is defined
             if (equal(tok, "-")) 
             {
@@ -1467,9 +1566,9 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     
                 sc = find_var(tok);
                 if (!sc)
-                    error_tok(tok, "%s %d: in input_asm function : variable undefined", __FILE__, __LINE__);
+                    error_tok(tok, "%s:%d: in input_asm function : variable undefined", __FILE__, __LINE__);
                 if (!sc->var->ty)
-                    error_tok(tok, "%s %d: in input_asm function : variable type unknown", __FILE__, __LINE__);
+                    error_tok(tok, "%s:%d: in input_asm function : variable type unknown", __FILE__, __LINE__);
                 asmExt->input[nbInput]->input = tok;
                 asmExt->input[nbInput]->isVariable = true;
                 asmExt->input[nbInput]->size = sc->var->ty->size;
@@ -1535,7 +1634,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     Token *arrow = tok->next;
                     while (equal(arrow, ")")) arrow = arrow->next;
                     if (!sc->var->ty->base)
-                        error_tok(tok, "%s %d: in input_asm function : expecting struct base but base is null!", __FILE__, __LINE__);
+                        error_tok(tok, "%s:%d: in input_asm function : expecting struct base but base is null!", __FILE__, __LINE__);
                     asmExt->input[nbInput]->input = tok;
                     SET_CTX(ctx);
                     tok = skip(arrow, (char *)(equal(arrow, "->") ? "->" : "."), ctx);
@@ -1545,11 +1644,11 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->input[nbInput]->isStruct = true;     
                     asmExt->input[nbInput]->size = sc->var->ty->size;
                     if (!asmExt->input[nbInput]->reg)
-                        error_tok(tok, "%s %d: in input_asm function : reg is null extended assembly not managed yet", __FILE__, __LINE__);                
+                        error_tok(tok, "%s:%d: in input_asm function : reg is null extended assembly not managed yet", __FILE__, __LINE__);                
                     asmExt->input[nbInput]->reg = update_register_size(asmExt->input[nbInput]->reg, asmExt->input[nbInput]->size);
                     //asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(nbInput);
                     if (!sc->var->ty->base->members)
-                        error_tok(tok, "%s %d: in input_asm function : expecting members but members is null", __FILE__, __LINE__);
+                        error_tok(tok, "%s:%d: in input_asm function : expecting members but members is null", __FILE__, __LINE__);
                     if (sc->var->funcname) {
                         update_offset(sc->var->funcname, locals);
                         asmExt->input[nbInput]->offset = sc->var->offset;
@@ -1561,7 +1660,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     char *toktmp = calloc(1, sizeof(char) * 300);                    
                     for (Member *mbr = sc->var->ty->base->members; mbr; mbr = mbr->next) {
                         if (mbr->name->len > 59)
-                            error_tok(tok, "%s %d %d: in input_asm function : not enough size for toktmp", __FILE__, __LINE__, mbr->name->len);
+                            error_tok(tok, "%s:%d %d: in input_asm function : not enough size for toktmp", __FILE__, __LINE__, mbr->name->len);
                         strncat(toktmp, mbr->name->loc, mbr->name->len);                            
                         if (equal(tokmbr, toktmp)) {
                             asmExt->input[nbInput]->offsetStruct = mbr->offset ;
@@ -1618,7 +1717,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->input[nbInput]->input = tok;                    
                     sc = find_var(tok);
                     if (!sc)
-                        error_tok(tok, "%s %d: in input_asm function : variable undefined2", __FILE__, __LINE__);
+                        error_tok(tok, "%s:%d: in input_asm function : variable undefined2", __FILE__, __LINE__);
                     asmExt->input[nbInput]->input = tok;
                     asmExt->input[nbInput]->isVariable = true;
                     asmExt->input[nbInput]->isAddress = true;
@@ -1669,9 +1768,9 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
 
                         sc = find_var(tok);
                         if (!sc)
-                            error_tok(tok, "%s %d: variable undefined in input_asm", __FILE__, __LINE__);
+                            error_tok(tok, "%s:%d: variable undefined in input_asm", __FILE__, __LINE__);
                         if (!sc->var->ty)
-                            error_tok(tok, "%s %d: variable type undefined in input_asm", __FILE__, __LINE__);
+                            error_tok(tok, "%s:%d: variable type undefined in input_asm", __FILE__, __LINE__);
 
                         asmExt->input[nbInput]->size = sc->var->ty->size;
 
@@ -1688,7 +1787,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
 
                         tok = tok->next;
                         if (!equal(tok, ")"))
-                            error_tok(tok, "%s %d: input_asm: expected ')' after cast", __FILE__, __LINE__);
+                            error_tok(tok, "%s:%d: input_asm: expected ')' after cast", __FILE__, __LINE__);
                         tok = tok->next; 
                         
 
@@ -1735,9 +1834,9 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->output[nbOutput]->output = tok;
                     sc = find_var(tok);
                     if (!sc)
-                        error_tok(tok, "%s %d: in output_asm function : variable undefined", __FILE__, __LINE__);
+                        error_tok(tok, "%s:%d: in output_asm function : variable undefined", __FILE__, __LINE__);
                     if (!sc->var->ty)
-                        error_tok(tok, "%s %d: in output_asm function : variable type unknown", __FILE__, __LINE__);
+                        error_tok(tok, "%s:%d: in output_asm function : variable type unknown", __FILE__, __LINE__);
                     
                     asmExt->output[nbOutput]->size = sc->var->ty->size;
                     if (sc->var->funcname) {
@@ -1748,7 +1847,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     }
                     asmExt->output[nbOutput]->isVariable = true;
                     if (!asmExt->output[nbOutput]->reg)
-                        error_tok(tok, "%s %d: in output_asm function : reg is null", __FILE__, __LINE__);
+                        error_tok(tok, "%s:%d: in output_asm function : reg is null", __FILE__, __LINE__);
                     asmExt->output[nbOutput]->reg = update_register_size(asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->size);
                     asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
                     tok = tok->next;
@@ -1765,7 +1864,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             tok = skip(tok, ",", ctx); continue;
         }
         else {            
-            error_tok(tok, "%s : in input_asm function : input complex constraint not managed yet! %.*s", __FILE__, tok->len, tok->loc);
+            error_tok(tok, "%s:%d : in input_asm function : input complex constraint not managed yet! %.*s", __FILE__, __LINE__, tok->len, tok->loc);
         }
 
         tok = tok->next;
@@ -1816,7 +1915,40 @@ char *string_replace(char *str, char *oldstr, char *newstr)
 char *generate_input_asm(char *input_str)
 {
     
-    char *tmp = calloc(1, sizeof(char) * 100);
+    char *tmp = calloc(1, sizeof(char) * 200);
+    if (asmExt->input[nbInput]->isBinaryExpr)
+    {
+        char imm_buf[32];
+
+        strncat(tmp, "\n", 3);
+        strncat(tmp, opcode(asmExt->input[nbInput]->size), strlen(opcode(asmExt->input[nbInput]->size)));
+        if (asmExt->input[nbInput]->bin_lhs_is_imm) {
+            snprintf(imm_buf, sizeof(imm_buf), "%ld", asmExt->input[nbInput]->bin_lhs_imm);
+            strncat(tmp, " $", 3);
+            strncat(tmp, imm_buf, strlen(imm_buf));
+        } else {
+            strncat(tmp, load_variable(asmExt->input[nbInput]->bin_lhs_offset),
+                    strlen(load_variable(asmExt->input[nbInput]->bin_lhs_offset)));
+        }
+        strncat(tmp, ", ", 3);
+        strncat(tmp, asmExt->input[nbInput]->variableNumber, strlen(asmExt->input[nbInput]->variableNumber));
+        strncat(tmp, ";\n", 3);
+
+        strncat(tmp, arith_opcode(asmExt->input[nbInput]->bin_op, asmExt->input[nbInput]->size),
+                strlen(arith_opcode(asmExt->input[nbInput]->bin_op, asmExt->input[nbInput]->size)));
+        if (asmExt->input[nbInput]->bin_rhs_is_imm) {
+            snprintf(imm_buf, sizeof(imm_buf), "%ld", asmExt->input[nbInput]->bin_rhs_imm);
+            strncat(tmp, " $", 3);
+            strncat(tmp, imm_buf, strlen(imm_buf));
+        } else {
+            strncat(tmp, load_variable(asmExt->input[nbInput]->bin_rhs_offset),
+                    strlen(load_variable(asmExt->input[nbInput]->bin_rhs_offset)));
+        }
+        strncat(tmp, ", ", 3);
+        strncat(tmp, asmExt->input[nbInput]->variableNumber, strlen(asmExt->input[nbInput]->variableNumber));
+        strncat(tmp, ";\n", 3);
+        return tmp;
+    }
     //case variable
     if (asmExt->input[nbInput]->isVariable && asmExt->input[nbInput]->isToNegate)
     {
@@ -2030,6 +2162,25 @@ char *opcode(int size)
         return "\n  mov ";        
     default:
         error("%s:%d: error: in opcode : size %d unexpected!", __FILE__, __LINE__, size);
+    }
+}
+
+static char *arith_opcode(char op, int size)
+{
+    switch (size)
+    {
+    case 1:
+        return (op == '+') ? "\n  addb " : "\n  subb ";
+    case 2:
+        return (op == '+') ? "\n  addw " : "\n  subw ";
+    case 4:
+        return (op == '+') ? "\n  addl " : "\n  subl ";
+    case 8:
+        return (op == '+') ? "\n  addq " : "\n  subq ";
+    case 16:
+        return (op == '+') ? "\n  add " : "\n  sub ";
+    default:
+        error("%s:%d: error: in arith_opcode : size %d unexpected!", __FILE__, __LINE__, size);
     }
 }
 

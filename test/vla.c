@@ -20,6 +20,8 @@ int main() {
   ASSERT(5*16+2, ({ int n=10; int x[n+1][n+6]; int *p=x; for (int i = 0; i<sizeof(x)/4; i++) p[i]=i; x[5][2]; }));
 
   ASSERT(10, ({ int n=5; sizeof(char[2][n]); }));
+  ASSERT(30, ({ int n=5; int m=3; sizeof(char[n][2][m]); }));
+  ASSERT(30, ({ int n=5; int m=3; int p=2; sizeof(char[n][p][m]); }));
 
   printf("OK\n");
   return 0;

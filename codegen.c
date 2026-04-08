@@ -536,6 +536,8 @@ static void gen_addr(Node *node)
     // Variable-length array, which is always local.
     if (node->var->ty->kind == TY_VLA)
     {
+      if (!node->var->ptr)
+        error("%s:%d: error: in gen_addr : VLA pointer is null", __FILE__, __LINE__);
       if (is_omit_fp(current_fn))
         println("  mov %d(%%rsp), %%rax", node->var->offset + current_fn->stack_size + depth * 8);
       else
@@ -546,6 +548,8 @@ static void gen_addr(Node *node)
     // Local variable
     if (node->var->is_local)
     {
+      if (!node->var->ptr)
+        error("%s:%d: error: in gen_addr : VLA pointer is null", __FILE__, __LINE__);    
       if (is_omit_fp(current_fn))
         println("  lea %d(%%rsp), %%rax", node->var->offset + current_fn->stack_size + depth * 8);
       else
@@ -855,7 +859,7 @@ static void load(Type *ty)
 static void store(Type *ty)
 {
   if (!ty)
-    error("%s %d: in store : ty is null!", __FILE__, __LINE__);
+    error("%s:%d: in store : ty is null!", __FILE__, __LINE__);
   pop_tmp("%rdi");
 
 
@@ -867,7 +871,7 @@ static void store(Type *ty)
     } else if (is_integer(ty->base)) {
       println("  movdqu %%xmm0, (%%rdi)");
     } else {
-      error("%s %d: in store : unsupported vector base type %d", __FILE__, __LINE__, ty->base->kind);
+      error("%s:%d: in store : unsupported vector base type %d", __FILE__, __LINE__, ty->base->kind);
     }
     return;
   case TY_STRUCT:
@@ -904,7 +908,7 @@ static void store(Type *ty)
 static void cmp_zero(Type *ty)
 {
   if (!ty)
-    error("%s %d: in cmp_zero : ty is null!", __FILE__, __LINE__);
+    error("%s:%d: in cmp_zero : ty is null!", __FILE__, __LINE__);
   switch (ty->kind)
   {
   case TY_FLOAT:
@@ -1106,7 +1110,7 @@ static const char *const cast_table[13][13] = /* clang-format off */ {
 static void cast(Type *from, Type *to)
 {
   if (!to)
-    error("%s %d: in cast : to type is null!", __FILE__, __LINE__);    
+    error("%s:%d: in cast : to type is null!", __FILE__, __LINE__);    
   if (!from)
     from = copy_type(to);    
   if (to->kind == TY_VOID)
@@ -1397,7 +1401,7 @@ static int push_args(Node *node)
   {
     Type *ty = arg->ty;
     if (!ty)
-      error("%s %d: in push_args : type is null!", __FILE__, __LINE__);  
+      error("%s:%d: in push_args : type is null!", __FILE__, __LINE__);  
 
     switch (ty->kind)
     {
@@ -1479,7 +1483,7 @@ static void copy_ret_buffer(Obj *var)
 {
   Type *ty = var->ty;
   if (!ty)
-    error("%s %d: in copy_ret_buffer : type is null!", __FILE__, __LINE__);  
+    error("%s:%d: in copy_ret_buffer : type is null!", __FILE__, __LINE__);  
 
   int gp = 0, fp = 0;
 
@@ -1546,7 +1550,7 @@ static void copy_struct_reg(void)
 {
   Type *ty = current_fn->ty->return_ty;
   if (!ty)
-    error("%s %d: in copy_struct_reg : type is null!", __FILE__, __LINE__);  
+    error("%s:%d: in copy_struct_reg : type is null!", __FILE__, __LINE__);  
   int gp = 0, fp = 0;
 
   println("  mov %%rax, %%rdi");
@@ -1600,7 +1604,7 @@ static void copy_struct_mem(void)
   Type *ty = current_fn->ty->return_ty;
 
   if (!ty)
-    error("%s %d: in copy_struct_mem : type is null!", __FILE__, __LINE__);  
+    error("%s:%d: in copy_struct_mem : type is null!", __FILE__, __LINE__);  
   Obj *var = current_fn->params;
   if (is_omit_fp(current_fn))
     println("  mov %d(%%rsp), %%rdi", var->offset + current_fn->stack_size + depth * 8);
@@ -3720,12 +3724,12 @@ static void gen_cas(Node *node)   {
   gen_expr(node->cas_old);
   println("  mov %%rax, %%r8");
   if (!node->cas_old->ty->base)
-    error("%s %d: in gen_cas :node->cas_old base type is null!", __FILE__, __LINE__); 
+    error("%s:%d: in gen_cas :node->cas_old base type is null!", __FILE__, __LINE__); 
   load(node->cas_old->ty->base);
   pop_tmp("%rdx"); // new
   pop_tmp("%rdi"); // addr
   if (!node->cas_addr->ty->base)
-    error("%s %d: in gen_cas : node->cas_addr base type is null!", __FILE__, __LINE__); 
+    error("%s:%d: in gen_cas : node->cas_addr base type is null!", __FILE__, __LINE__); 
   int sz = node->cas_addr->ty->base->size;
   println("  lock cmpxchg %s, (%%rdi)", reg_dx(sz));
   println("  sete %%cl");
@@ -3769,7 +3773,7 @@ static void gen_bool_cas(Node *node) {
   pop_tmp("%rdi");
   int sz = node->cas_ptr->ty->base->size;
   if (!node->cas_ptr->ty->base)
-    error("%s %d: in gen_bool_cas : node->cas_ptr base type is null!", __FILE__, __LINE__);   
+    error("%s:%d: in gen_bool_cas : node->cas_ptr base type is null!", __FILE__, __LINE__);   
   println("  lock cmpxchg %s, (%%rdi)", reg_dx(sz)); 
   println("  sete %%al");       
   println("  movzbl %%al, %%eax"); 
@@ -3914,7 +3918,7 @@ static void gen_fetchnand(Node *node) {
         case 2: println("  movzwl (%%rdi), %%rax"); break;
         case 4: println("  movl (%%rdi), %%eax");   break;
         case 8: println("  movq (%%rdi), %%rax");   break;
-        default: error("%s %d: in gen_fetchnand : unsupported size %d!", __FILE__, __LINE__, sz); 
+        default: error("%s:%d: in gen_fetchnand : unsupported size %d!", __FILE__, __LINE__, sz); 
     }
     int label = count();
     println(".L.fetchnand_loop_%d:", label);
@@ -3967,7 +3971,7 @@ static void gen_cas_n(Node *node)   {
   pop_tmp("%rdi"); /* addr */
   int sz = node->cas_addr->ty->base->size;
   if (!node->cas_addr->ty->base)
-    error("%s %d: in gen_cas_n : node->cas_addr base type is null!", __FILE__, __LINE__);   
+    error("%s:%d: in gen_cas_n : node->cas_addr base type is null!", __FILE__, __LINE__);   
 
   println("  lock cmpxchg %s, (%%rdi)", reg_dx(sz));
 
@@ -4134,7 +4138,7 @@ static void gen_expr(Node *node)
   {
     gen_addr(node);
     if (!node->ty)
-      error("%s %d: in gen_expr : ND_MEMBER node type is null!", __FILE__, __LINE__);  
+      error("%s:%d: in gen_expr : ND_MEMBER node type is null!", __FILE__, __LINE__);  
     load(node->ty);
 
     Member *mem = node->member;
@@ -4157,7 +4161,7 @@ static void gen_expr(Node *node)
   case ND_DEREF:    
     gen_expr(node->lhs);
     if (!node->ty)
-      error("%s %d: in gen_expr : ND_DEREF node type is null!", __FILE__, __LINE__); 
+      error("%s:%d: in gen_expr : ND_DEREF node type is null!", __FILE__, __LINE__); 
     load(node->ty);
     return;
   case ND_ADDR:
@@ -4281,7 +4285,7 @@ static void gen_expr(Node *node)
   case ND_CAST:
     gen_expr(node->lhs);    
     if (!node->ty)   
-      error("%s %d: in gen_expr : ND_CAST node type is null!", __FILE__, __LINE__); 
+      error("%s:%d: in gen_expr : ND_CAST node type is null!", __FILE__, __LINE__); 
     cast(node->lhs->ty, node->ty);
     return;
   case ND_MEMZERO:
@@ -4391,7 +4395,7 @@ static void gen_expr(Node *node)
     {
       Type *ty = arg->ty;
       if (!ty)
-        error("%s %d: in gen_expr : type is null!", __FILE__, __LINE__);  
+        error("%s:%d: in gen_expr : type is null!", __FILE__, __LINE__);  
 
       switch (ty->kind)
       {
@@ -6034,7 +6038,7 @@ static void emit_text(Obj *prog)
       {
         Type *ty = var->ty;
         if (!ty)
-          error("%s %d: in emit_text : type is null!", __FILE__, __LINE__);  
+          error("%s:%d: in emit_text : type is null!", __FILE__, __LINE__);  
         switch (ty->kind)
         {
           case TY_STRUCT:
@@ -6131,7 +6135,7 @@ static void emit_text(Obj *prog)
 
       Type *ty = var->ty;
       if (!ty)
-        error("%s %d: in emit_text : type is null!", __FILE__, __LINE__);  
+        error("%s:%d: in emit_text : type is null!", __FILE__, __LINE__);  
       switch (ty->kind)
       {
       case TY_VECTOR:
@@ -6140,7 +6144,7 @@ static void emit_text(Obj *prog)
         } else if (is_integer(ty->base)) {
           store_fp(fp++, offset, ty->size, var->ptr);
         } else {
-          error("%s %d: in emit_text : Unsupported vector base type", __FILE__, __LINE__);  
+          error("%s:%d: in emit_text : Unsupported vector base type", __FILE__, __LINE__);  
         }
         break;
       case TY_STRUCT:
@@ -6325,7 +6329,7 @@ void assign_lvar_offsets(Obj *prog) {
       if (var->offset) continue;
 
       Type *ty = var->ty;
-      if (!ty) error("%s %d: type is null!", __FILE__, __LINE__);
+      if (!ty) error("%s:%d: type is null!", __FILE__, __LINE__);
 
       // ABI: Check if passed in registers
       if (ty->kind == TY_STRUCT || ty->kind == TY_UNION) {
