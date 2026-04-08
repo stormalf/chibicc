@@ -7008,6 +7008,33 @@ static Node *primary(Token **rest, Token *tok)
     
   }
 
+  if (equal(tok, "__builtin_stdc_bit_width"))
+  {
+    Token *start = tok;
+    SET_CTX(ctx); 
+    tok = skip(tok->next, "(", ctx);
+    Node *arg = assign(&tok, tok);
+    SET_CTX(ctx);      
+    *rest = skip(tok, ")", ctx);
+
+    add_type(arg);
+    Obj *var = new_lvar("", ty_ulong, NULL);
+    Node *init = new_unary(ND_EXPR_STMT, new_binary(ND_ASSIGN, new_var_node(var, start), new_cast(arg, ty_ulong), start), start);
+    
+    Node *clz = new_node(ND_BUILTIN_CLZLL, start);
+    clz->builtin_val = new_var_node(var, start);
+    
+    Node *cond_node = new_node(ND_COND, start);
+    cond_node->cond = to_bool(new_var_node(var, start));
+    cond_node->then = new_binary(ND_SUB, new_num(64, start), clz, start);
+    cond_node->els = new_num(0, start);
+    
+    Node *node = new_node(ND_STMT_EXPR, start);
+    node->body = init;
+    init->next = new_unary(ND_EXPR_STMT, cond_node, start);
+    return node;
+  }
+
   if (equal(tok, "__builtin_bswap16")) {
       return ParseBuiltin(ND_BUILTIN_BSWAP16, tok, rest);
   }

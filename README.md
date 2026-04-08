@@ -393,7 +393,6 @@ git: https://github.com/git/git.git
 
 util-linux : https://github.com/util-linux/util-linux.git
 
-    Manually fixing the config.status and removing D["HAVE_UNION_SEMUN"]=" 1"
     ./autogen.sh
     CC=chibicc CFLAGS=-fPIC ./configure
     make
@@ -403,7 +402,7 @@ util-linux : https://github.com/util-linux/util-linux.git
     cd tests
     run.sh 
     ---------------------------------------------------------------------
-    All 340 tests PASSED
+    All 341 tests PASSED
     ---------------------------------------------------------------------
         
 
@@ -548,8 +547,11 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
     CC=chibicc  CFLAGS="-g -std=c11" ./configure --host x86_64-linux-gnu 
     make
     make check
-    failed with :
-    2025-08-19 21:36:40.890 CEST [1338239] PANIC: ProcKill() called in child process
+    failed during tests : 
+    not ok 229   - tablespace                                 14 ms
+    # (test process exited with exit code 2)
+    1..229
+    # 229 of 229 tests failed.
 
 
 ## features added 
@@ -625,7 +627,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.24  Passing GNUC from 3 to 4. Adding const, volatile, restrict support from slimcc/fuhsnn. Fixing issue ISS-195 prockill due to leakage attributes. Managing pragma pack. Fixing issue with attributes and alignment. Fixing issue with some edge cases initializer. Fixing some float comparisons issues with NaN. Fixing alignof issue and managing asm name. Fixing issue with string char array members initialization. Fixing issue with unicode characters. Managing anonymous enums. Fixing issue with extended assembly and &x in input. Fixing issue with extended assembly and macro expansion. Fixing issue with builtin_prefetch found during openssl compile. Managing \__atomic_is_lock_free. Adding \__builtin_offsetof and __has_builtin. Adding \__builtin_rotateleftxx. Fixing issue with attribute after typenames. Fixing issue with attribute hiding.
+1.0.24  Passing GNUC from 3 to 4. Adding const, volatile, restrict support from slimcc/fuhsnn. Fixing issue ISS-195 prockill due to leakage attributes. Managing pragma pack. Fixing issue with attributes and alignment. Fixing issue with some edge cases initializer. Fixing some float comparisons issues with NaN. Fixing alignof issue and managing asm name. Fixing issue with string char array members initialization. Fixing issue with unicode characters. Managing anonymous enums. Fixing issue with extended assembly and &x in input. Fixing issue with extended assembly and macro expansion. Fixing issue with builtin_prefetch found during openssl compile. Managing \__atomic_is_lock_free. Adding \__builtin_offsetof and __has_builtin. Adding \__builtin_rotateleftxx. Fixing issue with attribute after typenames. Fixing issue with attribute hiding. Fixing issue with vlc compile undefined functions (ISS-206).
 
 
 
