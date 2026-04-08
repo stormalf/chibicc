@@ -7826,6 +7826,15 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
     new_lvar("", pointer_to(rty), name_str);
 
   fn->params = locals;
+  //to fix issue with complex vla in parameters
+  Node vla_head = {};
+  Node *vla_cur = &vla_head;
+  for (Type *t = ty->params; t; t = t->next) {
+    Node *comp = compute_vla_size(t, t->name_pos ? t->name_pos : tok);
+    if (comp->kind != ND_NULL_EXPR)
+      vla_cur = vla_cur->next = new_unary(ND_EXPR_STMT, comp, t->name_pos ? t->name_pos : tok);
+  }
+
   if (ty->is_variadic)
     fn->va_area = new_lvar("__va_area__", array_of(ty_char, 200), name_str);
   
@@ -7857,6 +7866,11 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
       new_string_literal(fn->name, array_of(ty_char, strlen(fn->name) + 1));
   
   fn->body = compound_stmt(&tok, tok, NULL);
+
+  if (vla_head.next) {
+    vla_cur->next = fn->body->body;
+    fn->body->body = vla_head.next;
+  }
 
   //implementing tail call optimization.
   mark_tail_calls(fn->body);
