@@ -6962,6 +6962,11 @@ static Node *primary(Token **rest, Token *tok)
     return ParseBuiltin(ND_BUILTIN_CLZLL, tok, rest);
   }
 
+  if (equal(tok, "__builtin_stdc_leading_zeros"))
+  {
+    return ParseBuiltin(ND_BUILTIN_CLZLL, tok, rest);
+  }
+
 
   if (equal(tok, "__builtin_ctz"))
   {
@@ -6978,6 +6983,29 @@ static Node *primary(Token **rest, Token *tok)
   if (equal(tok, "__builtin_ctzll"))
   {
     return ParseBuiltin(ND_BUILTIN_CTZLL, tok, rest);
+  }
+
+  if (equal(tok, "__builtin_stdc_trailing_zeros"))
+  {
+    return ParseBuiltin(ND_BUILTIN_CTZLL, tok, rest);
+  }
+
+  if (equal(tok, "__builtin_stdc_count_ones"))
+  {
+    return ParseBuiltin(ND_POPCOUNTLL, tok, rest);
+  }
+
+  if (equal(tok, "__builtin_stdc_has_single_bit"))
+  {
+    Node *node = ParseBuiltin(ND_POPCOUNTLL, tok, rest);
+    node->builtin_val = new_cast(node->builtin_val, ty_ulong);
+    add_type(node->builtin_val);
+    add_type(node);
+    Node *one = new_num(1, tok);
+    one = new_cast(one, node->ty);
+    add_type(one);
+    return new_binary(ND_EQ, node, one, tok);
+    
   }
 
   if (equal(tok, "__builtin_bswap16")) {
@@ -7001,12 +7029,16 @@ static Node *primary(Token **rest, Token *tok)
   if (equal(tok, "__builtin_popcountl")) {
       Node *node = ParseBuiltin(ND_POPCOUNTL, tok, rest);
       node->builtin_val = new_cast(node->builtin_val, ty_ulong);
+      add_type(node);
+      add_type(node->builtin_val);
       return node;
   }
 
   if (equal(tok, "__builtin_popcountll")) {
       Node *node = ParseBuiltin(ND_POPCOUNTLL, tok, rest);
       node->builtin_val = new_cast(node->builtin_val, ty_ullong);
+      add_type(node);
+      add_type(node->builtin_val);      
       return node;
   }
 

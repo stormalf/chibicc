@@ -9,6 +9,11 @@ void fn1(i32 z, i32 a[z], i32 b1[sizeof(a)],  i32 (*b2)[sizeof(a)]){
   ASSERT(32, sizeof(*b2));
 }
 
+void fn1b(i32 z, i32 (*a)[z], i32 (*b2)[sizeof(*a)]){
+  ASSERT(28, sizeof(*a));  
+  ASSERT(112, sizeof(*b2));
+}
+
 void fn2(i32 z, i32 (*a)[z], i32 b1[sizeof(*a)],  i32 (*b2)[sizeof(*a)]){
   ASSERT(28, sizeof(*a));
   ASSERT(8, sizeof(b1));
@@ -81,6 +86,7 @@ _Bool z = 1;
 
 int main(void){
   fn1(7,0,0,0);
+  fn1b(7,0,0);
   fn2(7,0,0,0);
   fn3(7,11,0);
   fn4(3,0,7,0,0,11,0);
@@ -101,3 +107,4 @@ int main(void){
   printf("OK\n");
   return 0;
 }
+
