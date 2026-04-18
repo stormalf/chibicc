@@ -964,10 +964,17 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
     //Type *backup = ty2;
     if (is_old_style) {
       Token *backup = tok;
-      while(equal(tok, "*")) {
+      // Skip leading pointer stars: `int *name` or `int **name`
+      while (equal(tok, "*"))
         tok = tok->next;
+      // Also handle pointer-declarator form: `int (*name)[N]`
+      // In that case tok is `(`, followed by optional stars, then the ident.
+      if (equal(tok, "(")) {
+        tok = tok->next;
+        while (equal(tok, "*"))
+          tok = tok->next;
       }
-      if (equal(tok, "{")) 
+      if (equal(tok, "{"))
         break;
       if (tok->kind != TK_IDENT)
         error_tok(tok, "%s:%d: in func_params : expected identifier old source code not managed yet", __FILE__, __LINE__);
@@ -1032,7 +1039,7 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
   } else 
     ty->params = head.next;
   ty->is_variadic = is_variadic;
-  if (cur == &head && !has_ellipsis)
+  if ((cur == &head && !has_ellipsis) || is_old_style)
     ty->is_oldstyle = true;
   if (is_old_style && equal(tok, "{"))
     *rest = tok;
