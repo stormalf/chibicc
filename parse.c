@@ -172,7 +172,7 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr);
 static Token *global_declaration(Token *tok, Type *basety, VarAttr *attr);
 //static void initializer3(Token **rest, Token *tok, Initializer *init);
 //from COSMOPOLITAN adding attribute for variable
-static Node *visit_vla_sizes(Node *node, Token *tok);
+static Node *visit_all_vla(Node *node, Token *tok);
 static Node *sizeof_vla_type(Type *ty, Token *tok);
 static Token *thing_attributes(Token *tok, void *arg);
 static Token *attribute_list(Token *tok, void *arg, Token *(*f)(Token *, void *));
@@ -1331,7 +1331,7 @@ static Type *typeof_specifier(Token **rest, Token *tok)
   return ty;
 }
 
-static Node *visit_vla_sizes(Node *node, Token *tok) {
+static Node *visit_all_vla(Node *node, Token *tok) {
   if (!node)
     return new_node(ND_NULL_EXPR, tok);
 
@@ -1345,17 +1345,17 @@ static Node *visit_vla_sizes(Node *node, Token *tok) {
   case ND_STMT_EXPR:
   case ND_BLOCK:
     for (Node *n = node->body; n; n = n->next)
-      res = new_binary(ND_COMMA, res, visit_vla_sizes(n, tok), tok);
+      res = new_binary(ND_COMMA, res, visit_all_vla(n, tok), tok);
     break;
   case ND_FUNCALL:
-    res = new_binary(ND_COMMA, res, visit_vla_sizes(node->lhs, tok), tok);
+    res = new_binary(ND_COMMA, res, visit_all_vla(node->lhs, tok), tok);
     for (Node *n = node->args; n; n = n->next)
-      res = new_binary(ND_COMMA, res, visit_vla_sizes(n, tok), tok);
+      res = new_binary(ND_COMMA, res, visit_all_vla(n, tok), tok);
     break;
   case ND_COND:
-    res = new_binary(ND_COMMA, res, visit_vla_sizes(node->cond, tok), tok);
-    res = new_binary(ND_COMMA, res, visit_vla_sizes(node->then, tok), tok);
-    res = new_binary(ND_COMMA, res, visit_vla_sizes(node->els, tok), tok);
+    res = new_binary(ND_COMMA, res, visit_all_vla(node->cond, tok), tok);
+    res = new_binary(ND_COMMA, res, visit_all_vla(node->then, tok), tok);
+    res = new_binary(ND_COMMA, res, visit_all_vla(node->els, tok), tok);
     break;
   case ND_CAST:
   case ND_ADDR:
@@ -1365,7 +1365,7 @@ static Node *visit_vla_sizes(Node *node, Token *tok) {
   case ND_NEG:
   case ND_NOT:
   case ND_BITNOT:
-    res = new_binary(ND_COMMA, res, visit_vla_sizes(node->lhs, tok), tok);
+    res = new_binary(ND_COMMA, res, visit_all_vla(node->lhs, tok), tok);
     break;
   case ND_ADD:
   case ND_SUB:
@@ -1385,8 +1385,8 @@ static Node *visit_vla_sizes(Node *node, Token *tok) {
   case ND_LOGOR:
   case ND_ASSIGN:
   case ND_COMMA:
-    res = new_binary(ND_COMMA, res, visit_vla_sizes(node->lhs, tok), tok);
-    res = new_binary(ND_COMMA, res, visit_vla_sizes(node->rhs, tok), tok);
+    res = new_binary(ND_COMMA, res, visit_all_vla(node->lhs, tok), tok);
+    res = new_binary(ND_COMMA, res, visit_all_vla(node->rhs, tok), tok);
     break;
   default:
     break;
@@ -1486,7 +1486,7 @@ static Node *compute_vla_size(Type *ty, Token *tok)
   }
 
   if (ty->vla_len)
-    node = new_binary(ND_COMMA, node, visit_vla_sizes(ty->vla_len, tok), tok);
+    node = new_binary(ND_COMMA, node, visit_all_vla(ty->vla_len, tok), tok);
 
   if (!current_fn)
     return new_var_node(ty->vla_size, tok);
