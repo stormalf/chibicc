@@ -173,6 +173,7 @@ static Token *global_declaration(Token *tok, Type *basety, VarAttr *attr);
 //static void initializer3(Token **rest, Token *tok, Initializer *init);
 //from COSMOPOLITAN adding attribute for variable
 static Node *visit_vla_sizes(Node *node, Token *tok);
+static Node *sizeof_vla_type(Type *ty, Token *tok);
 static Token *thing_attributes(Token *tok, void *arg);
 static Token *attribute_list(Token *tok, void *arg, Token *(*f)(Token *, void *));
 static Token *type_attributes(Token *tok, void *arg);
@@ -1399,18 +1400,21 @@ static Node *compute_vla_size(Type *ty, Token *tok)
 {
   Node *node = new_node(ND_NULL_EXPR, tok);
 
+  // Function parameters that are arrays decay to pointers; vla_param_ty
+  // holds the original array type so we can still compute its element size.
   if (ty->kind == TY_PTR && ty->vla_param_ty) {
     if (!current_fn)
-        return node;
+      return node;
     Node *n = compute_vla_size(ty->vla_param_ty, tok);
-    ty->vla_size = ty->vla_param_ty->vla_size; 
+    ty->vla_size = ty->vla_param_ty->vla_size;
     if (!ty->vla_size)
-        error_tok(tok, "%s:%d: compute_vla_size: vla_size null after computation",
-                  __FILE__, __LINE__);
+      error_tok(tok, "%s:%d: compute_vla_size: vla_size null after computation",
+                __FILE__, __LINE__);
     return new_binary(ND_COMMA, node, n, tok);
   }
 
-  // If already computed, only ensure children are computed, but do not emit again
+  // If already computed for this function, only recurse into base so child
+  // sizes are available, but do not re-emit the assignment.
   if (ty->vla_size) {
     if (!current_fn) {
       if (ty->base)
@@ -1427,60 +1431,55 @@ static Node *compute_vla_size(Type *ty, Token *tok)
       return new_var_node(ty->vla_size, tok);
     }
 
+    // First time we see this vla_size in the current function: register it.
     if (!ty->vla_size->funcname) {
       ty->vla_size->funcname = current_fn->funcname;
       ty->vla_size->next = locals;
       locals = ty->vla_size;
-    } else if (strcmp(ty->vla_size->funcname, current_fn->funcname))
+    } else if (strcmp(ty->vla_size->funcname, current_fn->funcname)) {
+      // Came from a different function – reset so we reallocate below.
       ty->vla_size = NULL;
+    }
   }
 
-  if (ty->base) {
+  // Recurse into base type first so its vla_size is set before we need it.
+  if (ty->base)
     node = new_binary(ND_COMMA, node, compute_vla_size(ty->base, tok), tok);
 
-  }
-
+  // Nothing VLA-related at this level – done.
   if (ty->kind != TY_VLA && !ty->has_vla)
     return node;
 
-
-  if ((ty->kind == TY_STRUCT || ty->kind == TY_UNION) && !ty->has_vla)
-    return node;
-
-
-  if ((ty->kind == TY_STRUCT || ty->kind == TY_UNION) && ty->has_vla) {
-    // Allocate temporary variable to hold size
+  // Struct/union containing VLA members: sum member sizes dynamically.
+  if (ty->kind == TY_STRUCT || ty->kind == TY_UNION) {
+    if (!ty->has_vla)
+      return node;
+    // Allocate a runtime variable to hold the struct/union size.
     ty->vla_size = new_lvar("", ty_ulong, NULL);
     ty->vla_size->vla_ty = ty;
     Node *sz = new_num(0, tok);
 
     for (Member *mem = ty->members; mem; mem = mem->next) {
       Node *member_size;
-
       if (mem->ty->kind == TY_VLA || mem->ty->has_vla) {
         node = new_binary(ND_COMMA, node, compute_vla_size(mem->ty, tok), tok);
         member_size = new_var_node(mem->ty->vla_size, tok);
       } else {
         member_size = new_num(mem->ty->size, tok);
       }
-
-      // Simply add size, no alignment
       sz = new_binary(ND_ADD, sz, member_size, tok);
     }
 
     Node *expr = new_binary(ND_ASSIGN, new_var_node(ty->vla_size, tok), sz, tok);
     return new_binary(ND_COMMA, node, expr, tok);
-  }    
-
-  Node *base_sz;
-  if (ty->base->kind == TY_VLA) {
-    if (!ty->base->vla_size)
-      node = new_binary(ND_COMMA, node, compute_vla_size(ty->base, tok), tok);
-    base_sz = new_var_node(ty->base->vla_size, tok);
-  } else {
-    base_sz = new_num(ty->base->size, tok);
   }
-  
+
+  // TY_VLA: compute size = vla_len * base_size.
+  // base recursion above has already set ty->base->vla_size if base is also VLA.
+  Node *base_sz = (ty->base->kind == TY_VLA)
+                ? new_var_node(ty->base->vla_size, tok)
+                : new_num(ty->base->size, tok);
+
   if (!ty->vla_size) {
     ty->vla_size = new_lvar("", ty_ulong, NULL);
     ty->vla_size->vla_ty = ty;
@@ -1499,6 +1498,24 @@ static Node *compute_vla_size(Type *ty, Token *tok)
                           new_binary(ND_MUL, ty->vla_len, base_sz, tok),
                           tok);
   return new_binary(ND_COMMA, node, expr, tok);
+}
+
+// Return the sizeof expression for a VLA or struct-with-VLA type.
+// Returns NULL if the type is a regular (compile-time) type.
+static Node *sizeof_vla_type(Type *ty, Token *tok) {
+  if ((ty->kind == TY_STRUCT || ty->kind == TY_UNION) && ty->has_vla) {
+    if (!ty->vla_size) {
+      Node *lhs = compute_vla_size(ty, tok);
+      return new_binary(ND_COMMA, lhs, new_var_node(ty->vla_size, tok), tok);
+    }
+    return new_var_node(ty->vla_size, tok);
+  }
+  if (ty->kind == TY_VLA) {
+    if (ty->vla_size)
+      return new_var_node(ty->vla_size, tok);
+    return compute_vla_size(ty, tok);
+  }
+  return NULL;  // not a runtime-sized type
 }
 
 
@@ -6200,75 +6217,49 @@ static Node *primary(Token **rest, Token *tok)
 
   if (equal(tok, "sizeof"))
   {
-    Type *ty;
-
-    if (equal(tok->next, "(") && is_typename(tok->next->next)) {      
+    if (equal(tok->next, "(") && is_typename(tok->next->next)) {
+      // sizeof(type-name)
       enter_scope();
-      ty = typename(&tok, tok->next->next);
+      Type *ty = typename(&tok, tok->next->next);
       leave_scope();
-      SET_CTX(ctx); 
+      SET_CTX(ctx);
       *rest = skip(tok, ")", ctx);
-     
-      if ((ty->kind == TY_STRUCT || ty->kind == TY_UNION) && ty->has_vla) {
-        if (!ty->vla_size) {
-          Node *lhs = compute_vla_size(ty, tok); 
-          Node *rhs = new_var_node(ty->vla_size, tok);
-          return new_binary(ND_COMMA, lhs, rhs, tok);
-          }
-          return new_var_node(ty->vla_size, tok);
-        }
-        
 
+      // Runtime-sized types (VLA / struct-with-VLA).
+      Node *vla_node = sizeof_vla_type(ty, tok);
+      if (vla_node)
+        return vla_node;
+
+      // Flexible array member: exclude the last (unsized) member.
       if (ty->kind == TY_STRUCT && ty->is_flexible) {
-          Member *mem = ty->members;
-          while (mem->next)
-            mem = mem->next;
-          if (mem->ty->kind == TY_ARRAY)
-            return new_ulong((ty->size - mem->ty->size), tok);
+        Member *mem = ty->members;
+        while (mem->next)
+          mem = mem->next;
+        if (mem->ty->kind == TY_ARRAY)
+          return new_ulong((ty->size - mem->ty->size), tok);
       }
 
       if ((ty->kind == TY_UNION || ty->kind == TY_STRUCT) && ty->size < 0)
-          error_tok(tok, "%s:%d: in primary : incomplete type for sizeof", __FILE__, __LINE__);
+        error_tok(tok, "%s:%d: in primary : incomplete type for sizeof", __FILE__, __LINE__);
 
-    
-      if (ty->kind == TY_VLA) {
-        if (ty->vla_size)
-          return new_var_node(ty->vla_size, tok);
-        return compute_vla_size(ty, tok);
-      }
-      
-        return new_ulong(ty->size, start);
-      } else {
+      return new_ulong(ty->size, start);
+    } else {
+      // sizeof expr
       Node *node = unary(rest, tok->next);
       add_type(node);
 
-      //gcc compatible rule is to decay an array with comma operator and not compound literal
-      if (node->kind == ND_COMMA && node->rhs && is_array(node->rhs->ty) && node->rhs->var && !node->rhs->var->is_compound_lit)
+      // GCC: array in comma-expr decays (unless compound literal).
+      if (node->kind == ND_COMMA && node->rhs && is_array(node->rhs->ty)
+          && node->rhs->var && !node->rhs->var->is_compound_lit)
         node->ty = pointer_to(node->ty->base);
 
-      // Check if the type is incomplete
+      // Runtime-sized types (VLA / struct-with-VLA).
+      Node *vla_node = sizeof_vla_type(node->ty, tok);
+      if (vla_node)
+        return vla_node;
+
       if ((node->ty->kind == TY_UNION || node->ty->kind == TY_STRUCT) && node->ty->size < 0)
         error_tok(tok, "%s:%d: in primary : incomplete type for sizeof", __FILE__, __LINE__);
-        
-      //trying to fix =====ISS-166 segmentation fault 
-      if (node->ty->kind == TY_VLA)
-      {
-        if (node->ty->vla_size)
-          return new_var_node(node->ty->vla_size, tok);
-        return compute_vla_size(node->ty, tok);
-      }
-      if (node->ty->size < 0)
-        error_tok(tok, "%s:%d: in primary : incomplete type for sizeof", __FILE__, __LINE__);
-
-        
-      if ((node->ty->kind == TY_STRUCT || node->ty->kind == TY_UNION) && node->ty->has_vla) {
-        if (!node->ty->vla_size) {
-          Node *lhs = compute_vla_size(node->ty, tok);  // defines ty->vla_size
-          Node *rhs = new_var_node(node->ty->vla_size, tok);
-          return new_binary(ND_COMMA, lhs, rhs, tok);
-        }
-        return new_var_node(node->ty->vla_size, tok);
-      }
 
       if (node->ty->kind == TY_STRUCT && node->ty->is_flexible) {
         Member *mem = node->ty->members;
@@ -6278,7 +6269,10 @@ static Node *primary(Token **rest, Token *tok)
           return new_ulong((node->ty->size - mem->ty->size), tok);
       }
 
-      return new_ulong(node->ty->size, start);   
+      if (node->ty->size < 0)
+        error_tok(tok, "%s:%d: in primary : incomplete type for sizeof", __FILE__, __LINE__);
+
+      return new_ulong(node->ty->size, start);
     }
   }
 
