@@ -358,6 +358,7 @@ struct Obj
   bool is_param;
   char *cleanup_name;
   bool force_frame_pointer;
+  Type *vla_ty;
 };
 
 // Global variable can be initialized either by a constant expression

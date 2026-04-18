@@ -172,6 +172,7 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr);
 static Token *global_declaration(Token *tok, Type *basety, VarAttr *attr);
 //static void initializer3(Token **rest, Token *tok, Initializer *init);
 //from COSMOPOLITAN adding attribute for variable
+static Node *visit_vla_sizes(Node *node, Token *tok);
 static Token *thing_attributes(Token *tok, void *arg);
 static Token *attribute_list(Token *tok, void *arg, Token *(*f)(Token *, void *));
 static Token *type_attributes(Token *tok, void *arg);
@@ -1329,6 +1330,70 @@ static Type *typeof_specifier(Token **rest, Token *tok)
   return ty;
 }
 
+static Node *visit_vla_sizes(Node *node, Token *tok) {
+  if (!node)
+    return new_node(ND_NULL_EXPR, tok);
+
+  Node *res = new_node(ND_NULL_EXPR, tok);
+
+  switch (node->kind) {
+  case ND_VAR:
+    if (node->var && node->var->vla_ty)
+      res = new_binary(ND_COMMA, res, compute_vla_size(node->var->vla_ty, tok), tok);
+    break;
+  case ND_STMT_EXPR:
+  case ND_BLOCK:
+    for (Node *n = node->body; n; n = n->next)
+      res = new_binary(ND_COMMA, res, visit_vla_sizes(n, tok), tok);
+    break;
+  case ND_FUNCALL:
+    res = new_binary(ND_COMMA, res, visit_vla_sizes(node->lhs, tok), tok);
+    for (Node *n = node->args; n; n = n->next)
+      res = new_binary(ND_COMMA, res, visit_vla_sizes(n, tok), tok);
+    break;
+  case ND_COND:
+    res = new_binary(ND_COMMA, res, visit_vla_sizes(node->cond, tok), tok);
+    res = new_binary(ND_COMMA, res, visit_vla_sizes(node->then, tok), tok);
+    res = new_binary(ND_COMMA, res, visit_vla_sizes(node->els, tok), tok);
+    break;
+  case ND_CAST:
+  case ND_ADDR:
+  case ND_DEREF:
+  case ND_MEMBER:
+  case ND_POS:
+  case ND_NEG:
+  case ND_NOT:
+  case ND_BITNOT:
+    res = new_binary(ND_COMMA, res, visit_vla_sizes(node->lhs, tok), tok);
+    break;
+  case ND_ADD:
+  case ND_SUB:
+  case ND_MUL:
+  case ND_DIV:
+  case ND_MOD:
+  case ND_BITAND:
+  case ND_BITOR:
+  case ND_BITXOR:
+  case ND_SHL:
+  case ND_SHR:
+  case ND_EQ:
+  case ND_NE:
+  case ND_LT:
+  case ND_LE:
+  case ND_LOGAND:
+  case ND_LOGOR:
+  case ND_ASSIGN:
+  case ND_COMMA:
+    res = new_binary(ND_COMMA, res, visit_vla_sizes(node->lhs, tok), tok);
+    res = new_binary(ND_COMMA, res, visit_vla_sizes(node->rhs, tok), tok);
+    break;
+  default:
+    break;
+  }
+
+  return res;
+}
+
 // Generate code for computing a VLA size.
 static Node *compute_vla_size(Type *ty, Token *tok)
 {
@@ -1338,8 +1403,7 @@ static Node *compute_vla_size(Type *ty, Token *tok)
     if (!current_fn)
         return node;
     Node *n = compute_vla_size(ty->vla_param_ty, tok);
-    // Sync: if vla_param_ty's vla_size was reset (new function), update ours too
-    ty->vla_size = ty->vla_param_ty->vla_size;  // NULL-sync is intentional here
+    ty->vla_size = ty->vla_param_ty->vla_size; 
     if (!ty->vla_size)
         error_tok(tok, "%s:%d: compute_vla_size: vla_size null after computation",
                   __FILE__, __LINE__);
@@ -1350,8 +1414,8 @@ static Node *compute_vla_size(Type *ty, Token *tok)
   if (ty->vla_size) {
     if (!current_fn) {
       if (ty->base)
-        return compute_vla_size(ty->base, tok);
-    return node;
+        compute_vla_size(ty->base, tok);
+      return new_var_node(ty->vla_size, tok);
     }
 
     if (ty->vla_size->funcname && !strcmp(ty->vla_size->funcname, current_fn->funcname)) {
@@ -1387,6 +1451,7 @@ static Node *compute_vla_size(Type *ty, Token *tok)
   if ((ty->kind == TY_STRUCT || ty->kind == TY_UNION) && ty->has_vla) {
     // Allocate temporary variable to hold size
     ty->vla_size = new_lvar("", ty_ulong, NULL);
+    ty->vla_size->vla_ty = ty;
     Node *sz = new_num(0, tok);
 
     for (Member *mem = ty->members; mem; mem = mem->next) {
@@ -1416,9 +1481,17 @@ static Node *compute_vla_size(Type *ty, Token *tok)
     base_sz = new_num(ty->base->size, tok);
   }
   
-  if (!ty->vla_size)
+  if (!ty->vla_size) {
     ty->vla_size = new_lvar("", ty_ulong, NULL);
-  
+    ty->vla_size->vla_ty = ty;
+  }
+
+  if (ty->vla_len)
+    node = new_binary(ND_COMMA, node, visit_vla_sizes(ty->vla_len, tok), tok);
+
+  if (!current_fn)
+    return new_var_node(ty->vla_size, tok);
+
   if (!ty->vla_len)
     error_tok(tok, "%s:%d: in compute_vla_size : vla_len is null!", __FILE__, __LINE__);
 
@@ -7851,6 +7924,7 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
       vla_cur = vla_cur->next = new_unary(ND_EXPR_STMT, comp, t->name_pos ? t->name_pos : tok);
   }
 
+
   if (ty->is_variadic)
     fn->va_area = new_lvar("__va_area__", array_of(ty_char, 200), name_str);
   
@@ -9670,3 +9744,4 @@ static bool is_c99_or_later(void) {
     return false;
   }
 }
+
