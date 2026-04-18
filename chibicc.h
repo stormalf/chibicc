@@ -1087,6 +1087,7 @@ struct Type
   // Variable-length array
   Node *vla_len; // # of elements
   Obj *vla_size; // sizeof() value
+  Type *vla_param_ty;   // original VLA type before array→pointer decay in func params
 
   // Struct
   Member *members;

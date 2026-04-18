@@ -981,22 +981,20 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
 
     Token *name = ty2->name;
 
-    if (is_array(ty2))
-    {
-      // "array of T" is converted to "pointer to T" only in the parameter
-      // context. For example, *argv[] is converted to **argv by this.
-      //ty2 = pointer_to(ty2->base);
-      //ty2->name = name;
+    if (is_array(ty2)) {
+      Type *orig = ty2;   // save before decay
       Type *ty3 = pointer_to(ty2->base);
-      ty3->is_atomic = ty2->is_atomic;
-      ty3->is_const = ty2->is_const;
+      ty3->is_atomic   = ty2->is_atomic;
+      ty3->is_const    = ty2->is_const;
       ty3->is_volatile = ty2->is_volatile;
       ty3->is_restrict = ty2->is_restrict;
       ty2 = ty3;
       ty2->name = name;
+      // FIX: stash the pre-decay VLA type so size emission can find vla_len
+      if (orig->kind == TY_VLA)
+          ty2->vla_param_ty = orig;
     }
-    else if (ty2->kind == TY_FUNC)
-    {
+    else if (ty2->kind == TY_FUNC) {
       // Likewise, a function is converted to a pointer to a function
       // only in the parameter context.
       ty2 = pointer_to(ty2);
@@ -1335,6 +1333,19 @@ static Type *typeof_specifier(Token **rest, Token *tok)
 static Node *compute_vla_size(Type *ty, Token *tok)
 {
   Node *node = new_node(ND_NULL_EXPR, tok);
+
+  if (ty->kind == TY_PTR && ty->vla_param_ty) {
+    if (!current_fn)
+        return node;
+    Node *n = compute_vla_size(ty->vla_param_ty, tok);
+    // Sync: if vla_param_ty's vla_size was reset (new function), update ours too
+    ty->vla_size = ty->vla_param_ty->vla_size;  // NULL-sync is intentional here
+    if (!ty->vla_size)
+        error_tok(tok, "%s:%d: compute_vla_size: vla_size null after computation",
+                  __FILE__, __LINE__);
+    return new_binary(ND_COMMA, node, n, tok);
+  }
+
   // If already computed, only ensure children are computed, but do not emit again
   if (ty->vla_size) {
     if (!current_fn) {
@@ -1344,15 +1355,20 @@ static Node *compute_vla_size(Type *ty, Token *tok)
     }
 
     if (ty->vla_size->funcname && !strcmp(ty->vla_size->funcname, current_fn->funcname)) {
-      if (ty->base)
-        return new_binary(ND_COMMA, node, compute_vla_size(ty->base, tok), tok);
-    return node;
+      if (ty->base) {
+        Node *n = compute_vla_size(ty->base, tok);
+        if (n->kind != ND_NULL_EXPR)
+          return new_binary(ND_COMMA, node, n, tok);
+      }
+      return new_var_node(ty->vla_size, tok);
     }
 
-      if (!ty->vla_size->funcname)
-        ty->vla_size->funcname = current_fn->funcname;
-      else if (strcmp(ty->vla_size->funcname, current_fn->funcname))
-        ty->vla_size = NULL;
+    if (!ty->vla_size->funcname) {
+      ty->vla_size->funcname = current_fn->funcname;
+      ty->vla_size->next = locals;
+      locals = ty->vla_size;
+    } else if (strcmp(ty->vla_size->funcname, current_fn->funcname))
+      ty->vla_size = NULL;
   }
 
   if (ty->base) {
@@ -6141,7 +6157,7 @@ static Node *primary(Token **rest, Token *tok)
       if ((ty->kind == TY_UNION || ty->kind == TY_STRUCT) && ty->size < 0)
           error_tok(tok, "%s:%d: in primary : incomplete type for sizeof", __FILE__, __LINE__);
 
-
+    
       if (ty->kind == TY_VLA) {
         if (ty->vla_size)
           return new_var_node(ty->vla_size, tok);
@@ -6158,9 +6174,9 @@ static Node *primary(Token **rest, Token *tok)
         node->ty = pointer_to(node->ty->base);
 
       // Check if the type is incomplete
-        if ((node->ty->kind == TY_UNION || node->ty->kind == TY_STRUCT) && node->ty->size < 0)
+      if ((node->ty->kind == TY_UNION || node->ty->kind == TY_STRUCT) && node->ty->size < 0)
         error_tok(tok, "%s:%d: in primary : incomplete type for sizeof", __FILE__, __LINE__);
-            
+        
       //trying to fix =====ISS-166 segmentation fault 
       if (node->ty->kind == TY_VLA)
       {
@@ -8118,6 +8134,8 @@ Obj *parse(Token *tok)
 
   while (tok->kind != TK_EOF)
   {
+    current_fn = NULL;
+    locals = NULL;
     if (equal(tok, "_Static_assert")) {
       tok = static_assertion(tok);
       continue;
