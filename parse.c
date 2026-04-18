@@ -7616,9 +7616,10 @@ static Node *primary(Token **rest, Token *tok)
         fn->is_static = false;
         fn->is_extern = true;
       }
-      Node *node = unary(rest, tok->next);      
-      return node;
-      // error_tok(tok, "%s:%d: in primary : implicit declaration of a function", __FILE__, __LINE__);
+      // Node *node = unary(rest, tok->next);      
+      // return node;
+      *rest = tok->next;
+      return new_var_node(fn, tok);      
     }
 
     //printf("=======%s:%d\n", tok->loc, __LINE__);
@@ -8055,8 +8056,8 @@ static bool is_function(Token *tok, Type *basety)
 
   if (equal(tok, ";"))
     return false;
-  //Type dummy = {};
-  Type *ty = declarator(&tok, tok, basety);
+  Type dummy = {};
+  Type *ty = declarator(&tok, tok, &dummy);  
   if (!ty)
     error_tok(tok, "%s:%d: in is_function : ty is null", __FILE__, __LINE__);
 
