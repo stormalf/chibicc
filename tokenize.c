@@ -22,6 +22,9 @@ static bool at_bol;
 // True if the current position follows a space character
 static bool has_space;
 
+// True if we are inside a preprocessor directive line
+static bool in_pp_line;
+
 //static Token *read_pragma(Token *cur, char **rest, char *start);
 
 // Reports an error and exit.
@@ -228,7 +231,7 @@ static uint32_t read_universal_char(char *p, int len)
   for (int i = 0; i < len; i++)
   {
     if (!isxdigit(p[i]))
-      return 0;
+      return (uint32_t)-1;
     c = (c << 4) | from_hex(p[i]);
   }
   return c;
@@ -368,7 +371,7 @@ static int read_escaped_char(char **new_pos, char *p)
   {
     int len = (*p == 'u' ? 4 : 8);
     uint32_t c = read_universal_char(p + 1, len);
-    if (!c)
+    if (c == (uint32_t)-1)
       error_at(p, "%s:%d: in read_escaped_char : invalid universal character name", __FILE__, __LINE__);
     *new_pos = p + 1 + len;
     return c;
@@ -530,9 +533,8 @@ static Token *read_char_literal(char *start, char *quote, Type *ty) {
     n++;
   }
 
-  if (n > 4 && ty->kind == TY_INT)
-    warn_tok(new_token(TK_NUM, start, p + 1),
-             "character constant too long for its type");
+  if (n > 4 && ty->kind == TY_INT && !in_pp_line)
+    warning_at(start, "character constant too long for its type");
 
   // For a single-byte character literal, the value should be sign-extended
   // as if it were a char.
@@ -725,6 +727,7 @@ Token *tokenize(File *file)
   Token *cur = &head;
 
   at_bol = true;
+  in_pp_line = false;
   has_space = false;
 
   while (*p)
@@ -757,6 +760,7 @@ Token *tokenize(File *file)
     {
       p++;
       at_bol = true;
+      in_pp_line = false;
       has_space = true;
       continue;
     }
@@ -885,6 +889,8 @@ Token *tokenize(File *file)
     int punct_len = read_punct(p);
     if (punct_len)
     {
+      if (at_bol && *p == '#')
+        in_pp_line = true;
       cur = cur->next = new_token(TK_PUNCT, p, p + punct_len);
       p += cur->len;
       continue;
@@ -1056,7 +1062,7 @@ void convert_universal_chars(char *p)
     if (startswith(p, "\\u"))
     {
       uint32_t c = read_universal_char(p + 2, 4);
-      if (c)
+      if (c != (uint32_t)-1 && c != 0)
       {
         p += 6;
         q += encode_utf8(q, c);
@@ -1069,7 +1075,7 @@ void convert_universal_chars(char *p)
     else if (startswith(p, "\\U"))
     {
       uint32_t c = read_universal_char(p + 2, 8);
-      if (c)
+      if (c != (uint32_t)-1 && c != 0)
       {
         p += 10;
         q += encode_utf8(q, c);

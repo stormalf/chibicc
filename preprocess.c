@@ -1703,7 +1703,7 @@ void init_macros(void)
   define_macro("__SIZEOF_POINTER__", "8");
   define_macro("__SIZEOF_PTRDIFF_T__", "8");
   define_macro("__SIZEOF_SHORT__", "2");
-  define_macro("__SIZEOF_SIZE_T__", "8");
+  define_macro("__SIZEOF_SIZE_T__", "8");  
   define_macro("__SIZEOF_WCHAR_T__", "4");
   define_macro("__WCHAR_TYPE__", "int"); 
   define_macro("__WINT_TYPE__", "unsigned int");

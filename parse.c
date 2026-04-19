@@ -167,7 +167,7 @@ static Node *funcall(Token **rest, Token *tok, Node *node);
 static Node *unary(Token **rest, Token *tok);
 static Node *primary(Token **rest, Token *tok);
 static Node *parse_typedef(Token **rest, Token *tok, Type *basety, VarAttr *attr);
-static bool is_function(Token *tok, Type *basety);
+static bool is_function(Token *tok);
 static Token *function(Token *tok, Type *basety, VarAttr *attr);
 static Token *global_declaration(Token *tok, Type *basety, VarAttr *attr);
 //static void initializer3(Token **rest, Token *tok, Initializer *init);
@@ -2548,8 +2548,7 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
             cur = cur->next = calloc(1, sizeof(Relocation));
             cur->offset = (pos + offset);
             cur->label = srel->label;
-            cur->addend = srel->addend;
-
+            cur->addend = srel->addend;           
             srel = srel->next;
             pos += 8;
           } else {
@@ -2584,7 +2583,7 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
 
   char **label = NULL;
   uint64_t val = eval2(init->expr, &label);
-
+  
   if (!label)
   {
     if (ty->kind == TY_BOOL)
@@ -2611,7 +2610,7 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
             error("%s:%d: error: in write_gvar_data : rel is null", __FILE__, __LINE__);
           rel->offset = offset;
           rel->label = srel->label;
-          rel->addend = srel->addend;
+          rel->addend = srel->addend;           
           cur->next = rel;
           return cur->next;
         }
@@ -2630,7 +2629,7 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
               error("%s:%d: error: in write_gvar_data : rel is null", __FILE__, __LINE__);
             rel->offset = offset;
             rel->label = srel->label;
-            rel->addend = srel->addend;
+            rel->addend = srel->addend;                               
             cur->next = rel;
             return cur->next;
           }
@@ -3118,7 +3117,7 @@ static Node *compound_stmt(Token **rest, Token *tok, Node **last)
         continue;
       }
 
-      if (is_function(tok, basety))
+      if (is_function(tok))
       {
         tok = function(tok, basety, &attr);
         continue;
@@ -3181,7 +3180,7 @@ static Node *compound_stmt2(Token **rest, Token *tok)
         continue;
       }
 
-      if (is_function(tok, basety))
+      if (is_function(tok))
       {
         tok = function(tok, basety, &attr);
         continue;
@@ -8051,15 +8050,15 @@ static Token *global_declaration(Token *tok, Type *basety, VarAttr *attr)
 
 // Lookahead tokens and returns true if a given token is a start
 // of a function definition or declaration.
-static bool is_function(Token *tok, Type *basety)
+static bool is_function(Token *tok)
 {
 
   if (equal(tok, ";"))
     return false;
   Type dummy = {};
-  Type *ty = declarator(&tok, tok, &dummy);  
+  Type *ty = declarator(&tok, tok, &dummy);
   if (!ty)
-    error_tok(tok, "%s:%d: in is_function : ty is null", __FILE__, __LINE__);
+    error_tok(tok, "%s %d: in is_function : ty is null", __FILE__, __LINE__);
 
   return ty->kind == TY_FUNC;
 }
@@ -8238,7 +8237,7 @@ Obj *parse(Token *tok)
     }
 
     // Function
-    if (is_function(tok, basety))
+    if (is_function(tok))
     {
       if (check_old_style(&tok, tok)) {
         is_old_style = true;
