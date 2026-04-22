@@ -1231,6 +1231,7 @@ void add_type(Node *node)
   case ND_RDPMC:
   case ND_SBB_U32:
   case ND_BEXTR_U32:
+  case ND_PCMPGTB256_MASK:
     node->ty = ty_uint;
     return;    
   case ND_BSRDI:
@@ -1270,6 +1271,10 @@ void add_type(Node *node)
   case ND_ROLHI:
   case ND_TZCNT_U16:
     node->ty = ty_ushort;
+    return;
+  case ND_PSUBUSB256:
+  case ND_PSHUFB256:
+    node->ty = vector_of(ty_uchar, 32);
     return;
   default:
     node->ty = ty_void_ptr;

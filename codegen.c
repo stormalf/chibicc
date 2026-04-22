@@ -215,6 +215,28 @@ static void popv(int reg) {
   depth -= 2;
 }
 
+static int vec_use_ymm(Type *ty);
+
+static void push_vec(Type *ty) {
+  if (vec_use_ymm(ty)) {
+    println("  sub $32, %%rsp");
+    println("  vmovdqu %%ymm0, (%%rsp)");
+    depth += 4;
+    return;
+  }
+  pushv();
+}
+
+static void pop_vec(Type *ty, int reg) {
+  if (vec_use_ymm(ty)) {
+    println("  vmovdqu (%%rsp), %%ymm%d", reg);
+    println("  add $32, %%rsp");
+    depth -= 4;
+    return;
+  }
+  popv(reg);
+}
+
 void pushx(void) {
   println("  push %%rdx");
   println("  push %%rax");
@@ -792,6 +814,11 @@ static void gen_mem_zero(int offset, int n) {
   }
 }
 
+static int vec_use_ymm(Type *ty) {
+  return ty->size > 16;
+}
+
+
 // Load a value from where %rax is pointing to.
 static void load(Type *ty)
 {
@@ -801,13 +828,16 @@ static void load(Type *ty)
   switch (ty->kind)
   {
   case TY_VECTOR: {
-    if (ty->base->kind == TY_FLOAT || ty->base->kind == TY_DOUBLE) {      
-      println("  movups (%%rax), %%xmm0");  
-    } else if (is_integer(ty->base)) {
-     
-      println("  movdqu (%%rax), %%xmm0"); 
+    if (vec_use_ymm(ty)) {
+      if (ty->base->kind == TY_FLOAT || ty->base->kind == TY_DOUBLE)
+        println("  vmovups (%%rax), %%ymm0");
+      else
+        println("  vmovdqu (%%rax), %%ymm0");
     } else {
-      error("%s:%d: error: in load : unsupported vector base type %d", __FILE__, __LINE__, ty->base->kind);
+      if (ty->base->kind == TY_FLOAT || ty->base->kind == TY_DOUBLE)
+        println("  vmovups (%%rax), %%xmm0");
+      else
+        println("  vmovdqu (%%rax), %%xmm0");
     }
     return;
   }
@@ -866,12 +896,16 @@ static void store(Type *ty)
   switch (ty->kind)
   {
   case TY_VECTOR:
-    if (ty->base->kind == TY_FLOAT || ty->base->kind == TY_DOUBLE) {
-      println("  movups %%xmm0, (%%rdi)");  // store into rdi, not rax
-    } else if (is_integer(ty->base)) {
-      println("  movdqu %%xmm0, (%%rdi)");
+    if (vec_use_ymm(ty)) {
+      if (ty->base->kind == TY_FLOAT || ty->base->kind == TY_DOUBLE)
+        println("  vmovups %%ymm0, (%%rdi)");
+      else
+        println("  vmovdqu %%ymm0, (%%rdi)");
     } else {
-      error("%s:%d: in store : unsupported vector base type %d", __FILE__, __LINE__, ty->base->kind);
+      if (ty->base->kind == TY_FLOAT || ty->base->kind == TY_DOUBLE)
+        println("  vmovups %%xmm0, (%%rdi)");
+      else
+        println("  vmovdqu %%xmm0, (%%rdi)");
     }
     return;
   case TY_STRUCT:
@@ -1306,7 +1340,10 @@ static void push_args2(Node *args, bool first_pass)
       println("  movsd %%xmm0, %d(%%rsp)", args->stack_offset);
       break;
     case TY_VECTOR:
-      println("  movdqu %%xmm0, %d(%%rsp)", args->stack_offset);
+      if (vec_use_ymm(args->ty))
+        println("  vmovdqu %%ymm0, %d(%%rsp)", args->stack_offset);
+      else
+        println("  movdqu %%xmm0, %d(%%rsp)", args->stack_offset);
       break;
     case TY_LDOUBLE:
       println("  fstpt %d(%%rsp)", args->stack_offset);
@@ -1328,7 +1365,7 @@ static void push_args2(Node *args, bool first_pass)
       push_struct(args);
       break;
     case TY_VECTOR:
-      pushv();
+      push_vec(args->ty);
       break;
     case TY_FLOAT:
     case TY_DOUBLE:
@@ -2327,6 +2364,14 @@ static void gen_vec_ext(Node *node) {
   println("  and $%d, %%ecx", node->kind == ND_VECEXTV2SI ? 1 : 3);
   println("  movl (%%rsp,%%rcx,4), %%eax");
   pop_xmm(0);
+}
+
+static void gen_psubusb256(Node *node) {
+  gen_expr(node->rhs); // B
+  println("  vmovdqu %%ymm0, %%ymm1");     
+  gen_expr(node->lhs); // A
+  println("  vpsubusb %%ymm1, %%ymm0, %%ymm0");
+  println("  vzeroupper");
 }
 
 static void gen_vec_init_binop(Node *node, const char *insn) {
@@ -3573,7 +3618,34 @@ static void gen_sse_blendvpx(Node *node, const char *insn) {
   println("  movups %%xmm1, %%xmm0");
 }
 
+static void gen_pcmpgtb256_mask(Node *node) {
+  assert(node->builtin_nargs == 3);
+  // __builtin_ia32_pcmpgtb256_mask(A, B, U) returns a __mmask32 with:
+  //   result = U & (A > B) (signed compare per-lane)
+  //
+  // We don't require AVX-512 to compute the mask; AVX2 can do it via:
+  //   vpcmpgtb -> 0x00/0xff bytes
+  //   vpmovmskb -> extract MSBs to a 32-bit mask
+  gen_expr(node->builtin_args[2]);
+  push_tmp();
 
+  gen_expr(node->builtin_args[0]);
+  println("  vmovdqu %%ymm0, %%ymm1");
+  gen_expr(node->builtin_args[1]);
+  println("  vmovdqu %%ymm0, %%ymm2");
+  println("  vpcmpgtb %%ymm2, %%ymm1, %%ymm0");
+  println("  vpmovmskb %%ymm0, %%eax");
+  pop_tmp("%rcx");
+  println("  andl %%ecx, %%eax");
+  println("  vzeroupper");
+}
+
+static void gen_pshufb256(Node *node) {
+  gen_expr(node->rhs);
+  println("  vmovdqu %%ymm0, %%ymm1");
+  gen_expr(node->lhs);
+  println("  vpshufb %%ymm1, %%ymm0, %%ymm0");
+}
 
 static void gen_cvt_mmx_binop(Node *node, const char *insn) {
   gen_addr(node->lhs);   
@@ -4420,7 +4492,7 @@ static void gen_expr(Node *node)
         break;
       case TY_VECTOR:
         if (fp < FP_MAX)
-          popv(fp++);
+          pop_vec(ty, fp++);
         break;      
       case TY_FLOAT:
       case TY_DOUBLE:
@@ -5252,7 +5324,7 @@ static void gen_expr(Node *node)
   case ND_PABSD: gen_mmx_binop1(node, "pabsd"); return;
   case ND_PTESTZ128: gen_sse_testz(node); return;
   case ND_PTESTC128: gen_sse_testc(node); return;
-  case ND_PTESTNZC128: gen_sse_testnzc(node); return;
+  case ND_PTESTNZC128: gen_sse_testnzc(node); return;  
   case ND_PBLENDVB128: gen_sse_pblendvb128(node); return;
   case ND_BLENDVPS: gen_sse_blendvpx(node, "blendvps"); return;
   case ND_BLENDVPD: gen_sse_blendvpx(node, "blendvpd"); return;
@@ -5339,6 +5411,10 @@ static void gen_expr(Node *node)
   case ND_SIGNBIT:
   case ND_SIGNBITF:
   case ND_SIGNBITL: gen_signbit(node); return;
+  case ND_PSUBUSB256: gen_psubusb256(node); return;
+  case ND_PCMPGTB256_MASK: gen_pcmpgtb256_mask(node); return;
+  case ND_PSHUFB256: gen_pshufb256(node); return;
+
 }
   
 if (node->lhs && (is_vector(node->lhs->ty) || (node->rhs && is_vector(node->rhs->ty)))) {
@@ -5862,6 +5938,10 @@ static void store_fp(int r, int offset, int sz, char *ptr)
     return;
   case 16:
     println("  movups %%xmm%d, %d(%s)", r, offset, ptr); // movaps for 16-byte (128-bit) vector
+    return;
+  case 32:
+    // 256-bit vector arguments/returns use YMM registers in the SysV ABI.
+    println("  vmovdqu %%ymm%d, %d(%s)", r, offset, ptr);
     return;
   }
   

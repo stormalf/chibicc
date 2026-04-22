@@ -6564,7 +6564,8 @@ static Node *primary(Token **rest, Token *tok)
    
   if (equal(tok, "__builtin_ia32_pblendvb128") || 
       equal(tok, "__builtin_ia32_blendvpd") ||
-      equal(tok, "__builtin_ia32_blendvps"))
+      equal(tok, "__builtin_ia32_blendvps") ||
+      equal(tok, "__builtin_ia32_pcmpgtb256_mask"))
   {
     int builtin = builtin_enum(tok);
     if (builtin != -1) {
@@ -8788,6 +8789,9 @@ char *nodekind2str(NodeKind kind)
   case ND_SIGNBITF: return "SIGNBITF";
   case ND_SIGNBITL: return "SIGNBITL";
   case ND_ATOMIC_IS_LOCK_FREE: return "ATOMIC_IS_LOCK_FREE";
+  case ND_PSUBUSB256: return "PSUBUSB256";
+  case ND_PCMPGTB256_MASK: return "PCMPGTB256_MASK";
+  case ND_PSHUFB256: return "PSHUFB256";  
   default: return "UNREACHABLE"; 
   }
 }
@@ -9283,7 +9287,7 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_pcmpeqw", ND_PCMPEQW },
     { "__builtin_ia32_pcmpgtw", ND_PCMPGTW },
     { "__builtin_ia32_pcmpeqd", ND_PCMPEQD },    
-    { "__builtin_ia32_pcmpgtd", ND_PCMPGTD },  
+    { "__builtin_ia32_pcmpgtd", ND_PCMPGTD },      
     { "__builtin_ia32_vec_init_v4hi", ND_VECINITV4HI },  
     { "__builtin_ia32_vec_init_v8qi", ND_VECINITV8QI },    
     { "__builtin_ia32_vec_init_v2si", ND_VECINITV2SI },   
@@ -9472,7 +9476,7 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_psubsb128", ND_PSUBSB128 },     
     { "__builtin_ia32_psubsw128", ND_PSUBSW128 },   
     { "__builtin_ia32_psubusb128", ND_PSUBUSB128 },    
-    { "__builtin_ia32_psubusw128", ND_PSUBUSW128 },          
+    { "__builtin_ia32_psubusw128", ND_PSUBUSW128 },              
     { "__builtin_ia32_pmaddwd128", ND_PMADDWD128 },  
     { "__builtin_ia32_pmulhw128", ND_PMULHW128 },      
     { "__builtin_ia32_pmuludq", ND_PMULUDQ },          
@@ -9636,7 +9640,9 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_addcarryx_u64", ND_ADDCARRYX_U64 },    
     { "__builtin_ia32_tzcnt_u16", ND_TZCNT_U16 },
     { "__builtin_ia32_bextr_u32", ND_BEXTR_U32 },
-
+    { "__builtin_ia32_psubusb256", ND_PSUBUSB256 },
+    { "__builtin_ia32_pcmpgtb256_mask", ND_PCMPGTB256_MASK },
+    { "__builtin_ia32_pshufb256", ND_PSHUFB256 },
 };
 
 
@@ -9745,4 +9751,3 @@ static bool is_c99_or_later(void) {
     return false;
   }
 }
-

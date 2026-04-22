@@ -3263,14 +3263,14 @@
 // 						    (__mmask32) -1);
 // }
 
-// extern __inline __mmask32
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_cmpgt_epi8_mask (__m256i __A, __m256i __B)
-// {
-//   return (__mmask32) __builtin_ia32_pcmpgtb256_mask ((__v32qi) __A,
-// 						     (__v32qi) __B,
-// 						     (__mmask32) -1);
-// }
+extern __inline __mmask32
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_cmpgt_epi8_mask (__m256i __A, __m256i __B)
+{
+  return (__mmask32) __builtin_ia32_pcmpgtb256_mask ((__v32qi) __A,
+						     (__v32qi) __B,
+						     (__mmask32) -1);
+}
 
 // extern __inline __mmask32
 // __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
