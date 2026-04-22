@@ -142,7 +142,6 @@ static Node *expr(Token **rest, Token *tok);
 //static int64_t eval(Node *node);
 static int64_t eval2(Node *node, char ***label);
 static int64_t eval_rval(Node *node, char ***label);
-static bool is_const_expr(Node *node);
 static Node *assign(Token **rest, Token *tok);
 static Node *logor(Token **rest, Token *tok);
 static long double eval_double(Node *node);
@@ -3497,7 +3496,7 @@ static int64_t eval_rval(Node *node, char ***label)
   error_tok(node->tok, "%s:%d: in eval2 : invalid initializer3", __FILE__, __LINE__);
 }
 
-static bool is_const_expr(Node *node)
+bool is_const_expr(Node *node)
 {
   add_type(node);  
 
@@ -6547,7 +6546,8 @@ static Node *primary(Token **rest, Token *tok)
     equal(tok, "__builtin_ia32_bsrdi") || equal(tok, "__builtin_ia32_rdtscp") ||
     equal(tok, "__builtin_ia32_writeeflags_u64") || equal(tok, "__builtin_ia32_incsspq") ||
     equal(tok, "__builtin_ia32_rstorssp") || equal(tok, "__builtin_ia32_clrssbsy") || 
-    equal(tok, "__builtin_ia32_rsqrtss") || equal(tok, "__builtin_ia32_tzcnt_u16")) {
+    equal(tok, "__builtin_ia32_rsqrtss") || equal(tok, "__builtin_ia32_tzcnt_u16") || 
+    equal(tok, "__builtin_ia32_si256_si") || equal(tok, "__builtin_ia32_si_si256")) {
     int builtin = builtin_enum(tok);
     if (builtin != -1) {
       Node *node = new_node(builtin, tok);    
@@ -6566,7 +6566,9 @@ static Node *primary(Token **rest, Token *tok)
       equal(tok, "__builtin_ia32_blendvpd") ||
       equal(tok, "__builtin_ia32_blendvps") ||
       equal(tok, "__builtin_ia32_pcmpgtb256_mask") ||
-      equal(tok, "__builtin_ia32_pblendvb256"))
+      equal(tok, "__builtin_ia32_pblendvb256") ||
+      equal(tok, "__builtin_ia32_vinsertf128_si256") ||
+      equal(tok, "__builtin_ia32_palignr256"))
   {
     int builtin = builtin_enum(tok);
     if (builtin != -1) {
@@ -8797,6 +8799,10 @@ char *nodekind2str(NodeKind kind)
   case ND_PBLENDVB256: return "PBLENDVB256";
   case ND_PSRLDQI256: return "PSRLDQI256";
   case ND_PSLLDQI256: return "PSLLDQI256";
+  case ND_VINSERTF128_SI256: return "VINSERTF128_SI256";    
+  case ND_SI256_SI: return "SI256_SI";
+  case ND_SI_SI256: return "SI_SI256";
+  case ND_PALIGNR256: return "PALIGNR256";
   default: return "UNREACHABLE"; 
   }
 }
@@ -9651,6 +9657,10 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_pblendvb256", ND_PBLENDVB256 },
     { "__builtin_ia32_psrldqi256", ND_PSRLDQI256 },
     { "__builtin_ia32_pslldqi256", ND_PSLLDQI256 },
+    { "__builtin_ia32_vinsertf128_si256", ND_VINSERTF128_SI256 },        
+    { "__builtin_ia32_si256_si", ND_SI256_SI },
+    { "__builtin_ia32_si_si256", ND_SI_SI256 },
+    { "__builtin_ia32_palignr256", ND_PALIGNR256 },
 };
 
 

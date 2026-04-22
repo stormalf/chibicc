@@ -909,6 +909,10 @@ typedef enum
   ND_PBLENDVB256,
   ND_PSRLDQI256,
   ND_PSLLDQI256,
+  ND_VINSERTF128_SI256,    
+  ND_SI256_SI,
+  ND_SI_SI256,
+  ND_PALIGNR256,
 } NodeKind;
 
 // AST node type
@@ -1198,6 +1202,7 @@ Type *unqual(Type *ty);
 bool is_vector(Type *ty);
 bool is_int128(Type *ty);
 bool is_pointer(Type *ty);
+bool is_const_expr(Node *node);
 
 extern DebugTypedef *debug_typedefs;
 

@@ -1277,7 +1277,13 @@ void add_type(Node *node)
   case ND_PBLENDVB256:
   case ND_PSRLDQI256:
   case ND_PSLLDQI256:
+  case ND_PALIGNR256:
+  case ND_VINSERTF128_SI256:  
+  case ND_SI256_SI:
     node->ty = vector_of(ty_uchar, 32);
+    return;
+  case ND_SI_SI256:
+    node->ty = vector_of(ty_uchar, 16);
     return;
   default:
     node->ty = ty_void_ptr;

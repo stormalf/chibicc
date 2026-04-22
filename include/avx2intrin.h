@@ -114,12 +114,12 @@ _mm256_add_epi8 (__m256i __A, __m256i __B)
 //   return (__m256i) ((__v16hu)__A + (__v16hu)__B);
 // }
 
-// extern __inline __m256i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_add_epi32 (__m256i __A, __m256i __B)
-// {
-//   return (__m256i) ((__v8su)__A + (__v8su)__B);
-// }
+extern __inline __m256i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_add_epi32 (__m256i __A, __m256i __B)
+{
+  return (__m256i) ((__v8su)__A + (__v8su)__B);
+}
 
 // extern __inline __m256i
 // __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
@@ -156,23 +156,23 @@ _mm256_add_epi8 (__m256i __A, __m256i __B)
 //   return (__m256i)__builtin_ia32_paddusw256 ((__v16hi)__A, (__v16hi)__B);
 // }
 
-// #ifdef __OPTIMIZE__
-// extern __inline __m256i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_alignr_epi8 (__m256i __A, __m256i __B, const int __N)
-// {
-//   return (__m256i) __builtin_ia32_palignr256 ((__v4di)__A,
-// 					      (__v4di)__B,
-// 					      __N * 8);
-// }
-// #else
-// /* In that case (__N*8) will be in vreg, and insn will not be matched. */
-// /* Use define instead */
-// #define _mm256_alignr_epi8(A, B, N)				   \
-//   ((__m256i) __builtin_ia32_palignr256 ((__v4di)(__m256i)(A),	   \
-// 					(__v4di)(__m256i)(B),	   \
-// 					(int)(N) * 8))
-// #endif
+#ifdef __OPTIMIZE__
+extern __inline __m256i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_alignr_epi8 (__m256i __A, __m256i __B, const int __N)
+{
+  return (__m256i) __builtin_ia32_palignr256 ((__v4di)__A,
+					      (__v4di)__B,
+					      __N * 8);
+}
+#else
+/* In that case (__N*8) will be in vreg, and insn will not be matched. */
+/* Use define instead */
+#define _mm256_alignr_epi8(A, B, N)				   \
+  ((__m256i) __builtin_ia32_palignr256 ((__v4di)(__m256i)(A),	   \
+					(__v4di)(__m256i)(B),	   \
+					(int)(N) * 8))
+#endif
 
 extern __inline __m256i
 __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))

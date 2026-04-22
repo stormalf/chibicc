@@ -1019,6 +1019,7 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-mfsgsbase") ||
         !strcmp(argv[i], "-mavx") ||
         !strcmp(argv[i], "-m3dnow") ||
+        !strcmp(argv[i], "-flax-vector-conversions") ||        
         startswith(argv[i], "-mavx") ||     
         startswith(argv[i], "-W")     
         )

@@ -3672,6 +3672,37 @@ static void gen_avx2_256(Node *node, const char *insn) {
   println("  %s $%ld, %%ymm0, %%ymm0", insn, imm_bytes);
 }
 
+static void gen_vinsertf128_si256(Node *node) {
+  assert(node->builtin_nargs == 3);
+  gen_expr(node->builtin_args[0]);   // -> ymm0
+  println("  vmovdqu %%ymm0, %%ymm1");
+  gen_expr(node->builtin_args[1]);   // -> xmm0
+  println("  vmovdqu %%xmm0, %%xmm2");
+
+  // imm must be constant
+  Node *imm = node->builtin_args[2];
+  int64_t imm8 = eval(imm);
+  if (imm8 < 0 || imm8 > 1)
+    error_tok(imm->tok, "%s:%d: error: vinsertf128 imm must be 0 or 1", __FILE__, __LINE__);
+  int val = imm8 & 1;
+
+  println("  vinsertf128 $%d, %%xmm2, %%ymm1, %%ymm0", val);
+}
+
+static void gen_avx2_palignr256(Node *node) {
+  assert(node->builtin_nargs == 3);
+  gen_expr(node->builtin_args[1]); // B -> ymm0
+  println("  vmovdqu %%ymm0, %%ymm1"); // ymm1 = B
+  gen_expr(node->builtin_args[0]); // A -> ymm0
+  int64_t imm_bytes = eval(node->builtin_args[2]) / 8;
+  println("  vpalignr $%ld, %%ymm1, %%ymm0, %%ymm0", imm_bytes);
+}
+
+static void gen_si256 (Node *node) {
+  gen_expr(node->lhs);
+}
+
+
 static void gen_cvt_mmx_binop(Node *node, const char *insn) {
   gen_addr(node->lhs);   
   println("  movups (%%rax), %%xmm0"); 
@@ -5442,6 +5473,11 @@ static void gen_expr(Node *node)
   case ND_PSHUFB256: gen_pshufb256(node); return;
   case ND_PSRLDQI256: gen_avx2_256(node, "vpsrldq"); return;
   case ND_PSLLDQI256: gen_avx2_256(node, "vpslldq"); return;
+  case ND_VINSERTF128_SI256: gen_vinsertf128_si256(node); return;
+  case ND_SI256_SI: gen_si256(node); return;  
+  case ND_SI_SI256: gen_si256(node); return;
+  case ND_PALIGNR256: gen_avx2_palignr256(node); return;
+
 
 }
   
