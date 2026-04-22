@@ -913,6 +913,9 @@ typedef enum
   ND_SI256_SI,
   ND_SI_SI256,
   ND_PALIGNR256,
+  ND_VPERM2I128_SI256,
+  ND_PBLENDD256,
+  ND_VEXTRACTF128_SI256,
 } NodeKind;
 
 // AST node type

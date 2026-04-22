@@ -3698,6 +3698,32 @@ static void gen_avx2_palignr256(Node *node) {
   println("  vpalignr $%ld, %%ymm1, %%ymm0, %%ymm0", imm_bytes);
 }
 
+static void gen_vperm2i128_si256(Node *node) {
+  assert(node->builtin_nargs == 3);
+  gen_expr(node->builtin_args[1]); // Y -> ymm0
+  println("  vmovdqu %%ymm0, %%ymm1"); // ymm1 = Y
+  gen_expr(node->builtin_args[0]); // X -> ymm0
+  int64_t imm = eval(node->builtin_args[2]);
+  println("  vperm2i128 $%ld, %%ymm1, %%ymm0, %%ymm0", imm);
+}
+
+static void gen_pblendd256(Node *node) {
+  assert(node->builtin_nargs == 3);
+  gen_expr(node->builtin_args[1]); // B -> ymm0
+  println("  vmovdqu %%ymm0, %%ymm1"); // ymm1 = B
+  gen_expr(node->builtin_args[0]); // A -> ymm0
+  int64_t imm = eval(node->builtin_args[2]);
+  println("  vpblendd $%ld, %%ymm1, %%ymm0, %%ymm0", imm);
+}
+
+static void gen_vextractf128_si256(Node *node) {  
+  gen_expr(node->lhs); // Source vector -> ymm0
+  Node *imm_node = node->rhs;
+  int64_t imm = eval(imm_node);
+  if (imm < 0 || imm > 1) error_tok(imm_node->tok, "vextractf128 imm must be 0 or 1");
+  println("  vextractf128 $%ld, %%ymm0, %%xmm0", imm);
+}
+
 static void gen_si256 (Node *node) {
   gen_expr(node->lhs);
 }
@@ -5477,8 +5503,9 @@ static void gen_expr(Node *node)
   case ND_SI256_SI: gen_si256(node); return;  
   case ND_SI_SI256: gen_si256(node); return;
   case ND_PALIGNR256: gen_avx2_palignr256(node); return;
-
-
+  case ND_VPERM2I128_SI256: gen_vperm2i128_si256(node); return;
+  case ND_PBLENDD256: gen_pblendd256(node); return;
+  case ND_VEXTRACTF128_SI256: gen_vextractf128_si256(node); return;
 }
   
 if (node->lhs && (is_vector(node->lhs->ty) || (node->rhs && is_vector(node->rhs->ty)))) {

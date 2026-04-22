@@ -965,20 +965,20 @@ _mm256_subs_epu8 (__m256i __A, __m256i __B)
 // 					(__v4si)(__m128i)(Y), (int)(M)))
 // #endif
 
-// #ifdef __OPTIMIZE__
-// extern __inline __m256i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_blend_epi32 (__m256i __X, __m256i __Y, const int __M)
-// {
-//   return (__m256i) __builtin_ia32_pblendd256 ((__v8si)__X,
-// 					      (__v8si)__Y,
-// 					      __M);
-// }
-// #else
-// #define _mm256_blend_epi32(X, Y, M)					\
-//   ((__m256i) __builtin_ia32_pblendd256 ((__v8si)(__m256i)(X),		\
-// 					(__v8si)(__m256i)(Y), (int)(M)))
-// #endif
+#ifdef __OPTIMIZE__
+extern __inline __m256i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_blend_epi32 (__m256i __X, __m256i __Y, const int __M)
+{
+  return (__m256i) __builtin_ia32_pblendd256 ((__v8si)__X,
+					      (__v8si)__Y,
+					      __M);
+}
+#else
+#define _mm256_blend_epi32(X, Y, M)					\
+  ((__m256i) __builtin_ia32_pblendd256 ((__v8si)(__m256i)(X),		\
+					(__v8si)(__m256i)(Y), (int)(M)))
+#endif
 
 // extern __inline __m256i
 // __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
@@ -1075,17 +1075,17 @@ _mm256_subs_epu8 (__m256i __A, __m256i __B)
 // #endif
 
 
-// #ifdef __OPTIMIZE__
-// extern __inline __m256i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_permute2x128_si256 (__m256i __X, __m256i __Y, const int __M)
-// {
-//   return (__m256i) __builtin_ia32_permti256 ((__v4di)__X, (__v4di)__Y, __M);
-// }
-// #else
-// #define _mm256_permute2x128_si256(X, Y, M)				\
-//   ((__m256i) __builtin_ia32_permti256 ((__v4di)(__m256i)(X), (__v4di)(__m256i)(Y), (int)(M)))
-// #endif
+#ifdef __OPTIMIZE__
+extern __inline __m256i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_permute2x128_si256 (__m256i __X, __m256i __Y, const int __M)
+{
+  return (__m256i) __builtin_ia32_permti256 ((__v4di)__X, (__v4di)__Y, __M);
+}
+#else
+#define _mm256_permute2x128_si256(X, Y, M)				\
+  ((__m256i) __builtin_ia32_permti256 ((__v4di)(__m256i)(X), (__v4di)(__m256i)(Y), (int)(M)))
+#endif
 
 // #ifdef __OPTIMIZE__
 // extern __inline __m128i

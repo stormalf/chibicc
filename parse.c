@@ -6568,7 +6568,9 @@ static Node *primary(Token **rest, Token *tok)
       equal(tok, "__builtin_ia32_pcmpgtb256_mask") ||
       equal(tok, "__builtin_ia32_pblendvb256") ||
       equal(tok, "__builtin_ia32_vinsertf128_si256") ||
-      equal(tok, "__builtin_ia32_palignr256"))
+      equal(tok, "__builtin_ia32_palignr256") ||
+      equal(tok, "__builtin_ia32_permti256") ||
+      equal(tok, "__builtin_ia32_pblendd256"))
   {
     int builtin = builtin_enum(tok);
     if (builtin != -1) {
@@ -8803,6 +8805,9 @@ char *nodekind2str(NodeKind kind)
   case ND_SI256_SI: return "SI256_SI";
   case ND_SI_SI256: return "SI_SI256";
   case ND_PALIGNR256: return "PALIGNR256";
+  case ND_VPERM2I128_SI256: return "VPERM2I128_SI256";
+  case ND_PBLENDD256: return "PBLENDD256";
+  case ND_VEXTRACTF128_SI256: return "VEXTRACTF128_SI256";
   default: return "UNREACHABLE"; 
   }
 }
@@ -9661,6 +9666,9 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_si256_si", ND_SI256_SI },
     { "__builtin_ia32_si_si256", ND_SI_SI256 },
     { "__builtin_ia32_palignr256", ND_PALIGNR256 },
+    { "__builtin_ia32_permti256", ND_VPERM2I128_SI256 },
+    { "__builtin_ia32_pblendd256", ND_PBLENDD256 },
+    { "__builtin_ia32_vextractf128_si256", ND_VEXTRACTF128_SI256 },
 };
 
 
