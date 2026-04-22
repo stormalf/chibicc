@@ -3724,6 +3724,13 @@ static void gen_pblendd256(Node *node) {
   println("  vpblendd $%ld, %%ymm1, %%ymm0, %%ymm0", imm);
 }
 
+static void gen_andnotsi256(Node *node) {
+  gen_expr(node->lhs); // A -> ymm0
+  println("  vmovdqu %%ymm0, %%ymm1"); // ymm1 = B
+  gen_expr(node->rhs); // B -> ymm0
+  println("  vpandn %%ymm0, %%ymm1, %%ymm0"); // ymm0 = ~ymm0 & ymm1 => ~A & B
+}
+
 static void gen_vextractf128_si256(Node *node) {  
   gen_expr(node->lhs); // Source vector -> ymm0
   Node *imm_node = node->rhs;
@@ -5516,6 +5523,7 @@ static void gen_expr(Node *node)
   case ND_VPERM2I128_SI256: gen_vperm2i128_si256(node); return;
   case ND_PBLENDD256: gen_pblendd256(node); return;
   case ND_VEXTRACTF128_SI256: gen_vextractf128_si256(node); return;
+  case ND_ANDNOTSI256: gen_andnotsi256(node); return;
   
 }
   

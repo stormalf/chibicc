@@ -918,6 +918,7 @@ typedef enum
   ND_VEXTRACTF128_SI256,
   ND_VECEXTV16QI,
   ND_VECEXTV8HI,
+  ND_ANDNOTSI256,
 } NodeKind;
 
 // AST node type

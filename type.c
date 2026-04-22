@@ -1284,6 +1284,7 @@ void add_type(Node *node)
   case ND_VINSERTF128_SI256:  
   case ND_PBLENDD256:
   case ND_VEXTRACTF128_SI256:
+  case ND_ANDNOTSI256:
   case ND_SI256_SI:
     node->ty = vector_of(ty_uchar, 32);
     return;
