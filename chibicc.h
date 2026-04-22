@@ -906,6 +906,9 @@ typedef enum
   ND_PSUBUSB256,
   ND_PCMPGTB256_MASK,
   ND_PSHUFB256,
+  ND_PBLENDVB256,
+  ND_PSRLDQI256,
+  ND_PSLLDQI256,
 } NodeKind;
 
 // AST node type

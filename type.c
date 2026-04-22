@@ -1274,6 +1274,9 @@ void add_type(Node *node)
     return;
   case ND_PSUBUSB256:
   case ND_PSHUFB256:
+  case ND_PBLENDVB256:
+  case ND_PSRLDQI256:
+  case ND_PSLLDQI256:
     node->ty = vector_of(ty_uchar, 32);
     return;
   default:

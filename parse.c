@@ -6565,7 +6565,8 @@ static Node *primary(Token **rest, Token *tok)
   if (equal(tok, "__builtin_ia32_pblendvb128") || 
       equal(tok, "__builtin_ia32_blendvpd") ||
       equal(tok, "__builtin_ia32_blendvps") ||
-      equal(tok, "__builtin_ia32_pcmpgtb256_mask"))
+      equal(tok, "__builtin_ia32_pcmpgtb256_mask") ||
+      equal(tok, "__builtin_ia32_pblendvb256"))
   {
     int builtin = builtin_enum(tok);
     if (builtin != -1) {
@@ -6588,6 +6589,7 @@ static Node *primary(Token **rest, Token *tok)
     return node;
     }
   }
+
 
   //builtin shuffle can have two forms : 
   //builtin_shuffle(a, b, mask) or
@@ -8792,6 +8794,9 @@ char *nodekind2str(NodeKind kind)
   case ND_PSUBUSB256: return "PSUBUSB256";
   case ND_PCMPGTB256_MASK: return "PCMPGTB256_MASK";
   case ND_PSHUFB256: return "PSHUFB256";  
+  case ND_PBLENDVB256: return "PBLENDVB256";
+  case ND_PSRLDQI256: return "PSRLDQI256";
+  case ND_PSLLDQI256: return "PSLLDQI256";
   default: return "UNREACHABLE"; 
   }
 }
@@ -9643,6 +9648,9 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_psubusb256", ND_PSUBUSB256 },
     { "__builtin_ia32_pcmpgtb256_mask", ND_PCMPGTB256_MASK },
     { "__builtin_ia32_pshufb256", ND_PSHUFB256 },
+    { "__builtin_ia32_pblendvb256", ND_PBLENDVB256 },
+    { "__builtin_ia32_psrldqi256", ND_PSRLDQI256 },
+    { "__builtin_ia32_pslldqi256", ND_PSLLDQI256 },
 };
 
 

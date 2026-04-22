@@ -3606,6 +3606,17 @@ static void gen_sse_pblendvb128(Node *node) {
   println("  movups %%xmm1, %%xmm0");
 }
 
+static void gen_pblendvb256(Node *node) {
+  assert(node->builtin_nargs == 3);
+  gen_expr(node->builtin_args[0]);
+  println("  vmovdqu %%ymm0, %%ymm1");
+  gen_expr(node->builtin_args[1]);
+  println("  vmovdqu %%ymm0, %%ymm2");
+  gen_expr(node->builtin_args[2]);
+  // GCC: vpblendvb %ymm2, %ymm1, %ymm0, %ymm0  (mask is last argument)
+  println("  vpblendvb %%ymm0, %%ymm2, %%ymm1, %%ymm0");
+}
+
 static void gen_sse_blendvpx(Node *node, const char *insn) {
   assert(node->builtin_nargs == 3);  
   gen_expr(node->builtin_args[0]); 
@@ -3645,6 +3656,20 @@ static void gen_pshufb256(Node *node) {
   println("  vmovdqu %%ymm0, %%ymm1");
   gen_expr(node->lhs);
   println("  vpshufb %%ymm1, %%ymm0, %%ymm0");
+}
+
+
+static void gen_avx2_256(Node *node, const char *insn) {  
+  gen_expr(node->lhs);
+  int64_t imm_bits = eval(node->rhs);
+  if (imm_bits < 0 || imm_bits > 255 * 8)
+    error_tok(node->tok, "%s:%d: in gen_avx2_256: immediate out of range", __FILE__, __LINE__);
+  
+  if (imm_bits % 8 != 0)
+    error_tok(node->tok, "%s:%d: in gen_avx2_256: immediate must be multiple of 8", __FILE__, __LINE__);
+
+  int64_t imm_bytes = imm_bits / 8;
+  println("  %s $%ld, %%ymm0, %%ymm0", insn, imm_bytes);
 }
 
 static void gen_cvt_mmx_binop(Node *node, const char *insn) {
@@ -5326,6 +5351,7 @@ static void gen_expr(Node *node)
   case ND_PTESTC128: gen_sse_testc(node); return;
   case ND_PTESTNZC128: gen_sse_testnzc(node); return;  
   case ND_PBLENDVB128: gen_sse_pblendvb128(node); return;
+  case ND_PBLENDVB256: gen_pblendvb256(node); return;
   case ND_BLENDVPS: gen_sse_blendvpx(node, "blendvps"); return;
   case ND_BLENDVPD: gen_sse_blendvpx(node, "blendvpd"); return;
   case ND_PMINSB128: gen_sse_binop3(node, "pminsb", false); return; 
@@ -5414,6 +5440,8 @@ static void gen_expr(Node *node)
   case ND_PSUBUSB256: gen_psubusb256(node); return;
   case ND_PCMPGTB256_MASK: gen_pcmpgtb256_mask(node); return;
   case ND_PSHUFB256: gen_pshufb256(node); return;
+  case ND_PSRLDQI256: gen_avx2_256(node, "vpsrldq"); return;
+  case ND_PSLLDQI256: gen_avx2_256(node, "vpslldq"); return;
 
 }
   
