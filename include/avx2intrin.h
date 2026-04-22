@@ -548,19 +548,19 @@ _mm256_mulhi_epu16 (__m256i __A, __m256i __B)
 //   return (__m256i)__builtin_ia32_pmulhw256 ((__v16hi)__A, (__v16hi)__B);
 // }
 
-// extern __inline __m256i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_mullo_epi16 (__m256i __A, __m256i __B)
-// {
-//   return (__m256i) ((__v16hu)__A * (__v16hu)__B);
-// }
+extern __inline __m256i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_mullo_epi16 (__m256i __A, __m256i __B)
+{
+  return (__m256i) ((__v16hu)__A * (__v16hu)__B);
+}
 
-// extern __inline __m256i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_mullo_epi32 (__m256i __A, __m256i __B)
-// {
-//   return (__m256i) ((__v8su)__A * (__v8su)__B);
-// }
+extern __inline __m256i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_mullo_epi32 (__m256i __A, __m256i __B)
+{
+  return (__m256i) ((__v8su)__A * (__v8su)__B);
+}
 
 // extern __inline __m256i
 // __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
