@@ -8392,7 +8392,7 @@ char *nodekind2str(NodeKind kind)
   case ND_CLFLUSH: return "CLFLUSH"; 
   case ND_VECINITV2SI: return "VEC_INIT_V2SI";
   case ND_VECEXTV2SI: return "VEC_EXT_V2SI";
-  case ND_VECEXTV4SI: return "VEC_EXT_V4SI";
+  case ND_VECEXTV4SI: return "VEC_EXT_V4SI";  
   case ND_VECINITV8QI: return "VEC_INIT_V8QI";   
   case ND_VECINITV4HI: return "VEC_INIT_V4HI";        
   case ND_PACKSSWB: return "PACKSSWB";
@@ -8808,6 +8808,8 @@ char *nodekind2str(NodeKind kind)
   case ND_VPERM2I128_SI256: return "VPERM2I128_SI256";
   case ND_PBLENDD256: return "PBLENDD256";
   case ND_VEXTRACTF128_SI256: return "VEXTRACTF128_SI256";
+  case ND_VECEXTV16QI: return "VEC_EXT_V16QI";
+  case ND_VECEXTV8HI: return "VEC_EXT_V8HI";
   default: return "UNREACHABLE"; 
   }
 }
@@ -9306,7 +9308,7 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_pcmpgtd", ND_PCMPGTD },      
     { "__builtin_ia32_vec_init_v4hi", ND_VECINITV4HI },  
     { "__builtin_ia32_vec_init_v8qi", ND_VECINITV8QI },    
-    { "__builtin_ia32_vec_init_v2si", ND_VECINITV2SI },   
+    { "__builtin_ia32_vec_init_v2si", ND_VECINITV2SI },       
     { "__builtin_ia32_vec_ext_v2si", ND_VECEXTV2SI },       
     { "__builtin_ia32_vec_ext_v4si", ND_VECEXTV4SI },       
     { "__builtin_ia32_emms", ND_EMMS },       
@@ -9669,6 +9671,8 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_permti256", ND_VPERM2I128_SI256 },
     { "__builtin_ia32_pblendd256", ND_PBLENDD256 },
     { "__builtin_ia32_vextractf128_si256", ND_VEXTRACTF128_SI256 },
+    { "__builtin_ia32_vec_ext_v16qi", ND_VECEXTV16QI },
+    { "__builtin_ia32_vec_ext_v8hi", ND_VECEXTV8HI },
 };
 
 

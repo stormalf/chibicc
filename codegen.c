@@ -2361,8 +2361,16 @@ static void gen_vec_ext(Node *node) {
   push_xmm(0);
   gen_expr(node->rhs);
   println("  movslq %%eax, %%rcx");
-  println("  and $%d, %%ecx", node->kind == ND_VECEXTV2SI ? 1 : 3);
-  println("  movl (%%rsp,%%rcx,4), %%eax");
+  if (node->kind == ND_VECEXTV16QI) {
+    println("  and $15, %%ecx");
+    println("  movzbl (%%rsp,%%rcx), %%eax");
+  } else if (node->kind == ND_VECEXTV8HI) {
+    println("  and $7, %%ecx");
+    println("  movswl (%%rsp,%%rcx,2), %%eax");
+  } else {
+    println("  and $%d, %%ecx", node->kind == ND_VECEXTV2SI ? 1 : 3);
+    println("  movl (%%rsp,%%rcx,4), %%eax");
+  }
   pop_xmm(0);
 }
 
@@ -5114,7 +5122,9 @@ static void gen_expr(Node *node)
   case ND_MOVMSKPS: gen_sse_binop2(node, "movmskps", "eax", false);  return;   
   case ND_CLFLUSH: gen_single_addr_binop(node, "clflush"); return;
   case ND_VECINITV2SI: gen_vec_init_v2si(node); return;
-  case ND_VECEXTV2SI: gen_vec_ext(node); return;
+  case ND_VECEXTV16QI:
+  case ND_VECEXTV8HI: 
+  case ND_VECEXTV2SI: 
   case ND_VECEXTV4SI: gen_vec_ext(node); return;
   case ND_PACKSSWB:   gen_mmx_binop(node, "packsswb", false); return;
   case ND_PACKSSDW:   gen_mmx_binop(node, "packssdw", false); return;
@@ -5506,6 +5516,7 @@ static void gen_expr(Node *node)
   case ND_VPERM2I128_SI256: gen_vperm2i128_si256(node); return;
   case ND_PBLENDD256: gen_pblendd256(node); return;
   case ND_VEXTRACTF128_SI256: gen_vextractf128_si256(node); return;
+  
 }
   
 if (node->lhs && (is_vector(node->lhs->ty) || (node->rhs && is_vector(node->rhs->ty)))) {
