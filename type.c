@@ -981,6 +981,7 @@ void add_type(Node *node)
   case ND_CVTSD2SI64:
   case ND_CVTSS2SI64:
   case ND_CVTTSS2SI64:
+  case ND_VECEXTV2DI:
     node->ty = ty_long;
     return;
   case ND_VECINITV4HI:
@@ -1285,6 +1286,7 @@ void add_type(Node *node)
   case ND_PBLENDD256:
   case ND_VEXTRACTF128_SI256:
   case ND_ANDNOTSI256:
+  case ND_PMULHUW256:
   case ND_SI256_SI:
     node->ty = vector_of(ty_uchar, 32);
     return;

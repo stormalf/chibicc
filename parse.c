@@ -8811,6 +8811,8 @@ char *nodekind2str(NodeKind kind)
   case ND_VECEXTV16QI: return "VEC_EXT_V16QI";
   case ND_VECEXTV8HI: return "VEC_EXT_V8HI";
   case ND_ANDNOTSI256: return "ANDNOTSI256";
+  case ND_VECEXTV2DI: return "VEC_EXT_V2DI";
+  case ND_PMULHUW256: return "PMULHUW256";
   default: return "UNREACHABLE"; 
   }
 }
@@ -9675,6 +9677,8 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_vec_ext_v16qi", ND_VECEXTV16QI },
     { "__builtin_ia32_vec_ext_v8hi", ND_VECEXTV8HI },
     { "__builtin_ia32_andnotsi256", ND_ANDNOTSI256 },
+    { "__builtin_ia32_vec_ext_v2di", ND_VECEXTV2DI },
+    { "__builtin_ia32_pmulhuw256", ND_PMULHUW256 },
 };
 
 

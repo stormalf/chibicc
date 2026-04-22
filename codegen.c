@@ -2367,6 +2367,9 @@ static void gen_vec_ext(Node *node) {
   } else if (node->kind == ND_VECEXTV8HI) {
     println("  and $7, %%ecx");
     println("  movswl (%%rsp,%%rcx,2), %%eax");
+  } else if (node->kind == ND_VECEXTV2DI) {
+    println("  and $1, %%ecx");
+    println("  movq (%%rsp,%%rcx,8), %%rax");
   } else {
     println("  and $%d, %%ecx", node->kind == ND_VECEXTV2SI ? 1 : 3);
     println("  movl (%%rsp,%%rcx,4), %%eax");
@@ -3724,11 +3727,18 @@ static void gen_pblendd256(Node *node) {
   println("  vpblendd $%ld, %%ymm1, %%ymm0, %%ymm0", imm);
 }
 
+static void gen_pmulhuw256(Node *node) {
+  gen_expr(node->lhs); // A -> ymm0
+  println("  vmovdqu %%ymm0, %%ymm1"); // ymm1 = A
+  gen_expr(node->rhs); // B -> ymm0
+  println("  vpmulhuw %%ymm0, %%ymm1, %%ymm0"); // ymm0 = (A * B) >> 16
+}
+
 static void gen_andnotsi256(Node *node) {
   gen_expr(node->lhs); // A -> ymm0
-  println("  vmovdqu %%ymm0, %%ymm1"); // ymm1 = B
+  println("  vmovdqu %%ymm0, %%ymm1"); // ymm1 = A
   gen_expr(node->rhs); // B -> ymm0
-  println("  vpandn %%ymm0, %%ymm1, %%ymm0"); // ymm0 = ~ymm0 & ymm1 => ~A & B
+  println("  vpandn %%ymm0, %%ymm1, %%ymm0");
 }
 
 static void gen_vextractf128_si256(Node *node) {  
@@ -5131,7 +5141,8 @@ static void gen_expr(Node *node)
   case ND_VECINITV2SI: gen_vec_init_v2si(node); return;
   case ND_VECEXTV16QI:
   case ND_VECEXTV8HI: 
-  case ND_VECEXTV2SI: 
+  case ND_VECEXTV2SI:
+   case ND_VECEXTV2DI: 
   case ND_VECEXTV4SI: gen_vec_ext(node); return;
   case ND_PACKSSWB:   gen_mmx_binop(node, "packsswb", false); return;
   case ND_PACKSSDW:   gen_mmx_binop(node, "packssdw", false); return;
@@ -5518,12 +5529,13 @@ static void gen_expr(Node *node)
   case ND_PSLLDQI256: gen_avx2_256(node, "vpslldq"); return;
   case ND_VINSERTF128_SI256: gen_vinsertf128_si256(node); return;
   case ND_SI256_SI: gen_si256(node); return;  
-  case ND_SI_SI256: gen_si256(node); return;
+  case ND_SI_SI256: gen_si256(node); return;  
   case ND_PALIGNR256: gen_avx2_palignr256(node); return;
   case ND_VPERM2I128_SI256: gen_vperm2i128_si256(node); return;
   case ND_PBLENDD256: gen_pblendd256(node); return;
   case ND_VEXTRACTF128_SI256: gen_vextractf128_si256(node); return;
   case ND_ANDNOTSI256: gen_andnotsi256(node); return;
+  case ND_PMULHUW256: gen_pmulhuw256(node); return;
   
 }
   

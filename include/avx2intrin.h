@@ -534,12 +534,12 @@ _mm256_cmpgt_epi8 (__m256i __A, __m256i __B)
 // 					       (__v16hi)__Y);
 // }
 
-// extern __inline __m256i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_mulhi_epu16 (__m256i __A, __m256i __B)
-// {
-//   return (__m256i)__builtin_ia32_pmulhuw256 ((__v16hi)__A, (__v16hi)__B);
-// }
+extern __inline __m256i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_mulhi_epu16 (__m256i __A, __m256i __B)
+{
+  return (__m256i)__builtin_ia32_pmulhuw256 ((__v16hi)__A, (__v16hi)__B);
+}
 
 // extern __inline __m256i
 // __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
