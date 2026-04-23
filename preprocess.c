@@ -1940,8 +1940,6 @@ Token *preprocess(Token *tok, bool isReadLine)
   }
 
   tok = preprocess2(tok);
-  // to manage issue with macro used before its definition. gcc allows it
-  tok = preprocess3(tok);
 
   if (cond_incl && !isReadLine)
     error_tok(cond_incl->tok, "%s:%d: in preprocess : unterminated conditional directive", __FILE__, __LINE__);
@@ -1957,33 +1955,6 @@ Token *preprocess(Token *tok, bool isReadLine)
     t->line_no += abs(t->line_delta); // fixing issue with negative number that caused assembly issue
 
   return tok;
-}
-
-// a temp fix to manage the fact that gcc allows that a macro was defined after their use. See issue124.c for more details
-Token *preprocess3(Token *tok)
-{
-  Token head = {};
-  Token *cur = &head;
-  // Token *start = tok;
-
-  while (tok->kind != TK_EOF)
-  {
-
-    Macro *m = find_macro(tok);
-
-    if (m != NULL && m->is_objlike && m->body->len == 0)
-    {
-      //if (expand_macro(&tok, tok))
-      if (tok->kind == TK_IDENT && expand_macro(&tok, tok))
-        continue;
-    }
-
-    cur = cur->next = tok;
-    tok = tok->next;
-  }
-
-  cur->next = tok;
-  return head.next;
 }
 
 

@@ -354,23 +354,6 @@ curl : https://github.com/curl/curl.git
     TESTDONE: 1574 tests out of 1574 reported OK: 100%
 
 
-openssl : https://github.com/openssl/openssl.git
-
-    CC=chibicc ./Configure    
-    You need to remove from the file from openssl/crypto/perlasm/x86_64-xlate.pl
-    	my $section='.note.gnu.property, #alloc';
-    by :
-    	my $section='.note.gnu.property';
-    make
-    make test
-    Test Summary Report
-    -------------------
-    80-test_ca.t                           (Wstat: 256 (exited 1) Tests: 20 Failed: 1)
-    Failed test:  5
-    Non-zero exit status: 1
-    Files=350, Tests=4899, 1078 wallclock secs (15.69 usr  1.47 sys + 646.15 cusr 374.31 csys = 1037.62 CPU)
-    
-
 openssh-portable : https://github.com/openssh/openssh-portable.git
 
     autoreconf -fi
@@ -554,6 +537,21 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
     # 229 of 229 tests failed.
 
 
+openssl : https://github.com/openssl/openssl.git
+
+    CC=chibicc ./Configure    
+    You need to remove from the file from openssl/crypto/perlasm/x86_64-xlate.pl
+    	my $section='.note.gnu.property, #alloc';
+    by :
+    	my $section='.note.gnu.property';
+    make
+    make test
+    Failed with undefined reference
+    ld: ./libcrypto.so: undefined reference to `ossl_fips_intern_provider_init'
+    ld: ./libcrypto.so: undefined reference to `ossl_cipher_aead_settable_ctx_params'
+    ld: ./libcrypto.so: undefined reference to `ossl_cipher_aead_gettable_ctx_params'
+    
+
 ## features added 
 
     - some extended assembly syntax taken in account (only when on macro body they are failing)
@@ -584,7 +582,7 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
     git 2 tests failed    
     vim: compile OK, tests OK except 3.
     cpython : compile OK, some tests KO
-    openssl: compile OK, 5 tests KO     
+    openssl: compile KO (undefined references)    
            
 
 ## projects compiled successfully with chibicc
@@ -627,7 +625,7 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.24  Passing GNUC from 3 to 4. Adding const, volatile, restrict support from slimcc/fuhsnn. Fixing issue ISS-195 prockill due to leakage attributes. Managing pragma pack. Fixing issue with attributes and alignment. Fixing issue with some edge cases initializer. Fixing some float comparisons issues with NaN. Fixing alignof issue and managing asm name. Fixing issue with string char array members initialization. Fixing issue with unicode characters. Managing anonymous enums. Fixing issue with extended assembly and &x in input. Fixing issue with extended assembly and macro expansion. Fixing issue with builtin_prefetch found during openssl compile. Managing \__atomic_is_lock_free. Adding \__builtin_offsetof and __has_builtin. Adding \__builtin_rotateleftxx. Fixing issue with attribute after typenames. Fixing issue with attribute hiding. Fixing issue with vlc compile undefined functions (ISS-206). Reversing changes on is_function that causes side effect on cpython compile. Fixing issue with unicode x\u0000y. Fixing warning sent wrongly during tokenization.
+1.0.24  Passing GNUC from 3 to 4. Adding const, volatile, restrict support from slimcc/fuhsnn. Fixing issue ISS-195 prockill due to leakage attributes. Managing pragma pack. Fixing issue with attributes and alignment. Fixing issue with some edge cases initializer. Fixing some float comparisons issues with NaN. Fixing alignof issue and managing asm name. Fixing issue with string char array members initialization. Fixing issue with unicode characters. Managing anonymous enums. Fixing issue with extended assembly and &x in input. Fixing issue with extended assembly and macro expansion. Fixing issue with builtin_prefetch found during openssl compile. Managing \__atomic_is_lock_free. Adding \__builtin_offsetof and __has_builtin. Adding \__builtin_rotateleftxx. Fixing issue with attribute after typenames. Fixing issue with attribute hiding. Fixing issue with vlc compile undefined functions (ISS-206). Reversing changes on is_function that causes side effect on cpython compile. Fixing issue with unicode x\u0000y. Fixing warning sent wrongly during tokenization. Reversing openssl changed that caused side effects on cpython. Deleting preprocess3 that caused side effect in openssl parsing.
 
 
 

@@ -8058,15 +8058,13 @@ static Token *global_declaration(Token *tok, Type *basety, VarAttr *attr)
 // Lookahead tokens and returns true if a given token is a start
 // of a function definition or declaration.
 static bool is_function(Token *tok)
-{
-
+{  
   if (equal(tok, ";"))
     return false;
   Type dummy = {};
   Type *ty = declarator(&tok, tok, &dummy);
   if (!ty)
-    error_tok(tok, "%s %d: in is_function : ty is null", __FILE__, __LINE__);
-
+    error_tok(tok, "%s %d: in is_function : ty is null", __FILE__, __LINE__); 
   return ty->kind == TY_FUNC;
 }
 
