@@ -577,6 +577,7 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
     git 2 tests failed    
     vim: compile OK, tests OK except 1.
     cpython : compile OK, some tests KO     
+    openssl: compile OK, tests KO
            
 
 ## projects compiled successfully with chibicc
@@ -589,7 +590,7 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
     vlc: compile OK  
     memcached : compile OK, tests OK      
     php-src : compile OK, tests OK    
-    openssl: compile OK
+    
 
 
 ## debug
