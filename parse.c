@@ -8071,6 +8071,7 @@ static void scan_globals(void)
              memcpy(new_buf, var2->init_data, var2->ty->size);
              var2->init_data = new_buf;
            }
+           var2->ty = copy_type(var2->ty);
            var2->ty->size = var->ty->size;
         }
         break;

@@ -311,10 +311,6 @@ static void print_visibility(Obj *obj) {
   } else {
     println("  .globl\t%s", sym(obj));
   }
-  if (obj->is_weak) {
-    
-    println("  .weak\t%s", sym(obj));
-  }
 }
 
 
@@ -5990,9 +5986,10 @@ static void emit_data(Obj *prog)
   for (Obj *var = prog; var; var = var->next)
   {
     if (var->alias_name)
-      println("  .set \"%s\", %s", sym(var), var->alias_name);
+      println("  .set %s, %s", sym(var), var->alias_name);
     if (var->is_weak)
-      println("  .weak \"%s\"", sym(var));
+      println("  .weak %s", sym(var));
+
     if (var->is_function || !var->is_definition)
       continue;
     print_visibility(var);
@@ -6042,11 +6039,15 @@ static void emit_data(Obj *prog)
         {
           if (var->is_function) {
             println("  .long %s - . + %ld", *rel->label, rel->addend);
+            pos += 4;
           } else if (!var->is_extern) {
             println("  .quad %s%+ld", *rel->label, rel->addend);
+            pos += 8;
+          } else {
+             // Fallback for unexpected case
+             pos += 8;
           }
           rel = rel->next;
-          pos += 8;
         }
         else
         {
@@ -6203,13 +6204,6 @@ static void emit_text(Obj *prog)
   println(".L.text_start:");
   for (Obj *fn = prog; fn; fn = fn->next)
   {
-    // Emit alias if fn->alias_name is set
-    if (fn->alias_name) {
-      // Handle weak alias
-      println("  .weak %s", sym(fn));                 // Mark the function as weak
-      println("  .set %s, %s", sym(fn), fn->alias_name);  // Define alias
-    }
-
     if (!fn->is_function || !fn->is_definition)
       continue;
 
