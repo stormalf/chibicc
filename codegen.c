@@ -3700,6 +3700,26 @@ static void gen_vinsertf128_si256(Node *node) {
   println("  vinsertf128 $%d, %%xmm2, %%ymm1, %%ymm0", val);
 }
 
+static void gen_avx2_permdi256(Node *node) {
+  gen_expr(node->lhs);  
+  println("  vpermq $%ld, %%ymm0, %%ymm0", eval(node->rhs));
+}
+
+static void gen_avx2_psll_binop(Node *node, const char *insn) {
+  gen_expr(node->lhs); // ymm0 = lhs
+  if (node->rhs->kind == ND_NUM) {
+    println("  %s $%ld, %%ymm0, %%ymm0", insn, node->rhs->val);
+  } else {
+    // Shift with non-immediate count takes an xmm for the count.
+    // The count is in the low 64 bits of the xmm.
+    push_vec(node->lhs->ty);
+    gen_expr(node->rhs);
+    println("  movq %%rax, %%xmm1");
+    pop_vec(node->lhs->ty, 0);
+    println("  %s %%xmm1, %%ymm0, %%ymm0", insn);
+  }
+}
+
 static void gen_avx2_palignr256(Node *node) {
   assert(node->builtin_nargs == 3);
   gen_expr(node->builtin_args[1]); // B -> ymm0
@@ -5530,10 +5550,15 @@ static void gen_expr(Node *node)
   case ND_VINSERTF128_SI256: gen_vinsertf128_si256(node); return;
   case ND_SI256_SI: gen_si256(node); return;  
   case ND_SI_SI256: gen_si256(node); return;  
+  case ND_PD256_PD: gen_si256(node); return;
+  case ND_PS256_PS: gen_si256(node); return;
   case ND_PALIGNR256: gen_avx2_palignr256(node); return;
   case ND_VPERM2I128_SI256: gen_vperm2i128_si256(node); return;
+  case ND_PSRLQI256: gen_avx2_psll_binop(node, "vpsrlq"); return;
+  case ND_PSLLQI256: gen_avx2_psll_binop(node, "vpsllq"); return;
   case ND_PBLENDD256: gen_pblendd256(node); return;
   case ND_VEXTRACTF128_SI256: gen_vextractf128_si256(node); return;
+  case ND_PERMDI256: gen_avx2_permdi256(node); return;
   case ND_ANDNOTSI256: gen_andnotsi256(node); return;
   case ND_PMULHUW256: gen_pmulhuw256(node); return;
   

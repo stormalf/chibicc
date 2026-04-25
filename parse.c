@@ -6547,7 +6547,8 @@ static Node *primary(Token **rest, Token *tok)
     equal(tok, "__builtin_ia32_writeeflags_u64") || equal(tok, "__builtin_ia32_incsspq") ||
     equal(tok, "__builtin_ia32_rstorssp") || equal(tok, "__builtin_ia32_clrssbsy") || 
     equal(tok, "__builtin_ia32_rsqrtss") || equal(tok, "__builtin_ia32_tzcnt_u16") || 
-    equal(tok, "__builtin_ia32_si256_si") || equal(tok, "__builtin_ia32_si_si256")) {
+    equal(tok, "__builtin_ia32_si256_si") || equal(tok, "__builtin_ia32_si_si256") ||
+    equal(tok, "__builtin_ia32_pd_pd256") || equal(tok, "__builtin_ia32_ps_ps256")) {
     int builtin = builtin_enum(tok);
     if (builtin != -1) {
       Node *node = new_node(builtin, tok);    
@@ -8811,6 +8812,11 @@ char *nodekind2str(NodeKind kind)
   case ND_ANDNOTSI256: return "ANDNOTSI256";
   case ND_VECEXTV2DI: return "VEC_EXT_V2DI";
   case ND_PMULHUW256: return "PMULHUW256";
+  case ND_PD256_PD: return "PD256_PD";
+  case ND_PS256_PS: return "PS256_PS";
+  case ND_PSRLQI256: return "PSRLQI256";
+  case ND_PSLLQI256: return "PSLLQI256";
+  case ND_PERMDI256: return "PERMDI256";
   default: return "UNREACHABLE"; 
   }
 }
@@ -8876,12 +8882,6 @@ static bool check_old_style(Token **rest, Token *tok)
       {
         break;
       }
-
-      // //if function not followed by a Keyword exit
-      // if (equal(tok, ")") && tok->next &&tok->next->kind != TK_KEYWORD)
-      // {
-      //   break;
-      // }
 
       if (equal(tok, "}"))
       {
@@ -9677,6 +9677,11 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_andnotsi256", ND_ANDNOTSI256 },
     { "__builtin_ia32_vec_ext_v2di", ND_VECEXTV2DI },
     { "__builtin_ia32_pmulhuw256", ND_PMULHUW256 },
+    { "__builtin_ia32_pd_pd256", ND_PD256_PD },
+    { "__builtin_ia32_ps_ps256", ND_PS256_PS },
+    { "__builtin_ia32_psrlqi256", ND_PSRLQI256 },
+    { "__builtin_ia32_psllqi256", ND_PSLLQI256 },
+    { "__builtin_ia32_permdi256", ND_PERMDI256 },
 };
 
 

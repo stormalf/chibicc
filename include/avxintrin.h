@@ -1292,12 +1292,12 @@ _mm256_set_epi8  (char __q31, char __q30, char __q29, char __q28,
   };
 }
 
-// extern __inline __m256i __attribute__((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_set_epi64x (long long __A, long long __B, long long __C,
-// 		   long long __D)
-// {
-//   return __extension__ (__m256i)(__v4di){ __D, __C, __B, __A };
-// }
+extern __inline __m256i __attribute__((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_set_epi64x (long long __A, long long __B, long long __C,
+		   long long __D)
+{
+  return __extension__ (__m256i)(__v4di){ __D, __C, __B, __A };
+}
 
 // /* Create a vector with all elements equal to A.  */
 // extern __inline __m256d __attribute__((__gnu_inline__, __always_inline__, __artificial__))
@@ -1338,11 +1338,11 @@ _mm256_set1_epi8 (char __A)
 			  __A, __A, __A, __A, __A, __A, __A, __A);
 }
 
-// extern __inline __m256i __attribute__((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_set1_epi64x (long long __A)
-// {
-//   return __extension__ (__m256i)(__v4di){ __A, __A, __A, __A };
-// }
+extern __inline __m256i __attribute__((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_set1_epi64x (long long __A)
+{
+  return __extension__ (__m256i)(__v4di){ __A, __A, __A, __A };
+}
 
 // /* Create vectors of elements in the reversed order from the
 //    _mm256_set_XXX functions.  */
@@ -1399,62 +1399,62 @@ _mm256_setr_epi8  (char __q31, char __q30, char __q29, char __q28,
 			  __q28, __q29, __q30, __q31);
 }
 
-// extern __inline __m256i __attribute__((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_setr_epi64x (long long __A, long long __B, long long __C,
-// 		    long long __D)
-// {
-//   return _mm256_set_epi64x (__D, __C, __B, __A);
-// }
+extern __inline __m256i __attribute__((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_setr_epi64x (long long __A, long long __B, long long __C,
+		    long long __D)
+{
+  return _mm256_set_epi64x (__D, __C, __B, __A);
+}
 
-// /* Casts between various SP, DP, INT vector types.  Note that these do no
-//    conversion of values, they just change the type.  */
-// extern __inline __m256 __attribute__((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_castpd_ps (__m256d __A)
-// {
-//   return (__m256) __A;
-// }
+/* Casts between various SP, DP, INT vector types.  Note that these do no
+   conversion of values, they just change the type.  */
+extern __inline __m256 __attribute__((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_castpd_ps (__m256d __A)
+{
+  return (__m256) __A;
+}
 
-// extern __inline __m256i __attribute__((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_castpd_si256 (__m256d __A)
-// {
-//   return (__m256i) __A;
-// }
+extern __inline __m256i __attribute__((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_castpd_si256 (__m256d __A)
+{
+  return (__m256i) __A;
+}
 
-// extern __inline __m256d __attribute__((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_castps_pd (__m256 __A)
-// {
-//   return (__m256d) __A;
-// }
+extern __inline __m256d __attribute__((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_castps_pd (__m256 __A)
+{
+  return (__m256d) __A;
+}
 
-// extern __inline __m256i __attribute__((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_castps_si256(__m256 __A)
-// {
-//   return (__m256i) __A;
-// }
+extern __inline __m256i __attribute__((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_castps_si256(__m256 __A)
+{
+  return (__m256i) __A;
+}
 
-// extern __inline __m256 __attribute__((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_castsi256_ps (__m256i __A)
-// {
-//   return (__m256) __A;
-// }
+extern __inline __m256 __attribute__((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_castsi256_ps (__m256i __A)
+{
+  return (__m256) __A;
+}
 
-// extern __inline __m256d __attribute__((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_castsi256_pd (__m256i __A)
-// {
-//   return (__m256d) __A;
-// }
+extern __inline __m256d __attribute__((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_castsi256_pd (__m256i __A)
+{
+  return (__m256d) __A;
+}
 
-// extern __inline __m128d __attribute__((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_castpd256_pd128 (__m256d __A)
-// {
-//   return (__m128d) __builtin_ia32_pd_pd256 ((__v4df)__A);
-// }
+extern __inline __m128d __attribute__((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_castpd256_pd128 (__m256d __A)
+{
+  return (__m128d) __builtin_ia32_pd_pd256 ((__v4df)__A);
+}
 
-// extern __inline __m128 __attribute__((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_castps256_ps128 (__m256 __A)
-// {
-//   return (__m128) __builtin_ia32_ps_ps256 ((__v8sf)__A);
-// }
+extern __inline __m128 __attribute__((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_castps256_ps128 (__m256 __A)
+{
+  return (__m128) __builtin_ia32_ps_ps256 ((__v8sf)__A);
+}
 
 extern __inline __m128i __attribute__((__gnu_inline__, __always_inline__, __artificial__))
 _mm256_castsi256_si128 (__m256i __A)

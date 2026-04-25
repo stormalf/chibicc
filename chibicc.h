@@ -920,6 +920,11 @@ typedef enum
   ND_ANDNOTSI256,
   ND_VECEXTV2DI,
   ND_PMULHUW256,
+  ND_PD256_PD,
+  ND_PS256_PS,
+  ND_PSRLQI256,
+  ND_PSLLQI256,
+  ND_PERMDI256,
 } NodeKind;
 
 // AST node type
