@@ -1215,6 +1215,7 @@ bool is_vector(Type *ty);
 bool is_int128(Type *ty);
 bool is_pointer(Type *ty);
 bool is_const_expr(Node *node);
+bool contains_label(Node *node);
 
 extern DebugTypedef *debug_typedefs;
 

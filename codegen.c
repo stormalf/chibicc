@@ -4492,6 +4492,12 @@ static void gen_expr(Node *node)
     return;
   case ND_COND:
   {
+    if (is_const_expr(node->cond)) {
+      Node *n = eval(node->cond) ? node->then : node->els;
+      if (n)
+        gen_expr(n);
+      return;
+    }
     int c = count();
     gen_expr(node->cond);
     cmp_zero(node->cond->ty);
@@ -5816,11 +5822,26 @@ static void gen_stmt(Node *node)
   {
   case ND_IF:
   {
+    if (is_const_expr(node->cond)) {
+      if (eval(node->cond)) {
+        if (!contains_label(node->els)) {
+          if (node->then)
+            gen_stmt(node->then);
+          return;
+        }
+      } else {
+        if (!contains_label(node->then)) {
+          if (node->els)
+            gen_stmt(node->els);
+          return;
+        }
+      }
+    }
     int c = count();
     gen_expr(node->cond);
     cmp_zero(node->cond->ty);
     println("  je  .L.else.%d", c);
-    gen_stmt(node->then);
+    if (node->then) gen_stmt(node->then);
     println("  jmp .L.end.%d", c);
     println(".L.else.%d:", c);
     if (node->els)
@@ -5830,6 +5851,13 @@ static void gen_stmt(Node *node)
   }
   case ND_FOR:
   {
+    if (node->cond && is_const_expr(node->cond) && !eval(node->cond)) {
+      if (!contains_label(node->then)) {
+        if (node->init)
+          gen_stmt(node->init);
+        return;
+      }
+    }
     int c = count();
     if (node->init)
       gen_stmt(node->init);
@@ -5946,6 +5974,8 @@ static void gen_stmt(Node *node)
     if (node->lhs->ty && node->lhs->ty->kind == TY_LDOUBLE)
       println("  fstp %%st(0)");
     return;
+  case ND_NULL_EXPR:
+    return;
   case ND_ASM:
     println("  %s", node->asm_str);
     return;
@@ -5959,8 +5989,7 @@ static void emit_data(Obj *prog)
 {
   for (Obj *var = prog; var; var = var->next)
   {
-    //issue 35 about array not initialized completely.
-    if (var->ty->size != 0)
+    if (!var->is_function && var->ty->size != 0)
       println("  .zero %ld", labs(var->ty->size));
     if (var->alias_name)
       println("  .set \"%s\", %s", sym(var), var->alias_name);

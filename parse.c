@@ -2113,63 +2113,6 @@ static void vector_initializer1(Token **rest, Token *tok, Initializer *init) {
 }
 
 
-
-// Recursively traverse a Node and mark all function references as address-used
-static void mark_function_addresses_used(Node *node) {
-  if (!node)
-    return;
-
-  switch (node->kind) {
-  case ND_VAR:
-    if (node->var && node->var->is_function)
-      node->var->is_address_used = true;
-    break;
-  case ND_CAST:
-    mark_function_addresses_used(node->lhs);
-    break;
-  case ND_ADDR:
-  case ND_DEREF:
-  case ND_MEMBER:
-  case ND_POS:
-  case ND_NEG:
-  case ND_NOT:
-  case ND_BITNOT:
-    mark_function_addresses_used(node->lhs);
-    break;
-  case ND_ADD:
-  case ND_SUB:
-  case ND_MUL:
-  case ND_DIV:
-  case ND_MOD:
-  case ND_BITAND:
-  case ND_BITOR:
-  case ND_BITXOR:
-  case ND_SHL:
-  case ND_SHR:
-  case ND_EQ:
-  case ND_NE:
-  case ND_LT:
-  case ND_LE:
-  case ND_LOGAND:
-  case ND_LOGOR:
-  case ND_ASSIGN:
-    mark_function_addresses_used(node->lhs);
-    mark_function_addresses_used(node->rhs);
-    break;
-  case ND_COND:
-    mark_function_addresses_used(node->cond);
-    mark_function_addresses_used(node->then);
-    mark_function_addresses_used(node->els);
-    break;
-  case ND_COMMA:
-    mark_function_addresses_used(node->lhs);
-    mark_function_addresses_used(node->rhs);
-    break;
-  default:
-    break;
-  }
-}
-
 // initializer = string-initializer | array-initializer
 //             | struct-initializer | union-initializer
 //             | assign
@@ -2269,9 +2212,7 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
   }
 
   init->expr = assign(rest, tok);
-  add_type(init->expr);
-  // Recursively mark all function references in this expression as address-used
-  mark_function_addresses_used(init->expr);
+  add_type(init->expr); 
   
 }
 
@@ -2785,7 +2726,6 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
     tok = skip(tok->next, "(", ctx);
     node->cond = to_bool(expr(&tok, tok));
 
-
     if (isDotfile && dotf != NULL)
       fprintf(dotf, "%s%d -> %s%d\n", nodekind2str(node->kind), node->unique_number, nodekind2str(node->cond->kind), node->cond->unique_number);
 
@@ -2800,6 +2740,20 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
       node->els = stmt(&tok, tok->next, true);
       if (isDotfile && dotf != NULL)
         fprintf(dotf, "%s%d -> %s%d\n", nodekind2str(node->kind), node->unique_number, nodekind2str(node->els->kind), node->els->unique_number);
+    }
+
+    if (is_const_expr(node->cond)) {
+      if (eval(node->cond)) {
+        if (!contains_label(node->els)) {
+          *rest = tok;
+          return node->then;
+        }
+      } else {
+        if (!contains_label(node->then)) {
+          *rest = tok;
+          return node->els ? node->els : new_node(ND_NULL_EXPR, tok);
+        }
+      }
     }
 
     *rest = tok;
@@ -3542,6 +3496,19 @@ bool is_const_expr(Node *node)
   return false;
 }
 
+bool contains_label(Node *node)
+{
+  if (!node)
+    return false;
+  if (node->kind == ND_LABEL || node->kind == ND_CASE)
+    return true;
+  if (contains_label(node->lhs) || contains_label(node->rhs) || contains_label(node->cond) ||
+      contains_label(node->then) || contains_label(node->els) || contains_label(node->init) ||
+      contains_label(node->body) || contains_label(node->next) || contains_label(node->case_next))
+    return true;
+  return false;
+}
+
 int64_t const_expr(Token **rest, Token *tok)
 {
   Node *node = conditional(rest, tok);
@@ -3833,6 +3800,7 @@ static Node *conditional(Token **rest, Token *tok)
   SET_CTX(ctx);     
   tok = skip(tok, ":", ctx);
   node->els = conditional(rest, tok);
+
   return node;
 }
 
@@ -6256,7 +6224,11 @@ static Node *primary(Token **rest, Token *tok)
       // GCC: array in comma-expr decays (unless compound literal).
       if (node->kind == ND_COMMA && node->rhs && is_array(node->rhs->ty)
           && node->rhs->var && !node->rhs->var->is_compound_lit)
+      if (is_array(node->ty) &&
+          ((node->kind == ND_COMMA && node->rhs && node->rhs->var && !node->rhs->var->is_compound_lit) ||
+           (node->kind == ND_COND))) {
         node->ty = pointer_to(node->ty->base);
+      }
 
       // Runtime-sized types (VLA / struct-with-VLA).
       Node *vla_node = sizeof_vla_type(node->ty, tok);
@@ -7882,7 +7854,7 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   fn->file_no = tok->file->file_no;
   fn->line_no = tok->line_no; 
 
-  fn->is_root = !(fn->is_static && fn->is_inline);
+  fn->is_root |= !(fn->is_static && fn->is_inline);
 
    if (consume(&tok, tok, "asm") || consume(&tok, tok, "__asm__") || consume(&tok, tok, "__asm")) {
     SET_CTX(ctx); 
@@ -8009,6 +7981,8 @@ static Token *global_declaration(Token *tok, Type *basety, VarAttr *attr)
   }
     
     Obj *var = new_gvar(get_ident(ty->name), ty);
+    if (ty->kind == TY_FUNC)
+      var->is_function = true;
     
     
     //from COSMOPOLITAN adding other GNUC attributes
@@ -8039,7 +8013,7 @@ static Token *global_declaration(Token *tok, Type *basety, VarAttr *attr)
     var->visibility = decl_attr.visibility;
     var->is_aligned = var->is_aligned | decl_attr.is_aligned;
     var->is_externally_visible = decl_attr.is_externally_visible;
-    var->is_definition = !decl_attr.is_extern;
+    var->is_definition = !decl_attr.is_extern && ty->kind != TY_FUNC;
     var->is_static = decl_attr.is_static;
     var->is_tls = decl_attr.is_tls;
     if (decl_attr.align)
@@ -8064,8 +8038,6 @@ static bool is_function(Token *tok)
     return false;
   Type dummy = {};
   Type *ty = declarator(&tok, tok, &dummy);
-  if (!ty)
-    error_tok(tok, "%s %d: in is_function : ty is null", __FILE__, __LINE__); 
   return ty->kind == TY_FUNC;
 }
 
