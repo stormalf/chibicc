@@ -5989,8 +5989,6 @@ static void emit_data(Obj *prog)
 {
   for (Obj *var = prog; var; var = var->next)
   {
-    if (!var->is_function && var->ty->size != 0)
-      println("  .zero %ld", labs(var->ty->size));
     if (var->alias_name)
       println("  .set \"%s\", %s", sym(var), var->alias_name);
     if (var->is_weak)

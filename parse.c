@@ -8042,25 +8042,13 @@ static bool is_function(Token *tok)
 }
 
 
-static bool var_in_array(const char *str, Obj *varArr[], size_t count) {
-    for (size_t i = 0; i < count ; i++) {
-        if (varArr[i] && varArr[i]->name && strcmp(str, varArr[i]->name) == 0) {
-            return true; 
-        }
-    }
-    return false;  
-}
-
-
 // Remove redundant tentative definitions.
 // works fine when we have tentative and definition but didn't work when we have multiple tentatives.
 // that's why here we're doing two passes and managed the case of duplicate tentatives.
 static void scan_globals(void)
 {
   Obj head;
-  Obj *cur = &head;
-  Obj *varArr[MAX_GLOBAL_VAR];  
-  int i = 0;
+  Obj *cur = &head;    
   //the first pass skipped the duplicated tentative and stores in an Array of objects duplicated tentative
   for (Obj *var = globals; var; var = var->next)
   {
@@ -8075,9 +8063,15 @@ static void scan_globals(void)
     
     for (; var2; var2 = var2->next) {
       if (var != var2 && var2->is_definition && !strcmp(var->name, var2->name)) {
-        //warn_tok(var->tok, "%s:%d: in scan_globals : duplicated tentative definition", __FILE__, __LINE__);  
-        if (var2->is_tentative && !var_in_array(var->name, varArr, i + 1 ) && (i + 1) < MAX_GLOBAL_VAR) {
-          varArr[i++] = var;                
+        // If there's another definition, the tentative definition is redundant,
+        // but we should ensure the definition has the largest size seen.
+        if (var->ty->size > var2->ty->size) {
+           if (var2->init_data) {
+             char *new_buf = calloc(1, var->ty->size);
+             memcpy(new_buf, var2->init_data, var2->ty->size);
+             var2->init_data = new_buf;
+           }
+           var2->ty->size = var->ty->size;
         }
         break;
       }
