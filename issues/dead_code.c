@@ -1,4 +1,5 @@
 #include "test.h"
+#include <stdlib.h>
 
 extern void not_to_be_called();
 

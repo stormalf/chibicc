@@ -3297,19 +3297,31 @@ static int64_t eval2(Node *node, char ***label)
   case ND_BITXOR:
     return eval(node->lhs) ^ eval(node->rhs);
   case ND_SHL:
-    return eval(node->lhs) << eval(node->rhs);
-  case ND_SHR:
-    // if (node->ty->is_unsigned && node->ty->size == 8)
-    //   return (uint64_t)eval(node->lhs) >> eval(node->rhs);
-    // return eval(node->lhs) >> eval(node->rhs);
-    if (node->ty->is_unsigned) {
-      if (node->ty->size == 4)
-        return (uint32_t)eval(node->lhs) >> eval(node->rhs);
-      return (uint64_t)eval(node->lhs) >> eval(node->rhs);
+    {
+      int64_t lhs = eval(node->lhs);
+      int64_t rhs = eval(node->rhs);
+      int width = node->ty->size * 8;
+      if (rhs >= width || rhs < 0) return 0;
+      return lhs << rhs;
     }
-    if (node->ty->size == 4)
-      return (int32_t)eval(node->lhs) >> eval(node->rhs);
-    return eval(node->lhs) >> eval(node->rhs);    
+  case ND_SHR:
+    {
+      int64_t lhs = eval(node->lhs);
+      int64_t rhs = eval(node->rhs);
+      int width = node->ty->size * 8;
+      if (rhs >= width || rhs < 0) {
+        if (node->ty->is_unsigned || lhs >= 0) return 0;
+        return -1;
+      }
+      if (node->ty->is_unsigned) {
+        if (node->ty->size == 4)
+          return (uint32_t)lhs >> rhs;
+        return (uint64_t)lhs >> rhs;
+      }
+      if (node->ty->size == 4)
+        return (int32_t)lhs >> rhs;
+      return lhs >> rhs;
+    }
   case ND_EQ:
     //from @fuhsnn fixing when lhs is a float
     if (is_flonum(node->lhs->ty))

@@ -33,7 +33,7 @@ static void print_offset(Obj *prog);
 static int cmp_ctor(const void *a, const void *b);
 static void emit_constructors(void);
 static void emit_destructors(void); 
-
+static int vec_use_ymm(Type *ty);
 
 
 static int last_loc_line = 0;
@@ -215,7 +215,6 @@ static void popv(int reg) {
   depth -= 2;
 }
 
-static int vec_use_ymm(Type *ty);
 
 static void push_vec(Type *ty) {
   if (vec_use_ymm(ty)) {
@@ -5792,13 +5791,30 @@ switch (node->lhs->ty->kind)
   case ND_SHL:
     println("  mov %%rdi, %%rcx");
     println("  shl %%cl, %s", ax);
+    println("  xor %%r11, %%r11");
+    println("  cmp $%ld, %%rcx", node->ty->size * 8);
+    println("  cmovge %s, %s", reg_r11w(node->ty->size), ax);
     return;
   case ND_SHR:
     println("  mov %%rdi, %%rcx");
-    if (node->lhs->ty->is_unsigned)
+    if (node->ty->is_unsigned) {
       println("  shr %%cl, %s", ax);
-    else
+      println("  xor %%r11, %%r11");
+      println("  cmp $%ld, %%rcx", node->ty->size * 8);
+      println("  cmovge %s, %s", reg_r11w(node->ty->size), ax);
+    } else {
       println("  sar %%cl, %s", ax);
+      int c = count();
+      println("  cmp $%ld, %%rcx", node->ty->size * 8);
+      println("  jl .L.shift_done.%d", c);
+      if (node->ty->size == 8) {
+        println("  sar $63, %%rax");
+      } else {
+        println("  sar $31, %%eax");
+        println("  movsxd %%eax, %%rax");
+      }
+      println(".L.shift_done.%d:", c);
+    }
     return;
   }
 
