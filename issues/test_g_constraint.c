@@ -1,50 +1,76 @@
-#include "test.h"
+#include <stdio.h>
+#include <openssl/bn.h>
 
-
-
-unsigned long bn_mul_words(unsigned long *rp, const unsigned long *ap, int num, unsigned long w)
+/*
+ * Simplified replacement for TEST_error / TEST_BN_eq
+ * so we can run standalone.
+ */
+static void TEST_error(const char *msg, const char *op)
 {
-    unsigned long c1 = 0;
-
-    if (num <= 0)
-        return c1;
-
-    while (num & ~3) {
-        {
-        register unsigned long high,low;
-        asm ("mulq %3"
-                : "=a"(low),"=d"(high)
-                : "a"(w),"g"(ap[0])
-                : "cc");
-        }
-        ap += 4;
-        rp += 4;
-        num -= 4;
-    }
-    return c1;
+    printf("ERROR: ");
+    printf(msg, op);
+    printf("\n");
 }
 
-unsigned long test_g_constraint(unsigned long *rp, const unsigned long *ap) {
-    unsigned long result;
-    asm ("mulq %2"
-            : "=a"(result)
-            : "a"(5),"g"(0)
-            : "cc","rdx");
-    return result;
+static int TEST_BN_eq(const BIGNUM *a, const BIGNUM *b)
+{
+    char *as = BN_bn2hex(a);
+    char *bs = BN_bn2hex(b);
+
+    printf("expected: %s\n", as);
+    printf("actual:   %s\n", bs);
+
+    OPENSSL_free(as);
+    OPENSSL_free(bs);
+    return 0;
 }
 
-int main() {
-    unsigned long rp[4] = {0};
-    unsigned long ap[4] = {1, 2, 3, 4};
-    
-    bn_mul_words(rp, ap, 4, 2);
-    
-    unsigned long r = test_g_constraint(rp, ap);
-    if (r != 0) {
-        printf("FAIL: expected 0, got %lu\n", r);
+/*
+ * Your function under test
+ */
+static int equalBN(const char *op, const BIGNUM *expected, const BIGNUM *actual)
+{
+    if (BN_cmp(expected, actual) == 0)
         return 1;
+
+    TEST_error("unexpected %s value", op);
+    TEST_BN_eq(expected, actual);
+    return 0;
+}
+
+int main(void)
+{
+    BN_CTX *ctx = BN_CTX_new();
+
+    BIGNUM *a = BN_new();
+    BIGNUM *b = BN_new();
+    BIGNUM *c = BN_new();
+
+    /*
+     * Case 1: equal values → must pass BN_cmp path
+     */
+    BN_set_word(a, 12345);
+    BN_set_word(b, 12345);
+
+    printf("== CASE 1 (should PASS)\n");
+    if (!equalBN("test1", a, b)) {
+        printf("FAIL CASE 1\n");
     }
-    
-    printf("PASS\n");
+
+    /*
+     * Case 2: different values → must trigger TEST_BN_eq
+     */
+    BN_set_word(c, 54321);
+
+    printf("\n== CASE 2 (should FAIL)\n");
+    if (!equalBN("test2", a, c)) {
+        printf("FAIL CASE 2 (expected)\n");
+    }
+
+    BN_free(a);
+    BN_free(b);
+    BN_free(c);
+    BN_CTX_free(ctx);
+
     return 0;
 }

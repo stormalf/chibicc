@@ -5792,20 +5792,20 @@ switch (node->lhs->ty->kind)
     println("  mov %%rdi, %%rcx");
     println("  shl %%cl, %s", ax);
     println("  xor %%r11, %%r11");
-    println("  cmp $%ld, %%rcx", node->ty->size * 8);
-    println("  cmovge %s, %s", reg_r11w(node->ty->size), ax);
+    println("  cmp $%d, %%ecx", (int)node->ty->size * 8);
+    println("  cmovge %s, %s", (node->ty->size == 8) ? "%r11" : "%r11d", ax);
     return;
   case ND_SHR:
     println("  mov %%rdi, %%rcx");
     if (node->ty->is_unsigned) {
       println("  shr %%cl, %s", ax);
       println("  xor %%r11, %%r11");
-      println("  cmp $%ld, %%rcx", node->ty->size * 8);
-      println("  cmovge %s, %s", reg_r11w(node->ty->size), ax);
+      println("  cmp $%d, %%ecx", (int)node->ty->size * 8);
+      println("  cmovge %s, %s", (node->ty->size == 8) ? "%r11" : "%r11d", ax);
     } else {
       println("  sar %%cl, %s", ax);
       int c = count();
-      println("  cmp $%ld, %%rcx", node->ty->size * 8);
+      println("  cmp $%d, %%ecx", (int)node->ty->size * 8);
       println("  jl .L.shift_done.%d", c);
       if (node->ty->size == 8) {
         println("  sar $63, %%rax");

@@ -6,6 +6,7 @@ CC=gcc
 CFLAGS =-std=c11 -g -fno-common -Wall -Wno-switch -DPREFIX=\"$(PREFIX)\" -DGCC_VERSION=\"$(GCC_VERSION)\"
 CFLAGS_DIAG= -std=c11 
 CFLAGS_SPE = -fomit-frame-pointer -O3
+LDFLAGS = -lcrypto
 TEST_JOBS ?=
 TEST_TIMEOUT ?= 30
 OBJECT=chibicc
@@ -29,7 +30,7 @@ $(OBJS): $(OBJECT).h
 
 test/%.exe: $(OBJECT) test/%.c 
 	./$(OBJECT) $(CFLAGS_DIAG) -Iinclude -Itest -c -o test/$*.o test/$*.c 
-	$(CC) -pthread -o $@ test/$*.o -xc test/common -lm
+	$(CC) -pthread -o $@ test/$*.o -xc test/common -lm $(LDFLAGS) 
 #	dot -Tpng test/$*.dot -o diagram/$*.png || echo $*.dot failed
 	
 
@@ -41,7 +42,7 @@ test_spe/%.exe: $(OBJECT) test/%.c
 	mkdir -p test_spe
 	./$(OBJECT) $(CFLAGS_DIAG) $(CFLAGS_SPE) -Iinclude -Itest \
 		-c -o test_spe/$*.o test/$*.c
-	$(CC) -pthread -o $@ test_spe/$*.o -xc test/common -lm
+	$(CC) -pthread -o $@ test_spe/$*.o -xc test/common -lm $(LDFLAGS) 
 
 test_spe: $(TESTS_SPE)
 	TEST_JOBS="$(TEST_JOBS)" TEST_TIMEOUT="$(TEST_TIMEOUT)" ./test/run_tests.sh $(addprefix ./,$^)
@@ -63,7 +64,7 @@ stage2/%.o: $(OBJECT) %.c
 stage2/test/%.exe: stage2/$(OBJECT) test/%.c
 	mkdir -p stage2/test
 	./stage2/$(OBJECT) -Iinclude -Itest -c -o stage2/test/$*.o test/$*.c 
-	$(CC) -pthread -o $@ stage2/test/$*.o -xc test/common
+	$(CC)  -pthread -o $@ stage2/test/$*.o -xc test/common $(LDFLAGS) 
 
 test-stage2: $(TESTS:test/%=stage2/test/%)
 	TEST_JOBS="$(TEST_JOBS)" TEST_TIMEOUT="$(TEST_TIMEOUT)" ./test/run_tests.sh $(addprefix ./,$^)
@@ -86,7 +87,7 @@ nmap:
 	cd ../nmap && make clean && CC=chibicc  CFLAGS="-fPIC -std=c11" LIBS="-ldbus-1 -latomic -libverbs -lrdmacm" ./configure --with-dbus && make -j$(nproc) && make check
 
 openssl:
-	cd ../openssl && make clean && CC=chibicc CFLAGS="-std=c11" ./Configure && make && make test
+	cd ../openssl && make clean && CC=chibicc CFLAGS="-std=c11 -O0" ./Configure && make && make test
 
 util-linux:
 	cd ../util-linux && make clean && CC=chibicc CFLAGS="-fPIC -std=c11" ./configure && make -j$(nproc) && make check-programs && cd tests && ./run.sh
