@@ -145,9 +145,9 @@ static void pop_tmp(char *arg) {
 
 static void push_tmpf(void) {
   if (is_omit_fp(current_fn)) {
-    println("  sub $8, %%rsp");
-    println("  movsd %%xmm0, (%%rsp)");
-    depth++;
+    println("  sub $16, %%rsp");
+    println("  movsd %%xmm0, 8(%%rsp)");
+    depth += 2;
     return;
   }
   int offset = push_tmpstack();
@@ -156,9 +156,9 @@ static void push_tmpf(void) {
 
 static void pop_tmpf(int reg) {
   if (is_omit_fp(current_fn)) {
-    println("  movsd (%%rsp), %%xmm%d", reg);
-    println("  add $8, %%rsp");
-    depth--;
+    println("  movsd 8(%%rsp), %%xmm%d", reg);
+    println("  add $16, %%rsp");
+    depth -= 2;
     return;
   }
   int offset = pop_tmpstack();
@@ -874,8 +874,12 @@ static void load(Type *ty)
     println("  %sbl (%%rax), %%eax", insn);
   else if (ty->size == 2)
     println("  %swl (%%rax), %%eax", insn);
-  else if (ty->size == 4)
-    println("  movsxd (%%rax), %%rax");
+  else if (ty->size == 4) {
+    if (ty->is_unsigned)
+      println("  movl (%%rax), %%eax");
+    else
+      println("  movsxd (%%rax), %%rax");
+  }
   else
     println("  mov (%%rax), %%rax");
 }
@@ -977,7 +981,7 @@ static void cmp_zero(Type *ty)
 #define i64i128 "cqto"
 #define u8i128  "movzbq\t%al,%rax\n\txor\t%edx,%edx"
 #define u16i128 "movzwq\t%ax,%rax\n\txor\t%edx,%edx"
-#define u32i128 "cltq\n\txor\t%edx,%edx"
+#define u32i128 "mov\t%eax,%eax\n\txor\t%edx,%edx"
 #define u64i128 "xor\t%edx,%edx"
 #define i128f32 "mov\t%rax,%rdi\n\tmov\t%rdx,%rsi\n\tcall\t__floattisf"
 #define i128f64 "mov\t%rax,%rdi\n\tmov\t%rdx,%rsi\n\tcall\t__floattidf"
@@ -1127,7 +1131,7 @@ static const char *const cast_table[13][13] = /* clang-format off */ {
   {i32i8,  i32i16,  NULL,    NULL,    i32u8,  i32u16,  NULL,    NULL,    i64f32,  i64f64,  i64f80,  i64i128, i64i128}, // i64
   {i32i8,  NULL,    NULL,    i32i64,  NULL,   NULL,    NULL,    i32i64,  i32f32,  i32f64,  i32f80,  i32i128, i32i128}, // u8
   {i32i8,  i32i16,  NULL,    i32i64,  i32u8,  NULL,    NULL,    i32i64,  i32f32,  i32f64,  i32f80,  i32i128, i32i128}, // u16
-  {i32i8,  i32i16,  NULL,    u32i64,  i32u8,  i32u16,  NULL,    u32i64,  u32f32,  u32f64,  u32f80,  u32i128, i32i128}, // u32
+  {i32i8,  i32i16,  NULL,    u32i64,  i32u8,  i32u16,  NULL,    u32i64,  u32f32,  u32f64,  u32f80,  u32i128, u32i128}, // u32
   {i32i8,  i32i16,  NULL,    NULL,    i32u8,  i32u16,  NULL,    NULL,    u64f32,  u64f64,  u64f80,  u64i128, u64i128}, // u64
   {f32i8,  f32i16,  f32i32,  f32i64,  f32u8,  f32u16,  f32u32,  f32u64,  NULL,    f32f64,  f32f80,  f32i128, f32u128}, // f32
   {f64i8,  f64i16,  f64i32,  f64i64,  f64u8,  f64u16,  f64u32,  f64u64,  f64f32,  NULL,    f64f80,  f64i128, f64u128}, // f64
