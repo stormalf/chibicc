@@ -2107,7 +2107,7 @@ static void gen_vector_op(Node *node) {
     case ND_NEG:
       println("  pxor %%xmm1, %%xmm1");
       println("  psubq %%xmm0, %%xmm1");
-      println("  movdqa %%xmm1, %%xmm0");
+      println("  movdqu %%xmm1, %%xmm0");
       break;
     case ND_BITNOT:
       println("  pcmpeqq %%xmm1, %%xmm1"); // SSE4.1; for SSE2 use two 32-bit pcmpeqd and pack
@@ -2140,7 +2140,7 @@ static void gen_vector_op(Node *node) {
     case ND_NEG: 
       println("  pxor %%xmm1, %%xmm1");      
       println("  psubd %%xmm0, %%xmm1");     
-      println("  movdqa %%xmm1, %%xmm0");
+      println("  movdqu %%xmm1, %%xmm0");
       break;
     case ND_BITNOT:
       println("  pcmpeqd %%xmm1, %%xmm1"); 
@@ -3560,7 +3560,7 @@ static void gen_sse_binop7(Node *node, const char *insn) {
   gen_expr(node->rhs);
   pop_xmm(1);
   println("  %s %%xmm0, %%xmm1", insn);  
-  println("  movdqa %%xmm1, %%xmm0");  
+  println("  movdqu %%xmm1, %%xmm0");  
 }
 
 static void gen_sse_binop8(Node *node, const char *insn, const char *reg) {
@@ -6132,7 +6132,7 @@ static void store_fp(int r, int offset, int sz, char *ptr)
     println("  movsd %%xmm%d, %d(%s)", r, offset, ptr);
     return;
   case 16:
-    println("  movups %%xmm%d, %d(%s)", r, offset, ptr); // movaps for 16-byte (128-bit) vector
+    println("  movups %%xmm%d, %d(%s)", r, offset, ptr); 
     return;
   case 32:
     // 256-bit vector arguments/returns use YMM registers in the SysV ABI.
@@ -6853,7 +6853,7 @@ static void emit_destructors(void) {
 
 
 #define FPCLASSIFY_FLOAT \
-  "\tmovaps\t%%xmm0,%%xmm1\n\
+  "\tmovups\t%%xmm0,%%xmm1\n\
 \tmov\t$0x7fffffff,%%eax\n\
 \tmovd\t%%eax,%%xmm2\n\
 \tandps\t%%xmm2,%%xmm1\n\
