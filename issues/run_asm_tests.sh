@@ -13,6 +13,7 @@ tests=(
     "ghash:ghash-x86_64.s"
     "keccak:keccak1600-x86_64.s"
     "poly1305:poly1305-x86_64.s"
+    "vpaes:vpaes-x86_64.s"
 )
 
 failed=0
