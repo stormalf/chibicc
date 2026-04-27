@@ -34,3 +34,4 @@ compile_commands.json
 .gdbinit
 vgcore.*
 .codex
+**/*.S

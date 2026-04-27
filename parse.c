@@ -4657,6 +4657,8 @@ static Token *type_attributes(Token *tok, void *arg)
 
   if (consume(&tok, tok, "noinline") ||
       consume(&tok, tok, "__noinline__") ||
+      consume(&tok, tok, "noclone") ||
+      consume(&tok, tok, "__noclone__") ||
       consume(&tok, tok, "const") ||
       consume(&tok, tok, "__const__") ||
       consume(&tok, tok, "pure") ||
@@ -5286,6 +5288,8 @@ static Token *thing_attributes(Token *tok, void *arg) {
 
   if (consume(&tok, tok, "noinline") ||
       consume(&tok, tok, "__noinline__") ||
+      consume(&tok, tok, "noclone") ||
+      consume(&tok, tok, "__noclone__") ||
       consume(&tok, tok, "const") ||
       consume(&tok, tok, "__const__") ||
       consume(&tok, tok, "pure") ||

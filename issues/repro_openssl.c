@@ -1,17 +1,24 @@
 #include <stdio.h>
 
-void check(void) {
-    void *rsp;
-    asm("mov %%rsp, %0" : "=r"(rsp));
-
-    if (((unsigned long)rsp & 15) != 0) {
-        printf("FAIL: stack misaligned\n");
-    } else {
-        printf("OK: stack aligned\n");
-    }
+__attribute__((noinline, noclone))
+long check(void)
+{
+    long rsp;
+    asm volatile(
+        "mov %%rsp, %0"
+        : "=r"(rsp)
+    );
+    return rsp & 15;
 }
 
-int main() {
-    check();
-    return 0;
+__attribute__((noinline))
+long callee(long a, long b, long c, long d)
+{
+    return check();
+}
+
+int main()
+{
+    long r = callee(1,2,3,4);
+    printf("%ld\n", r);
 }

@@ -30,6 +30,15 @@ extern bool opt_optimize_level3;
 static void gen_expr(Node *node);
 static void gen_stmt(Node *node);
 static void print_offset(Obj *prog);
+
+static int get_align(Obj *var) {
+  int align = var->align;
+  if ((var->ty->kind == TY_ARRAY && var->ty->size >= 16) || 
+      is_vector(var->ty) || var->ty->kind == TY_INT128)
+    align = MAX(16, align);
+  return align;
+}
+
 static int cmp_ctor(const void *a, const void *b);
 static void emit_constructors(void);
 static void emit_destructors(void); 
@@ -80,19 +89,22 @@ static int count(void)
 static bool is_omit_fp(Obj *fn) {
   if (!opt_omit_frame_pointer) return false;
   if (fn->force_frame_pointer) return false;
-  if (fn->stack_align > 16) return false;
-  // 16-byte atomics/int128 on stack can be used by cmpxchg16b paths.
-  // Keep a frame pointer for these cases to preserve slot alignment.
+
+  // ABI: The x86-64 System V ABI requires the stack to be 16-byte aligned before a call.
+  // When omitting the frame pointer, %rsp is '8 mod 16' relative to entry.
+  // chibicc's current local variable placement logic misaligns variables that need 
+  // 16-byte alignment in omit-fp mode. We must preserve the frame pointer for these cases
+  // to ensure pointers passed to external assembly (like OpenSSL's movdqa) are correct.
   for (Obj *var = fn->locals; var; var = var->next) {
-    if (var->ty && var->ty->size == 16 &&
-        (var->ty->is_atomic || var->ty->kind == TY_INT128 || var->ty->kind == TY_LDOUBLE))
+    if (get_align(var) > 8)
       return false;
   }
   for (Obj *var = fn->params; var; var = var->next) {
-    if (var->ty && var->ty->size == 16 &&
-        (var->ty->is_atomic || var->ty->kind == TY_INT128 || var->ty->kind == TY_LDOUBLE))
+    if (get_align(var) > 8)
       return false;
   }
+
+  if (fn->stack_align > 16) return false;
   return true;
 }
 
@@ -6528,14 +6540,6 @@ static void print_offset(Obj *prog)
     }
 
   }
-}
-
-static int get_align(Obj *var) {
-  int align = var->align;
-  if ((var->ty->kind == TY_ARRAY && var->ty->size >= 16) || 
-      is_vector(var->ty) || var->ty->kind == TY_INT128)
-    align = MAX(16, align);
-  return align;
 }
 
 static int get_lvar_align(Obj *fn, int align) {
