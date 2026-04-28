@@ -1439,7 +1439,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
 
             asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(nbOutput + nbInput);
             asmExt->input[nbInput]->index = nbOutput + nbInput;
-            asmExt->input[nbInput]->reg = specific_register_available("%rdi");
+            asmExt->input[nbInput]->reg = specific_register_available("%r11");
             if (!asmExt->input[nbInput]->reg)
                  error("%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__);            
             asmExt->input[nbInput]->reg64 = asmExt->input[nbInput]->reg;
@@ -1986,10 +1986,26 @@ char *generate_input_asm(char *input_str)
     {
         strncat(tmp, "\n", 3);
         strncat(tmp, opcode(8), strlen(opcode(8)));
-        strncat(tmp, load_variable(asmExt->input[nbInput]->offset), strlen(load_variable(asmExt->input[nbInput]->offset)));
+        int off = (asmExt->input[nbInput]->isArray) ? asmExt->input[nbInput]->offsetArray : asmExt->input[nbInput]->offset;
+        strncat(tmp, load_variable(off), strlen(load_variable(off)));
         strncat(tmp, ", ", 3);
         strncat(tmp, asmExt->input[nbInput]->variableNumber, strlen(asmExt->input[nbInput]->variableNumber));
         strncat(tmp, ";\n", 3);
+
+        int member_off = 0;
+        if (asmExt->input[nbInput]->isArray) member_off = asmExt->input[nbInput]->offset;
+        else if (asmExt->input[nbInput]->isStruct) member_off = asmExt->input[nbInput]->offsetStruct;
+
+        if (member_off != 0) {
+            char off_str[16];
+            snprintf(off_str, sizeof(off_str), "%d", member_off);
+            strncat(tmp, "  addq $", 11);
+            strncat(tmp, off_str, strlen(off_str));
+            strncat(tmp, ", ", 3);
+            strncat(tmp, asmExt->input[nbInput]->variableNumber, strlen(asmExt->input[nbInput]->variableNumber));
+            strncat(tmp, ";\n", 3);
+        }
+
         if (asmExt->input[nbInput]->letter != 'm') {
             strncat(tmp, opcode(8), 8);
             strncat(tmp, "(", 2);
