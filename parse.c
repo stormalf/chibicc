@@ -6329,7 +6329,9 @@ static Node *primary(Token **rest, Token *tok)
     SET_CTX(ctx);     
     *rest = skip(tok, ")", ctx);
     bool is_constant = false;
-    if (expr->tok->kind == TK_NUM || expr->tok->kind == TK_STR || is_const_expr(expr)) {
+    Node *e = expr;
+    while (e->kind == ND_CAST) e = e->lhs;
+    if (e->tok->kind == TK_NUM || e->tok->kind == TK_STR || is_const_expr(e)) {
         // Consider numeric and character literals as constants
         is_constant = true;
     }

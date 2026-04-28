@@ -254,6 +254,7 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 break;
             input_asm(node, rest, tok, locals);
             // generate input instruction to load the parameter into register
+            // Skip input loading for immediate constants - they will be substituted directly in the template
             if (asmExt->input[nbInput]->variableNumber) {
                 hasInput = true;
                 input_asm_str = generate_input_asm(asmExt->input[nbInput]->variableNumber);
@@ -269,7 +270,10 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 // concatenate the input final strings to add to the assembly
                 
                 strncat(input_final, input_asm_str, strlen(input_asm_str));
-            }  else { //to manage the case of no input
+            }  else if (asmExt->input[nbInput]->input_value) {
+                // For immediate constants, just mark as having input so proper substitution happens
+                hasInput = true;
+            } else { //to manage the case of no input
                 tok = tok->next;
                 *rest = tok;
             }
@@ -403,14 +407,21 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 asm_str = subst_asm(template, asmExt->input[i]->regw, pattern);
             }                
             
-            if (asmExt->input[i]->isAddress && asmExt->input[i]->letter == 'm') {
+            if (asmExt->input[i]->input_value) {
+                // For immediate values, substitute the value directly with $ prefix
+                char *tmp = calloc(1, sizeof(char) * 30);
+                strncat(tmp, "$", 2);
+                strncat(tmp, asmExt->input[i]->input_value, strlen(asmExt->input[i]->input_value));
+                asm_str = subst_asm(template, tmp, asmExt->input[i]->variableNumber);
+                free(tmp);
+            } else if (asmExt->input[i]->isAddress && asmExt->input[i]->letter == 'm') {
                 char *tmp = calloc(1, sizeof(char) * 30);
                 strncat(tmp, "(", 2);
                 strncat(tmp, asmExt->input[i]->reg64, strlen(asmExt->input[i]->reg64) );
                 strncat(tmp, ")", 2);
                 asm_str = subst_asm(template, tmp, asmExt->input[i]->variableNumber);
                 free(tmp);
-            }else {
+            } else {
                 asm_str = subst_asm(template, asmExt->input[i]->reg, asmExt->input[i]->variableNumber); 
 
             }
@@ -2294,8 +2305,8 @@ char *generate_input_for_output() {
 
     for (int i = 0; i < nbOutput; i++)
     {      
-      //not sure yet about in which case exactly we need to generate the input for the output
-        if ((asmExt->output[i]->offset != 0 && (!strncmp(asmExt->output[i]->prefix, "+", 2) || asmExt->output[i]->isAddress))) {
+  //not sure yet about in which case exactly we need to generate the input for the output
+        if ((asmExt->output[i]->isAddress || (asmExt->output[i]->offset != 0 && !strncmp(asmExt->output[i]->prefix, "+", 2)))) {
             if (asmExt->output[i]->isVariable && !asmExt->output[i]->isAddress)
                 {
                     strncat(tmp, "\n", 3);
@@ -2305,7 +2316,7 @@ char *generate_input_for_output() {
                     strncat(tmp, asmExt->output[i]->reg, strlen(asmExt->output[i]->reg));
                     strncat(tmp, ";\n", 3);             
 
-                }else if (asmExt->output[i]->isAddress) {
+                }else if (asmExt->output[i]->isAddress ) {
                     strncat(tmp, "\n", 3);
                     strncat(tmp, opcode(8), 8);
                     strncat(tmp, load_variable(asmExt->output[i]->offset), strlen(load_variable(asmExt->output[i]->offset)));
