@@ -1,5 +1,5 @@
 // asm_array_min_test.c
-#include <stdio.h>
+#include "test.h"
 #include <stdint.h>
 
 typedef unsigned long BN_ULONG;
@@ -28,7 +28,8 @@ int main(void) {
     a[0] = 0xFFFFFFFFFFFFFFFFUL;
 
     BN_ULONG r = mul_high(a, 2);
-
+    printf("%ld\n", r);
+    ASSERT(2, r);
 
     printf("OK\n");
     return 0;

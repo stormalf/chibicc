@@ -235,10 +235,10 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 output_loading = generate_output_asm(asmExt->output[nbOutput]->variableNumber);
                 // replace %9 by the correct register
                 if (!output_loading)
-                error("%s:%d: error: in extended_asm function extended_asm :output_loading is null!", __FILE__, __LINE__);
+                 error("%s:%d: error: in extended_asm function extended_asm :output_loading is null!", __FILE__, __LINE__);
                 if (!asmExt->output[nbOutput]->reg)
                 error("%s:%d: error: in extended_asm function extended_asm :asmExt->output[nbOutput]->reg is null!", __FILE__, __LINE__);
-                output_loading = subst_asm(output_loading, asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->variableNumber);
+                 output_loading = subst_asm(output_loading, asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->variableNumber);
                 //generate the ouput instruction
                 strncat(output_asm_str, output_loading, strlen(output_loading));
             } else { //to manage the case of no output
@@ -1395,7 +1395,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             }                 
         }
 
-            else if (tok->kind == TK_STR && !strncmp(tok->str, "Nd", tok->len))
+        else if (tok->kind == TK_STR && !strncmp(tok->str, "Nd", tok->len))
         {
 
             asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(nbOutput + nbInput);
