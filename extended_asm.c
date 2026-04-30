@@ -1195,16 +1195,13 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                                 error_tok(tok, "%s:%d: in output_asm function : variable type unknown after cast", __FILE__, __LINE__);                                
 
                             asmExt->output[nbOutput]->size = sc->var->ty->size;
-
                             if (sc->var->funcname) {
                                 update_offset(sc->var->funcname, locals);
                                 asmExt->output[nbOutput]->offset = sc->var->offset;
                             } else {
                                 asmExt->output[nbOutput]->offset = 0;
                             }
-
-                            if (!asmExt->output[nbOutput]->reg)
-                                error_tok(tok, "%s:%d: in output_asm function : reg is null", __FILE__, __LINE__);          
+                            ensure_output_reg(asmExt->output[nbOutput], "%r11");
 
                             asmExt->output[nbOutput]->reg = update_register_size(asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->size);
                             asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
@@ -1875,12 +1872,8 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                             update_offset(sc->var->funcname, locals);
                             asmExt->input[nbInput]->offset = sc->var->offset;
                         }
-
-                        if (!asmExt->input[nbInput]->reg)
-                            error_tok(tok, "%s:%d: input_asm: reg is null!", __FILE__, __LINE__);
-
-                        asmExt->input[nbInput]->reg = update_register_size(asmExt->input[nbInput]->reg,
-                                                                        asmExt->input[nbInput]->size);
+                        ensure_input_reg(asmExt->input[nbInput], "%r11");
+                        asmExt->input[nbInput]->reg = update_register_size(asmExt->input[nbInput]->reg, asmExt->input[nbInput]->size);
 
                         tok = tok->next;
                         if (!equal(tok, ")"))
