@@ -45,7 +45,7 @@ int main() {
 
   ASSERT(&a, p0);
   ASSERT(&b, p1);
-
+  printf("Ok\n");  
   return 0;
 #endif
 }

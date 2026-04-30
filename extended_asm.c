@@ -1487,7 +1487,8 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             asmExt->input[nbInput]->regl = register_lower(asmExt->input[nbInput]->reg64);
             asmExt->input[nbInput]->regw = register_word(asmExt->input[nbInput]->reg64);
         }
-        else if (tok->kind == TK_STR && (!strncmp(tok->str, "I", tok->len) || !strncmp(tok->str, "i", tok->len) || !strncmp(tok->str, "n", tok->len)))
+        else if (tok->kind == TK_STR && (!strncmp(tok->str, "I", tok->len) || !strncmp(tok->str, "i", tok->len) || 
+                                        !strncmp(tok->str, "n", tok->len) || !strncmp(tok->str, "J", tok->len) || !strncmp(tok->str, "K", tok->len)))
         {
             asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(nbOutput + nbInput);
             asmExt->input[nbInput]->index = nbOutput + nbInput;            
