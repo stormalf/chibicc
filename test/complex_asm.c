@@ -6,7 +6,7 @@ int main() {
 
   __asm__ volatile (
       "add %[src], %[dst]\n"
-      : [dst] "=r" (result)
+      : [dst] "+r" (result)
       : [src] "r" (a + b)
   );
 

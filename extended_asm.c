@@ -164,6 +164,57 @@ static char *register_word(char *reg);
 static bool parse_simple_binary_input(Token **rest, Token *tok, Obj *locals);
 static char *arith_opcode(char op, int size);
 
+static bool is_mem_placeholder(char *s) {
+    return s && !strcmp(s, "%mem");
+}
+
+static Obj *find_obj_by_tok(Obj *locals, Token *tok) {
+    if (!locals || !tok || tok->kind != TK_IDENT)
+        return NULL;
+
+    for (Obj *var = locals; var; var = var->next) {
+        if (!var->name)
+            continue;
+        if ((int)strlen(var->name) == tok->len && !strncmp(var->name, tok->loc, tok->len))
+            return var;
+    }
+    return NULL;
+}
+
+static char *use_fixed_register(char *reg64) {
+    // Fixed constraints like "a" or "d" must use the exact register even if
+    // other operands are present; flexible constraints should adapt instead.
+    if (!check_register_used(reg64))
+        add_register_used(reg64);
+    return reg64;
+}
+
+static void ensure_input_reg(AsmInput *in, char *preferred64) {
+    if (in->reg && !is_mem_placeholder(in->reg))
+        return;
+
+    in->reg = specific_register_available(preferred64);
+    if (!in->reg)
+        error("%s:%d: error: in ensure_input_reg :reg is null!", __FILE__, __LINE__);
+    in->reg64 = in->reg;
+    in->regh = register_higher(in->reg64);
+    in->regl = register_lower(in->reg64);
+    in->regw = register_word(in->reg64);
+}
+
+static void ensure_output_reg(AsmOutput *out, char *preferred64) {
+    if (out->reg && !is_mem_placeholder(out->reg))
+        return;
+
+    out->reg = specific_register_available(preferred64);
+    if (!out->reg)
+        error("%s:%d: error: in ensure_output_reg :reg is null!", __FILE__, __LINE__);
+    out->reg64 = out->reg;
+    out->regh = register_higher(out->reg64);
+    out->regl = register_lower(out->reg64);
+    out->regw = register_word(out->reg64);
+}
+
 
 char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
 {
@@ -176,7 +227,12 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
     nbLabel = 0;
     hasInput = false;
     hasOutput = false;
-    char *template = tok->str;
+    // Work on a private, writable buffer. Substitutions are done in-place and
+    // string_replace() assumes enough capacity (up to 10000 bytes).
+    char *template = calloc(1, sizeof(char) * 10000);
+    if (!template)
+        error("%s:%d: error: in extended_asm : out of memory", __FILE__, __LINE__);
+    strncpy(template, tok->str, 9999);
     char *asm_str = calloc(1, sizeof(char) * 10000);
     //case __asm__ volatile ("" ::: "memory")
     //case __asm__ __volatile__ ("rep; nop" ::: "memory");  
@@ -471,6 +527,8 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
     tok = tok->next;
     //printf("tok=%s\n", tok->loc);
     *rest = tok;
+    // Don't leak template register "usage" into subsequent codegen.
+    clear_register_used();
     // free memory
     for (int i = 0; i < 10; i++)
         free(asmExt->input[i]);
@@ -478,6 +536,7 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
         free(asmExt->output[i]);
     for (int i = 0; i < 10; i++)
         free(asmExt->clobber[i]);
+    free(template);
     free(asmExt->template);
     // free(input_for_output);
     // free(output_asm_str);
@@ -611,7 +670,9 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 else {
                     asmExt->output[nbOutput]->prefix = "+";
                 }
-                asmExt->output[nbOutput]->reg = specific_register_available("%rax");
+                // Let the allocator choose a free GPR. Hardcoding %rax breaks
+                // common patterns like "+r"(carry) alongside "a"(low).
+                asmExt->output[nbOutput]->reg = register_available();
                 if (!asmExt->output[nbOutput]->reg)
                     error("%s:%d: error: in output_asm function :reg is null!", __FILE__, __LINE__);
                 asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg;
@@ -644,13 +705,10 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 else {
                     asmExt->output[nbOutput]->prefix = "+";
                 }
-                asmExt->output[nbOutput]->reg = specific_register_available("%rdi");
-                if (!asmExt->output[nbOutput]->reg)
-                    error("%s:%d: error: in output_asm function :reg is null!", __FILE__,  __LINE__);
-                asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg; 
-                asmExt->output[nbOutput]->regh = register_higher(asmExt->output[nbOutput]->reg64);
-                asmExt->output[nbOutput]->regl = register_lower(asmExt->output[nbOutput]->reg64);  
-                asmExt->output[nbOutput]->regw = register_word(asmExt->output[nbOutput]->reg64);             
+                // For pure memory outputs, don't reserve a scratch register.
+                // We'll substitute %N with the actual memory operand (e.g. -8(%rbp)).
+                asmExt->output[nbOutput]->reg = "%mem";
+                asmExt->output[nbOutput]->reg64 = "%mem";
                 asmExt->output[nbOutput]->letter = 'm';
                 asmExt->output[nbOutput]->inputToGenerate = true;
                 asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
@@ -665,7 +723,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 else {
                     asmExt->output[nbOutput]->prefix = "+";
                 }
-                asmExt->output[nbOutput]->reg = specific_register_available("%rdx");
+                asmExt->output[nbOutput]->reg = register_available();
                 if (!asmExt->output[nbOutput]->reg)
                     error("%s:%d: error: in output_asm function :reg is null!", __FILE__, __LINE__);
                 asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg; 
@@ -686,7 +744,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 else {
                     asmExt->output[nbOutput]->prefix = "+";
                 }
-                asmExt->output[nbOutput]->reg = specific_register_available("%rax");
+                asmExt->output[nbOutput]->reg = register_available();
                 if (!asmExt->output[nbOutput]->reg)
                     error("%s:%d: error: in output_asm function :reg is null!", __FILE__, __LINE__);
                 asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg;    
@@ -707,7 +765,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 else {
                     asmExt->output[nbOutput]->prefix = "+";
                 }
-                asmExt->output[nbOutput]->reg = specific_register_available("%rdx");
+                asmExt->output[nbOutput]->reg = register_available();
                 if (!asmExt->output[nbOutput]->reg)
                     error("%s:%d: error: in output_asm function :reg is null!", __FILE__, __LINE__);
                 asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg;
@@ -940,11 +998,15 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
 
                 if (sc->var->funcname) {
                     update_offset(sc->var->funcname, locals);
-                    asmExt->output[nbOutput]->offset = sc->var->offset;
+                    Obj *ov = find_obj_by_tok(locals, tok);
+                    if (ov && ov->offset)
+                        sc->var->offset = ov->offset;
+                    asmExt->output[nbOutput]->offset = (ov && ov->offset) ? ov->offset : sc->var->offset;
                 }
                 else {
-                    asmExt->output[nbOutput]->offset = 0;
+                    asmExt->output[nbOutput]->offset = sc->var->offset;
                 }
+                int base_off = asmExt->output[nbOutput]->offset;
 
                 //managing specific case of arrays
                 Token *bracket = tok->next;
@@ -958,10 +1020,13 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->output[nbOutput]->size = sc->var->ty->base->size;
                     if (!asmExt->output[nbOutput]->reg)
                         error("%s:%d: error: in output_asm function :reg is null!", __FILE__, __LINE__);
-                    asmExt->output[nbOutput]->reg = update_register_size(asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->size);
+                    if (asmExt->output[nbOutput]->letter != 'm')
+                        asmExt->output[nbOutput]->reg = update_register_size(asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->size);
                     //calculate the offset for each element from the bottom to the top r[0] has the lowest offset example -48, r[1] - 44, r[2] -40, r[3] - 36
                     asmExt->output[nbOutput]->offset = (sc->var->offset ) + (asmExt->output[nbOutput]->indexArray * asmExt->output[nbOutput]->size);
-                    asmExt->output[nbOutput]->offsetArray = sc->var->offset; 
+                    asmExt->output[nbOutput]->offsetArray = base_off;
+                    if (asmExt->output[nbOutput]->letter == 'm')
+                        asmExt->output[nbOutput]->reg = load_variable(asmExt->output[nbOutput]->offset);
                     tok = tok->next;
                     SET_CTX(ctx);
                     tok = skip(tok, "]", ctx);
@@ -982,10 +1047,11 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->output[nbOutput]->size = sc->var->ty->base->size;
                     if (!asmExt->output[nbOutput]->reg)
                         error_tok(tok, "%s:%d: in output_asm function : reg is null extended assembly not managed yet", __FILE__, __LINE__);
+                    ensure_output_reg(asmExt->output[nbOutput], "%r11");
                     asmExt->output[nbOutput]->reg = update_register_size(asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->size);
                     //calculate the offset for each element from the bottom to the top r[0] has the lowest offset example -48, r[1] - 44, r[2] -40, r[3] - 36
                     asmExt->output[nbOutput]->offset = (asmExt->output[nbOutput]->indexArray * asmExt->output[nbOutput]->size);
-                    asmExt->output[nbOutput]->offsetArray = sc->var->offset; 
+                    asmExt->output[nbOutput]->offsetArray = base_off;
                     tok = tok->next;
                     SET_CTX(ctx);
                     tok = skip(tok, "]", ctx);
@@ -1011,6 +1077,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->output[nbOutput]->size = sc->var->ty->size;
                     if (!asmExt->output[nbOutput]->reg)
                         error_tok(tok, "%s:%d: in output_asm function : reg is null extended assembly not managed yet", __FILE__, __LINE__);                
+                    ensure_output_reg(asmExt->output[nbOutput], "%r11");
                     asmExt->output[nbOutput]->reg = update_register_size(asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->size);
                     asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
                     if (!sc->var->ty->base->members)
@@ -1045,7 +1112,10 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     return;
                 }
 
-                asmExt->output[nbOutput]->reg = update_register_size(asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->size);
+                if (asmExt->output[nbOutput]->letter == 'm')
+                    asmExt->output[nbOutput]->reg = load_variable(asmExt->output[nbOutput]->offset);
+                else
+                    asmExt->output[nbOutput]->reg = update_register_size(asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->size);
                 // skip the variable to go to next token that should be a ")"
                 // tok = tok->next;
                 tok = tok->next;                
@@ -1063,7 +1133,8 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 if (tok->kind == TK_IDENT)
                 {
                     asmExt->output[nbOutput]->isAddress = true;
-                    asmExt->output[nbOutput]->output = tok;                    
+                    ensure_output_reg(asmExt->output[nbOutput], "%r11");
+                    asmExt->output[nbOutput]->output = tok;
                     sc = find_var(tok);
                     if (!sc)
                         error_tok(tok, "%s:%d: in output_asm function : variable undefined2", __FILE__, __LINE__);
@@ -1266,7 +1337,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             asmExt->input[nbInput]->letter = 'a';
             //=====ISS-156 case we have no output for the letter
             if (retrieve_output_index_from_letter('a') == -1) {
-                asmExt->input[nbInput]->reg =  specific_register_available("%rax");
+                asmExt->input[nbInput]->reg = use_fixed_register("%rax");
                 if (!asmExt->input[nbInput]->reg)
                     error("%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__);  
                 asmExt->input[nbInput]->reg64 = asmExt->input[nbInput]->reg;
@@ -1293,9 +1364,9 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             asmExt->input[nbInput]->letter = 'b';
             //=====ISS-156 case we have no output for the letter
             if (retrieve_output_index_from_letter('b') == -1) {
-                asmExt->input[nbInput]->reg =  specific_register_available("%rbx");
+                asmExt->input[nbInput]->reg = use_fixed_register("%rbx");
                 if (!asmExt->input[nbInput]->reg)
-                    error("%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__);
+                    error("%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__);  
                 asmExt->input[nbInput]->reg64 = asmExt->input[nbInput]->reg;
                 asmExt->input[nbInput]->regh = register_higher(asmExt->input[nbInput]->reg64);
                 asmExt->input[nbInput]->regl = register_lower(asmExt->input[nbInput]->reg64);
@@ -1320,7 +1391,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             asmExt->input[nbInput]->letter = 'c';
             //=====ISS-156 case we have no output for the letter
             if (retrieve_output_index_from_letter('c') == -1) {
-                asmExt->input[nbInput]->reg =  specific_register_available("%rcx");
+                asmExt->input[nbInput]->reg = use_fixed_register("%rcx");
                 if (!asmExt->input[nbInput]->reg)
                     error("%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__);
                 asmExt->input[nbInput]->reg64 = asmExt->input[nbInput]->reg;
@@ -1348,7 +1419,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             asmExt->input[nbInput]->letter = 'd';            
             //=====ISS-156 case we have no output for the letter
             if (retrieve_output_index_from_letter('d') == -1) {
-                asmExt->input[nbInput]->reg =  specific_register_available("%rdx");
+                asmExt->input[nbInput]->reg = use_fixed_register("%rdx");
                 if (!asmExt->input[nbInput]->reg)
                     error("%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__); 
                 asmExt->input[nbInput]->reg64 = asmExt->input[nbInput]->reg;
@@ -1375,7 +1446,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             asmExt->input[nbInput]->letter = 'g';            
             //=====ISS-156 case we have no output for the letter
             if (retrieve_output_index_from_letter('g') == -1) {
-                asmExt->input[nbInput]->reg =  specific_register_available("%rdi");
+                asmExt->input[nbInput]->reg = register_available();
                 if (!asmExt->input[nbInput]->reg)
                     error("%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__); 
                 asmExt->input[nbInput]->reg64 = asmExt->input[nbInput]->reg;
@@ -1403,7 +1474,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             asmExt->input[nbInput]->letter = 'N';            
             //=====ISS-156 case we have no output for the letter
             if (retrieve_output_index_from_letter('N') == -1) {
-                asmExt->input[nbInput]->reg =  specific_register_available("%rdx");
+                asmExt->input[nbInput]->reg = use_fixed_register("%rdx");
                 if (!asmExt->input[nbInput]->reg)
                     error("%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__); 
                 asmExt->input[nbInput]->reg64 = asmExt->input[nbInput]->reg;                
@@ -1450,13 +1521,10 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
 
             asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(nbOutput + nbInput);
             asmExt->input[nbInput]->index = nbOutput + nbInput;
-            asmExt->input[nbInput]->reg = specific_register_available("%r11");
-            if (!asmExt->input[nbInput]->reg)
-                 error("%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__);            
-            asmExt->input[nbInput]->reg64 = asmExt->input[nbInput]->reg;
-            asmExt->input[nbInput]->regh = register_higher(asmExt->input[nbInput]->reg64);
-            asmExt->input[nbInput]->regl = register_lower(asmExt->input[nbInput]->reg64);
-            asmExt->input[nbInput]->regw = register_word(asmExt->input[nbInput]->reg64);                        
+            // Pure memory input: don't reserve a scratch register unless we later
+            // discover the operand needs an address in a register (e.g. *ptr).
+            asmExt->input[nbInput]->reg = "%mem";
+            asmExt->input[nbInput]->reg64 = "%mem";
             asmExt->input[nbInput]->letter = 'm';
         }
         else if (tok->kind == TK_STR && !strncmp(tok->str, "q", tok->len))
@@ -1585,8 +1653,15 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 asmExt->input[nbInput]->size = sc->var->ty->size;
                 if (sc->var->funcname) {     
                     update_offset(sc->var->funcname, locals);
-                    asmExt->input[nbInput]->offset = sc->var->offset;
+                    Obj *iv = find_obj_by_tok(locals, tok);
+                    if (iv && iv->offset)
+                        sc->var->offset = iv->offset;
+                    asmExt->input[nbInput]->offset = (iv && iv->offset) ? iv->offset : sc->var->offset;
                 } 
+                else {
+                    asmExt->input[nbInput]->offset = sc->var->offset;
+                }
+                int base_off = asmExt->input[nbInput]->offset;
                 if (!asmExt->input[nbInput]->reg) {
                     error_tok(tok, "%s:%d: error: in input_asm function input_asm :reg is null! %d", __FILE__, __LINE__, nbInput);
                 }
@@ -1603,10 +1678,13 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->input[nbInput]->size = sc->var->ty->base->size;
                     if (!asmExt->input[nbInput]->reg)
                         error_tok(tok, "%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__);
-                    asmExt->input[nbInput]->reg = update_register_size(asmExt->input[nbInput]->reg, asmExt->input[nbInput]->size);
+                    if (asmExt->input[nbInput]->letter != 'm')
+                        asmExt->input[nbInput]->reg = update_register_size(asmExt->input[nbInput]->reg, asmExt->input[nbInput]->size);
                     //calculate the offset for each element from the bottom to the top r[0] has the lowest offset example -48, r[1] - 44, r[2] -40, r[3] - 36
                     asmExt->input[nbInput]->offset = (sc->var->offset ) + (asmExt->input[nbInput]->indexArray * asmExt->input[nbInput]->size);
-                    asmExt->input[nbInput]->offsetArray = sc->var->offset; 
+                    asmExt->input[nbInput]->offsetArray = base_off;
+                    if (asmExt->input[nbInput]->letter == 'm')
+                        asmExt->input[nbInput]->reg = load_variable(asmExt->input[nbInput]->offset);
                     tok = tok->next;
                     SET_CTX(ctx);
                     tok = skip(tok, "]", ctx);
@@ -1627,10 +1705,11 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->input[nbInput]->size = sc->var->ty->base->size;
                     if (!asmExt->input[nbInput]->reg)
                         error_tok(tok, "%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__);                    
+                    ensure_input_reg(asmExt->input[nbInput], "%r11");
                     asmExt->input[nbInput]->reg = update_register_size(asmExt->input[nbInput]->reg, asmExt->input[nbInput]->size);
                     //calculate the offset for each element from the bottom to the top r[0] has the lowest offset example -48, r[1] - 44, r[2] -40, r[3] - 36
                     asmExt->input[nbInput]->offset = (asmExt->input[nbInput]->indexArray * asmExt->input[nbInput]->size);
-                    asmExt->input[nbInput]->offsetArray = sc->var->offset; 
+                    asmExt->input[nbInput]->offsetArray = base_off;
                     tok = tok->next;
                     SET_CTX(ctx);
                     tok = skip(tok, "]", ctx);
@@ -1656,6 +1735,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->input[nbInput]->size = sc->var->ty->size;
                     if (!asmExt->input[nbInput]->reg)
                         error_tok(tok, "%s:%d: in input_asm function : reg is null extended assembly not managed yet", __FILE__, __LINE__);                
+                    ensure_input_reg(asmExt->input[nbInput], "%r11");
                     asmExt->input[nbInput]->reg = update_register_size(asmExt->input[nbInput]->reg, asmExt->input[nbInput]->size);
                     //asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(nbInput);
                     if (!sc->var->ty->base->members)
@@ -1689,7 +1769,12 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     return;
                 }
 
-                asmExt->input[nbInput]->reg = update_register_size(asmExt->input[nbInput]->reg, asmExt->input[nbInput]->size);
+                if (asmExt->input[nbInput]->letter == 'm' && !asmExt->input[nbInput]->isAddress) {
+                    asmExt->input[nbInput]->reg = load_variable(asmExt->input[nbInput]->offset);
+                } else {
+                    ensure_input_reg(asmExt->input[nbInput], "%r11");
+                    asmExt->input[nbInput]->reg = update_register_size(asmExt->input[nbInput]->reg, asmExt->input[nbInput]->size);
+                }
                 if (isDebug) printf("input_asm: TK_IDENT name=%.*s size=%d reg=%s\n", tok->len, tok->loc, asmExt->input[nbInput]->size, asmExt->input[nbInput]->reg);
                 tok = tok->next;
                 SET_CTX(ctx);
@@ -1733,6 +1818,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->input[nbInput]->isVariable = true;
                     asmExt->input[nbInput]->isAddress = true;
                     asmExt->input[nbInput]->size = sc->var->ty->size;
+                    ensure_input_reg(asmExt->input[nbInput], "%r11");
                     if (sc->var->funcname) {
                         update_offset(sc->var->funcname, locals);
 
@@ -1927,6 +2013,12 @@ char *generate_input_asm(char *input_str)
 {
     
     char *tmp = calloc(1, sizeof(char) * 200);
+    // For pure memory operands, substitute %N with the memory address and don't emit loads.
+    if (asmExt->input[nbInput]->letter == 'm' &&
+        asmExt->input[nbInput]->isVariable &&
+        !asmExt->input[nbInput]->isAddress &&
+        !asmExt->input[nbInput]->isBinaryExpr)
+        return tmp;
     if (asmExt->input[nbInput]->isBinaryExpr)
     {
         char imm_buf[32];
@@ -2057,6 +2149,18 @@ char *generate_output_asm(char *output_str)
 {
     
     char *tmp = calloc(1, sizeof(char) * 300);
+    // Memory outputs are written by the asm itself (read-modify-write included).
+    // Don't emit a "store back" sequence; it can corrupt memory for ptr-based
+    // operands like "+m"(rp[0]) used by OpenSSL.
+    if (asmExt->output[nbOutput]->letter == 'm')
+        return tmp;
+    // For pure memory outputs, the asm writes directly to the lvalue.
+    if (asmExt->output[nbOutput]->letter == 'm' &&
+        asmExt->output[nbOutput]->isVariable &&
+        !asmExt->output[nbOutput]->isAddress &&
+        !asmExt->output[nbOutput]->isArray &&
+        !asmExt->output[nbOutput]->isStruct)
+        return tmp;
     //case variable and not an address
     if (asmExt->output[nbOutput]->isVariable && !asmExt->output[nbOutput]->isAddress)
     {
@@ -2221,11 +2325,32 @@ void update_offset(char *funcname, Obj *locals)
     if (fn) {
         //fixing ====ISS-161 issue with some locals missing in fn->locals
         //if (!fn->locals)
-        fn->locals = locals;        
+        fn->locals = locals;
+
+        // During parsing we may call this before the function is fully marked as
+        // a definition. Force offset assignment so inline asm can use (%rbp)-relative
+        // slots for locals/params.
+        bool saved_def = fn->is_definition;
+        fn->is_definition = true;
+        fn->is_function = true;
+
+        Type dummy_ty = {0};
+        if (!fn->ty)
+            fn->ty = &dummy_ty;
+
         assign_lvar_offsets(fn);
+        fn->is_definition = saved_def;
+        return;
     }
 
-    
+    // Fallback: assign offsets using a synthetic function object.
+    Obj dummy_fn = {0};
+    Type dummy_ty = {0};
+    dummy_fn.is_function = true;
+    dummy_fn.is_definition = true;
+    dummy_fn.locals = locals;
+    dummy_fn.ty = &dummy_ty;
+    assign_lvar_offsets(&dummy_fn);
 }
 
 
@@ -2306,6 +2431,8 @@ char *generate_input_for_output() {
     for (int i = 0; i < nbOutput; i++)
     {      
   //not sure yet about in which case exactly we need to generate the input for the output
+        if (asmExt->output[i]->letter == 'm' && !asmExt->output[i]->isAddress)
+            continue;
         if ((asmExt->output[i]->isAddress || (asmExt->output[i]->offset != 0 && !strncmp(asmExt->output[i]->prefix, "+", 2)))) {
             if (asmExt->output[i]->isVariable && !asmExt->output[i]->isAddress)
                 {
@@ -2319,10 +2446,20 @@ char *generate_input_for_output() {
                 }else if (asmExt->output[i]->isAddress ) {
                     strncat(tmp, "\n", 3);
                     strncat(tmp, opcode(8), 8);
-                    strncat(tmp, load_variable(asmExt->output[i]->offset), strlen(load_variable(asmExt->output[i]->offset)));
+                    int off = asmExt->output[i]->isArray ? asmExt->output[i]->offsetArray : asmExt->output[i]->offset;
+                    strncat(tmp, load_variable(off), strlen(load_variable(off)));
                     strncat(tmp, ", ", 3);
                     strncat(tmp, asmExt->output[i]->reg64, strlen(asmExt->output[i]->reg64));
                     strncat(tmp, ";\n", 3);                       
+                    if (asmExt->output[i]->isArray && asmExt->output[i]->offset) {
+                        char off_str[16];
+                        snprintf(off_str, sizeof(off_str), "%d", asmExt->output[i]->offset);
+                        strncat(tmp, "  addq $", 11);
+                        strncat(tmp, off_str, strlen(off_str));
+                        strncat(tmp, ", ", 3);
+                        strncat(tmp, asmExt->output[i]->reg64, strlen(asmExt->output[i]->reg64));
+                        strncat(tmp, ";\n", 3);
+                    }
                 }       
         }
 
