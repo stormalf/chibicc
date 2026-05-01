@@ -1410,8 +1410,8 @@ static Token *preprocess2(Token *tok)
     {
       bool is_dquote;
       char *filename = read_include_filename(&tok, tok->next, &is_dquote);
-      if (isDebug)
-        printf("=====includes===%s\n", filename);
+      // if (isDebug)
+      //   printf("=====includes===%s\n", filename);
 
       if (filename[0] != '/' && is_dquote)
       {

@@ -2042,7 +2042,7 @@ char *generate_input_asm(char *input_str)
         strncat(tmp, ", ", 3);
         strncat(tmp, asmExt->input[nbInput]->variableNumber, strlen(asmExt->input[nbInput]->variableNumber));
         strncat(tmp, ";\n", 3);
-        strncat(tmp, "neg ", 5);
+        strncat(tmp, "  neg ", 7);
         strncat(tmp, asmExt->input[nbInput]->variableNumber, strlen(asmExt->input[nbInput]->variableNumber));
         strncat(tmp, ";\n", 3);
         return tmp;
@@ -2263,15 +2263,15 @@ char *opcode(int size)
     switch (size)
     {
     case 1:
-        return "\n  movb ";
+        return "  movb ";
     case 2:
-        return "\n  movw ";
+        return "  movw ";
     case 4:
-        return "\n  movl ";
+        return "  movl ";
     case 8:
-        return "\n  movq ";
+        return "  movq ";
     case 16:
-        return "\n  mov ";        
+        return "  mov ";        
     default:
         error("%s:%d: error: in opcode : size %d unexpected!", __FILE__, __LINE__, size);
     }
@@ -2282,15 +2282,15 @@ static char *arith_opcode(char op, int size)
     switch (size)
     {
     case 1:
-        return (op == '+') ? "\n  addb " : "\n  subb ";
+        return (op == '+') ? "  addb " : "  subb ";
     case 2:
-        return (op == '+') ? "\n  addw " : "\n  subw ";
+        return (op == '+') ? "  addw " : "  subw ";
     case 4:
-        return (op == '+') ? "\n  addl " : "\n  subl ";
+        return (op == '+') ? "  addl " : "  subl ";
     case 8:
-        return (op == '+') ? "\n  addq " : "\n  subq ";
+        return (op == '+') ? "  addq " : "  subq ";
     case 16:
-        return (op == '+') ? "\n  add " : "\n  sub ";
+        return (op == '+') ? "  add " : "  sub ";
     default:
         error("%s:%d: error: in arith_opcode : size %d unexpected!", __FILE__, __LINE__, size);
     }

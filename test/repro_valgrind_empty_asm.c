@@ -1,4 +1,4 @@
-#include <stdio.h>
+#include "test.h"
 #include <stdint.h>
 
 // This mimics OpenSSL's value_barrier pattern.

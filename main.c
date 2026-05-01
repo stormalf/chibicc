@@ -109,11 +109,11 @@ static void setup_signal_handlers() {
 }
 
 
-static void print_string_array(StringArray *arr) {
-    for (int i = 0; i < arr->len; i++) {
-        printf("=====ld_extra_args[%d]: %s\n", i, arr->data[i]);
-    }
-}
+// static void print_string_array(StringArray *arr) {
+//     for (int i = 0; i < arr->len; i++) {
+//         printf("=====ld_extra_args[%d]: %s\n", i, arr->data[i]);
+//     }
+// }
 
 
 
@@ -1526,8 +1526,8 @@ static void run_linker(StringArray *inputs, char *output)
   }
 
   //enabling verbose mode for linker in case of debug
-  if (isDebug)
-    strarray_push(&arr, "--verbose=1");
+  // if (isDebug)
+  //   strarray_push(&arr, "--verbose=1");
 
   char *libpath = find_libpath();
   char *gcc_libpath = find_gcc_libpath();
@@ -1614,8 +1614,8 @@ static void run_linker(StringArray *inputs, char *output)
   strarray_push(&arr, format("%s/crtn.o", libpath));
   strarray_push(&arr, NULL);
 
-  if (isDebug)
-      print_string_array(&arr);    
+  // if (isDebug)
+  //     print_string_array(&arr);    
   run_subprocess(arr.data);
 }
 
