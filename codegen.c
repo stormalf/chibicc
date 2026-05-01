@@ -300,6 +300,18 @@ static void pop_xmm(int x) {
   depth -= 2;
 }
 
+static void push_ymm(int x) {
+  println("  sub $32, %%rsp");
+  println("  vmovdqu %%ymm%d, (%%rsp)", x);
+  depth += 4;
+}
+
+static void pop_ymm(int x) {
+  println("  vmovdqu (%%rsp), %%ymm%d", x);
+  println("  add $32, %%rsp");
+  depth -= 4;
+}
+
 
 
 // Round up `n` to the nearest multiple of `align`. For instance,
@@ -2390,8 +2402,9 @@ static void gen_vec_ext(Node *node) {
 
 static void gen_psubusb256(Node *node) {
   gen_expr(node->rhs); // B
-  println("  vmovdqu %%ymm0, %%ymm1");     
+  push_ymm(0);
   gen_expr(node->lhs); // A
+  pop_ymm(1);
   println("  vpsubusb %%ymm1, %%ymm0, %%ymm0");
   println("  vzeroupper");
 }
@@ -3630,13 +3643,15 @@ static void gen_sse_pblendvb128(Node *node) {
 
 static void gen_pblendvb256(Node *node) {
   assert(node->builtin_nargs == 3);
-  gen_expr(node->builtin_args[0]);
-  println("  vmovdqu %%ymm0, %%ymm1");
-  gen_expr(node->builtin_args[1]);
-  println("  vmovdqu %%ymm0, %%ymm2");
-  gen_expr(node->builtin_args[2]);
-  // GCC: vpblendvb %ymm2, %ymm1, %ymm0, %ymm0  (mask is last argument)
-  println("  vpblendvb %%ymm0, %%ymm2, %%ymm1, %%ymm0");
+  gen_expr(node->builtin_args[2]); // mask -> ymm0
+  push_ymm(0);
+  gen_expr(node->builtin_args[1]); // src2 -> ymm0
+  push_ymm(0);
+  gen_expr(node->builtin_args[0]); // src1 -> ymm0
+  pop_ymm(2); // src2 -> ymm2
+  pop_ymm(1); // mask -> ymm1
+  // GCC: vpblendvb %ymm1, %ymm2, %ymm0, %ymm0
+  println("  vpblendvb %%ymm1, %%ymm2, %%ymm0, %%ymm0");
 }
 
 static void gen_sse_blendvpx(Node *node, const char *insn) {
@@ -3663,9 +3678,13 @@ static void gen_pcmpgtb256_mask(Node *node) {
   push_tmp();
 
   gen_expr(node->builtin_args[0]);
-  println("  vmovdqu %%ymm0, %%ymm1");
+  //println("  vmovdqu %%ymm0, %%ymm1");
+  push_ymm(0);
   gen_expr(node->builtin_args[1]);
-  println("  vmovdqu %%ymm0, %%ymm2");
+  push_ymm(0);
+  //println("  vmovdqu %%ymm0, %%ymm2");
+  pop_ymm(2);
+  pop_ymm(1);
   println("  vpcmpgtb %%ymm2, %%ymm1, %%ymm0");
   println("  vpmovmskb %%ymm0, %%eax");
   pop_tmp("%rcx");
@@ -3675,8 +3694,12 @@ static void gen_pcmpgtb256_mask(Node *node) {
 
 static void gen_pshufb256(Node *node) {
   gen_expr(node->rhs);
-  println("  vmovdqu %%ymm0, %%ymm1");
+  //println("  vmovdqu %%ymm0, %%ymm1");
+  push_ymm(0);
   gen_expr(node->lhs);
+  push_ymm(0);
+  pop_ymm(0);
+  pop_ymm(1);
   println("  vpshufb %%ymm1, %%ymm0, %%ymm0");
 }
 
@@ -3697,10 +3720,13 @@ static void gen_avx2_256(Node *node, const char *insn) {
 static void gen_vinsertf128_si256(Node *node) {
   assert(node->builtin_nargs == 3);
   gen_expr(node->builtin_args[0]);   // -> ymm0
-  println("  vmovdqu %%ymm0, %%ymm1");
+  //println("  vmovdqu %%ymm0, %%ymm1");
+  push_ymm(0);
   gen_expr(node->builtin_args[1]);   // -> xmm0
-  println("  vmovdqu %%xmm0, %%xmm2");
-
+  //println("  vmovdqu %%xmm0, %%xmm2");
+  push_ymm(0);
+  pop_ymm(2);
+  pop_ymm(1);
   // imm must be constant
   Node *imm = node->builtin_args[2];
   int64_t imm8 = eval(imm);
@@ -3734,8 +3760,10 @@ static void gen_avx2_psll_binop(Node *node, const char *insn) {
 static void gen_avx2_palignr256(Node *node) {
   assert(node->builtin_nargs == 3);
   gen_expr(node->builtin_args[1]); // B -> ymm0
-  println("  vmovdqu %%ymm0, %%ymm1"); // ymm1 = B
+  //println("  vmovdqu %%ymm0, %%ymm1"); // ymm1 = B
+  push_ymm(0);
   gen_expr(node->builtin_args[0]); // A -> ymm0
+  pop_ymm(1);
   int64_t imm_bytes = eval(node->builtin_args[2]) / 8;
   println("  vpalignr $%ld, %%ymm1, %%ymm0, %%ymm0", imm_bytes);
 }
@@ -3743,8 +3771,10 @@ static void gen_avx2_palignr256(Node *node) {
 static void gen_vperm2i128_si256(Node *node) {
   assert(node->builtin_nargs == 3);
   gen_expr(node->builtin_args[1]); // Y -> ymm0
-  println("  vmovdqu %%ymm0, %%ymm1"); // ymm1 = Y
+  //println("  vmovdqu %%ymm0, %%ymm1"); // ymm1 = Y
+  push_ymm(0);
   gen_expr(node->builtin_args[0]); // X -> ymm0
+  pop_ymm(1);
   int64_t imm = eval(node->builtin_args[2]);
   println("  vperm2i128 $%ld, %%ymm1, %%ymm0, %%ymm0", imm);
 }
@@ -3752,23 +3782,29 @@ static void gen_vperm2i128_si256(Node *node) {
 static void gen_pblendd256(Node *node) {
   assert(node->builtin_nargs == 3);
   gen_expr(node->builtin_args[1]); // B -> ymm0
-  println("  vmovdqu %%ymm0, %%ymm1"); // ymm1 = B
+  //println("  vmovdqu %%ymm0, %%ymm1"); // ymm1 = B
+  push_ymm(0);
   gen_expr(node->builtin_args[0]); // A -> ymm0
+  pop_ymm(1);
   int64_t imm = eval(node->builtin_args[2]);
   println("  vpblendd $%ld, %%ymm1, %%ymm0, %%ymm0", imm);
 }
 
 static void gen_pmulhuw256(Node *node) {
   gen_expr(node->lhs); // A -> ymm0
-  println("  vmovdqu %%ymm0, %%ymm1"); // ymm1 = A
+  //println("  vmovdqu %%ymm0, %%ymm1"); // ymm1 = A
+  push_ymm(0);
   gen_expr(node->rhs); // B -> ymm0
+  pop_ymm(1);
   println("  vpmulhuw %%ymm0, %%ymm1, %%ymm0"); // ymm0 = (A * B) >> 16
 }
 
 static void gen_andnotsi256(Node *node) {
-  gen_expr(node->lhs); // A -> ymm0
-  println("  vmovdqu %%ymm0, %%ymm1"); // ymm1 = A
+  gen_expr(node->lhs); 
+  //println("  vmovdqu %%ymm0, %%ymm1"); // ymm1 = A
+  push_ymm(0);
   gen_expr(node->rhs); // B -> ymm0
+  pop_ymm(1);
   println("  vpandn %%ymm0, %%ymm1, %%ymm0");
 }
 

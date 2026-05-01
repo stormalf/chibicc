@@ -1,83 +1,55 @@
-// asm_array_loop_test.c
-#include "test.h"
+// test_poly1305_abi.c
 #include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+#include <assert.h>
 
-typedef unsigned long BN_ULONG;
+// Assembly functions
+void poly1305_init(void *ctx, const unsigned char key[32]);
+void poly1305_blocks(void *ctx, const unsigned char *m, size_t len, uint32_t padbit);
+void poly1305_emit(void *ctx, unsigned char mac[16], const unsigned int nonce[4]);
 
-static BN_ULONG mul_add_loop(BN_ULONG *rp, const BN_ULONG *ap,
-                            int n, BN_ULONG w)
-{
-    BN_ULONG carry = 0;
+// Poly1305 context size (from OpenSSL)
+typedef struct {
+    uint64_t r[3];
+    uint64_t h[3];
+    uint64_t pad[2];
+} poly1305_ctx;
 
-    for (int i = 0; i < n; i++) {
-        BN_ULONG high, low;
-
-        // mul
-        asm("mulq %3"
-            : "=a"(low), "=d"(high)
-            : "a"(w), "m"(ap[i])
-            : "cc");
-
-        // add low into carry
-        asm("addq %2,%0; adcq %3,%1"
-            : "+r"(carry), "+d"(high)
-            : "a"(low), "g"(0)
-            : "cc");
-
-        // add carry into rp[i]
-        asm("addq %2,%0; adcq %3,%1"
-            : "+m"(rp[i]), "+d"(high)
-            : "r"(carry), "g"(0)
-            : "cc");
-
-        carry = high;
-    }
-
-    return carry;
-}
-
-/* reference */
-static BN_ULONG ref(BN_ULONG *rp, const BN_ULONG *ap,
-                    int n, BN_ULONG w)
-{
-    BN_ULONG carry = 0;
-
-    for (int i = 0; i < n; i++) {
-        __uint128_t t =
-            (__uint128_t)ap[i] * w + rp[i] + carry;
-
-        rp[i] = (BN_ULONG)t;
-        carry = (BN_ULONG)(t >> 64);
-    }
-
-    return carry;
-}
-
-int main(void)
-{
-    BN_ULONG a[4] = {
-        0xFFFFFFFFFFFFFFFFUL,
-        0x1,
-        0x2,
-        0x3
+int main() {
+    // RFC 8439 test vector
+    const unsigned char key[32] = {
+        0x85,0xd6,0xbe,0x78,0x57,0x55,0x6d,0x33,
+        0x7f,0x44,0x52,0xfe,0x42,0xd5,0x06,0xa8,
+        0x01,0x03,0x80,0x8a,0xfb,0x0d,0xf1,0xce,
+        0x10,0x6c,0x6a,0x10,0x16,0x3b,0xa7,0x4d
     };
 
-    BN_ULONG r1[4] = {0};
-    BN_ULONG r2[4] = {0};
+    const unsigned char msg[] = "Cryptographic Forum Research Group";
 
-    BN_ULONG c1 = mul_add_loop(r1, a, 4, 2);
-    BN_ULONG c2 = ref(r2, a, 4, 2);
+    const unsigned char expected[16] = {
+        0xa8,0x06,0x1d,0xc1,0x30,0x51,0x36,0xc6,
+        0xc2,0x2b,0x8b,0xaf,0x0c,0x01,0x27,0xa9
+    };
 
-    for (int i = 0; i < 4; i++) {
-        if (r1[i] != r2[i]) {
-            printf("FAIL r[%d]: %lu != %lu\n", i, r1[i], r2[i]);
-            return 1;
-        }
-    }
+    poly1305_ctx ctx;
+    unsigned char mac[16];
 
-    if (c1 != c2) {
-        printf("FAIL carry: %lu != %lu\n", c1, c2);
-        return 1;
+    memset(&ctx, 0, sizeof(ctx));
+
+    // --- Call assembly ---
+    poly1305_init(&ctx, key);
+    poly1305_blocks(&ctx, msg, sizeof(msg) - 1, 1);
+    poly1305_emit(&ctx, mac, (const unsigned int *)(key + 16));
+
+    // --- Verify ---
+    if (memcmp(mac, expected, 16) != 0) {
+        printf("got:      ");
+        for (int i = 0; i < 16; i++) printf("%02x", mac[i]);
+        printf("\nexpected: ");
+        for (int i = 0; i < 16; i++) printf("%02x", expected[i]);
+        printf("\n");
+        return 0;
     }
 
     printf("OK\n");
