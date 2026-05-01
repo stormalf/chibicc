@@ -234,22 +234,6 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
         error("%s:%d: error: in extended_asm : out of memory", __FILE__, __LINE__);
     strncpy(template, tok->str, 9999);
     char *asm_str = calloc(1, sizeof(char) * 10000);
-    //case __asm__ volatile ("" ::: "memory")
-    //case __asm__ __volatile__ ("rep; nop" ::: "memory");  
-    //we generate a nop operation for each memory border defined
-    //if (strlen(template) == 0 || !strncmp(template, "rep; nop", 9)) {
-    if (strlen(template) == 0) {        
-        while (!equal(tok, ";")) {
-            tok = tok->next;
-        }
-        //*rest = tok->next;
-        // SET_CTX(ctx);
-        // *rest = skip(tok->next, ")", ctx);
-        //tok = *rest;
-        *rest = tok;
-        asm_str = "\nnop;\n";
-        return asm_str;
-    }
     if (isDebug)
         printf("template==%s\n", template);
     // allocate memory for all structs needed
@@ -511,6 +495,9 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
 
     //case __asm__ __volatile__ ("rep; nop" ::: "memory");  
     if (!hasOutput && !hasInput) {
+        if (strlen(template) == 0)
+            strncat(asm_str, "\nnop;\n", 7);
+        else
         strncat(asm_str, template, strlen(template));
     }
     //replace special characters
