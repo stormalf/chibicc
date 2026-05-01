@@ -1742,8 +1742,15 @@ int main(int argc, char **argv)
     // Handle .s, -S, .asm
     if (type == FILE_ASM)
     {
-      if (!opt_S)
-        assemble(input, output);
+      if (!opt_S) {
+        if (opt_c) {
+          assemble(input, output);
+        } else {
+          char *tmp = create_tmpfile();
+          assemble(input, tmp);
+          strarray_push(&ld_args, tmp);
+        }
+      }
       continue;
     }
 
@@ -1825,4 +1832,3 @@ bool startsWith(const char *restrict string, const char *restrict prefix)
 bool is_gnu_mode(void) {
   return current_std == STD_GNU89 || current_std == STD_GNU11;
 }
-
