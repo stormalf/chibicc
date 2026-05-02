@@ -5,7 +5,12 @@
 #include <assert.h>
 
 // Assembly functions
-void poly1305_init(void *ctx, const unsigned char key[32]);
+#ifndef POLY1305_ASM
+int z = 10;
+void poly1305_init(void *ctx, const unsigned char key[16]);
+#else
+int poly1305_init(void *ctx, const unsigned char key[16], void *func);
+#endif
 void poly1305_blocks(void *ctx, const unsigned char *m, size_t len, uint32_t padbit);
 void poly1305_emit(void *ctx, unsigned char mac[16], const unsigned int nonce[4]);
 
@@ -36,9 +41,9 @@ int main() {
     unsigned char mac[16];
 
     memset(&ctx, 0, sizeof(ctx));
-
+    printf("%d\n", 10);
     // --- Call assembly ---
-    poly1305_init(&ctx, key);
+    poly1305_init(&ctx, key );
     poly1305_blocks(&ctx, msg, sizeof(msg) - 1, 1);
     poly1305_emit(&ctx, mac, (const unsigned int *)(key + 16));
 

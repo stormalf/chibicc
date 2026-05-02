@@ -33,7 +33,8 @@ static void print_offset(Obj *prog);
 
 static int get_align(Obj *var) {
   int align = var->align;
-  if ((var->ty->kind == TY_ARRAY && var->ty->size >= 16) || 
+  if (((var->ty->kind == TY_ARRAY || var->ty->kind == TY_STRUCT || var->ty->kind == TY_UNION) &&
+       var->ty->size >= 16) ||
       is_vector(var->ty) || var->ty->kind == TY_INT128)
     align = MAX(16, align);
   return align;
@@ -180,6 +181,8 @@ static void pop_tmpf(int reg) {
 static void push(void)
 {
   println("  push %%rax");
+  //temp hack for issue with openssl need to think about replacing push/pop by what gcc is doing
+  println("  mov %%rax, %%rdx");
   depth++;
 }
 
