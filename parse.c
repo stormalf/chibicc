@@ -9036,8 +9036,9 @@ static Node *parse_memcpy(Token *tok, Token **rest) {
     add_type(node->builtin_src); 
     SET_CTX(ctx); 
     tok = skip(tok, ",", ctx);
-    node->builtin_size = assign(&tok, tok);
+    node->builtin_size = assign(&tok, tok);    
     add_type(node->builtin_size); 
+    node->builtin_size = new_cast(node->builtin_size, ty_ulong);
     SET_CTX(ctx); 
     *rest = skip(tok, ")", ctx);
     return node;  
@@ -9056,8 +9057,9 @@ static Node *parse_memset(Token *tok, Token **rest) {
     add_type(node->builtin_val); 
     SET_CTX(ctx); 
     tok = skip(tok, ",", ctx);
-    node->builtin_size = assign(&tok, tok);
-    add_type(node->builtin_size); 
+    node->builtin_size = assign(&tok, tok);    
+    add_type(node->builtin_size);     
+    node->builtin_size = new_cast(node->builtin_size, ty_ulong);
     SET_CTX(ctx); 
     *rest = skip(tok, ")", ctx);
     return node;
