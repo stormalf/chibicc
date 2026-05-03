@@ -1197,39 +1197,39 @@ _mm256_storeu_si256 (__m256i_u *__P, __m256i __A)
 //   return __builtin_ia32_movmskps256 ((__v8sf)__A);
 // }
 
-// extern __inline __m256d __attribute__((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_undefined_pd (void)
-// {
-//   __m256d __Y = __Y;
-//   return __Y;
-// }
+extern __inline __m256d __attribute__((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_undefined_pd (void)
+{
+  __m256d __Y = __Y;
+  return __Y;
+}
 
-// extern __inline __m256 __attribute__((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_undefined_ps (void)
-// {
-//   __m256 __Y = __Y;
-//   return __Y;
-// }
+extern __inline __m256 __attribute__((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_undefined_ps (void)
+{
+  __m256 __Y = __Y;
+  return __Y;
+}
 
-// extern __inline __m256i __attribute__((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_undefined_si256 (void)
-// {
-//   __m256i __Y = __Y;
-//   return __Y;
-// }
+extern __inline __m256i __attribute__((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_undefined_si256 (void)
+{
+  __m256i __Y = __Y;
+  return __Y;
+}
 
-// extern __inline __m256d __attribute__((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_setzero_pd (void)
-// {
-//   return __extension__ (__m256d){ 0.0, 0.0, 0.0, 0.0 };
-// }
+extern __inline __m256d __attribute__((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_setzero_pd (void)
+{
+  return __extension__ (__m256d){ 0.0, 0.0, 0.0, 0.0 };
+}
 
-// extern __inline __m256 __attribute__((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_setzero_ps (void)
-// {
-//   return __extension__ (__m256){ 0.0, 0.0, 0.0, 0.0,
-// 				 0.0, 0.0, 0.0, 0.0 };
-// }
+extern __inline __m256 __attribute__((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_setzero_ps (void)
+{
+  return __extension__ (__m256){ 0.0, 0.0, 0.0, 0.0,
+				 0.0, 0.0, 0.0, 0.0 };
+}
 
 extern __inline __m256i __attribute__((__gnu_inline__, __always_inline__, __artificial__))
 _mm256_setzero_si256 (void)
@@ -1237,42 +1237,42 @@ _mm256_setzero_si256 (void)
   return __extension__ (__m256i)(__v4di){ 0, 0, 0, 0 };
 }
 
-// /* Create the vector [A B C D].  */
-// extern __inline __m256d __attribute__((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_set_pd (double __A, double __B, double __C, double __D)
-// {
-//   return __extension__ (__m256d){ __D, __C, __B, __A };
-// }
+/* Create the vector [A B C D].  */
+extern __inline __m256d __attribute__((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_set_pd (double __A, double __B, double __C, double __D)
+{
+  return __extension__ (__m256d){ __D, __C, __B, __A };
+}
 
-// /* Create the vector [A B C D E F G H].  */
-// extern __inline __m256 __attribute__((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_set_ps (float __A, float __B, float __C, float __D,
-// 	       float __E, float __F, float __G, float __H)
-// {
-//   return __extension__ (__m256){ __H, __G, __F, __E,
-// 				 __D, __C, __B, __A };
-// }
+/* Create the vector [A B C D E F G H].  */
+extern __inline __m256 __attribute__((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_set_ps (float __A, float __B, float __C, float __D,
+	       float __E, float __F, float __G, float __H)
+{
+  return __extension__ (__m256){ __H, __G, __F, __E,
+				 __D, __C, __B, __A };
+}
 
-// /* Create the vector [A B C D E F G H].  */
-// extern __inline __m256i __attribute__((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_set_epi32 (int __A, int __B, int __C, int __D,
-// 		  int __E, int __F, int __G, int __H)
-// {
-//   return __extension__ (__m256i)(__v8si){ __H, __G, __F, __E,
-// 					  __D, __C, __B, __A };
-// }
+/* Create the vector [A B C D E F G H].  */
+extern __inline __m256i __attribute__((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_set_epi32 (int __A, int __B, int __C, int __D,
+		  int __E, int __F, int __G, int __H)
+{
+  return __extension__ (__m256i)(__v8si){ __H, __G, __F, __E,
+					  __D, __C, __B, __A };
+}
 
-// extern __inline __m256i __attribute__((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_set_epi16 (short __q15, short __q14, short __q13, short __q12,
-// 		  short __q11, short __q10, short __q09, short __q08,
-// 		  short __q07, short __q06, short __q05, short __q04,
-// 		  short __q03, short __q02, short __q01, short __q00)
-// {
-//   return __extension__ (__m256i)(__v16hi){
-//     __q00, __q01, __q02, __q03, __q04, __q05, __q06, __q07,
-//     __q08, __q09, __q10, __q11, __q12, __q13, __q14, __q15
-//   };
-// }
+extern __inline __m256i __attribute__((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_set_epi16 (short __q15, short __q14, short __q13, short __q12,
+		  short __q11, short __q10, short __q09, short __q08,
+		  short __q07, short __q06, short __q05, short __q04,
+		  short __q03, short __q02, short __q01, short __q00)
+{
+  return __extension__ (__m256i)(__v16hi){
+    __q00, __q01, __q02, __q03, __q04, __q05, __q06, __q07,
+    __q08, __q09, __q10, __q11, __q12, __q13, __q14, __q15
+  };
+}
 
 extern __inline __m256i __attribute__((__gnu_inline__, __always_inline__, __artificial__))
 _mm256_set_epi8  (char __q31, char __q30, char __q29, char __q28,
@@ -1353,19 +1353,19 @@ _mm256_set1_epi64x (long long __A)
 //   return _mm256_set_pd (__D, __C, __B, __A);
 // }
 
-// extern __inline __m256 __attribute__((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_setr_ps (float __A, float __B, float __C, float __D,
-// 		float __E, float __F, float __G, float __H)
-// {
-//   return _mm256_set_ps (__H, __G, __F, __E, __D, __C, __B, __A);
-// }
+extern __inline __m256 __attribute__((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_setr_ps (float __A, float __B, float __C, float __D,
+		float __E, float __F, float __G, float __H)
+{
+  return _mm256_set_ps (__H, __G, __F, __E, __D, __C, __B, __A);
+}
 
-// extern __inline __m256i __attribute__((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_setr_epi32 (int __A, int __B, int __C, int __D,
-// 		   int __E, int __F, int __G, int __H)
-// {
-//   return _mm256_set_epi32 (__H, __G, __F, __E, __D, __C, __B, __A);
-// }
+extern __inline __m256i __attribute__((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_setr_epi32 (int __A, int __B, int __C, int __D,
+		   int __E, int __F, int __G, int __H)
+{
+  return _mm256_set_epi32 (__H, __G, __F, __E, __D, __C, __B, __A);
+}
 
 // extern __inline __m256i __attribute__((__gnu_inline__, __always_inline__, __artificial__))
 // _mm256_setr_epi16 (short __q15, short __q14, short __q13, short __q12,
