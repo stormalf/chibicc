@@ -87,16 +87,16 @@ nmap:
 	cd ../nmap && make clean && CC=chibicc  CFLAGS="-fPIC -std=c11" LIBS="-ldbus-1 -latomic -libverbs -lrdmacm" ./configure --with-dbus && make -j$(nproc) && make check
 
 openssl:
-	cd ../openssl && make clean && CC=chibicc CFLAGS="-std=c11 -g -O0" ./Configure linux-x86_64 --debug enable-fips enable-legacy && make && make test
+	cd ../openssl && make clean && CC=chibicc CFLAGS="-std=c11 -g -O0" ./Configure linux-x86_64 --debug enable-fips enable-legacy && make -j2 && make test
 
 util-linux:
 	cd ../util-linux && make clean && CC=chibicc CFLAGS="-fPIC -std=c11" ./configure && make -j$(nproc) && make check-programs && cd tests && ./run.sh
 
 nginx:
-	cd ../nginx && make clean && CC=chibicc CFLAGS="-fPIC -std=c11" ./auto/configure --with-http_ssl_module && make
+	cd ../nginx && make clean && CC=chibicc CFLAGS="-fPIC -std=c11" ./auto/configure --with-http_ssl_module && make -j2
 
 vim:
-	cd ../vim && make clean && CC=chibicc CFLAGS="-fPIC -std=c11" ./configure && make &&  make test 
+	cd ../vim && make clean && CC=chibicc CFLAGS="-fPIC -std=c11" ./configure && make -j2 &&  make test 
 
 lxc:
 	cd ../lxc && rm -rf build && CC=gcc \
@@ -106,11 +106,11 @@ lxc:
 vlc:
 	cd ../vlc && make clean && CC=chibicc CFLAGS="-fPIC -std=c11"  ./configure  \
 	--disable-lua --disable-xcb --disable-qt --disable-alsa --disable-sse --host x86_64-linux-gnu && \
-    make all
+    make -j2 all
 
 cpython:
 	cd ../cpython &&  CC=chibicc CFLAGS="-std=c11 -O3" ./configure  \
-	 --build=x86_64-pc-linux-gnu && make clean && make && make -j$(nproc) test
+	 --build=x86_64-pc-linux-gnu && make clean && make && make -j2(nproc) test
 
 # vlc2:
 # 	cd ../vlc && rm -rf build && mymeson setup build && cd build && mymeson compile

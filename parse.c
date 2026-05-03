@@ -7924,9 +7924,11 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   }
 
 
-  if (ty->is_variadic)
-    fn->va_area = new_lvar("__va_area__", array_of(ty_char, 200), name_str);
-  
+  if (ty->is_variadic) {
+    fn->va_area = new_lvar("__va_area__", array_of(ty_char, 208), name_str);
+    fn->va_area->align = 16;
+  }
+
 
   //from COSMOPOLITAN adding other GNUC attributes
   tok = attribute_list(tok, ty, type_attributes);

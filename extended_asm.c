@@ -1563,7 +1563,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
         {
             asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(nbOutput + nbInput);
             asmExt->input[nbInput]->index = nbOutput + nbInput;
-            asmExt->input[nbInput]->reg = specific_register_available("%r8");
+            asmExt->input[nbInput]->reg = specific_register_available("%r10");
             if (!asmExt->input[nbInput]->reg)
                 error_tok(tok,"%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__);            
             asmExt->input[nbInput]->reg64 = asmExt->input[nbInput]->reg;
@@ -2457,8 +2457,8 @@ static char *register_higher(char *reg) {
     if (!strncmp(reg, "%rbx", 4) || !strncmp(reg, "%ebx", 4) || !strncmp(reg, "%bx", 3)) return "%bh";
     if (!strncmp(reg, "%rcx", 4) || !strncmp(reg, "%ecx", 4) || !strncmp(reg, "%cx", 3)) return "%ch";
     if (!strncmp(reg, "%rdx", 4) || !strncmp(reg, "%edx", 4) || !strncmp(reg, "%dx", 3)) return "%dh";
-    // %r8-%r9, %rdi, %rsi do not have high 8-bit registers in x86-64
-    if (!strncmp(reg, "%r8", 3) || !strncmp(reg, "%r9", 3) ||
+    // %r10-%r11, %rdi, %rsi do not have high 8-bit registers in x86-64
+    if (!strncmp(reg, "%r10", 3) || !strncmp(reg, "%r11", 3) ||
         !strncmp(reg, "%rdi", 4) || !strncmp(reg, "%rsi", 4)) return NULL;
     return NULL;
 }
