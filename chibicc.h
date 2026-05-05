@@ -1268,6 +1268,8 @@ void check_register_in_template(char *template);
 void pushreg(const char *arg);
 void gen_fpclassify(FpClassify *);
 void println(char *fmt, ...);
+int get_align(Obj *var);
+bool is_omit_fp(Obj *fn);
 
 extern bool dont_reuse_stack;
 

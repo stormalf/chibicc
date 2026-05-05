@@ -31,7 +31,7 @@ static void gen_expr(Node *node);
 static void gen_stmt(Node *node);
 static void print_offset(Obj *prog);
 
-static int get_align(Obj *var) {
+int get_align(Obj *var) {
   int align = var->align;
   if (((var->ty->kind == TY_ARRAY || var->ty->kind == TY_STRUCT || var->ty->kind == TY_UNION) &&
        var->ty->size >= 16) ||
@@ -87,7 +87,7 @@ static int count(void)
 }
 
 
-static bool is_omit_fp(Obj *fn) {
+bool is_omit_fp(Obj *fn) {
   if (!opt_omit_frame_pointer) return false;
   if (fn->force_frame_pointer) return false;
 
@@ -6655,6 +6655,7 @@ void assign_lvar_offsets(Obj *prog) {
     int gp = 0, fp = 0;
     int max_align = 8;
     int stack = 0;
+    int param_idx = 0;
 
     // If variables already have offsets (assigned during parsing for inline asm),
     // ensure 'bottom' reflects the space they occupy.
@@ -6665,8 +6666,9 @@ void assign_lvar_offsets(Obj *prog) {
       }
     }
 
-    for (Obj *var = fn->params; var; var = var->next) {
+    for (Obj *var = fn->params; var; var = var->next) {      
       var->is_param = true;
+      var->nbparm = param_idx++;
       if (var->offset) continue;
 
       Type *ty = var->ty;

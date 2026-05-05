@@ -687,9 +687,21 @@ void emit_debug_info(Obj *prog) {
     println("  .quad %s", fn->name);
     println("  .quad .L.end.%s", fn->name);
     
-    // Frame base: DW_OP_reg6 (rbp)
-    println("  .byte 1");
-    println("  .byte 0x56");
+    // Frame base
+    int lbl_fb = label_count++;
+    println("  .uleb128 .L.loc_end_%d - .L.loc_start_%d", lbl_fb, lbl_fb);
+    println(".L.loc_start_%d:", lbl_fb);
+    if (is_omit_fp(fn)) {
+        // If frame pointer is omitted, offsets are relative to RSP at entry.
+        // We define frame base as RSP + stack_size.
+        println("  .byte 0x77"); // DW_OP_breg7 (rsp)
+        println("  .sleb128 %d", fn->stack_size);
+    } else if (fn->stack_align > 16) {
+        println("  .byte 0x53"); // DW_OP_reg3 (rbx)
+    } else {
+        println("  .byte 0x56"); // DW_OP_reg6 (rbp)
+    }
+    println(".L.loc_end_%d:", lbl_fb);
     
     println("  .byte %d", !fn->is_static);
 
@@ -703,8 +715,14 @@ void emit_debug_info(Obj *prog) {
         int lbl = label_count++;
         println("  .uleb128 .L.loc_end_%d - .L.loc_start_%d", lbl, lbl);
         println(".L.loc_start_%d:", lbl);
-        println("  .byte 0x91"); // DW_OP_fbreg
-        println("  .sleb128 %d", var->offset);
+        // println("  .byte 0x91"); // DW_OP_fbreg
+        // println("  .sleb128 %d", var->offset);
+        // SysV ABI argument registers
+        static int argreg64[] = {5, 4, 1, 2, 8, 9}; // rdi, rsi, rdx, rcx, r8, r9
+
+        if (var->nbparm < 6) {
+          println("  .byte %d", 0x50 + argreg64[var->nbparm]); // DW_OP_regX
+        }        
         println(".L.loc_end_%d:", lbl);
     }
 
