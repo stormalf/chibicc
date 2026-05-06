@@ -1,4 +1,6 @@
 #include "chibicc.h"
+#include <limits.h>
+#include <string.h>
 
 //  for debug needs
 char *tokenkind2str(TokenKind kind)
@@ -420,6 +422,28 @@ void emit_debug_info(Obj *prog) {
   static int c = 0;
   static int label_count = 0;
 
+  // Compute absolute source path and compilation directory
+  char abs_path[PATH_MAX] = {0};
+  char comp_dir[PATH_MAX] = {0};
+  if (base_file) {
+    // Use base_file directly without realpath
+    snprintf(abs_path, sizeof(abs_path), "%s", base_file);
+    // Extract directory from path (find last '/')
+    char *last_slash = strrchr(base_file, '/');
+    if (last_slash && last_slash != base_file) {
+      size_t dir_len = last_slash - base_file;
+      if (dir_len < sizeof(comp_dir)) {
+        strncpy(comp_dir, base_file, dir_len);
+        comp_dir[dir_len] = '\0';
+      }
+    } else {
+      snprintf(comp_dir, sizeof(comp_dir), ".");
+    }
+  } else {
+    snprintf(abs_path, sizeof(abs_path), "%s", "unknown_source");
+    snprintf(comp_dir, sizeof(comp_dir), ".");
+  }
+
   println("  .section .debug_abbrev,\"\",@progbits");
   println(".L.debug_abbrev%d:", c);
 
@@ -430,7 +454,9 @@ void emit_debug_info(Obj *prog) {
   println("  .uleb128 0x8");                  // DW_FORM_string
   println("  .uleb128 0x13");                 // DW_AT_language
   println("  .uleb128 0xb");                  // DW_FORM_data1
-  println("  .uleb128 0x3");                  // DW_AT_name
+  println("  .uleb128 0x1b");                 // DW_AT_comp_dir
+  println("  .uleb128 0x8");                  // DW_FORM_string
+  println("  .uleb128 0x3");                 // DW_AT_name
   println("  .uleb128 0x8");                  // DW_FORM_string
   println("  .uleb128 0x10");                 // DW_AT_stmt_list
   println("  .uleb128 0x17");                 // DW_FORM_sec_offset
@@ -440,6 +466,7 @@ void emit_debug_info(Obj *prog) {
   println("  .uleb128 0x1");                  // DW_FORM_addr
   println("  .byte 0");
   println("  .byte 0");
+  //println("  .byte 0");
 
   println("  .uleb128 2");                    // Abbrev code
   println("  .uleb128 0x2e");                 // DW_TAG_subprogram
@@ -616,12 +643,13 @@ void emit_debug_info(Obj *prog) {
   println("  .byte 8");
 
   println("  .uleb128 1");
-  println("  .string \"chibicc\"");
-  println("  .byte 0xc");                     // DW_LANG_C99
-  println("  .string \"%s\"", base_file);
-  println("  .long 0");
-  println("  .quad .L.text_start");
-  println("  .quad .L.text_end");
+  println("  .string \"%s\"", PRODUCT);            // DW_AT_producer
+  println("  .byte 0xc");                     // DW_AT_language (DW_LANG_C99)
+  println("  .string \"%s\"", comp_dir);       // DW_AT_comp_dir (new)
+  println("  .string \"%s\"", abs_path);       // DW_AT_name (absolute path)
+  println("  .long .L.line_table_start0");     // DW_AT_stmt_list
+  println("  .quad .L.text_start");           // DW_AT_low_pc
+  println("  .quad .L.text_end");             // DW_AT_high_pc
 
   // Emit base types
   emit_base_type_die(c, "type_void", "void", 0, 0);
@@ -684,8 +712,9 @@ void emit_debug_info(Obj *prog) {
     println("  .string \"%s\"", fn->name);
     println("  .uleb128 %d", fn->file_no);
     println("  .uleb128 %d", fn->line_no);
-    println("  .quad %s", fn->name);
-    println("  .quad .L.end.%s", fn->name);
+    char *name = fn->asmname ? fn->asmname : fn->name;
+    println("  .quad %s", name);
+    println("  .quad .L.end.%s", name);
     
     // Frame base
     int lbl_fb = label_count++;
@@ -763,4 +792,7 @@ void emit_debug_info(Obj *prog) {
 
   println("  .byte 0");
   println(".L.debug_info_end%d:", c);
+
+  println("  .section .debug_line,\"\",@progbits");
+  println(".L.line_table_start0:");
 }

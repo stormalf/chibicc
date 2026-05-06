@@ -46,7 +46,8 @@ static void emit_destructors(void);
 static int vec_use_ymm(Type *ty);
 
 
-static int last_loc_line = 0;
+static int last_loc_line = -1;
+static int last_loc_file = -1;
 
 typedef struct CtorFunc {
   char *name;
@@ -4312,9 +4313,10 @@ static void gen_expr(Node *node)
 {
   if (!node)
     error("%s:%d: error: in gen_expr : node is null!", __FILE__, __LINE__);
-  if (node->tok && node->tok->line_no != last_loc_line) {
-  println("  .loc %d %u", node->tok->file->file_no, node->tok->line_no);
-      last_loc_line = node->tok->line_no;
+  if (node->tok && (node->tok->line_no != last_loc_line || node->tok->file->file_no != last_loc_file)) {
+    println("  .loc %d %u", node->tok->file->file_no, node->tok->line_no);
+    last_loc_line = node->tok->line_no;
+    last_loc_file = node->tok->file->file_no;
   }
 
   switch (node->kind)
@@ -5908,9 +5910,10 @@ static void gen_stmt(Node *node)
 {
   if (!node)
     error("%s:%d: error: in gen_stmt : node is null!", __FILE__, __LINE__);
-  if (node->tok && node->tok->line_no != last_loc_line) {
-  println("  .loc %d %u", node->tok->file->file_no, node->tok->line_no);
-        last_loc_line = node->tok->line_no;
+  if (node->tok && (node->tok->line_no != last_loc_line || node->tok->file->file_no != last_loc_file)) {
+    println("  .loc %d %u", node->tok->file->file_no, node->tok->line_no);
+    last_loc_line = node->tok->line_no;
+    last_loc_file = node->tok->file->file_no;
   }
 
   switch (node->kind)
@@ -6326,6 +6329,8 @@ static void emit_text(Obj *prog)
       println("  .section .text,\"ax\",@progbits");
     println("  .type %s, @function", sym(fn));
     println("  .loc %d %d", fn->file_no, fn->line_no);
+    last_loc_line = fn->line_no;
+    last_loc_file = fn->file_no;
     println("%s:", sym(fn));
 
     current_fn = fn;
