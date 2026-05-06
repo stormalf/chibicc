@@ -6325,6 +6325,7 @@ static void emit_text(Obj *prog)
     else
       println("  .section .text,\"ax\",@progbits");
     println("  .type %s, @function", sym(fn));
+    println("  .loc %d %d", fn->file_no, fn->line_no);
     println("%s:", sym(fn));
 
     current_fn = fn;

@@ -1,5 +1,7 @@
-#include <stdio.h>
+int add(int a, int b) {
+  return a + b;
+}
 
-int main(int argc, char **argv) {
-    printf("argc=%d argv=%p\n", argc, argv);
+int main() {
+  return add(1, 2);
 }
