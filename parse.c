@@ -8034,6 +8034,10 @@ static Token *global_declaration(Token *tok, Type *basety, VarAttr *attr)
     var->is_aligned = var->is_aligned | decl_attr.is_aligned;
     var->is_externally_visible = decl_attr.is_externally_visible;
     var->is_definition = !decl_attr.is_extern && ty->kind != TY_FUNC;
+    if (ty->name) {
+      var->file_no = ty->name->file->file_no;
+      var->line_no = ty->name->line_no;
+    }
     var->is_static = decl_attr.is_static;
     var->is_tls = decl_attr.is_tls;
     if (decl_attr.align)

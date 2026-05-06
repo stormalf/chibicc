@@ -432,6 +432,10 @@ void emit_debug_info(Obj *prog) {
   println("  .uleb128 0xb");                  // DW_FORM_data1
   println("  .uleb128 0x3");                  // DW_AT_name
   println("  .uleb128 0x8");                  // DW_FORM_string
+  println("  .uleb128 0x1b");                 // DW_AT_comp_dir
+  println("  .uleb128 0x8");                  // DW_FORM_string
+  println("  .uleb128 0x1b");                 // DW_AT_comp_dir
+  println("  .uleb128 0x8");                  // DW_FORM_string
   println("  .uleb128 0x10");                 // DW_AT_stmt_list
   println("  .uleb128 0x17");                 // DW_FORM_sec_offset
   println("  .uleb128 0x11");                 // DW_AT_low_pc
@@ -619,6 +623,13 @@ void emit_debug_info(Obj *prog) {
   println("  .string \"chibicc\"");
   println("  .byte 0xc");                     // DW_LANG_C99
   println("  .string \"%s\"", base_file);
+
+  char cwd[PATH_MAX];
+  if (getcwd(cwd, sizeof(cwd)))
+    println("  .string \"%s\"", cwd);
+  else
+    println("  .string \".\"");
+
   println("  .long 0");
   println("  .quad .L.text_start");
   println("  .quad .L.text_end");
