@@ -6328,7 +6328,6 @@ static void emit_text(Obj *prog)
     println("%s:", sym(fn));
 
     current_fn = fn;
-    last_loc_line = 0;
     tmp_stack.bottom = fn->stack_size;
 
     bool use_rbx = (fn->stack_align > 16);
