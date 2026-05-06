@@ -744,14 +744,8 @@ void emit_debug_info(Obj *prog) {
         int lbl = label_count++;
         println("  .uleb128 .L.loc_end_%d - .L.loc_start_%d", lbl, lbl);
         println(".L.loc_start_%d:", lbl);
-        // println("  .byte 0x91"); // DW_OP_fbreg
-        // println("  .sleb128 %d", var->offset);
-        // SysV ABI argument registers
-        static int argreg64[] = {5, 4, 1, 2, 8, 9}; // rdi, rsi, rdx, rcx, r8, r9
-
-        if (var->nbparm < 6) {
-          println("  .byte %d", 0x50 + argreg64[var->nbparm]); // DW_OP_regX
-        }        
+        println("  .byte 0x91"); // DW_OP_fbreg
+        println("  .sleb128 %d", var->offset);
         println(".L.loc_end_%d:", lbl);
     }
 
