@@ -575,8 +575,12 @@ void add_type(Node *node)
   case ND_NE:
   case ND_LT:
   case ND_LE:
-    usual_arith_conv(&node->lhs, &node->rhs);
-    node->ty = ty_int;
+    if (is_vector(node->lhs->ty) && is_vector(node->rhs->ty)) {
+      node->ty = node->lhs->ty;
+    } else {
+      usual_arith_conv(&node->lhs, &node->rhs);
+      node->ty = ty_int;
+    }
     return;
   case ND_ALLOC:
     add_type(node->lhs);  

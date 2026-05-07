@@ -2025,26 +2025,60 @@ static void scalar_to_xmm(Type *vec_ty, const char *xmm_reg) {
 
 
 static void gen_vector_op(Node *node) {
+  Type *vec_ty = node->lhs->ty;
+  if (vec_ty->kind == TY_PTR && vec_ty->base->kind == TY_VECTOR)
+    vec_ty = vec_ty->base;
+
+  if (vec_ty->kind != TY_VECTOR)
+    error_tok(node->tok, "%s:%d: error: in gen_vector_op : lhs is not a vector", __FILE__, __LINE__);
+
+  bool use_ymm = vec_use_ymm(vec_ty);
+
   if (node->rhs) {
     gen_expr(node->rhs);
-    if (node->rhs->is_scalar_promoted)
+    if (node->rhs->is_scalar_promoted) {
       scalar_to_xmm(node->rhs->ty, "%xmm0");
-    push_xmm(0);      
+      if (use_ymm) {
+        println("  vxorps %%ymm1, %%ymm1, %%ymm1");
+        println("  vinsertf128 $0, %%xmm0, %%ymm1, %%ymm1");
+        println("  vinsertf128 $1, %%xmm0, %%ymm1, %%ymm0");
+      }
+    }
+    if (use_ymm)
+      push_ymm(0);
+    else
+      push_xmm(0);
   }
+
   if (node->lhs) {
-    gen_expr(node->lhs); 
-    if (node->lhs->is_scalar_promoted)
+    gen_expr(node->lhs);
+    if (node->lhs->is_scalar_promoted) {
       scalar_to_xmm(node->lhs->ty, "%xmm0");
+      if (use_ymm) {
+        println("  vxorps %%ymm1, %%ymm1, %%ymm1");
+        println("  vinsertf128 $0, %%xmm0, %%ymm1, %%ymm1");
+        println("  vinsertf128 $1, %%xmm0, %%ymm1, %%ymm0");
+      }
+    }
   }
-  
-  if (node->rhs)
-    pop_xmm(1);
+
+  if (node->rhs) {
+    if (use_ymm)
+      pop_ymm(1);
+    else
+      pop_xmm(1);
+  }
 
 
   switch (node->kind) {
   case ND_ADD:
   case ND_SUB:
   case ND_MUL:
+    break;
+  case ND_EQ:
+  case ND_NE:
+  case ND_LT:
+  case ND_LE:
     break;
   case ND_BITXOR:
   case ND_BITAND:
@@ -2062,46 +2096,61 @@ static void gen_vector_op(Node *node) {
     error_tok(node->tok, "%s:%d: error: in gen_vector_op :  unsupported vector operation %d", __FILE__, __LINE__, node->kind);
   }
 
-  Type *vec_ty = node->lhs->ty;
-  if (vec_ty->kind == TY_PTR && vec_ty->base->kind == TY_VECTOR)
-    vec_ty = vec_ty->base;
-
-  if (vec_ty->kind != TY_VECTOR)
-    error_tok(node->tok, "%s:%d: error: in gen_vector_op : lhs is not a vector", __FILE__, __LINE__);
-
-  // if (node->rhs)
-  //   load_vector_operand(node->rhs, "%xmm1");    
-  // load_vector_operand(node->lhs, "%xmm0");
-
-
   switch (vec_ty->base->kind) {
     case TY_FLOAT:
       switch (node->kind) {
       case ND_ADD:
-        println("  addps %%xmm1, %%xmm0");
+        if (use_ymm)
+          println("  vaddps %%ymm1, %%ymm0, %%ymm0");
+        else
+          println("  addps %%xmm1, %%xmm0");
         break;
       case ND_SUB:
-        println("  subps %%xmm1, %%xmm0");
+        if (use_ymm)
+          println("  vsubps %%ymm1, %%ymm0, %%ymm0");
+        else
+          println("  subps %%xmm1, %%xmm0");
         break;
       case ND_MUL:
-        println("  mulps %%xmm1, %%xmm0");
+        if (use_ymm)
+          println("  vmulps %%ymm1, %%ymm0, %%ymm0");
+        else
+          println("  mulps %%xmm1, %%xmm0");
         break;
       case ND_DIV:
-        println("  divps %%xmm1, %%xmm0");
+        if (use_ymm)
+          println("  vdivps %%ymm1, %%ymm0, %%ymm0");
+        else
+          println("  divps %%xmm1, %%xmm0");
         break;
       case ND_BITXOR:
-        println("  pxor %%xmm1, %%xmm0");
+        if (use_ymm)
+          println("  vpxor %%ymm1, %%ymm0, %%ymm0");
+        else
+          println("  pxor %%xmm1, %%xmm0");
         break;
       case ND_BITAND:
-        println("  pand %%xmm1, %%xmm0");
+        if (use_ymm)
+          println("  vpand %%ymm1, %%ymm0, %%ymm0");
+        else
+          println("  pand %%xmm1, %%xmm0");
         break;
       case ND_BITOR:
-        println("  por %%xmm1, %%xmm0");
+        if (use_ymm)
+          println("  vpor %%ymm1, %%ymm0, %%ymm0");
+        else
+          println("  por %%xmm1, %%xmm0");
         break;
       case ND_NEG: 
-        println("  xorps %%xmm1, %%xmm1");     
-        println("  subps %%xmm0, %%xmm1");     
-        println("  movaps %%xmm1, %%xmm0"); 
+        if (use_ymm) {
+          println("  vxorps %%ymm1, %%ymm1, %%ymm1");
+          println("  vsubps %%ymm0, %%ymm1, %%ymm1");
+          println("  vmovaps %%ymm1, %%ymm0");
+        } else {
+          println("  xorps %%xmm1, %%xmm1");
+          println("  subps %%xmm0, %%xmm1");
+          println("  movaps %%xmm1, %%xmm0");
+        }
         break;                
       default:
         error_tok(node->tok, "%s:%d: error: unsupported float vector operation", __FILE__, __LINE__);
@@ -2110,64 +2159,364 @@ static void gen_vector_op(Node *node) {
   case TY_DOUBLE:
     switch (node->kind) {
     case ND_ADD:
-      println("  addpd %%xmm1, %%xmm0");
+      if (use_ymm)
+        println("  vaddpd %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  addpd %%xmm1, %%xmm0");
       break;
     case ND_SUB:
-      println("  subpd %%xmm1, %%xmm0");
+      if (use_ymm)
+        println("  vsubpd %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  subpd %%xmm1, %%xmm0");
       break;
     case ND_MUL:
-      println("  mulpd %%xmm1, %%xmm0");
+      if (use_ymm)
+        println("  vmulpd %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  mulpd %%xmm1, %%xmm0");
       break;
     case ND_DIV:
-      println("  divpd %%xmm1, %%xmm0");
+      if (use_ymm)
+        println("  vdivpd %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  divpd %%xmm1, %%xmm0");
       break;
     case ND_BITXOR:
-      println("  pxor %%xmm1, %%xmm0");
+      if (use_ymm)
+        println("  vpxor %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  pxor %%xmm1, %%xmm0");
       break;
     case ND_BITAND:
-      println("  pand %%xmm1, %%xmm0");
+      if (use_ymm)
+        println("  vpand %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  pand %%xmm1, %%xmm0");
       break;
     case ND_BITOR:
-      println("  por %%xmm1, %%xmm0");
+      if (use_ymm)
+        println("  vpor %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  por %%xmm1, %%xmm0");
       break;
     case ND_NEG: 
-      println("  xorpd %%xmm1, %%xmm1");     
-      println("  subpd %%xmm0, %%xmm1");     
-      println("  movapd %%xmm1, %%xmm0");  
+      if (use_ymm) {
+        println("  vxorpd %%ymm1, %%ymm1, %%ymm1");
+        println("  vsubpd %%ymm0, %%ymm1, %%ymm1");
+        println("  vmovapd %%ymm1, %%ymm0");
+      } else {
+        println("  xorpd %%xmm1, %%xmm1");
+        println("  subpd %%xmm0, %%xmm1");
+        println("  movapd %%xmm1, %%xmm0");
+      }
       break;      
     default:
       error_tok(node->tok, "%s:%d: error: unsupported double vector operation", __FILE__, __LINE__);
+    }
+    break;
+  case TY_CHAR:
+    switch (node->kind) {
+    case ND_ADD:
+      if (use_ymm)
+        println("  vpaddb %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  paddb %%xmm1, %%xmm0");
+      break;
+    case ND_SUB:
+      if (use_ymm)
+        println("  vpsubb %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  psubb %%xmm1, %%xmm0");
+      break;
+    case ND_BITXOR:
+      if (use_ymm)
+        println("  vpxor %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  pxor %%xmm1, %%xmm0");
+      break;
+    case ND_BITAND:
+      if (use_ymm)
+        println("  vpand %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  pand %%xmm1, %%xmm0");
+      break;
+    case ND_BITOR:
+      if (use_ymm)
+        println("  vpor %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  por %%xmm1, %%xmm0");
+      break;
+    case ND_NEG:
+      if (use_ymm) {
+        println("  vpxor %%ymm2, %%ymm2, %%ymm2");
+        println("  vpsubb %%ymm0, %%ymm2, %%ymm0");
+      } else {
+        println("  pxor %%xmm2, %%xmm2");
+        println("  psubb %%xmm0, %%xmm2");
+        println("  movdqu %%xmm2, %%xmm0");
+      }
+      break;
+    case ND_BITNOT:
+      if (use_ymm) {
+        println("  vpcmpeqd %%ymm2, %%ymm2, %%ymm2");
+        println("  vpxor %%ymm2, %%ymm0, %%ymm0");
+      } else {
+        println("  pcmpeqd %%xmm2, %%xmm2");
+        println("  pxor %%xmm2, %%xmm0");
+      }
+      break;
+    case ND_EQ:
+      if (use_ymm)
+        println("  vpcmpeqb %%ymm1, %%ymm0, %%ymm0");
+      else {
+        println("  movdqu %%xmm0, %%xmm2");
+        println("  pcmpeqb %%xmm1, %%xmm2");
+        println("  movdqu %%xmm2, %%xmm0");
+      }
+      break;
+    case ND_NE:
+      if (use_ymm) {
+        println("  vpcmpeqb %%ymm1, %%ymm0, %%ymm0");
+        println("  vpcmpeqd %%ymm2, %%ymm2, %%ymm2");
+        println("  vpxor %%ymm2, %%ymm0, %%ymm0");
+      } else {
+        println("  movdqu %%xmm0, %%xmm2");
+        println("  pcmpeqb %%xmm1, %%xmm2");
+        println("  pcmpeqd %%xmm3, %%xmm3");
+        println("  pxor %%xmm3, %%xmm2");
+        println("  movdqu %%xmm2, %%xmm0");
+      }
+      break;
+    case ND_LT:
+      if (use_ymm) {
+        println("  vpcmpgtb %%ymm0, %%ymm1, %%ymm0");
+      } else {
+        println("  movdqu %%xmm1, %%xmm2");
+        println("  pcmpgtb %%xmm0, %%xmm2");
+        println("  movdqu %%xmm2, %%xmm0");
+      }
+      break;
+    case ND_LE:
+      if (use_ymm) {
+        println("  vpcmpgtb %%ymm1, %%ymm0, %%ymm0");
+        println("  vpcmpeqd %%ymm2, %%ymm2, %%ymm2");
+        println("  vpxor %%ymm2, %%ymm0, %%ymm0");
+      } else {
+        println("  movdqu %%xmm0, %%xmm2");
+        println("  pcmpgtb %%xmm1, %%xmm2");
+        println("  pcmpeqd %%xmm3, %%xmm3");
+        println("  pxor %%xmm3, %%xmm2");
+        println("  movdqu %%xmm2, %%xmm0");
+      }
+      break;
+    default:
+      error_tok(node->tok, "%s:%d: error: char vector operation not supported", __FILE__, __LINE__);
+    }
+    break;
+  case TY_SHORT:
+    switch (node->kind) {
+    case ND_ADD:
+      if (use_ymm)
+        println("  vpaddw %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  paddw %%xmm1, %%xmm0");
+      break;
+    case ND_SUB:
+      if (use_ymm)
+        println("  vpsubw %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  psubw %%xmm1, %%xmm0");
+      break;
+    case ND_MUL:
+      if (use_ymm)
+        println("  vpmullw %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  pmullw %%xmm1, %%xmm0");
+      break;
+    case ND_BITXOR:
+      if (use_ymm)
+        println("  vpxor %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  pxor %%xmm1, %%xmm0");
+      break;
+    case ND_BITAND:
+      if (use_ymm)
+        println("  vpand %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  pand %%xmm1, %%xmm0");
+      break;
+    case ND_BITOR:
+      if (use_ymm)
+        println("  vpor %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  por %%xmm1, %%xmm0");
+      break;
+    case ND_NEG:
+      if (use_ymm) {
+        println("  vpxor %%ymm2, %%ymm2, %%ymm2");
+        println("  vpsubw %%ymm0, %%ymm2, %%ymm0");
+      } else {
+        println("  pxor %%xmm2, %%xmm2");
+        println("  psubw %%xmm0, %%xmm2");
+        println("  movdqu %%xmm2, %%xmm0");
+      }
+      break;
+    case ND_BITNOT:
+      if (use_ymm) {
+        println("  vpcmpeqd %%ymm2, %%ymm2, %%ymm2");
+        println("  vpxor %%ymm2, %%ymm0, %%ymm0");
+      } else {
+        println("  pcmpeqd %%xmm2, %%xmm2");
+        println("  pxor %%xmm2, %%xmm0");
+      }
+      break;
+    case ND_EQ:
+      if (use_ymm)
+        println("  vpcmpeqw %%ymm1, %%ymm0, %%ymm0");
+      else {
+        println("  movdqu %%xmm0, %%xmm2");
+        println("  pcmpeqw %%xmm1, %%xmm2");
+        println("  movdqu %%xmm2, %%xmm0");
+      }
+      break;
+    case ND_NE:
+      if (use_ymm) {
+        println("  vpcmpeqw %%ymm1, %%ymm0, %%ymm0");
+        println("  vpcmpeqd %%ymm2, %%ymm2, %%ymm2");
+        println("  vpxor %%ymm2, %%ymm0, %%ymm0");
+      } else {
+        println("  movdqu %%xmm0, %%xmm2");
+        println("  pcmpeqw %%xmm1, %%xmm2");
+        println("  pcmpeqd %%xmm3, %%xmm3");
+        println("  pxor %%xmm3, %%xmm2");
+        println("  movdqu %%xmm2, %%xmm0");
+      }
+      break;
+    case ND_LT:
+      if (use_ymm) {
+        println("  vpcmpgtw %%ymm0, %%ymm1, %%ymm0");
+      } else {
+        println("  movdqu %%xmm1, %%xmm2");
+        println("  pcmpgtw %%xmm0, %%xmm2");
+        println("  movdqu %%xmm2, %%xmm0");
+      }
+      break;
+    case ND_LE:
+      if (use_ymm) {
+        println("  vpcmpgtw %%ymm1, %%ymm0, %%ymm0");
+        println("  vpcmpeqd %%ymm2, %%ymm2, %%ymm2");
+        println("  vpxor %%ymm2, %%ymm0, %%ymm0");
+      } else {
+        println("  movdqu %%xmm0, %%xmm2");
+        println("  pcmpgtw %%xmm1, %%xmm2");
+        println("  pcmpeqd %%xmm3, %%xmm3");
+        println("  pxor %%xmm3, %%xmm2");
+        println("  movdqu %%xmm2, %%xmm0");
+      }
+      break;
+    default:
+      error_tok(node->tok, "%s:%d: error: short vector operation not supported", __FILE__, __LINE__);
     }
     break;
   case TY_LLONG:
   case TY_LONG:
     switch (node->kind) {
     case ND_ADD:
-      println("  paddq %%xmm1, %%xmm0");
+      if (use_ymm)
+        println("  vpaddq %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  paddq %%xmm1, %%xmm0");
       break;
     case ND_SUB:
-      println("  psubq %%xmm1, %%xmm0");
+      if (use_ymm)
+        println("  vpsubq %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  psubq %%xmm1, %%xmm0");
       break;
     case ND_MUL:
-      println("  pmulld %%xmm1, %%xmm0"); // Note: no native 64-bit integer multiply in SSE2; might need scalar fallback
+      error_tok(node->tok, "%s:%d: error: 64-bit integer vector multiply not supported", __FILE__, __LINE__);
       break;
     case ND_BITXOR:
-      println("  pxor %%xmm1, %%xmm0");
+      if (use_ymm)
+        println("  vpxor %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  pxor %%xmm1, %%xmm0");
       break;
     case ND_BITAND:
-      println("  pand %%xmm1, %%xmm0");
+      if (use_ymm)
+        println("  vpand %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  pand %%xmm1, %%xmm0");
       break;
     case ND_BITOR:
-      println("  por %%xmm1, %%xmm0");
+      if (use_ymm)
+        println("  vpor %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  por %%xmm1, %%xmm0");
       break;
     case ND_NEG:
-      println("  pxor %%xmm1, %%xmm1");
-      println("  psubq %%xmm0, %%xmm1");
-      println("  movdqu %%xmm1, %%xmm0");
+      if (use_ymm) {
+        println("  vpxor %%ymm2, %%ymm2, %%ymm2");
+        println("  vpsubq %%ymm0, %%ymm2, %%ymm0");
+      } else {
+        println("  pxor %%xmm1, %%xmm1");
+        println("  psubq %%xmm0, %%xmm1");
+        println("  movdqu %%xmm1, %%xmm0");
+      }
       break;
     case ND_BITNOT:
-      println("  pcmpeqq %%xmm1, %%xmm1"); // SSE4.1; for SSE2 use two 32-bit pcmpeqd and pack
-      println("  pxor %%xmm1, %%xmm0");
+      if (use_ymm) {
+        println("  vpcmpeqd %%ymm2, %%ymm2, %%ymm2");
+        println("  vpxor %%ymm2, %%ymm0, %%ymm0");
+      } else {
+        println("  pcmpeqd %%xmm1, %%xmm1");
+        println("  pxor %%xmm1, %%xmm0");
+      }
+      break;
+    case ND_EQ:
+      if (use_ymm)
+        println("  vpcmpeqq %%ymm1, %%ymm0, %%ymm0");
+      else {
+        println("  movdqu %%xmm0, %%xmm2");
+        println("  pcmpeqq %%xmm1, %%xmm2");
+        println("  movdqu %%xmm2, %%xmm0");
+      }
+      break;
+    case ND_NE:
+      if (use_ymm) {
+        println("  vpcmpeqq %%ymm1, %%ymm0, %%ymm0");
+        println("  vpcmpeqd %%ymm2, %%ymm2, %%ymm2");
+        println("  vpxor %%ymm2, %%ymm0, %%ymm0");
+      } else {
+        println("  movdqu %%xmm0, %%xmm2");
+        println("  pcmpeqq %%xmm1, %%xmm2");
+        println("  pcmpeqd %%xmm3, %%xmm3");
+        println("  pxor %%xmm3, %%xmm2");
+        println("  movdqu %%xmm2, %%xmm0");
+      }
+      break;
+    case ND_LT:
+      if (use_ymm) {
+        println("  vpcmpgtq %%ymm0, %%ymm1, %%ymm0");
+      } else {
+        println("  movdqu %%xmm1, %%xmm2");
+        println("  pcmpgtq %%xmm0, %%xmm2");
+        println("  movdqu %%xmm2, %%xmm0");
+      }
+      break;
+    case ND_LE:
+      if (use_ymm) {
+        println("  vpcmpgtq %%ymm1, %%ymm0, %%ymm0");
+        println("  vpcmpeqd %%ymm2, %%ymm2, %%ymm2");
+        println("  vpxor %%ymm2, %%ymm0, %%ymm0");
+      } else {
+        println("  movdqu %%xmm0, %%xmm2");
+        println("  pcmpgtq %%xmm1, %%xmm2");
+        println("  pcmpeqd %%xmm3, %%xmm3");
+        println("  pxor %%xmm3, %%xmm2");
+        println("  movdqu %%xmm2, %%xmm0");
+      }
       break;
     default:
       error_tok(node->tok, "%s:%d: error: long vector operation not supported", __FILE__, __LINE__);
@@ -2176,36 +2525,110 @@ static void gen_vector_op(Node *node) {
   case TY_INT:
     switch (node->kind) {
     case ND_ADD:
-      println("  paddd %%xmm1, %%xmm0");
+      if (use_ymm)
+        println("  vpaddd %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  paddd %%xmm1, %%xmm0");
       break;
     case ND_SUB:
-      println("  psubd %%xmm1, %%xmm0");
+      if (use_ymm)
+        println("  vpsubd %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  psubd %%xmm1, %%xmm0");
       break;
     case ND_MUL:
-      println("  pmulld %%xmm1, %%xmm0");
+      if (use_ymm)
+        println("  vpmulld %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  pmulld %%xmm1, %%xmm0");
       break;
     case ND_BITXOR:
-      println("  pxor %%xmm1, %%xmm0");
+      if (use_ymm)
+        println("  vpxor %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  pxor %%xmm1, %%xmm0");
       break;
     case ND_BITAND:
-      println("  pand %%xmm1, %%xmm0");
+      if (use_ymm)
+        println("  vpand %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  pand %%xmm1, %%xmm0");
       break;
     case ND_BITOR:
-      println("  por %%xmm1, %%xmm0");
+      if (use_ymm)
+        println("  vpor %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  por %%xmm1, %%xmm0");
       break;
     case ND_NEG: 
-      println("  pxor %%xmm1, %%xmm1");      
-      println("  psubd %%xmm0, %%xmm1");     
-      println("  movdqu %%xmm1, %%xmm0");
+      if (use_ymm) {
+        println("  vpxor %%ymm2, %%ymm2, %%ymm2");
+        println("  vpsubd %%ymm0, %%ymm2, %%ymm0");
+      } else {
+        println("  pxor %%xmm1, %%xmm1");
+        println("  psubd %%xmm0, %%xmm1");
+        println("  movdqu %%xmm1, %%xmm0");
+      }
       break;
     case ND_BITNOT:
-      println("  pcmpeqd %%xmm1, %%xmm1"); 
-      println("  pxor %%xmm1, %%xmm0");  
+      if (use_ymm) {
+        println("  vpcmpeqd %%ymm2, %%ymm2, %%ymm2");
+        println("  vpxor %%ymm2, %%ymm0, %%ymm0");
+      } else {
+        println("  pcmpeqd %%xmm1, %%xmm1");
+        println("  pxor %%xmm1, %%xmm0");
+      }
       break;      
+    case ND_EQ:
+      if (use_ymm)
+        println("  vpcmpeqd %%ymm1, %%ymm0, %%ymm0");
+      else {
+        println("  movdqu %%xmm0, %%xmm2");
+        println("  pcmpeqd %%xmm1, %%xmm2");
+        println("  movdqu %%xmm2, %%xmm0");
+      }
+      break;
+    case ND_NE:
+      if (use_ymm) {
+        println("  vpcmpeqd %%ymm1, %%ymm0, %%ymm0");
+        println("  vpcmpeqd %%ymm2, %%ymm2, %%ymm2");
+        println("  vpxor %%ymm2, %%ymm0, %%ymm0");
+      } else {
+        println("  movdqu %%xmm0, %%xmm2");
+        println("  pcmpeqd %%xmm1, %%xmm2");
+        println("  pcmpeqd %%xmm3, %%xmm3");
+        println("  pxor %%xmm3, %%xmm2");
+        println("  movdqu %%xmm2, %%xmm0");
+      }
+      break;
+    case ND_LT:
+      if (use_ymm) {
+        println("  vpcmpgtd %%ymm0, %%ymm1, %%ymm0");
+      } else {
+        println("  movdqu %%xmm1, %%xmm2");
+        println("  pcmpgtd %%xmm0, %%xmm2");
+        println("  movdqu %%xmm2, %%xmm0");
+      }
+      break;
+    case ND_LE:
+      if (use_ymm) {
+        println("  vpcmpgtd %%ymm1, %%ymm0, %%ymm0");
+        println("  vpcmpeqd %%ymm2, %%ymm2, %%ymm2");
+        println("  vpxor %%ymm2, %%ymm0, %%ymm0");
+      } else {
+        println("  movdqu %%xmm0, %%xmm2");
+        println("  pcmpgtd %%xmm1, %%xmm2");
+        println("  pcmpeqd %%xmm3, %%xmm3");
+        println("  pxor %%xmm3, %%xmm2");
+        println("  movdqu %%xmm2, %%xmm0");
+      }
+      break;
     default:
       error_tok(node->tok, "%s:%d: error: integer vector operation not supported", __FILE__, __LINE__);
     }
     break;
+  default:
+    error_tok(node->tok, "%s:%d: error: vector base type not supported %d", __FILE__, __LINE__, vec_ty->base->kind);
   }
 }
 
@@ -2438,7 +2861,6 @@ static void gen_psubusb256(Node *node) {
   gen_expr(node->lhs); // A
   pop_ymm(1);
   println("  vpsubusb %%ymm1, %%ymm0, %%ymm0");
-  println("  vzeroupper");
 }
 
 static void gen_vec_init_binop(Node *node, const char *insn) {

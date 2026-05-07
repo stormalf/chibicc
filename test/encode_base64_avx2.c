@@ -26,8 +26,7 @@
 
 void OPENSSL_cpuid_setup() { return ;};
 /* ── capability word exposed by OpenSSL ────────────────────────────────── */
-extern unsigned int OPENSSL_ia32cap_P[];   /* [0]=EAX, [1]=EDX, [2]=ECX leaf7 */
-
+unsigned int OPENSSL_ia32cap_P[10];   /* 40 bytes, matches OpenSSL layout */
 /* AVX2 is reported in OPENSSL_ia32cap_P[2] bit 5 (CPUID leaf 7, EBX bit 5)  */
 #define AVX2_BIT  (1u << 5)
 #define EVP_ENCODE_CTX_USE_SRP_ALPHABET 2
