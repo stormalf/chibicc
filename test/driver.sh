@@ -13,6 +13,11 @@ check() {
     fi
 }
 
+# switch expression type-checking (autoconf relies on this)
+echo 'int main(){char *p=0; switch(p){case 0: break;} return 0;}' | $chibicc -c -o /dev/null -xc - >/dev/null 2>&1
+[ $? -ne 0 ]
+check 'switch pointer rejected'
+
 # -o
 rm -f $tmp/out
 ./chibicc -c -o $tmp/out $tmp/empty.c

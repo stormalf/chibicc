@@ -2773,6 +2773,9 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
     SET_CTX(ctx);      
     tok = skip(tok->next, "(", ctx);
     node->cond = expr(&tok, tok);
+    add_type(node->cond);
+    if (!is_integer(node->cond->ty))
+      error_tok(node->cond->tok, "%s:%d: in stmt : switch expression must have integer type", __FILE__, __LINE__);
 
     SET_CTX(ctx);      
     tok = skip(tok, ")", ctx);

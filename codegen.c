@@ -3364,7 +3364,7 @@ static void gen_singleop(Node *node, const char *insn) {
 
 static void gen_mul_overflow(Node *node) {
   int c = count(); 
-  Type *ty = node->lhs->ty;  
+  Type *ty = node->lhs->ty;
   if (ty->base)
     ty = ty->base;
   int size = ty->size;
@@ -3386,7 +3386,7 @@ static void gen_mul_overflow(Node *node) {
       println("  imul %%sil");
     println("  jo .L.overflowm%d", c);
     println("  mov %%al, (%%rcx)");
-    println("  mov $0, %%al");       
+    println("  mov $0, %%eax");
     println("  jmp .L.donem%d", c);   
   } else if (size == 2) {
     // For 16-bit values (short)
@@ -3397,7 +3397,7 @@ static void gen_mul_overflow(Node *node) {
       println("  imul %%si");
     println("  jo .L.overflowm%d", c);
     println("  mov %%ax, (%%rcx)");
-    println("  mov $0, %%ax");       
+    println("  mov $0, %%eax");
     println("  jmp .L.donem%d", c);   
   } else if (size == 4) {
     // For 32-bit values (int)
@@ -3408,7 +3408,7 @@ static void gen_mul_overflow(Node *node) {
       println("  imul %%esi");
     println("  jo .L.overflowm%d", c);  
     println("  mov %%eax, (%%rcx)");   
-    println("  mov $0, %%eax");       
+    println("  mov $0, %%eax");
     println("  jmp .L.donem%d", c);   
   } else if (size == 8) {
     // For 64-bit values (long long)
@@ -3436,48 +3436,208 @@ static void gen_mul_overflow(Node *node) {
 
 static void gen_sub_overflow(Node *node) {
     int c = count(); 
-    Type *ty = node->builtin_dest->ty;  
+    Type *ty = node->builtin_dest->ty;
     if (ty->base)
       ty = ty->base;
+
     gen_expr(node->lhs);
-    if (ty->size == 16) pushx_tmp(); else push_tmp();
+    if (ty->size == 16)
+      pushx_tmp();
+    else
+      push_tmp();
     gen_expr(node->rhs);
-    if (ty->size == 16) pushx_tmp(); else push_tmp();
+    if (ty->size == 16)
+      pushx_tmp();
+    else
+      push_tmp();
     gen_expr(node->builtin_dest);
     push_tmp();
-    pop_tmp("%rdx");  
-    if (ty->size == 16) popx_tmp("%rcx", "%rsi"); else pop_tmp("%rsi");
-    if (ty->size == 16) popx_tmp("%rax", "%rdi"); else pop_tmp("%rdi");
+
+    pop_tmp("%rdx");  // dest ptr
+    if (ty->size == 16)
+      popx_tmp("%rcx", "%rsi"); // rhs low/high
+    else
+      pop_tmp("%rsi");          // rhs
+    if (ty->size == 16)
+      popx_tmp("%rax", "%rdi"); // lhs low/high
+    else
+      pop_tmp("%rdi");          // lhs
 
     if (ty->size == 1) {
-        println("  mov %%dil, %%al");
-        println("  sub %%sil, %%al");
+        // Promote operands to signed 64-bit infinite precision values.
+        // lhs -> %rax
+        if (node->lhs->ty->is_unsigned) {
+          println("  movzbl %%dil, %%eax");
+        } else {
+          println("  movsbl %%dil, %%eax");
+        }
+        println("  movslq %%eax, %%rax");
+
+        // rhs -> %rcx
+        if (node->rhs->ty->is_unsigned) {
+          println("  movzbl %%sil, %%ecx");
+        } else {
+          println("  movsbl %%sil, %%ecx");
+        }
+        println("  movslq %%ecx, %%rcx");
+
+        // wide = lhs - rhs
+        println("  sub %%rcx, %%rax");
+
+        // store truncated result
         println("  mov %%al, (%%rdx)");
+
+        // overflow check vs destination type
+        if (ty->is_unsigned) {
+          // 0..255
+          println("  cmp $0, %%rax");
+          println("  jl .Loverflows%d", c);
+          println("  cmp $255, %%rax");
+          println("  jg .Loverflows%d", c);
+        } else {
+          // -128..127
+          println("  cmp $-128, %%rax");
+          println("  jl .Loverflows%d", c);
+          println("  cmp $127, %%rax");
+          println("  jg .Loverflows%d", c);
+        }
+        println("  mov $0, %%eax");
+        println("  jmp .Lends%d", c);
+        println(".Loverflows%d:", c);
+        println("  mov $1, %%eax");
+        println(".Lends%d:", c);
+        return;
     } else if (ty->size == 2) {
-        println("  mov %%di, %%ax");
-        println("  sub %%si, %%ax");
+        if (node->lhs->ty->is_unsigned) {
+          println("  movzwl %%di, %%eax");
+        } else {
+          println("  movswl %%di, %%eax");
+        }
+        println("  movslq %%eax, %%rax");
+
+        if (node->rhs->ty->is_unsigned) {
+          println("  movzwl %%si, %%ecx");
+        } else {
+          println("  movswl %%si, %%ecx");
+        }
+        println("  movslq %%ecx, %%rcx");
+
+        println("  sub %%rcx, %%rax");
         println("  mov %%ax, (%%rdx)");
+
+        if (ty->is_unsigned) {
+          // 0..65535
+          println("  cmp $0, %%rax");
+          println("  jl .Loverflows%d", c);
+          println("  cmp $65535, %%rax");
+          println("  jg .Loverflows%d", c);
+        } else {
+          // -32768..32767
+          println("  cmp $-32768, %%rax");
+          println("  jl .Loverflows%d", c);
+          println("  cmp $32767, %%rax");
+          println("  jg .Loverflows%d", c);
+        }
+        println("  mov $0, %%eax");
+        println("  jmp .Lends%d", c);
+        println(".Loverflows%d:", c);
+        println("  mov $1, %%eax");
+        println(".Lends%d:", c);
+        return;
     } else if (ty->size == 4) {
+        // lhs -> %rax
         println("  mov %%edi, %%eax");
-        println("  sub %%esi, %%eax");
+        if (!node->lhs->ty->is_unsigned)
+          println("  movslq %%eax, %%rax");
+
+        // rhs -> %rcx
+        println("  mov %%esi, %%ecx");
+        if (!node->rhs->ty->is_unsigned)
+          println("  movslq %%ecx, %%rcx");
+
+        println("  sub %%rcx, %%rax");
         println("  mov %%eax, (%%rdx)");
+
+        if (ty->is_unsigned) {
+          // 0..4294967295
+          println("  cmp $0, %%rax");
+          println("  jl .Loverflows%d", c);
+          println("  mov $4294967295, %%rcx");
+          println("  cmp %%rcx, %%rax");
+          println("  jg .Loverflows%d", c);
+        } else {
+          // -2147483648..2147483647
+          println("  mov $-2147483648, %%rcx");
+          println("  cmp %%rcx, %%rax");
+          println("  jl .Loverflows%d", c);
+          println("  mov $2147483647, %%rcx");
+          println("  cmp %%rcx, %%rax");
+          println("  jg .Loverflows%d", c);
+        }
+        println("  mov $0, %%eax");
+        println("  jmp .Lends%d", c);
+        println(".Loverflows%d:", c);
+        println("  mov $1, %%eax");
+        println(".Lends%d:", c);
+        return;
     } else if (ty->size == 8) {
+        // Use 128-bit arithmetic for 64-bit operands.
+        // Build lhs128 in rax:rcx, rhs128 in rbx:r8 (low:high).
+        // lhs low in %rdi, rhs low in %rsi.
         println("  mov %%rdi, %%rax");
-        println("  sub %%rsi, %%rax");
+        if (node->lhs->ty->is_unsigned) {
+          println("  xor %%rcx, %%rcx");
+        } else {
+          println("  mov %%rdi, %%rcx");
+          println("  sar $63, %%rcx");
+        }
+
+        println("  mov %%rsi, %%rbx");
+        if (node->rhs->ty->is_unsigned) {
+          println("  xor %%r8, %%r8");
+        } else {
+          println("  mov %%rsi, %%r8");
+          println("  sar $63, %%r8");
+        }
+
+        // rax:rcx = lhs, rbx:r8 = rhs
+        println("  sub %%rbx, %%rax");
+        println("  sbb %%r8, %%rcx");
+
+        // Now wide result is in rax:rcx.
+        // Store truncated 64-bit result.
         println("  mov %%rax, (%%rdx)");
-    } else if (ty->size == 16) { // __int128
-        // lhs in rax:rdi (low:high), rhs in rcx:rsi. rdx is result ptr
+
+        if (ty->is_unsigned) {
+          // Unsigned 64-bit destination: overflow iff high 64 bits are not 0.
+          println("  test %%rcx, %%rcx");
+          println("  sete %%al");
+          println("  xor $1, %%al");
+          println("  movzx %%al, %%eax");
+        } else {
+          // Signed 64-bit destination: overflow iff high 64 bits are not
+          // sign-extension of low 64 bits.
+          println("  mov %%rax, %%r8");
+          println("  sar $63, %%r8");        // expected high (-1 or 0)
+          println("  cmp %%r8, %%rcx");
+          println("  sete %%al");
+          println("  xor $1, %%al");
+          println("  movzx %%al, %%eax");
+        }
+
+        return;
+    } else if (ty->size == 16) { // __int128 destination
         println("  sub %%rcx, %%rax");        // sub low
         println("  sbb %%rsi, %%rdi");        // sbb high
-
         println("  mov %%rax, (%%rdx)");      // store result low
         println("  mov %%rdi, 8(%%rdx)");     // store result high
     }
+
     if (ty->is_unsigned)
       println("  setc %%al");
     else
       println("  seto %%al");
-    println("  movzx %%al, %%eax");  
+    println("  movzx %%al, %%eax");
     println("  cmp $0, %%eax");
     println("  jne .Loverflows%d", c);
     println("  mov $0, %%eax");

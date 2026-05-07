@@ -520,6 +520,16 @@ lxc: https://github.com/lxc/lxc.git
     CC=chibicc CFLAGS="-fpic" meson build && cd build && meson compile
 
 
+
+postgres: https://github.com/postgres/postgres.git  (in case of bad network use git clone --filter=blob:none --depth=1 https://github.com/postgres/postgres.git --branch master)
+
+    CC=chibicc  CFLAGS="-g -std=c11" ./configure --host x86_64-linux-gnu 
+    make
+    make check    
+    # (test process exited with exit code 2)
+    1..229
+    # All 229 tests passed.
+    
   
 
 ## Limits
@@ -548,17 +558,6 @@ cpython: git clone https://github.com/python/cpython.git
         Total test files: run=503/500 failed=5 skipped=25 resource_denied=3 rerun=6
 
 
-postgres: https://github.com/postgres/postgres.git  (in case of bad network use git clone --filter=blob:none --depth=1 https://github.com/postgres/postgres.git --branch master)
-
-    CC=chibicc  CFLAGS="-g -std=c11" ./configure --host x86_64-linux-gnu 
-    make
-    make check
-    failed during tests : 
-    not ok 229   - tablespace                                 14 ms
-    # (test process exited with exit code 2)
-    1..229
-    # 9 of 229 tests failed.
-    
 
 ## features added 
 
@@ -590,8 +589,7 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
     postgres execution : compile OK, tests OK except 9
     git 2 tests failed    
     vim: compile OK, tests OK except 1.
-    cpython : compile OK, some tests KO     
-    openssl: compile OK, tests OK except 3.
+    cpython : compile OK, some tests KO         
            
 
 ## projects compiled successfully with chibicc
@@ -604,6 +602,7 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
     vlc: compile OK  
     memcached : compile OK, tests OK      
     php-src : compile OK, tests OK    
+    openssl: compile OK, tests OK
     
 
 
@@ -636,7 +635,7 @@ Example of diagram generated with -dotfile parameter :
 ## release notes
 
 1.0.24  Passing GNUC from 3 to 4. Adding const, volatile, restrict support from slimcc/fuhsnn. Fixing issue ISS-195 prockill due to leakage attributes. Managing pragma pack. Fixing issue with attributes and alignment. Fixing issue with some edge cases initializer. Fixing some float comparisons issues with NaN. Fixing alignof issue and managing asm name. Fixing issue with string char array members initialization. Fixing issue with unicode characters. Managing anonymous enums. Fixing issue with extended assembly and &x in input. Fixing issue with extended assembly and macro expansion. Fixing issue with builtin_prefetch found during openssl compile. Managing \__atomic_is_lock_free. Adding \__builtin_offsetof and __has_builtin. Adding \__builtin_rotateleftxx. Fixing issue with attribute after typenames. Fixing issue with attribute hiding. Fixing issue with vlc compile undefined functions (ISS-206). Reversing changes on is_function that causes side effect on cpython compile. Fixing issue with unicode x\u0000y. Fixing warning sent wrongly during tokenization. Reversing openssl changed that caused side effects on cpython. Deleting preprocess3 that caused side effect in openssl parsing. Fixing issue with openssl and undefined reference. Adding some builtin xxx256.
-Fixing issue with __m256 not managed correctly (sometimes dealt as __int128) found during openssl tests that fixed also lots of postgres tests.
+Fixing issue with __m256 not managed correctly (sometimes dealt as __int128) found during openssl tests that fixed also lots of postgres tests. Fixing remaining postgres tests.
 
 
 
