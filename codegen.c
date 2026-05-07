@@ -183,7 +183,7 @@ static void push(void)
 {
   println("  push %%rax");
   //temp hack for issue with openssl need to think about replacing push/pop by what gcc is doing
-  println("  mov %%rax, %%rdx");
+  //println("  mov %%rax, %%rdx");
   depth++;
 }
 

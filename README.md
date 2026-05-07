@@ -496,6 +496,19 @@ openssl : https://github.com/openssl/openssl.git
     	my $section='.note.gnu.property';
     make
     make test
+    Test Summary Report
+    -------------------
+    70-test_quic_radix.t                   (Wstat: 256 (exited 1) Tests: 1 Failed: 1)
+        Failed test:  1
+        Non-zero exit status: 1
+    70-test_quic_multistream.t             (Wstat: 256 (exited 1) Tests: 2 Failed: 1)
+        Failed test:  1
+        Non-zero exit status: 1
+    30-test_evp.t                          (Wstat: 256 (exited 1) Tests: 180 Failed: 1)
+        Failed test:  20
+        Non-zero exit status: 1
+    Files=363, Tests=4774, 664 wallclock secs (31.24 usr  3.86 sys + 1927.08 cusr 246.06 csys = 2208.24 CPU)
+    Result: FAIL
 
 
 ## meson
@@ -544,7 +557,7 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
     not ok 229   - tablespace                                 14 ms
     # (test process exited with exit code 2)
     1..229
-    # 229 of 229 tests failed.
+    # 9 of 229 tests failed.
     
 
 ## features added 
@@ -555,11 +568,12 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
     - alignment attributes supported (like GNUC level 4)
     - some basic optimization
     - some basic debug information (dwarf information)
+    - adding support on __m256 avx2
 
  
 ## TODO
 
-- trying to pass GNUC from 3 to 4
+- trying to pass GNUC from 4 to higher compatibility level
 - trying to compile other C projects from source to see what is missing or which bug we have with chibicc.
 - trying to fix issue with postgres tests
 - trying to rewrite extended assembly to be more robust
@@ -573,11 +587,11 @@ postgres: https://github.com/postgres/postgres.git  (in case of bad network use 
 
 ## known issues
 
-    postgres execution : tests KO
+    postgres execution : compile OK, tests OK except 9
     git 2 tests failed    
     vim: compile OK, tests OK except 1.
     cpython : compile OK, some tests KO     
-    openssl: compile OK, tests KO
+    openssl: compile OK, tests OK except 3.
            
 
 ## projects compiled successfully with chibicc
@@ -622,6 +636,7 @@ Example of diagram generated with -dotfile parameter :
 ## release notes
 
 1.0.24  Passing GNUC from 3 to 4. Adding const, volatile, restrict support from slimcc/fuhsnn. Fixing issue ISS-195 prockill due to leakage attributes. Managing pragma pack. Fixing issue with attributes and alignment. Fixing issue with some edge cases initializer. Fixing some float comparisons issues with NaN. Fixing alignof issue and managing asm name. Fixing issue with string char array members initialization. Fixing issue with unicode characters. Managing anonymous enums. Fixing issue with extended assembly and &x in input. Fixing issue with extended assembly and macro expansion. Fixing issue with builtin_prefetch found during openssl compile. Managing \__atomic_is_lock_free. Adding \__builtin_offsetof and __has_builtin. Adding \__builtin_rotateleftxx. Fixing issue with attribute after typenames. Fixing issue with attribute hiding. Fixing issue with vlc compile undefined functions (ISS-206). Reversing changes on is_function that causes side effect on cpython compile. Fixing issue with unicode x\u0000y. Fixing warning sent wrongly during tokenization. Reversing openssl changed that caused side effects on cpython. Deleting preprocess3 that caused side effect in openssl parsing. Fixing issue with openssl and undefined reference. Adding some builtin xxx256.
+Fixing issue with __m256 not managed correctly (sometimes dealt as __int128) found during openssl tests that fixed also lots of postgres tests.
 
 
 
