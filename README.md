@@ -490,25 +490,24 @@ php-src: https://github.com/php/php-src.git
 openssl : https://github.com/openssl/openssl.git
 
     CC=chibicc ./Configure    
-    You need to remove from the file from openssl/crypto/perlasm/x86_64-xlate.pl
-    	my $section='.note.gnu.property, #alloc';
-    by :
-    	my $section='.note.gnu.property';
     make
     make test
     Test Summary Report
     -------------------
-    70-test_quic_radix.t                   (Wstat: 256 (exited 1) Tests: 1 Failed: 1)
-        Failed test:  1
-        Non-zero exit status: 1
-    70-test_quic_multistream.t             (Wstat: 256 (exited 1) Tests: 2 Failed: 1)
-        Failed test:  1
-        Non-zero exit status: 1
-    30-test_evp.t                          (Wstat: 256 (exited 1) Tests: 180 Failed: 1)
-        Failed test:  20
-        Non-zero exit status: 1
-    Files=363, Tests=4774, 664 wallclock secs (31.24 usr  3.86 sys + 1927.08 cusr 246.06 csys = 2208.24 CPU)
+    25-test_req.t                          (Wstat: 256 (exited 1) Tests: 129 Failed: 1)
+      Failed test:  80
+      Non-zero exit status: 1
+    Files=363, Tests=4774, 553 wallclock secs (29.86 usr  3.87 sys + 1922.87 cusr 222.54 csys = 2179.14 CPU)
     Result: FAIL
+
+postgres: https://github.com/postgres/postgres.git  (in case of bad network use git clone --filter=blob:none --depth=1 https://github.com/postgres/postgres.git --branch master)
+
+    CC=chibicc  CFLAGS="-g -std=c11" ./configure --host x86_64-linux-gnu 
+    make
+    make check    
+    # (test process exited with exit code 2)
+    1..229
+    # All 229 tests passed.
 
 
 ## meson
@@ -519,16 +518,6 @@ lxc: https://github.com/lxc/lxc.git
 
     CC=chibicc CFLAGS="-fpic" meson build && cd build && meson compile
 
-
-
-postgres: https://github.com/postgres/postgres.git  (in case of bad network use git clone --filter=blob:none --depth=1 https://github.com/postgres/postgres.git --branch master)
-
-    CC=chibicc  CFLAGS="-g -std=c11" ./configure --host x86_64-linux-gnu 
-    make
-    make check    
-    # (test process exited with exit code 2)
-    1..229
-    # All 229 tests passed.
     
   
 
@@ -586,7 +575,6 @@ cpython: git clone https://github.com/python/cpython.git
 
 ## known issues
 
-    postgres execution : compile OK, tests OK except 9
     git 2 tests failed    
     vim: compile OK, tests OK except 1.
     cpython : compile OK, some tests KO         
@@ -602,7 +590,8 @@ cpython: git clone https://github.com/python/cpython.git
     vlc: compile OK  
     memcached : compile OK, tests OK      
     php-src : compile OK, tests OK    
-    openssl: compile OK, tests OK
+    openssl: compile OK, tests OK (except 1)
+    postgres execution : compile OK, tests OK
     
 
 
