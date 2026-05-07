@@ -492,13 +492,8 @@ openssl : https://github.com/openssl/openssl.git
     CC=chibicc ./Configure    
     make
     make test
-    Test Summary Report
-    -------------------
-    25-test_req.t                          (Wstat: 256 (exited 1) Tests: 129 Failed: 1)
-      Failed test:  80
-      Non-zero exit status: 1
-    Files=363, Tests=4774, 553 wallclock secs (29.86 usr  3.87 sys + 1922.87 cusr 222.54 csys = 2179.14 CPU)
-    Result: FAIL
+
+
 
 postgres: https://github.com/postgres/postgres.git  (in case of bad network use git clone --filter=blob:none --depth=1 https://github.com/postgres/postgres.git --branch master)
 
@@ -590,7 +585,7 @@ cpython: git clone https://github.com/python/cpython.git
     vlc: compile OK  
     memcached : compile OK, tests OK      
     php-src : compile OK, tests OK    
-    openssl: compile OK, tests OK (except 1)
+    openssl: compile OK, tests OK
     postgres execution : compile OK, tests OK
     
 

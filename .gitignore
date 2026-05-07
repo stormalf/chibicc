@@ -35,3 +35,4 @@ compile_commands.json
 vgcore.*
 .codex
 **/*.S
+.codegraph
