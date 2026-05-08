@@ -4,8 +4,8 @@ PREFIX=/usr/local
 GCC_VERSION!=gcc -dumpversion
 CC=gcc
 CFLAGS =-std=c11 -g -fno-common -Wall -Wno-switch -DPREFIX=\"$(PREFIX)\" -DGCC_VERSION=\"$(GCC_VERSION)\"
-CFLAGS_DIAG= -std=c11 
-CFLAGS_SPE = -fomit-frame-pointer -O3
+CFLAGS_DIAG= -std=c11 -g 
+CFLAGS_SPE = -g -fomit-frame-pointer -O3
 LDFLAGS = -lcrypto
 TEST_JOBS ?=
 TEST_TIMEOUT ?= 30
@@ -78,22 +78,22 @@ projects: zlib util-linux nginx
 
 
 curl:
-	cd ../curl && make clean && CC=chibicc  CFLAGS="-std=c11 -g" ./configure --with-openssl && make -j$(nproc) && make -j$(nproc) test
+	cd ../curl && make clean && CC=chibicc  CFLAGS="-std=c11 -g" ./configure --with-openssl && make -j4 && make -j4 test
 
 zlib:
 	cd ../zlib && make clean && CC=chibicc CFLAGS="-fPIC -std=c11 -g" ./configure && make && make test
 
 nmap:
-	cd ../nmap && make clean && CC=chibicc  CFLAGS="-fPIC -std=c11 -g" LIBS="-ldbus-1 -latomic -libverbs -lrdmacm" ./configure --with-dbus && make -j$(nproc) && make check
+	cd ../nmap && make clean && CC=chibicc  CFLAGS="-fPIC -std=c11 -g" LIBS="-ldbus-1 -latomic -libverbs -lrdmacm" ./configure --with-dbus && make -j4 && make check
 
 openssl:
-	cd ../openssl && make clean && CC=chibicc CFLAGS="-std=c11 -g -O0" ./Configure linux-x86_64 --debug enable-fips enable-legacy && make -j4 && make test
+	cd ../openssl && make clean && CC=chibicc CFLAGS="-std=c11 -g -O0" ./Configure linux-x86_64 --debug enable-fips enable-legacy enable-fpo && make -j4 && make test
 
 util-linux:
-	cd ../util-linux && make clean && CC=chibicc CFLAGS="-fPIC -std=c11 -g" ./configure && make -j$(nproc) && make check-programs && cd tests && ./run.sh
+	cd ../util-linux && make clean && CC=chibicc CFLAGS="-fPIC -std=c11 -g" ./configure && make -j4 && make check-programs && cd tests && ./run.sh
 
 nginx:
-	cd ../nginx && make clean && CC=chibicc CFLAGS="-fPIC -std=c11" ./auto/configure --with-http_ssl_module && make -j2
+	cd ../nginx && make clean && CC=chibicc CFLAGS="-fPIC -std=c11" ./auto/configure --with-http_ssl_module && make -j4
 
 vim:
 	cd ../vim && make clean && CC=chibicc CFLAGS="-fPIC -std=c11 -g" ./configure && make -j2 &&  make test 
@@ -106,7 +106,7 @@ lxc:
 vlc:
 	cd ../vlc && make clean && CC=chibicc CFLAGS="-fPIC -std=c11 -g"  ./configure  \
 	--disable-lua --disable-xcb --disable-qt --disable-alsa --disable-sse --host x86_64-linux-gnu && \
-    make -j2 all
+    make -j4 all
 
 cpython:
 	cd ../cpython &&  CC=chibicc CFLAGS="-std=c11 -O3 -g" ./configure  \
@@ -117,16 +117,16 @@ git:
 	cd ../git && CC=chibicc CFLAGS="-fPIC -std=c11 -g" ./configure && make && make test
 
 memcached:
-	cd ../memcached && make clean && CC=chibicc CFLAGS="-fPIC -std=c11 -g" ./configure && make -j$$(nproc) && make test
+	cd ../memcached && make clean && CC=chibicc CFLAGS="-fPIC -std=c11 -g" ./configure && make -j4 && make test
 
 openssh-portable:
-	cd ../openssh-portable && make clean && CC=chibicc CFLAGS="-std=c11 -g" ./configure && make && make tests
+	cd ../openssh-portable && make clean && CC=chibicc CFLAGS="-std=c11 -g" ./configure && make -j4 && make tests
 
 sqlite:
-	cd ../sqlite && CC=chibicc CFLAGS="-fPIC -std=c11 -g" ./configure && make clean && make && make test
+	cd ../sqlite && CC=chibicc CFLAGS="-fPIC -std=c11 -g" ./configure && make clean && make -j2 && make test
 
 php-src:
-	cd ../php-src && CC=chibicc CFLAGS="-fPIC -std=c11 -g" ./buildconf && ./configure && make clean && make && make test
+	cd ../php-src && CC=chibicc CFLAGS="-fPIC -std=c11 -g" ./buildconf && ./configure && make clean && make -j2 && make test
 
 # Misc.
 
