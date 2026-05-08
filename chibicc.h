@@ -200,7 +200,7 @@ struct Token
 {
   TokenKind kind;   // Token kind
   Token *next;      // Next token
-  int64_t val;      // If kind is TK_NUM, its value
+  int64_t val;     // If kind is TK_NUM, its value
   long double fval; // If kind is TK_NUM, its value
   char *loc;        // Token location
   int len;          // Token length
@@ -925,6 +925,8 @@ typedef enum
   ND_PSLLQI256,
   ND_PERMDI256,
   ND_PSLLDI256,
+  ND_PSRLDI256,
+  ND_PSRADI256,
 } NodeKind;
 
 // AST node type
@@ -1027,13 +1029,13 @@ typedef struct
 } VarScope;
 
 Node *new_cast(Node *expr, Type *ty);
-int64_t const_expr(Token **rest, Token *tok);
+int64_t  const_expr(Token **rest, Token *tok);
 Obj *parse(Token *tok);
 VarScope *find_var(Token *tok);
 Obj *find_func(char *name);
 //from COSMOPOLITAN adding function ConsumeStringLiteral
 char *ConsumeStringLiteral(Token **rest, Token *tok) ;
-int64_t eval(Node *node);
+int64_t  eval(Node *node);
 bool equal_tok(Token *a, Token *b);
 
 extern bool opt_fbuiltin;

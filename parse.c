@@ -8852,6 +8852,8 @@ char *nodekind2str(NodeKind kind)
   case ND_PSLLQI256: return "PSLLQI256";
   case ND_PERMDI256: return "PERMDI256";
   case ND_PSLLDI256: return "PSLLDI256";
+  case ND_PSRLDI256: return "PSRLDI256";
+  case ND_PSRADI256: return "PSRADI256";
   default: return "UNREACHABLE"; 
   }
 }
@@ -9720,6 +9722,8 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_psllqi256", ND_PSLLQI256 },
     { "__builtin_ia32_permdi256", ND_PERMDI256 },
     { "__builtin_ia32_pslldi256", ND_PSLLDI256 }, 
+    { "__builtin_ia32_psrldi256", ND_PSRLDI256 },
+    { "__builtin_ia32_psradi256", ND_PSRADI256 },
 };
 
 
@@ -9741,6 +9745,10 @@ static Node *scalar_to_vector(Node *scalar, Type *vec_ty) {
 
 // Promote scalars to vectors for a binary operation
 static void promote_scalar_to_vector(Node *node) {
+    if (!node->lhs)
+      return;
+    if (!node->rhs)
+      return;
     add_type(node->lhs);
     add_type(node->rhs);
 

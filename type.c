@@ -115,6 +115,8 @@ static bool is_bitfield2(Node *node, int *width) {
 
 int int_rank(Type *t) {
   switch (t->kind) {
+    case TY_VECTOR:
+      return 4;
     case TY_ENUM:
     case TY_BOOL:
     case TY_CHAR:
@@ -1303,6 +1305,8 @@ void add_type(Node *node)
     node->ty = vector_of(ty_uchar, 16);
     return;
   case ND_PSLLDI256: 
+  case ND_PSRLDI256:
+  case ND_PSRADI256:
     node->ty = vector_of(ty_int, 8);
     return;
   default:

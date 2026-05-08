@@ -18,7 +18,7 @@ static char *newargreg64[] = {"%rcx","%rdx","%rax","%rsi","%rdi","%r8",  "%r9", 
 static char *registerUsed[] = {"free", "free", "free", "free", "free", "free", "free", "free", "free", "free", "free", "free"};
 
 
-extern int64_t eval(Node *node);
+extern int64_t  eval(Node *node);
 
 static Obj *current_fn;
 static char *lvar_ptr;
@@ -2890,7 +2890,7 @@ static void gen_shuf_binop(Node *node, const char *insn) {
   push_xmm(0);
   gen_expr(node->lhs);
   pop_xmm(1);
-  println("  %s $%ld, %%xmm1, %%xmm0", insn, node->rhs->val);
+  println("  %s $%ld, %%xmm1, %%xmm0", insn, (int64_t)node->rhs->val);
 }
 
 static void gen_psll_binop(Node *node, const char *insn) {
@@ -2899,7 +2899,7 @@ static void gen_psll_binop(Node *node, const char *insn) {
   gen_expr(node->rhs);
   pop_xmm(1);
   if (node->rhs->kind == ND_NUM)
-    println("  %s $%ld, %%xmm1", insn, node->rhs->val);
+    println("  %s $%ld, %%xmm1", insn, (int64_t)node->rhs->val);
   else {
     println("  movq %%rax, %%xmm0");
     println("  %s %%xmm0, %%xmm1", insn);
@@ -3179,7 +3179,7 @@ static void gen_readeflags_u64(Node *node) {
 
 static void gen_writeeflags_u64(Node *node) {
   gen_expr(node->lhs);
-  println("  pushq $%ld", node->lhs->val);
+  println("  pushq $%ld", (int64_t)node->lhs->val);
   println("  popfq");
 }
 
@@ -3224,7 +3224,7 @@ static void gen_wrussq(Node *node) {
 static void gen_clrssbsy(Node *node) {
   gen_expr(node->lhs);
   if (node->lhs->kind == ND_NUM)
-    println("  clrssbsy %ld", node->lhs->val);
+    println("  clrssbsy %ld", (int64_t)node->lhs->val);
   else
     println("  clrssbsy (%%rax)");
 }
@@ -4047,7 +4047,7 @@ static void gen_movnti(Node *node) {
   push_tmp();
   gen_expr(node->rhs);
   if (node->rhs->kind == ND_NUM)
-    println("  mov $%ld, %%ecx", node->rhs->val);
+    println("  mov $%ld, %%ecx", (int64_t)node->rhs->val);
   else 
     println("  movq (%%rax), %%rcx");
   pop_tmp("%rax");
@@ -4059,7 +4059,7 @@ static void gen_movnti64(Node *node) {
   push_tmp();
   gen_expr(node->rhs);
   if (node->rhs->kind == ND_NUM)
-    println("  mov $%ld, %%rcx", node->rhs->val);
+    println("  mov $%ld, %%rcx", (int64_t)node->rhs->val);
   else 
     println("  movq (%%rax), %%rcx");
   pop_tmp("%rax");
@@ -4353,13 +4353,13 @@ static void gen_vinsertf128_si256(Node *node) {
 
 static void gen_avx2_permdi256(Node *node) {
   gen_expr(node->lhs);  
-  println("  vpermq $%ld, %%ymm0, %%ymm0", eval(node->rhs));
+  println("  vpermq $%ld, %%ymm0, %%ymm0", (int64_t)eval(node->rhs));
 }
 
 static void gen_avx2_psll_binop(Node *node, const char *insn) {
   gen_expr(node->lhs); // ymm0 = lhs
   if (node->rhs->kind == ND_NUM) {
-    println("  %s $%ld, %%ymm0, %%ymm0", insn, node->rhs->val);
+    println("  %s $%ld, %%ymm0, %%ymm0", insn, (int64_t)node->rhs->val);
   } else {
     // Shift with non-immediate count takes an xmm for the count.
     // The count is in the low 64 bits of the xmm.
@@ -4479,7 +4479,7 @@ static void gen_mmx_binop(Node *node, const char *insn, bool rhs_is_imm) {
 
   if (rhs_is_imm) {
     if (node->rhs->kind == ND_NUM) {
-      println("  %s $%ld, %%mm0", insn, node->rhs->val);
+      println("  %s $%ld, %%mm0", insn, (int64_t)node->rhs->val);
     } else {
       gen_expr(node->rhs);
       println("  movq %%rax, %%mm1");
@@ -4950,7 +4950,7 @@ static void gen_expr(Node *node)
 
     }
 
-    println("  mov $%ld, %%rax", node->val);
+    println("  mov $%ld, %%rax", (int64_t)node->val);
     return;
   }
   case ND_POS:
@@ -6230,6 +6230,8 @@ static void gen_expr(Node *node)
   case ND_ANDNOTSI256: gen_andnotsi256(node); return;
   case ND_PMULHUW256: gen_pmulhuw256(node); return;
   case ND_PSLLDI256: gen_avx2_psll_binop(node, "vpslld"); return;
+  case ND_PSRLDI256: gen_avx2_psll_binop(node, "vpsrld"); return;
+  case ND_PSRADI256: gen_avx2_psll_binop(node, "vpsrad"); return;
   
 }
   

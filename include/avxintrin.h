@@ -308,17 +308,17 @@ _mm256_dp_ps (__m256 __X, __m256 __Y, const int __M)
 //   return (__m256) __builtin_ia32_minps256 ((__v8sf)__A, (__v8sf)__B);
 // }
 
-// extern __inline __m256d __attribute__((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_mul_pd (__m256d __A, __m256d __B)
-// {
-//   return (__m256d) ((__v4df)__A * (__v4df)__B);
-// }
+extern __inline __m256d __attribute__((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_mul_pd (__m256d __A, __m256d __B)
+{
+  return (__m256d) ((__v4df)__A * (__v4df)__B);
+}
 
-// extern __inline __m256 __attribute__((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_mul_ps (__m256 __A, __m256 __B)
-// {
-//   return (__m256) ((__v8sf)__A * (__v8sf)__B);
-// }
+extern __inline __m256 __attribute__((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_mul_ps (__m256 __A, __m256 __B)
+{
+  return (__m256) ((__v8sf)__A * (__v8sf)__B);
+}
 
 // extern __inline __m256d __attribute__((__gnu_inline__, __always_inline__, __artificial__))
 // _mm256_or_pd (__m256d __A, __m256d __B)
