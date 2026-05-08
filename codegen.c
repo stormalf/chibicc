@@ -6394,7 +6394,12 @@ switch (node->lhs->ty->kind)
     println("  sub %s, %s", di, ax);
     return;
   case ND_MUL:
-    println("  imul %s, %s", di, ax);
+    //println("  imul %s, %s", di, ax);
+    if (node->lhs->ty->is_unsigned && node->rhs->ty->is_unsigned) {
+      println("  mul %s", di);
+    } else {      
+      println("  imul %s, %s", di, ax);
+    }
     return;
   case ND_DIV:
   case ND_MOD:
