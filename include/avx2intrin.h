@@ -677,12 +677,12 @@ _mm256_slli_si256 (__m256i __A, const int __N)
 //   return (__m256i)__builtin_ia32_psllw256((__v16hi)__A, (__v8hi)__B);
 // }
 
-// extern __inline __m256i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_slli_epi32 (__m256i __A, int __B)
-// {
-//   return (__m256i)__builtin_ia32_pslldi256 ((__v8si)__A, __B);
-// }
+extern __inline __m256i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_slli_epi32 (__m256i __A, int __B)
+{
+  return (__m256i)__builtin_ia32_pslldi256 ((__v8si)__A, __B);
+}
 
 // extern __inline __m256i
 // __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
@@ -803,26 +803,26 @@ _mm256_sub_epi8 (__m256i __A, __m256i __B)
   return (__m256i) ((__v32qu)__A - (__v32qu)__B);
 }
 
-// extern __inline __m256i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_sub_epi16 (__m256i __A, __m256i __B)
-// {
-//   return (__m256i) ((__v16hu)__A - (__v16hu)__B);
-// }
+extern __inline __m256i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_sub_epi16 (__m256i __A, __m256i __B)
+{
+  return (__m256i) ((__v16hu)__A - (__v16hu)__B);
+}
 
-// extern __inline __m256i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_sub_epi32 (__m256i __A, __m256i __B)
-// {
-//   return (__m256i) ((__v8su)__A - (__v8su)__B);
-// }
+extern __inline __m256i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_sub_epi32 (__m256i __A, __m256i __B)
+{
+  return (__m256i) ((__v8su)__A - (__v8su)__B);
+}
 
-// extern __inline __m256i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_sub_epi64 (__m256i __A, __m256i __B)
-// {
-//   return (__m256i) ((__v4du)__A - (__v4du)__B);
-// }
+extern __inline __m256i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_sub_epi64 (__m256i __A, __m256i __B)
+{
+  return (__m256i) ((__v4du)__A - (__v4du)__B);
+}
 
 // extern __inline __m256i
 // __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))

@@ -1683,6 +1683,16 @@ static char *format_time(struct tm *tm)
 
 void init_macros(void)
 {
+  if (opt_avx2)
+    define_macro("__AVX2__", "1");
+  if (opt_sse4) {
+    define_macro("__SSE4__", "1");
+    define_macro("__SSE4_2__", "1");
+  }
+  if (opt_avx) {
+    define_macro("__AVX__", "1");
+  }
+
   // Define predefined macros
   define_macro("__VERSION__", "\"" VERSION "\"");
   //define_macro("__builtin_offsetof", "offsetof");

@@ -225,6 +225,7 @@ static Obj *new_gvar(char *name, Type *ty);
 static Obj *new_lvar(char *name, Type *ty, char *funcname);
 static Node *new_binary(NodeKind kind, Node *lhs, Node *rhs, Token *tok);
 static Node *compute_vla_size(Type *ty, Token *tok);
+static Node *constant_folding(int kind, Node *lhs, Node *rhs, Token *tok);
 
 static int align_down(int n, int align)
 {
@@ -3415,6 +3416,11 @@ static int64_t eval2(Node *node, char ***label)
     if (is_vector(node->var->ty))
       return 0; 
  
+    if (!label && is_const_var(node->var) && node->var->init_data && !node->var->rel) {
+      if (is_integer(node->var->ty))
+        return eval_sign_extend(node->var->ty, read_buf(node->var->init_data, node->var->ty->size));
+    }
+
     if (node->var->is_static || node->var->is_definition) {
       if (label)
           *label = &node->var->name;
@@ -3578,6 +3584,16 @@ static long double eval_double(Node *node)
   case ND_FPCLASSIFY:
   case ND_NUM:
     return node->fval;
+  case ND_VAR:
+    if (node->var->init_data && !node->var->rel) {
+      if (node->ty->kind == TY_FLOAT)
+        return *(float *)node->var->init_data;
+      if (node->ty->kind == TY_DOUBLE)
+        return *(double *)node->var->init_data;
+      if (node->ty->kind == TY_LDOUBLE)
+        return *(long double *)node->var->init_data;
+    }
+    break;
   }
 
   error_tok(node->tok, "%s:%d: in eval_double : not a compile-time constant %d", __FILE__, __LINE__, node->kind);
@@ -3989,7 +4005,7 @@ static Node *new_add(Node *lhs, Node *rhs, Token *tok, bool is_op)
   add_type(lhs);
   add_type(rhs);
 
-  //case of vectors + sclaras
+  //case of vectors + scalars
   if (is_op && (is_vector(lhs->ty) || is_vector(rhs->ty))) {
     if (is_vector(lhs->ty) && !is_vector(rhs->ty)) {
       rhs = scalar_to_vector(rhs, lhs->ty);
@@ -4012,8 +4028,13 @@ static Node *new_add(Node *lhs, Node *rhs, Token *tok, bool is_op)
   }
 
   // num + num
-  if (is_numeric(lhs->ty) && is_numeric(rhs->ty))
+  if (is_numeric(lhs->ty) && is_numeric(rhs->ty)) {
+    Node *folded = constant_folding(ND_ADD, lhs, rhs, tok);
+    if (folded)
+      return folded;
+
     return new_binary(ND_ADD, lhs, rhs, tok);
+  }
   
   if ((lhs->ty->base == NULL && rhs->ty->base == NULL) || (lhs->ty->base != NULL && rhs->ty->base != NULL)) {
     error_tok(tok, "%s:%d: in new_add : invalid operands", __FILE__, __LINE__);
@@ -4047,7 +4068,6 @@ static Node *new_sub(Node *lhs, Node *rhs, Token *tok, bool is_op)
 
   add_type(lhs);
   add_type(rhs);
-
   
   //case of vectors + scalars
   if (is_op && (is_vector(lhs->ty) || is_vector(rhs->ty))) {
@@ -4073,8 +4093,13 @@ static Node *new_sub(Node *lhs, Node *rhs, Token *tok, bool is_op)
   }
 
   // num - num
-  if (is_numeric(lhs->ty) && is_numeric(rhs->ty))
+  if (is_numeric(lhs->ty) && is_numeric(rhs->ty)) {
+    Node *folded = constant_folding(ND_SUB, lhs, rhs, tok);
+    if (folded)
+      return folded;
+
     return new_binary(ND_SUB, lhs, rhs, tok);
+  }
 
   // VLA + num
   if (lhs->ty->base->kind == TY_VLA) {
@@ -4136,6 +4161,7 @@ static Node *add(Token **rest, Token *tok)
 static Node *mul(Token **rest, Token *tok)
 {
   Node *node = cast(&tok, tok);
+  add_type(node);
 
   for (;;)
   {
@@ -4143,22 +4169,40 @@ static Node *mul(Token **rest, Token *tok)
 
     if (equal(tok, "*"))
     {
-      node = new_binary(ND_MUL, node, cast(&tok, tok->next), start);
-      promote_scalar_to_vector(node);
+      Node *rhs = cast(&tok, tok->next);
+      Node *folded = constant_folding(ND_MUL, node, rhs, start);
+      if (folded) {
+        node = folded;
+      } else {
+        node = new_binary(ND_MUL, node, rhs, start);
+        promote_scalar_to_vector(node);
+      }
       continue;
     }
 
     if (equal(tok, "/"))
     {
-      node = new_binary(ND_DIV, node, cast(&tok, tok->next), start);
-      promote_scalar_to_vector(node);
+      Node *rhs = cast(&tok, tok->next);
+      Node *folded = constant_folding(ND_DIV, node, rhs, start);
+      if (folded) {
+        node = folded;
+      } else {
+        node = new_binary(ND_DIV, node, rhs, start);
+        promote_scalar_to_vector(node);
+      }
       continue;
     }
 
     if (equal(tok, "%"))
     {
-      node = new_binary(ND_MOD, node, cast(&tok, tok->next), start);
-      promote_scalar_to_vector(node);
+      Node *rhs = cast(&tok, tok->next);
+      Node *folded = constant_folding(ND_MOD, node, rhs, start);
+      if (folded) {
+        node = folded;
+      } else {
+        node = new_binary(ND_MOD, node, rhs, start);
+        promote_scalar_to_vector(node);
+      }
       continue;
     }
 
@@ -8807,6 +8851,7 @@ char *nodekind2str(NodeKind kind)
   case ND_PSRLQI256: return "PSRLQI256";
   case ND_PSLLQI256: return "PSLLQI256";
   case ND_PERMDI256: return "PERMDI256";
+  case ND_PSLLDI256: return "PSLLDI256";
   default: return "UNREACHABLE"; 
   }
 }
@@ -9275,7 +9320,7 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_pmullw", ND_PMULLW },
     { "__builtin_ia32_psllw", ND_PSLLW },
     { "__builtin_ia32_psllwi", ND_PSLLWI },
-    { "__builtin_ia32_pslld", ND_PSLLD },
+    { "__builtin_ia32_pslld", ND_PSLLD },    
     { "__builtin_ia32_pslldi", ND_PSLLDI },
     { "__builtin_ia32_psllq", ND_PSLLQ },
     { "__builtin_ia32_psllqi", ND_PSLLQI },
@@ -9674,6 +9719,7 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_psrlqi256", ND_PSRLQI256 },
     { "__builtin_ia32_psllqi256", ND_PSLLQI256 },
     { "__builtin_ia32_permdi256", ND_PERMDI256 },
+    { "__builtin_ia32_pslldi256", ND_PSLLDI256 }, 
 };
 
 
@@ -9781,4 +9827,74 @@ static bool is_c99_or_later(void) {
   default:
     return false;
   }
+}
+
+static Node *constant_folding(int kind, Node *lhs, Node *rhs, Token *tok)
+{
+  add_type(lhs);
+  add_type(rhs);
+
+  if (lhs->kind != ND_NUM || rhs->kind != ND_NUM)
+    return NULL;
+
+  Node *node;
+  // If either operand is floating → promote to double
+  bool is_float = is_flonum(lhs->ty) || is_flonum(rhs->ty);
+
+  if (is_float) {
+    double a = is_flonum(lhs->ty) ? lhs->fval : lhs->val;
+    double b = is_flonum(rhs->ty) ? rhs->fval : rhs->val;
+
+    switch (kind) {
+    case ND_ADD: node = new_double(a + b, tok); break;
+    case ND_SUB: node = new_double(a - b, tok); break;
+    case ND_MUL: node = new_double(a * b, tok); break;
+    case ND_DIV:
+      if (b == 0.0)
+        return NULL;
+      node = new_double(a / b, tok);
+      break;
+    default: return NULL;
+    }
+  } else {
+    // integer path
+    // Determine if unsigned arithmetic is needed
+    bool is_unsigned = lhs->ty->is_unsigned || rhs->ty->is_unsigned;
+
+    uint64_t u_a = lhs->val;
+    uint64_t u_b = rhs->val;
+
+    int64_t s_a = lhs->val;
+    int64_t s_b = rhs->val;
+
+    switch (kind) {
+    case ND_ADD: node = new_num(is_unsigned ? (u_a + u_b) : (s_a + s_b), tok); break;
+    case ND_SUB: node = new_num(is_unsigned ? (u_a - u_b) : (s_a - s_b), tok); break;
+    case ND_MUL: node = new_num(is_unsigned ? (u_a * u_b) : (s_a * s_b), tok); break;
+    case ND_DIV:
+      if (is_unsigned ? (u_b == 0) : (s_b == 0))
+        return NULL;
+      node = new_num(is_unsigned ? (u_a / u_b) : (s_a / s_b), tok);
+      break;
+    case ND_MOD:
+      if (is_unsigned ? (u_b == 0) : (s_b == 0))
+        return NULL;
+      node = new_num(is_unsigned ? (u_a % u_b) : (s_a % s_b), tok);
+      break;
+    default: return NULL;
+    }
+  }
+
+  // Assign correct type using a dummy node to trigger usual arithmetic conversions
+  Node dummy = {kind, .lhs = lhs, .rhs = rhs, .tok = tok};
+  add_type(&dummy);
+  node->ty = dummy.ty;
+
+  // Truncate the result according to the type's size to simulate overflow behavior.
+  if (!is_float)
+    node->val = eval_sign_extend(node->ty, node->val);
+  else if (node->ty->kind == TY_FLOAT)
+    node->fval = (float)node->fval;
+
+  return node;
 }

@@ -37,6 +37,8 @@ bool opt_optimize = false;
 bool opt_optimize_level1 = false;
 bool opt_optimize_level2 = false;
 bool opt_optimize_level3 = false;
+bool opt_avx2;
+bool opt_avx;
 
 static FileType opt_x;
 static StringArray opt_include;
@@ -392,6 +394,15 @@ static void parse_args(int argc, char **argv)
       continue;
     }    
 
+    if (!strcmp(argv[i], "-mavx2")) {
+      opt_avx2 = true;
+      continue;
+    }
+
+    if (!strcmp(argv[i], "-mavx")) {
+      opt_avx = true;
+      continue;
+    }
 
     if (startsWith(argv[i], "-flto"))
     {
@@ -865,9 +876,16 @@ static void parse_args(int argc, char **argv)
     }
 
 
-    if (!strcmp(argv[i], "-O0") || !strcmp(argv[i], "-O")) {
+    if (!strcmp(argv[i], "-O0")) {
       opt_omit_frame_pointer = false;
       opt_optimize = false;
+      continue;
+    }
+
+    if (!strcmp(argv[i], "-O")) {
+      opt_omit_frame_pointer = true;
+      opt_optimize = true;
+      opt_optimize_level1 = true;
       continue;
     }
 
@@ -892,6 +910,12 @@ static void parse_args(int argc, char **argv)
       opt_optimize_level1 = true;
       opt_optimize_level2 = true;
       opt_optimize_level3 = true;
+      continue;
+    }
+
+    if (!strcmp(argv[i], "-foptimize-sibling-calls")) {
+      opt_optimize = true;
+      opt_optimize_level2 = true;
       continue;
     }
 

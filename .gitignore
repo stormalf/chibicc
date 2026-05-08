@@ -36,3 +36,4 @@ vgcore.*
 .codex
 **/*.S
 .codegraph
+check_constant_folding.sh

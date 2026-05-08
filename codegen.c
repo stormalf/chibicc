@@ -6229,6 +6229,7 @@ static void gen_expr(Node *node)
   case ND_PERMDI256: gen_avx2_permdi256(node); return;
   case ND_ANDNOTSI256: gen_andnotsi256(node); return;
   case ND_PMULHUW256: gen_pmulhuw256(node); return;
+  case ND_PSLLDI256: gen_avx2_psll_binop(node, "vpslld"); return;
   
 }
   

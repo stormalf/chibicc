@@ -924,6 +924,7 @@ typedef enum
   ND_PSRLQI256,
   ND_PSLLQI256,
   ND_PERMDI256,
+  ND_PSLLDI256,
 } NodeKind;
 
 // AST node type
@@ -1369,6 +1370,8 @@ extern bool opt_optimize_level1;
 extern bool opt_optimize_level2;
 extern bool opt_optimize_level3;
 extern bool opt_omit_frame_pointer;
+extern bool opt_avx2;
+extern bool opt_avx;
 
 //
 // extended_asm.c
