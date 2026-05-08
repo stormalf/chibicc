@@ -87,7 +87,7 @@ nmap:
 	cd ../nmap && make clean && CC=chibicc  CFLAGS="-fPIC -std=c11 -g" LIBS="-ldbus-1 -latomic -libverbs -lrdmacm" ./configure --with-dbus && make -j4 && make check
 
 openssl:
-	cd ../openssl && make clean && CC=chibicc CFLAGS="-std=c11 -g -O0" ./Configure linux-x86_64 --debug enable-fips enable-legacy && make -j4 && make test
+	cd ../openssl && make clean && CC=chibicc CFLAGS="-std=c11 -g -O0" ./Configure linux-x86_64 --debug enable-fips enable-legacy && make -j4 && HARNESS_JOBS=1 make test
 
 util-linux:
 	cd ../util-linux && make clean && CC=chibicc CFLAGS="-fPIC -std=c11 -g" ./configure && make -j4 && make check-programs && cd tests && ./run.sh
