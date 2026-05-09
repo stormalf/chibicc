@@ -2475,7 +2475,7 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
     Obj *var = eval_var(init->expr,  false);
     if (var && var->init_data && !var->is_weak && (is_const_var(var) || var->is_compound_lit)) {
       // Don't memcpy raw bytes into a pointer; use relocation path instead.
-      bool can_copy = (ty->kind != TY_PTR);
+      bool can_copy = (ty->kind != TY_PTR && ty->kind != TY_FUNC);
 
       if (can_copy) {
         Relocation *srel = var->rel;
@@ -2490,7 +2490,7 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
             cur->label = srel->label;
             cur->addend = srel->addend;           
             srel = srel->next;
-            pos += 8;
+            pos += ty->base ? ty->base->size : 8;
           } else {
             // Copy initialization data from compound literal
             buf[(pos + offset)] = var->init_data[(pos + sofs)];
