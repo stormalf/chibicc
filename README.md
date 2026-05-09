@@ -15,75 +15,89 @@ or
 ./chibicc -h
 
     chibicc is a C compiler based on chibicc created by Rui Ueyama.
-        See original project https://github.com/rui314/chibicc for more information
-        this chibicc contains only some differences for now like new parameters
+     See original project https://github.com/rui314/chibicc for more information
+     this chibicc contains only some differences for now like new parameters
     chibicc usage :
-        --help or -h print the help
-        --version or -v print the version of chibicc
-        -cc1 run the cc1 function needs -cc1-input (-cc1-output optional) parameter 
-        -fuse-ld to specify other linker than ld used by default 
-        -x Specify the language of the following input files.
-            Permissible languages include: c assembler none
-            'none' means revert to the default behavior of
-            guessing the language based on the file's extension.
-        -S generate assembly file 
-        -o path to output executable if omitted a.out generated
-        -c path to source to compile 
-        -Xlinker <arg> Pass <arg> on to the linker.
-        -Wl,<options> Pass comma-separated <options> on to the linker.
-        -z <arg> Pass <arg> on to the linker. 
-        -soname <arg> Pass -soname <arg> on to the linker. 
-        --version-script <arg> Pass --version-script <arg> to the linker.
-        -I<path> Pass path to the include directories 
-        -L<path> Pass path to the lib directories 
-        -D<macro> define macro example -DM13 
-        -U<macro> undefine macro example -UM13
-        -s to strip all symbols during linkage phasis 
-        -M -MD -MP -MMD -MF <arg> -MT <arg> -MQ <arg> compiler write a list of input files to 
-            stdout in a format that "make" command can read. This feature is
-            used to automate file dependency management
-        -fpic or -fPIC Generate position-independent code (PIC)
-        -fno-pic disables the generation of position-independent code with relative address references
-        -pie Create a dynamically linked position independent 
-        -fpie Create a dynamically linked position independent
-        -fPIE Create a dynamically linked position independent
-        -fcommon is the default if not specified, it's mainly useful to enable legacy code to link without errors
-        -fno-common specifies that the compiler places uninitialized global variables in the BSS section of the object file.
-        -static  pass to the linker to link a program statically
-        -pthread pass to the linker to link with lpthread library 
-        -shared pass to the linker to produce a shared object which can then be linked with other objects to form an executable.
-        -hashmap-test to test the hashmap function 
-        -idirafter <dir> apply to lookup for both the #include "file" and #include <file> directives.
-        -### to dump all commands executed by chibicc 
-        -debug to dump all commands executed by chibicc in a log file in /tmp/chibicc.log
-        -E Stop after the preprocessing stage; do not run the compiler proper. 
-            The output is in the form of preprocessed source code, which is sent to the standard output.
-            Input files that don’t require preprocessing are ignored.
-        -rpath <dir> Add a directory to the runtime library search path this parameter is passed to the linker. 
-            This is used when linking an ELF executable with shared objects.
-            All -rpath arguments are concatenated and passed to the runtime linker,
-            which uses them to locate shared objects at runtime. 
-            The -rpath option is also used when locating shared objects 
-            which are needed by shared objects explicitly included in the link. 
-        -dumpmachine it's required by some projects returns x86_64-linux-gnu
-        -dotfile generates a file with .dot extension that can be visualized using graphviz package 
-        -dM Print macro definitions in -E mode instead of normal output
-        -print print all tokens in a log file in /tmp/chibicc.log
-        -A print Abstract Syntax Tree in a log file in /tmp/chibicc.log
-        -msse3 enabling sse3 support 
-        -msse4 enabling sse4 support 
-        -msse4.1 enabling sse4.1 support 
-        -mcrc32 enabling crc32 instruction support
-        -nostdlib  Do not use the standard system startup files or libraries when linking 
-        -nostdinc Do not use the standard system header files when compiling 
-        -std=c99 generates an error on implicit function declaration (without -std only a warning is emitted)
-        -std=c11 generates an error on implicit function declaration (without -std only a warning is emitted)
-        -mmmx to allow mmx instructions and builtin functions linked to mmx like __builtin_packuswb... 
-        -print-search-dirs prints minimal information on install dir.
-        -Werror any warning is sent as an error and stops the compile
-        -f-omit-frame-pointer omits frame pointer and uses rsp-relative addressing. Minimal stack usage 
-        -f-no-omit-frame-pointer always keeps frame pointer (default) 
-        chibicc [ -o <path> ] <file>
+     --help or -h print the help
+     --version or -v print the version of chibicc
+     -cc1 run the cc1 function needs -cc1-input (-cc1-output optional) parameter 
+     -fuse-ld to specify other linker than ld used by default 
+     -x Specify the language of the following input files.
+         Permissible languages include: c assembler none
+         'none' means revert to the default behavior of
+         guessing the language based on the file's extension.
+     -S generate assembly file 
+     -o path to output executable if omitted a.out generated
+     -c path to source to compile 
+     -Xlinker <arg> Pass <arg> on to the linker.
+     -Wl,<options> Pass comma-separated <options> on to the linker.
+     -z <arg> Pass <arg> on to the linker. 
+     -soname <arg> Pass -soname <arg> on to the linker. 
+     --version-script <arg> Pass --version-script <arg> to the linker.
+     -I<path> Pass path to the include directories 
+     -L<path> Pass path to the lib directories 
+     -D<macro> define macro example -DM13 
+     -U<macro> undefine macro example -UM13
+     -s to strip all symbols during linkage phasis 
+     -M -MD -MP -MMD -MF <arg> -MT <arg> -MQ <arg> compiler write a list of input files to 
+         stdout in a format that "make" command can read. This feature is
+         used to automate file dependency management
+     -fpic or -fPIC Generate position-independent code (PIC)
+     -fno-pic disables the generation of position-independent code with relative address references
+     -pie Create a dynamically linked position independent 
+     -fpie Create a dynamically linked position independent
+     -fPIE Create a dynamically linked position independent
+     -fcommon is the default if not specified, it's mainly useful to enable legacy code to link without errors
+     -fno-common specifies that the compiler places uninitialized global variables in the BSS section of the object file.
+     -static  pass to the linker to link a program statically
+     -pthread pass to the linker to link with lpthread library 
+     -shared pass to the linker to produce a shared object which can then be linked with other objects to form an executable.
+     -hashmap-test to test the hashmap function 
+     -idirafter <dir> apply to lookup for both the #include "file" and #include <file> directives.
+     -### to dump all commands executed by chibicc 
+     -debug to dump all commands executed by chibicc in a log file in /tmp/chibicc.log
+     -E Stop after the preprocessing stage; do not run the compiler proper. 
+         The output is in the form of preprocessed source code, which is sent to the standard output.
+         Input files that don’t require preprocessing are ignored.
+     -rpath <dir> Add a directory to the runtime library search path this parameter is passed to the linker. 
+         This is used when linking an ELF executable with shared objects.
+         All -rpath arguments are concatenated and passed to the runtime linker,
+         which uses them to locate shared objects at runtime. 
+         The -rpath option is also used when locating shared objects 
+         which are needed by shared objects explicitly included in the link. 
+     -dumpmachine it's required by some projects returns x86_64-linux-gnu
+     -dotfile generates a file with .dot extension that can be visualized using graphviz package 
+     -dM Print macro definitions in -E mode instead of normal output
+     -print print all tokens in a log file in /tmp/chibicc.log 
+     -A print Abstract Syntax Tree in a log file in /tmp/chibicc.log 
+     -msse enabling sse support 
+     -mno-sse disabling sse support 
+     -msse2 enabling sse2 support 
+     -mno-sse2 disabling sse2 support 
+     -msse3 enabling sse3 support 
+     -mno-sse3 disabling sse3 support 
+     -msse4 enabling sse4 support 
+     -mno-sse4 disabling sse4 support 
+     -msse4.1 enabling sse4.1 support 
+     -mcrc32 enabling crc32 instruction support 
+     -nostdlib  Do not use the standard system startup files or libraries when linking 
+     -nostdinc Do not use the standard system header files when compiling 
+     -std=c99 generates an error on implicit function declaration (without -std only a warning is emitted) 
+     -std=c11 generates an error on implicit function declaration (without -std only a warning is emitted) 
+     -mmmx enabling mmx instructions 
+     -mno-mmx disabling mmx instructions 
+     -mavx enabling avx instructions 
+     -mavx2 enabling avx2 instructions 
+     -print-search-dirs prints minimal information on install dir. 
+     -Werror any warning is sent as an error and stops the compile 
+     -f-omit-frame-pointer omits frame pointer and uses rsp-relative addressing. Minimal stack usage 
+     -f-no-omit-frame-pointer always keeps frame pointer (default) 
+     -g enabling debug symbols 
+     -O0 disabling optimization 
+     -O or -O1 enabling optimization level 1 
+     -O2 enabling optimization level 2 
+     -O3 enabling optimization level 3 
+     chibicc [ -o <path> ] <file>
 
 ## compile
 
@@ -306,9 +320,11 @@ List of options ignored :
     "-mwbnoinvd"
     "-mrdpid"
     "-mfsgsbase"
-    "-mavx"
+    "-mavx..."
     "-m3dnow"
     "-Wno-unreachable-code"
+    "-flax-vector-conversions"
+    "-W..."
 
 ## Dockerfile and devcontainer
 
@@ -464,16 +480,11 @@ sqlite : https://github.com/sqlite/sqlite.git
     CC=chibicc CFLAGS="-std=c11" ./configure
     make all
     make test
-    fuzzdata1.db: 0% 10% 20% 30% 40% 50% 60% 70% 80% 90% 100% - 9917 tests
-    fuzzdata2.db: 0% 10% 20% 30% 40% 50% 60% 70% 80% 90% 100% - 9959 tests
-    fuzzdata3.db: 0% 10% 20% 30% 40% 50% 60% 70% 80% 90% 100% - 2316 tests
-    fuzzdata4.db: 0% 10% 20% 30% 40% 50% 60% 70% 80% 90% 100% - 2575 tests
-    fuzzdata5.db: 0% 10% 20% 30% 40% 50% 60% 70% 80% 90% 100% - 8834 tests
-    fuzzdata6.db: 0% 10% 20% 30% 40% 50% 60% 70% 80% 90% 100% - 3896 tests
-    fuzzdata7.db: 0% 10% 20% 30% 40% 50% 60% 70% 80% 90% 100% - 8145 tests
-    fuzzdata8.db: 0% 10% 20% 30% 40% 50% 60% 70% 80% 90% 100% - 749 tests
-    fuzzcheck: 9616 query invariants checked
-    fuzzcheck: 0 errors out of 46391 tests in 147.339 seconds
+    FAILED: All-Debug test/walsetlk.test (0)
+    14:13 bld(10/10) fuzz(54/54) tcl(2470/2470) f1 ETC 00:00
+    1 failures:
+    FAILED: All-Debug test/walsetlk.test
+    
 
 
 php-src: https://github.com/php/php-src.git
@@ -572,7 +583,8 @@ cpython: git clone https://github.com/python/cpython.git
 
     git 2 tests failed    
     vim: compile OK, tests OK except 1.
-    cpython : compile OK, some tests KO         
+    cpython : compile OK, some tests KO      
+    sqlite: compile OK, tests OK (except 1)   
            
 
 ## projects compiled successfully with chibicc
@@ -586,9 +598,8 @@ cpython: git clone https://github.com/python/cpython.git
     memcached : compile OK, tests OK      
     php-src : compile OK, tests OK    
     openssl: compile OK, tests OK
-    postgres execution : compile OK, tests OK
+    postgres execution : compile OK, tests OK    
     
-
 
 ## debug
 
@@ -620,8 +631,6 @@ Example of diagram generated with -dotfile parameter :
 
 1.0.24  Passing GNUC from 3 to 4. Adding const, volatile, restrict support from slimcc/fuhsnn. Fixing issue ISS-195 prockill due to leakage attributes. Managing pragma pack. Fixing issue with attributes and alignment. Fixing issue with some edge cases initializer. Fixing some float comparisons issues with NaN. Fixing alignof issue and managing asm name. Fixing issue with string char array members initialization. Fixing issue with unicode characters. Managing anonymous enums. Fixing issue with extended assembly and &x in input. Fixing issue with extended assembly and macro expansion. Fixing issue with builtin_prefetch found during openssl compile. Managing \__atomic_is_lock_free. Adding \__builtin_offsetof and __has_builtin. Adding \__builtin_rotateleftxx. Fixing issue with attribute after typenames. Fixing issue with attribute hiding. Fixing issue with vlc compile undefined functions (ISS-206). Reversing changes on is_function that causes side effect on cpython compile. Fixing issue with unicode x\u0000y. Fixing warning sent wrongly during tokenization. Reversing openssl changed that caused side effects on cpython. Deleting preprocess3 that caused side effect in openssl parsing. Fixing issue with openssl and undefined reference. Adding some builtin xxx256.
 Fixing issue with __m256 not managed correctly (sometimes dealt as __int128) found during openssl tests that fixed also lots of postgres tests. Fixing remaining postgres tests and openssl tests.
-
-
 
 
 ## old release notes

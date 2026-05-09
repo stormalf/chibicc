@@ -114,19 +114,33 @@ this " PRODUCT " contains only some differences for now like new parameters\n"
 -dM Print macro definitions in -E mode instead of normal output\n \
 -print print all tokens in a log file in /tmp/chibicc.log \n \
 -A print Abstract Syntax Tree in a log file in /tmp/chibicc.log \n \
+-msse enabling sse support \n \
+-mno-sse disabling sse support \n \
+-msse2 enabling sse2 support \n \
+-mno-sse2 disabling sse2 support \n \
 -msse3 enabling sse3 support \n\
+-mno-sse3 disabling sse3 support \n \
 -msse4 enabling sse4 support \n \
+-mno-sse4 disabling sse4 support \n \
 -msse4.1 enabling sse4.1 support \n \
 -mcrc32 enabling crc32 instruction support \n \
 -nostdlib  Do not use the standard system startup files or libraries when linking \n \
 -nostdinc Do not use the standard system header files when compiling \n \
 -std=c99 generates an error on implicit function declaration (without -std only a warning is emitted) \n \
 -std=c11 generates an error on implicit function declaration (without -std only a warning is emitted) \n \
--mmmx to allow mmx instructions and builtin functions linked to mmx like __builtin_packuswb... \n \
+-mmmx enabling mmx instructions \n \
+-mno-mmx disabling mmx instructions \n \
+-mavx enabling avx instructions \n \
+-mavx2 enabling avx2 instructions \n \
 -print-search-dirs prints minimal information on install dir. \n \
 -Werror any warning is sent as an error and stops the compile \n \
 -f-omit-frame-pointer omits frame pointer and uses rsp-relative addressing. Minimal stack usage \n \
 -f-no-omit-frame-pointer always keeps frame pointer (default) \n \
+-g enabling debug symbols \n \
+-O0 disabling optimization \n \
+-O or -O1 enabling optimization level 1 \n \
+-O2 enabling optimization level 2 \n \
+-O3 enabling optimization level 3 \n \
 chibicc [ -o <path> ] <file>\n"
 
 typedef struct Type Type;
