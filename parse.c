@@ -142,6 +142,7 @@ static Node *expr(Token **rest, Token *tok);
 //static int64_t eval(Node *node);
 static int64_t eval2(Node *node, char ***label);
 static int64_t eval_rval(Node *node, char ***label);
+static Obj *eval_lval_obj(Node *node, int64_t *offset);
 static Node *assign(Token **rest, Token *tok);
 static Node *logor(Token **rest, Token *tok);
 static long double eval_double(Node *node);
@@ -2532,6 +2533,43 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
     return cur;
   }
 
+  // For pointer types, check if the label refers to a const var whose
+  // relocation at offset `val` can be copied directly (e.g. int *p = relo.c).
+  if (ty->kind == TY_PTR && init->expr) {
+    int64_t src_offset = 0;
+    Obj *src_var = NULL;
+    Node *expr = init->expr;
+    while (expr && expr->kind == ND_CAST)
+      expr = expr->lhs;
+    if (expr && expr->kind == ND_MEMBER) {
+      // int *p = s.member — copy relocation from inside const struct
+      Node *base = expr->lhs;
+      while (base && base->kind == ND_CAST) base = base->lhs;
+      if (base && base->kind == ND_VAR && !base->var->is_local) {
+        src_var = base->var;
+        src_offset = (int64_t)expr->member->offset;
+      }
+    } else if (expr && expr->kind == ND_VAR && !expr->var->is_local &&
+               expr->var->ty->kind == TY_PTR) {
+      // int *p = q — copy relocation from const pointer variable
+      src_var = expr->var;
+      src_offset = 0;
+    }
+    if (src_var && src_var->init_data &&
+        (is_const_var(src_var) || src_var->is_compound_lit)) {
+      for (Relocation *srel = src_var->rel; srel; srel = srel->next) {
+        if (srel->offset == (int)src_offset) {
+          Relocation *rel = calloc(1, sizeof(Relocation));
+          rel->offset = offset;
+          rel->label = srel->label;
+          rel->addend = srel->addend;
+          cur->next = rel;
+          return cur->next;
+        }
+      }
+    }
+  }
+
   Relocation *rel = calloc(1, sizeof(Relocation));
   if (rel == NULL)
     error("%s:%d: error: in write_gvar_data : rel is null", __FILE__, __LINE__);
@@ -3354,9 +3392,19 @@ static int64_t eval2(Node *node, char ***label)
   //   return eval2(node->lhs, label);
   //from @fuhsnn eval2():Evaluate ND_DEREF for TY_ARRAY
   case ND_DEREF:
-    // if (node->ty->kind != TY_ARRAY && !is_vector(node->ty))
-    //   error_tok(node->tok, "%s:%d: in eval2 : not a compile-time constant node->ty->kind=%d ", __FILE__, __LINE__, node->ty->kind);
-    return eval2(node->lhs, label);    
+    // If dereferencing to an integer type from a const array, read the value.
+    if (is_integer(node->ty)) {
+      int64_t byte_offset = 0;
+      Obj *var = eval_lval_obj(node->lhs, &byte_offset);
+      if (var && var->init_data && !var->rel &&
+          is_const_var(var) &&
+          byte_offset >= 0 && byte_offset + node->ty->size <= var->ty->size) {
+        // Resolved to a constant: clear label so caller treats it as a plain integer.
+        if (label) *label = NULL;
+        return eval_sign_extend(node->ty, read_buf(var->init_data + byte_offset, node->ty->size));
+      }
+    }
+    return eval2(node->lhs, label);
   case ND_MEMBER:
     
     if (!label) {
@@ -3423,6 +3471,41 @@ static int64_t eval_rval(Node *node, char ***label)
   }
 
   error_tok(node->tok, "%s:%d: in eval2 : invalid initializer3", __FILE__, __LINE__);
+}
+
+// Walk an lvalue expression and return the underlying global Obj and byte offset.
+// Returns NULL if the expression is not a constant lvalue into a global.
+static Obj *eval_lval_obj(Node *node, int64_t *offset) {
+  switch (node->kind) {
+  case ND_VAR:
+    if (node->var->is_local)
+      return NULL;
+    *offset = 0;
+    return node->var;
+  case ND_ADD: {
+    // ptr + index (pointer arithmetic, already byte-scaled by new_add)
+    int64_t base_off = 0;
+    Obj *var = eval_lval_obj(node->lhs, &base_off);
+    if (!var)
+      return NULL;
+    *offset = base_off + eval(node->rhs);
+    return var;
+  }
+  case ND_DEREF: {
+    // *(ptr) — evaluate ptr as lvalue
+    int64_t base_off = 0;
+    Obj *var = eval_lval_obj(node->lhs, &base_off);
+    if (!var)
+      return NULL;
+    *offset = base_off;
+    return var;
+  }
+  case ND_CAST:
+    // Array-to-pointer decay and other pointer casts: pass through
+    return eval_lval_obj(node->lhs, offset);
+  default:
+    return NULL;
+  }
 }
 
 bool is_const_expr(Node *node)
