@@ -201,7 +201,6 @@ static int64_t eval_sign_extend(Type *ty, uint64_t val);
 static bool is_const_var(Obj *var);
 static int64_t eval_rval(Node *node, char ***label);
 static Obj *eval_var(Node *expr, bool allow_local);
-static Obj *find_global_by_name(char *name);
 static bool is_const_var(Obj *var) ;
 static bool is_str_tok(Token **rest, Token *tok, Token **str_tok);
 
@@ -2533,55 +2532,10 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
     return cur;
   }
 
-  // If this references a constant object with known data, fold the load.
-  Obj *cvar = *label ? find_global_by_name(*label) : NULL;
-  if (cvar && cvar->init_data &&
-      (is_const_var(cvar) || cvar->is_compound_lit)) {
-    if (is_numeric(ty) && !cvar->rel) {
-      if (val + ty->size <= cvar->ty->size) {
-        memcpy(buf + offset, cvar->init_data + val, ty->size);
-        return cur;
-      }
-    }
-    if (ty->kind == TY_PTR && cvar->rel && cvar->ty->kind == TY_PTR) {
-      for (Relocation *srel = cvar->rel; srel; srel = srel->next) {
-        if (srel->offset == (int)val) {
-          Relocation *rel = calloc(1, sizeof(Relocation));
-          if (rel == NULL)
-            error("%s:%d: error: in write_gvar_data : rel is null", __FILE__, __LINE__);
-          rel->offset = offset;
-          rel->label = srel->label;
-          rel->addend = srel->addend;           
-          cur->next = rel;
-          return cur->next;
-        }
-      }
-    }
-    if (ty->kind == TY_PTR && cvar->rel && init->expr) {
-      Node *expr = init->expr;
-      while (expr->kind == ND_CAST)
-        expr = expr->lhs;
-      if (expr->kind == ND_MEMBER) {
-        int mofs = (int)val;
-        for (Relocation *srel = cvar->rel; srel; srel = srel->next) {
-          if (srel->offset == mofs) {
-            Relocation *rel = calloc(1, sizeof(Relocation));
-            if (rel == NULL)
-              error("%s:%d: error: in write_gvar_data : rel is null", __FILE__, __LINE__);
-            rel->offset = offset;
-            rel->label = srel->label;
-            rel->addend = srel->addend;                               
-            cur->next = rel;
-            return cur->next;
-          }
-        }
-      }
-    }
-  }
-
   Relocation *rel = calloc(1, sizeof(Relocation));
   if (rel == NULL)
     error("%s:%d: error: in write_gvar_data : rel is null", __FILE__, __LINE__);
+
   rel->offset = offset;
   rel->label = label;
   rel->addend = val;
@@ -9264,16 +9218,6 @@ static Obj *eval_var(Node *expr, bool allow_local) {
       var->init_data && is_const_var(var))
     return var;
 
-  return NULL;
-}
-
-static Obj *find_global_by_name(char *name) {
-  if (!name)
-    return NULL;
-  for (Obj *var = globals; var; var = var->next) {
-    if (var->name && !strcmp(var->name, name))
-      return var;
-  }
   return NULL;
 }
 
