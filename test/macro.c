@@ -303,6 +303,41 @@ int main() {
 #endif
   ASSERT(5, m);
 
+#if __has_include("include1.h")
+  m = 7;
+#else
+  m = 8;
+#endif
+  ASSERT(7, m);
+
+#if __has_include(<stdarg.h>)
+  m = 9;
+#else
+  m = 10;
+#endif
+  ASSERT(9, m);
+
+#if __has_include("definitely_missing_header_for_chibicc_tests.h")
+  m = 11;
+#else
+  m = 12;
+#endif
+  ASSERT(12, m);
+
+#if __has_include_next("include1.h")
+  m = 13;
+#else
+  m = 14;
+#endif
+  ASSERT(14, m);
+
+#if __has_include_next(<stdarg.h>)
+  m = 15;
+#else
+  m = 16;
+#endif
+  ASSERT(15, m);
+
 #define STR(x) #x
 #define M12(x) STR(x)
 #define M13(x) M12(foo.x)

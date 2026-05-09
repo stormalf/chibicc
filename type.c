@@ -1,5 +1,4 @@
 #include "chibicc.h"
-#define TYPE_C "type.c"
 
 
 Type *ty_void = &(Type){TY_VOID, 1, 1};
@@ -21,7 +20,7 @@ Type *ty_ullong = &(Type){TY_LLONG, 8, 8, true};
 Type *ty_float = &(Type){TY_FLOAT, 4, 4};
 Type *ty_double = &(Type){TY_DOUBLE, 8, 8};
 Type *ty_ldouble = &(Type){TY_LDOUBLE, 16, 16};
-Type *ty_void_ptr = &(Type){TY_PTR, 8, 8, true};
+Type *ty_void_ptr = &(Type){TY_PTR, 8, 8, true, .is_pointer = true, .pointertype = &(Type){TY_VOID, 1, 1}, .base = &(Type){TY_VOID, 1, 1}};
 
 Type *ty_int128 = &(Type){TY_INT128, 16, 16}; 
 Type *ty_uint128 = &(Type){TY_INT128, 16, 16, true}; 
@@ -31,7 +30,7 @@ static Type *new_type(TypeKind kind, int64_t size, int align)
 {
   Type *ty = calloc(1, sizeof(Type));
   if (ty == NULL)
-    error("%s: %s:%d: error: in new_type ty is null!", TYPE_C, __FILE__, __LINE__);
+    error("%s:%d: error: in new_type ty is null!", __FILE__, __LINE__);
   ty->kind = kind;
   ty->size = size;
   ty->align = align;
@@ -47,12 +46,26 @@ Type *new_qualified_type(Type *ty) {
   Type *ret = calloc(1, sizeof(Type));
   *ret = *ty;
   ret->origin = ty;
-
   if (ty->size < 0) {
     ret->decl_next = ty->decl_next;
     ty->decl_next = ret;
   }
   return ret;
+}
+
+Type *unqual(Type *ty) {
+  if (!ty) return NULL;
+  if (ty->origin)
+    ty = ty->origin;
+
+  if (ty->is_atomic || ty->is_const || ty->is_volatile || ty->is_restrict) {
+    ty = copy_type(ty);
+    ty->is_atomic = false;
+    ty->is_const = false;
+    ty->is_volatile = false;
+    ty->is_restrict = false;
+  }
+  return ty;
 }
 
 bool is_integer(Type *ty)
@@ -102,6 +115,8 @@ static bool is_bitfield2(Node *node, int *width) {
 
 int int_rank(Type *t) {
   switch (t->kind) {
+    case TY_VECTOR:
+      return 4;
     case TY_ENUM:
     case TY_BOOL:
     case TY_CHAR:
@@ -157,6 +172,63 @@ bool is_numeric(Type *ty)
   return is_integer(ty) || is_flonum(ty);
 }
 
+static bool is_tag_compat(Type *t1, Type *t2) {
+  return  t1->tag && t2->tag && equal_tok(t1->tag, t2->tag);
+}
+
+static bool is_qual_compat(Type *t1, Type *t2) {
+  return t1->is_atomic == t2->is_atomic &&
+    t1->is_const == t2->is_const &&
+    t1->is_volatile == t2->is_volatile &&
+    t1->is_restrict == t2->is_restrict;
+}
+
+
+bool is_compatible2(Type *t1, Type *t2) {
+  return is_qual_compat(t1, t2) && is_compatible(t1, t2);
+}
+
+static bool is_record_compat(Type *t1, Type *t2) {
+  if (t1->align != t2->align ||
+    t1->is_flexible != t2->is_flexible)
+    return false;
+
+  Member *mem1 = t1->members;
+  Member *mem2 = t2->members;
+  while (mem1 && mem2) {
+    if (mem1->offset != mem2->offset ||
+      mem1->align != mem2->align ||
+      mem1->is_bitfield != mem2->is_bitfield ||
+      mem1->bit_offset != mem2->bit_offset ||
+      mem1->bit_width != mem2->bit_width)
+      return false;
+
+    if ((!mem1->name != !mem2->name) ||
+      (mem1->name && !equal_tok(mem1->name, mem2->name)))
+      return false;
+
+    Type *t1 = mem1->ty;
+    Type *t2 = mem2->ty;
+    if (t1->kind != t2->kind)
+      return false;
+
+    if (t1->kind == TY_STRUCT || t1->kind == TY_UNION) {
+      if (!mem1->name != !t1->tag || !mem2->name != !t2->tag ||
+        (t1->tag && !equal_tok(t1->tag, t2->tag)))
+        return false;
+      if (!is_qual_compat(t1, t2) || !is_record_compat(t1, t2))
+        return false;
+    } else {
+      if (!is_compatible2(t1, t2))
+        return false;
+    }
+    mem1 = mem1->next;
+    mem2 = mem2->next;
+  }
+  return !mem1 == !mem2;
+}
+
+
 bool is_compatible(Type *t1, Type *t2)
 {
   if (t1 == t2)
@@ -193,13 +265,20 @@ bool is_compatible(Type *t1, Type *t2)
   case TY_INT128: 
     return t1->is_unsigned == t2->is_unsigned;     
   case TY_PTR:
-    return is_compatible(t1->base, t2->base);
+    return is_compatible2(t1->base, t2->base);
   case TY_FUNC:
   {
     if (!is_compatible(t1->return_ty, t2->return_ty))
       return false;
-    if (t1->is_variadic != t2->is_variadic)
+    if (t1->is_variadic != t2->is_variadic) {
+      if (t1->is_oldstyle && !t2->is_variadic && !t2->params && !t2->is_oldstyle) {
+      } else if (t2->is_oldstyle && !t1->is_variadic && !t1->params && !t1->is_oldstyle) {
+      } else {
       return false;
+      }
+    } else if (t1->is_variadic && t1->is_oldstyle != t2->is_oldstyle) {
+      return false;
+    }
 
     Type *p1 = t1->params;
     Type *p2 = t2->params;
@@ -211,13 +290,16 @@ bool is_compatible(Type *t1, Type *t2)
   case TY_ARRAY:
     if (!is_compatible(t1->base, t2->base))
       return false;
-    return t1->array_len < 0 && t2->array_len < 0 &&
+    return t1->array_len < 0 || t2->array_len < 0 ||
            t1->array_len == t2->array_len;
   case TY_VECTOR:
     if (!is_compatible(t1->base, t2->base))
       return false;
-    return t1->array_len < 0 && t2->array_len < 0 &&
+    return t1->array_len < 0 || t2->array_len < 0 ||
            t1->array_len == t2->array_len;           
+  case TY_STRUCT:
+  case TY_UNION:
+    return is_tag_compat(t1, t2) && is_record_compat(t1, t2); 
   }
   return false;
 }
@@ -226,7 +308,14 @@ Type *copy_type(Type *ty)
 {
   Type *ret = calloc(1, sizeof(Type));
   if (ret == NULL)
-    error("%s: %s:%d: error: in copy_type ret is null!", TYPE_C, __FILE__, __LINE__);
+    error("%s:%d: error: in copy_type ret is null!", __FILE__, __LINE__);
+  Type *root = ty && ty->origin ? ty->origin : ty;
+  
+  if (root && root->size < 0) {
+    ty->decl_next = root->decl_next;
+    root->decl_next = ty;
+  }
+   
   *ret = *ty;
   ret->origin = ty;
   return ret;
@@ -239,7 +328,6 @@ Type *pointer_to(Type *base)
   ty->is_pointer = true;
   ty->pointertype = base;
   ty->is_unsigned = true;
-  ty->is_vector = base->is_vector;
   return ty;
 }
 
@@ -259,7 +347,7 @@ Type *func_type(Type *return_ty)
 Type *array_of(Type *base, int64_t len)
 {
   if (!base)
-  error("%s %d: in array_of : base is null", TYPE_C, __LINE__); 
+  error("%s:%d: in array_of : base is null", __FILE__, __LINE__); 
   Type *ty = new_type(TY_ARRAY, base->size * len, base->align);
   ty->base = base;
   ty->array_len = len;  
@@ -271,7 +359,7 @@ Type *array_of(Type *base, int64_t len)
 Type *vector_of(Type *base, int64_t len)
 {
   if (!base)
-    error("%s %d: in vector_of : base is null", TYPE_C, __LINE__); 
+    error("%s:%d: in vector_of : base is null", __FILE__, __LINE__); 
   Type *ty = new_type(TY_VECTOR, base->size * len, base->align);
   int total_size = base->size * len;
   ty->size = total_size;
@@ -286,7 +374,7 @@ Type *vector_of(Type *base, int64_t len)
 Type *vla_of(Type *base, Node *len)
 {
 
-  Type *ty = new_type(TY_VLA, 8, 8);
+  Type *ty = new_type(TY_VLA, 8, base->align);
   ty->base = base;
   ty->vla_len = len;
   ty->has_vla = true;
@@ -331,7 +419,7 @@ static Type *get_common_type(Node **lhs, Node **rhs)
   if (ty1->base) {
     if (ty1->base->kind == TY_VOID)
       if (ty2->base)
-        return pointer_to(ty2->base);  
+        return pointer_to(ty2->base);
     return pointer_to(ty1->base);
   }
 
@@ -473,14 +561,14 @@ void add_type(Node *node)
   case ND_POS:
   case ND_NEG:
     if (!is_numeric(node->lhs->ty) && !is_vector(node->lhs->ty))
-      error_tok(node->lhs->tok, "%s %d: in add_type: invalid operand", TYPE_C, __LINE__);
+      error_tok(node->lhs->tok, "%s:%d: in add_type: invalid operand", __FILE__, __LINE__);
     if (is_integer(node->lhs->ty))
       int_promotion(&node->lhs);
     node->ty = node->lhs->ty;
     return;  
   case ND_ASSIGN:
     if (node->lhs->ty->kind == TY_ARRAY)
-      error_tok(node->lhs->tok, "%s %d: not an lvalue", TYPE_C, __LINE__);
+      error_tok(node->lhs->tok, "%s:%d: not an lvalue", __FILE__, __LINE__);
     if (node->lhs->ty->kind != TY_STRUCT && node->lhs->ty->kind != TY_UNION)
       node->rhs = new_cast(node->rhs, node->lhs->ty);
     node->ty = node->lhs->ty;
@@ -489,8 +577,12 @@ void add_type(Node *node)
   case ND_NE:
   case ND_LT:
   case ND_LE:
-    usual_arith_conv(&node->lhs, &node->rhs);
-    node->ty = ty_int;
+    if (is_vector(node->lhs->ty) && is_vector(node->rhs->ty)) {
+      node->ty = node->lhs->ty;
+    } else {
+      usual_arith_conv(&node->lhs, &node->rhs);
+      node->ty = ty_int;
+    }
     return;
   case ND_ALLOC:
     add_type(node->lhs);  
@@ -507,14 +599,14 @@ void add_type(Node *node)
   case ND_SHR:
     //node->ty = node->lhs->ty;  
     if (!is_integer(node->lhs->ty) && !is_vector(node->lhs->ty))
-      error_tok(node->tok, "%s %d %d invalid operand ", TYPE_C, __LINE__, node->kind);
+      error_tok(node->tok, "%s:%d %d invalid operand ", __FILE__, __LINE__, node->kind);
     if (is_integer(node->lhs->ty))
       int_promotion(&node->lhs);
     node->ty = node->lhs->ty;       
     return;
   case ND_VAR:
       if (!node->var) {
-        error_tok(node->tok, "%s %d %d variable undefined ", TYPE_C, __LINE__, node->kind);
+        error_tok(node->tok, "%s:%d %d variable undefined ", __FILE__, __LINE__, node->kind);
       }
   case ND_VLA_PTR:
     node->ty = node->var->ty;
@@ -555,12 +647,12 @@ void add_type(Node *node)
       if (node->lhs->ty)
         node->lhs->ty->base = node->lhs->ty;
       else
-        error_tok(node->tok, "%s %d: invalid pointer dereference", TYPE_C, __LINE__);
+        error_tok(node->tok, "%s:%d: invalid pointer dereference", __FILE__, __LINE__);
     }
     //======ISS-154 trying to fix deferencing pointer issue when we have a macro that can return a pointer or null  (self) ? NULL      
     //printf("======%d %d %s\n", node->lhs->ty->base->kind, node->lhs->ty->kind, node->lhs->tok->loc);
     if (node->lhs->ty->base->kind == TY_VOID && node->lhs->ty->kind == TY_VOID)
-      error_tok(node->tok, "%s %d : dereferencing a void pointer", TYPE_C, __LINE__);
+      error_tok(node->tok, "%s:%d : dereferencing a void pointer", __FILE__, __LINE__);
     if (node->lhs->ty->base->kind == TY_VOID)
       node->lhs->ty->base = node->lhs->ty;
     node->ty = node->lhs->ty->base;
@@ -583,7 +675,7 @@ void add_type(Node *node)
       }
     }
     //trying to fix =====ISS-144 compiling util-linux failed with expression returning void is not supported
-    //error_tok(node->tok, "%s statement expression returning void is not supported", TYPE_C);
+    //error_tok(node->tok, "%s statement expression returning void is not supported", __FILE__);
     return;
   case ND_LABEL_VAL:
     node->ty = pointer_to(ty_void);
@@ -595,6 +687,11 @@ void add_type(Node *node)
     node->ty = ty_bool;
     return;
   case ND_CAS_N:
+    node->ty = ty_bool;
+    return;
+  case ND_ATOMIC_IS_LOCK_FREE:
+    add_type(node->lhs);
+    add_type(node->rhs);
     node->ty = ty_bool;
     return;
   case ND_BUILTIN_MEMSET:    
@@ -819,7 +916,7 @@ void add_type(Node *node)
   case ND_FETCHNAND:
   case ND_SUBFETCH:
     if (node->lhs->ty->kind != TY_PTR)
-      error_tok(node->lhs->tok, "%s %d:  in add_type: pointer expected", TYPE_C, __LINE__);
+      error_tok(node->lhs->tok, "%s:%d:  in add_type: pointer expected", __FILE__, __LINE__);
     node->rhs = new_cast(node->rhs, node->lhs->ty->base);
     node->ty = node->lhs->ty->base;
     return;
@@ -861,7 +958,7 @@ void add_type(Node *node)
     return;
   case ND_EXCH:
     if (node->lhs->ty->kind != TY_PTR)
-      error_tok(node->cas_addr->tok, "%s %d: pointer expected", TYPE_C, __LINE__);
+      error_tok(node->cas_addr->tok, "%s:%d: pointer expected", __FILE__, __LINE__);
     node->ty = node->lhs->ty->base;
     return;
   case ND_BUILTIN_NANF:  
@@ -881,6 +978,8 @@ void add_type(Node *node)
   case ND_CVTTSS2SI: 
   case ND_CVTTSD2SI:     
   case ND_VECEXTV2SI:
+  case ND_VECEXTV16QI:
+  case ND_VECEXTV8HI:
   case ND_VECEXTV4SI:
     node->ty = ty_int;
     return;
@@ -888,6 +987,7 @@ void add_type(Node *node)
   case ND_CVTSD2SI64:
   case ND_CVTSS2SI64:
   case ND_CVTTSS2SI64:
+  case ND_VECEXTV2DI:
     node->ty = ty_long;
     return;
   case ND_VECINITV4HI:
@@ -1140,6 +1240,7 @@ void add_type(Node *node)
   case ND_RDPMC:
   case ND_SBB_U32:
   case ND_BEXTR_U32:
+  case ND_PCMPGTB256_MASK:
     node->ty = ty_uint;
     return;    
   case ND_BSRDI:
@@ -1179,6 +1280,34 @@ void add_type(Node *node)
   case ND_ROLHI:
   case ND_TZCNT_U16:
     node->ty = ty_ushort;
+    return;
+  case ND_PSUBUSB256:
+  case ND_PSHUFB256:
+  case ND_PBLENDVB256:
+  case ND_PSRLDQI256:
+  case ND_PSLLDQI256:
+  case ND_PALIGNR256:
+  case ND_VPERM2I128_SI256:
+  case ND_VINSERTF128_SI256:  
+  case ND_PBLENDD256:
+  case ND_ANDNOTSI256:
+  case ND_PMULHUW256:
+  case ND_SI_SI256:
+  case ND_PSRLQI256:
+  case ND_PSLLQI256:
+  case ND_PERMDI256:  
+    node->ty = vector_of(ty_uchar, 32);
+    return;
+  case ND_SI256_SI:
+  case ND_VEXTRACTF128_SI256:
+  case ND_PD256_PD:
+  case ND_PS256_PS:
+    node->ty = vector_of(ty_uchar, 16);
+    return;
+  case ND_PSLLDI256: 
+  case ND_PSRLDI256:
+  case ND_PSRADI256:
+    node->ty = vector_of(ty_int, 8);
     return;
   default:
     node->ty = ty_void_ptr;

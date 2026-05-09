@@ -1,5 +1,4 @@
 #include "chibicc.h"
-#define TOKENIZE_C "tokenize.c"
 
 // Define the ANSI color codes
 #define RED "\033[31m"
@@ -22,6 +21,9 @@ static bool at_bol;
 
 // True if the current position follows a space character
 static bool has_space;
+
+// True if we are inside a preprocessor directive line
+static bool in_pp_line;
 
 //static Token *read_pragma(Token *cur, char **rest, char *start);
 
@@ -159,7 +161,7 @@ bool equal(Token *tok, const char *op)
 Token *skip(Token *tok, char *op, Context *ctx)
 {
   if (!equal(tok, op))
-    error_tok(tok, "%s %s %s %u: in skip : expected '%s'", TOKENIZE_C, ctx->filename, ctx->funcname, ctx->line_no, op );
+    error_tok(tok, "%s %s %s %u: in skip : expected '%s'", __FILE__, ctx->filename, ctx->funcname, ctx->line_no, op );
   return tok->next;
 }
 
@@ -179,7 +181,7 @@ static Token *new_token(TokenKind kind, char *start, char *end)
 {
   Token *tok = calloc(1, sizeof(Token));
   if (tok == NULL)
-    error("%s: in new_token tok is null!", TOKENIZE_C);
+    error("%s:%d in new_token tok is null!",  __FILE__, __LINE__);
   tok->kind = kind;
   tok->loc = start;
   tok->len = end - start;
@@ -198,21 +200,12 @@ bool startswith(char *p, char *q)
 
 // Read an identifier and returns the length of it.
 // If p does not point to a valid identifier, 0 is returned.
-static int read_ident(char *start, char *previous, bool isNotANumber)
+static int read_ident(char *start)
 {
   char *p = start;
   uint32_t c = decode_utf8(&p, p);
-  // allows identifier starting by a number if previous character was an hashtag
-  if (*previous == '#' || isNotANumber)
-  {
-    if (!is_ident3(c))
-      return 0;
-  }
-  else
-  {
-    if (!is_ident1(c))
-      return 0;
-  }
+  if (!is_ident1(c))
+    return 0;
   for (;;)
   {
     char *q;
@@ -230,6 +223,18 @@ static int from_hex(char c)
   if ('a' <= c && c <= 'f')
     return c - 'a' + 10;
   return c - 'A' + 10;
+}
+
+static uint32_t read_universal_char(char *p, int len)
+{
+  uint32_t c = 0;
+  for (int i = 0; i < len; i++)
+  {
+    if (!isxdigit(p[i]))
+      return (uint32_t)-1;
+    c = (c << 4) | from_hex(p[i]);
+  }
+  return c;
 }
 
 // Read a punctuator token from p and returns its length.
@@ -353,7 +358,7 @@ static int read_escaped_char(char **new_pos, char *p)
     // Read a hexadecimal number.
     p++;
     if (!isxdigit(*p))
-      error_at(p, "%s: in read_escaped_char : invalid hex escape sequence", TOKENIZE_C);
+      error_at(p, "%s:%d: in read_escaped_char : invalid hex escape sequence", __FILE__, __LINE__);
 
     int c = 0;
     for (; isxdigit(*p); p++)
@@ -362,19 +367,18 @@ static int read_escaped_char(char **new_pos, char *p)
     return c;
   }
 
+  if (*p == 'u' || *p == 'U')
+  {
+    int len = (*p == 'u' ? 4 : 8);
+    uint32_t c = read_universal_char(p + 1, len);
+    if (c == (uint32_t)-1)
+      error_at(p, "%s:%d: in read_escaped_char : invalid universal character name", __FILE__, __LINE__);
+    *new_pos = p + 1 + len;
+    return c;
+  }
+
   *new_pos = p + 1;
 
-  // Escape sequences are defined using themselves here. E.g.
-  // '\n' is implemented using '\n'. This tautological definition
-  // works because the compiler that compiles our compiler knows
-  // what '\n' actually is. In other words, we "inherit" the ASCII
-  // code of '\n' from the compiler that compiles our compiler,
-  // so we don't have to teach the actual code here.
-  //
-  // This fact has huge implications not only for the correctness
-  // of the compiler but also for the security of the generated code.
-  // For more info, read "Reflections on Trusting Trust" by Ken Thompson.
-  // https://github.com/rui314/chibicc/wiki/thompson1984.pdf
   switch (*p)
   {
   case 'a':
@@ -407,7 +411,7 @@ static char *string_literal_end(char *p)
   {
     
     if (*p == '\n' || *p == '\0')
-      error_at(start, "%s %d: in string_literal_end : unclosed string literal", TOKENIZE_C, __LINE__);
+      error_at(start, "%s:%d: in string_literal_end : unclosed string literal", __FILE__, __LINE__);
     if (*p == '\\')
       p++;
   }
@@ -419,12 +423,14 @@ static Token *read_string_literal(char *start, char *quote)
   char *end = string_literal_end(quote + 1);
   char *buf = calloc(1, end - quote);
   if (buf == NULL)
-    error("%s: %s:%d: error: in read_string_literal buf is null!", TOKENIZE_C, __FILE__, __LINE__);
+    error("%s:%d: error: in read_string_literal buf is null!", __FILE__, __LINE__);
   int len = 0;
 
   for (char *p = quote + 1; p < end;)
   {
-    if (*p == '\\')
+    if (*p == '\\' && (p[1] == 'u' || p[1] == 'U'))
+      len += encode_utf8(buf + len, read_escaped_char(&p, p + 1));
+    else if (*p == '\\')
       buf[len++] = read_escaped_char(&p, p + 1);
     else
       buf[len++] = *p++;
@@ -448,18 +454,17 @@ static Token *read_utf16_string_literal(char *start, char *quote)
   char *end = string_literal_end(quote + 1);
   uint16_t *buf = calloc(2, end - start);
   if (buf == NULL)
-    error("%s: %s:%d: error: in read_utf16_string_literal buf is null!", TOKENIZE_C, __FILE__, __LINE__);
+    error("%s:%d: error: in read_utf16_string_literal buf is null!", __FILE__, __LINE__);
   int len = 0;
 
   for (char *p = quote + 1; p < end;)
   {
+    uint32_t c;
     if (*p == '\\')
-    {
-      buf[len++] = read_escaped_char(&p, p + 1);
-      continue;
-    }
+      c = read_escaped_char(&p, p + 1);
+    else
+      c = decode_utf8(&p, p);
 
-    uint32_t c = decode_utf8(&p, p);
     if (c < 0x10000)
     {
       // Encode a code point in 2 bytes.
@@ -489,7 +494,7 @@ static Token *read_utf32_string_literal(char *start, char *quote, Type *ty)
   char *end = string_literal_end(quote + 1);
   uint32_t *buf = calloc(4, end - quote);
   if (buf == NULL)
-    error("%s: %s:%d: error: in read_utf32_string_literal buf is null!", TOKENIZE_C, __FILE__, __LINE__);
+    error("%s:%d: error: in read_utf32_string_literal buf is null!", __FILE__, __LINE__);
   int len = 0;
 
   for (char *p = quote + 1; p < end;)
@@ -506,123 +511,42 @@ static Token *read_utf32_string_literal(char *start, char *quote, Type *ty)
   return tok;
 }
 
-static Token *read_char_literal(char *start, char *quote, Type *ty)
-{
+static Token *read_char_literal(char *start, char *quote, Type *ty) {
   char *p = quote + 1;
   if (*p == '\0')
-    error_at(start, "%s: in read_char_literal : unclosed char literal", TOKENIZE_C);
+    error_at(start, "%s:%d: in read_char_literal : unclosed char literal", __FILE__, __LINE__);
 
-  int c;
-  if (*p == '\\')
-    c = read_escaped_char(&p, p + 1);
-  else
-    c = decode_utf8(&p, p);
+  int64_t c = 0;
+  int n = 0;
 
-  char *end = strchr(p, '\'');
-  if (!end)
-    error_at(p, "%s: in read_char_literal : unclosed char literal", TOKENIZE_C);
+  while (*p != '\'') {
+    if (*p == '\0' || *p == '\n')
+      error_at(start, "unclosed char literal");
 
-  Token *tok = new_token(TK_NUM, start, end + 1);
+    if (n > 0)
+      c <<= 8;
+
+    if (*p == '\\')
+      c |= read_escaped_char(&p, p + 1);
+    else
+      c |= decode_utf8(&p, p);
+    n++;
+  }
+
+  if (n > 4 && ty->kind == TY_INT && !in_pp_line)
+    warning_at(start, "character constant too long for its type");
+
+  // For a single-byte character literal, the value should be sign-extended
+  // as if it were a char.
+  if (n == 1 && (quote - start) == 0)
+    c = (char)c;
+
+  Token *tok = new_token(TK_NUM, start, p + 1);
   tok->val = c;
   tok->ty = ty;
   return tok;
 }
 
-// static bool convert_pp_int(Token *tok)
-// {
-//   char *p = tok->loc;
-
-//   // Read a binary, octal, decimal or hexadecimal number.
-//   int base = 10;
-//   if (!strncasecmp(p, "0x", 2) && isxdigit(p[2]))
-//   {
-//     p += 2;
-//     base = 16;
-//   }
-//   else if (!strncasecmp(p, "0b", 2) && (p[2] == '0' || p[2] == '1'))
-//   {
-//     p += 2;
-//     base = 2;
-//   }
-//   else if (*p == '0')
-//   {
-//     base = 8;
-//   }
-
-//   int64_t val = strtoul(p, &p, base);
-
-//   // Read U, L or LL suffixes.
-//   bool l = false;
-//   bool u = false;
-
-//   if (startswith(p, "LLU") || startswith(p, "LLu") ||
-//       startswith(p, "llU") || startswith(p, "llu") ||
-//       startswith(p, "ULL") || startswith(p, "Ull") ||
-//       startswith(p, "uLL") || startswith(p, "ull"))
-//   {
-//     p += 3;
-//     l = u = true;
-//   }
-//   else if (!strncasecmp(p, "lu", 2) || !strncasecmp(p, "ul", 2))
-//   {
-//     p += 2;
-//     l = u = true;
-//   }
-//   else if (startswith(p, "LL") || startswith(p, "ll"))
-//   {
-//     p += 2;
-//     l = true;
-//   }
-//   else if (*p == 'L' || *p == 'l')
-//   {
-//     p++;
-//     l = true;
-//   }
-//   else if (*p == 'U' || *p == 'u')
-//   {
-//     p++;
-//     u = true;
-//   }
-
-//   if (p != tok->loc + tok->len)
-//     return false;
-
-//   // Infer a type.
-//   Type *ty;
-//   if (base == 10)
-//   {
-//     if (l && u)
-//       ty = ty_ulong;
-//     else if (l)
-//       ty = ty_long;
-//     else if (u)
-//       ty = (val >> 32) ? ty_ulong : ty_uint;
-//     else
-//       ty = (val >> 31) ? ty_long : ty_int;
-//   }
-//   else
-//   {
-//     if (l && u)
-//       ty = ty_ulong;
-//     else if (l)
-//       ty = (val >> 63) ? ty_ulong : ty_long;
-//     else if (u)
-//       ty = (val >> 32) ? ty_ulong : ty_uint;
-//     else if (val >> 63)
-//       ty = ty_ulong;
-//     else if (val >> 32)
-//       ty = ty_long;
-//     else if (val >> 31)
-//       ty = ty_uint;
-//     else
-//       ty = ty_int;
-//   }
-
-//   tok->kind = TK_NUM;
-//   tok->val = val;
-//   tok->ty = ty;
-//   return true;
-// }
 static bool convert_pp_int(Token *tok) {
   char *p = tok->loc;
 
@@ -732,6 +656,7 @@ static void convert_pp_number(Token *tok)
   if (*end == 'f' || *end == 'F')
   {
     ty = ty_float;
+    val = (float)val;
     end++;
   }
   else if (*end == 'l' || *end == 'L')
@@ -742,10 +667,11 @@ static void convert_pp_number(Token *tok)
   else
   {
     ty = ty_double;
+    val = (double)val;
   }
 
   if (tok->loc + tok->len != end)
-    error_tok(tok, "%s: in convert_pp_number : invalid numeric constant", TOKENIZE_C);  
+    error_tok(tok, "%s:%d: in convert_pp_number : invalid numeric constant", __FILE__, __LINE__);  
   tok->kind = TK_NUM;
   tok->fval = val;
   tok->ty = ty;
@@ -799,9 +725,9 @@ Token *tokenize(File *file)
   char *p = file->contents;
   Token head = {};
   Token *cur = &head;
-  bool isNotANumber = false;
 
   at_bol = true;
+  in_pp_line = false;
   has_space = false;
 
   while (*p)
@@ -823,7 +749,7 @@ Token *tokenize(File *file)
     {
       char *q = strstr(p + 2, "*/");
       if (!q)
-        error_at(p, "%s: in tokenize : unclosed block comment", TOKENIZE_C);
+        error_at(p, "%s:%d: in tokenize : unclosed block comment", __FILE__, __LINE__);
       p = q + 2;
       has_space = true;
       continue;
@@ -834,7 +760,8 @@ Token *tokenize(File *file)
     {
       p++;
       at_bol = true;
-      has_space = false;
+      in_pp_line = false;
+      has_space = true;
       continue;
     }
 
@@ -846,38 +773,25 @@ Token *tokenize(File *file)
       continue;
     }
     
-
-    // to manage particular cases see issue 116, 117, 118
-    char *previous = p;    
-    char *current = p;
-    if (p != file->contents)
-      previous = p - 1; 
     // Numeric literal
-    // to fix issue #117, checking that previous character is not an hashtag!
-    if ((isdigit(*p) || (*p == '.' && isdigit(p[1]))) && *(previous) != '#')
-    {
-      char *q = p++;
+    if (isdigit(*p) || (*p == '.' && isdigit(p[1]))) {
+      char *q = p;
       for (;;)
       {
-
-        if (p[0] && p[1] && strchr("eEpP", p[0]) && strchr("+-", p[1]))
+        if (p[0] && p[1] && strchr("eEpP", p[0]) && strchr("+-", p[1])) {
           p += 2;
-        else if (isalnum(*p) || *p == '.')
-          p++;
+          continue;
+        }
+
+        char *p2;
+        uint32_t c = decode_utf8(&p2, p);
+        if (c == '.' || is_ident2(c))
+          p = p2;
         else
           break;
       }
-      // fixing issue #116 with wrong number detected 1024_160 was considered as number 1024 and other token _160!
-      if (*p != '_')
-      {
-        cur = cur->next = new_token(TK_PP_NUM, q, p);
-        continue;
-      }
-      else
-      {
-        p = current;
-        isNotANumber = true;
-      }
+      cur = cur->next = new_token(TK_PP_NUM, q, p);
+      continue;
     }
 
     // String literal
@@ -924,7 +838,15 @@ Token *tokenize(File *file)
     if (*p == '\'')
     {
       cur = cur->next = read_char_literal(p, p, ty_int);
-      cur->val = (char)cur->val;
+      //cur->val = (char)cur->val;
+      p += cur->len;
+      continue;
+    }
+
+    // UTF-8 character literal
+    if (startswith(p, "u8'"))
+    {
+      cur = cur->next = read_char_literal(p, p + 2, ty_char);
       p += cur->len;
       continue;
     }
@@ -955,7 +877,7 @@ Token *tokenize(File *file)
     }
 
     // Identifier or keyword
-    int ident_len = read_ident(p, previous, isNotANumber);
+    int ident_len = read_ident(p);
     if (ident_len)
     {
       cur = cur->next = new_token(TK_IDENT, p, p + ident_len);
@@ -967,12 +889,14 @@ Token *tokenize(File *file)
     int punct_len = read_punct(p);
     if (punct_len)
     {
+      if (at_bol && *p == '#')
+        in_pp_line = true;
       cur = cur->next = new_token(TK_PUNCT, p, p + punct_len);
       p += cur->len;
       continue;
     }
 
-    error_at(p, "%s: in tokenize : invalid token", TOKENIZE_C);
+    error_at(p, "%s:%d: in tokenize : invalid token", __FILE__, __LINE__);
   }
 
   cur = cur->next = new_token(TK_EOF, p, p);
@@ -980,7 +904,7 @@ Token *tokenize(File *file)
 
   // for debug needs print all the tokens with values
   if (printTokens && f != NULL)
-     print_debug_tokens(TOKENIZE_C, "tokenize", head.next);
+     print_debug_tokens(__FILE__, "tokenize", head.next);
   return head.next;
 }
 
@@ -1036,7 +960,7 @@ File *new_file(char *name, unsigned int file_no, char *contents)
 {
   File *file = calloc(1, sizeof(File));
   if (file == NULL)
-    error("%s: %s:%d: error: in new_file file is null!", TOKENIZE_C, __FILE__, __LINE__);
+    error("%s:%d: error: in new_file file is null!", __FILE__, __LINE__);
   file->name = name;
   file->display_name = name;
   file->file_no = file_no;
@@ -1104,29 +1028,41 @@ static void remove_backslash_newline(char *p)
   p[j] = '\0';
 }
 
-static uint32_t read_universal_char(char *p, int len)
-{
-  uint32_t c = 0;
-  for (int i = 0; i < len; i++)
-  {
-    if (!isxdigit(p[i]))
-      return 0;
-    c = (c << 4) | from_hex(p[i]);
-  }
-  return c;
-}
+
 
 // Replace \u or \U escape sequences with corresponding UTF-8 bytes.
-static void convert_universal_chars(char *p)
+void convert_universal_chars(char *p)
 {
   char *q = p;
 
   while (*p)
   {
+    if (*p == '"' || *p == '\'')
+    {
+      char quote = *p;
+      *q++ = *p++;
+      while (*p && *p != quote)
+      {
+        if (*p == '\\')
+        {
+          *q++ = *p++;
+          if (*p)
+            *q++ = *p++;
+        }
+        else
+        {
+          *q++ = *p++;
+        }
+      }
+      if (*p)
+        *q++ = *p++;
+      continue;
+    }
+
     if (startswith(p, "\\u"))
     {
       uint32_t c = read_universal_char(p + 2, 4);
-      if (c)
+      if (c != (uint32_t)-1 && c != 0)
       {
         p += 6;
         q += encode_utf8(q, c);
@@ -1139,7 +1075,7 @@ static void convert_universal_chars(char *p)
     else if (startswith(p, "\\U"))
     {
       uint32_t c = read_universal_char(p + 2, 8);
-      if (c)
+      if (c != (uint32_t)-1 && c != 0)
       {
         p += 10;
         q += encode_utf8(q, c);
@@ -1187,11 +1123,10 @@ Token *tokenize_file(char *path)
   // Save the filename for assembler .file directive.
   input_files = realloc(input_files, sizeof(char *) * (file_no + 2));
   if (input_files == NULL)
-    error("%s: %s:%d: error: in tokenize_file input_files is null!", TOKENIZE_C, __FILE__, __LINE__);
+    error("%s:%d: error: in tokenize_file input_files is null!", __FILE__, __LINE__);
   input_files[file_no] = file;
   input_files[file_no + 1] = NULL;
   file_no++;
 
   return tokenize(file);
 }
-

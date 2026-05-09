@@ -4,8 +4,9 @@ PREFIX=/usr/local
 GCC_VERSION!=gcc -dumpversion
 CC=gcc
 CFLAGS =-std=c11 -g -fno-common -Wall -Wno-switch -DPREFIX=\"$(PREFIX)\" -DGCC_VERSION=\"$(GCC_VERSION)\"
-CFLAGS_DIAG= -std=c11 
-CFLAGS_SPE = -fomit-frame-pointer -O3
+CFLAGS_DIAG= -std=c11 -g -mavx2
+CFLAGS_SPE = -g -fomit-frame-pointer -O3 -mavx2
+LDFLAGS = -lcrypto
 TEST_JOBS ?=
 TEST_TIMEOUT ?= 30
 OBJECT=chibicc
@@ -29,7 +30,7 @@ $(OBJS): $(OBJECT).h
 
 test/%.exe: $(OBJECT) test/%.c 
 	./$(OBJECT) $(CFLAGS_DIAG) -Iinclude -Itest -c -o test/$*.o test/$*.c 
-	$(CC) -pthread -o $@ test/$*.o -xc test/common -lm
+	$(CC) -pthread -o $@ test/$*.o -xc test/common -lm $(LDFLAGS) 
 #	dot -Tpng test/$*.dot -o diagram/$*.png || echo $*.dot failed
 	
 
@@ -41,7 +42,7 @@ test_spe/%.exe: $(OBJECT) test/%.c
 	mkdir -p test_spe
 	./$(OBJECT) $(CFLAGS_DIAG) $(CFLAGS_SPE) -Iinclude -Itest \
 		-c -o test_spe/$*.o test/$*.c
-	$(CC) -pthread -o $@ test_spe/$*.o -xc test/common -lm
+	$(CC) -pthread -o $@ test_spe/$*.o -xc test/common -lm $(LDFLAGS) 
 
 test_spe: $(TESTS_SPE)
 	TEST_JOBS="$(TEST_JOBS)" TEST_TIMEOUT="$(TEST_TIMEOUT)" ./test/run_tests.sh $(addprefix ./,$^)
@@ -63,7 +64,7 @@ stage2/%.o: $(OBJECT) %.c
 stage2/test/%.exe: stage2/$(OBJECT) test/%.c
 	mkdir -p stage2/test
 	./stage2/$(OBJECT) -Iinclude -Itest -c -o stage2/test/$*.o test/$*.c 
-	$(CC) -pthread -o $@ stage2/test/$*.o -xc test/common
+	$(CC)  -pthread -o $@ stage2/test/$*.o -xc test/common $(LDFLAGS) 
 
 test-stage2: $(TESTS:test/%=stage2/test/%)
 	TEST_JOBS="$(TEST_JOBS)" TEST_TIMEOUT="$(TEST_TIMEOUT)" ./test/run_tests.sh $(addprefix ./,$^)
@@ -71,31 +72,31 @@ test-stage2: $(TESTS:test/%=stage2/test/%)
 
 projects-all: projects projects-oth lxc vlc git memcached cpython openssl
 
-projects-oth: vim nmap curl 
+projects-oth: sqlite vim nmap curl 
 
 projects: zlib util-linux nginx
 
 
 curl:
-	cd ../curl && make clean && CC=chibicc  CFLAGS="-std=c11" ./configure --with-openssl && make -j$(nproc) && make -j$(nproc) test
+	cd ../curl && make clean && CC=chibicc  CFLAGS="-std=c11 -g" ./configure --with-openssl && make -j4 && make -j4 test
 
 zlib:
-	cd ../zlib && make clean && CC=chibicc CFLAGS="-fPIC -std=c11" ./configure && make && make test
+	cd ../zlib && make clean && CC=chibicc CFLAGS="-fPIC -std=c11 -g" ./configure && make && make test
 
 nmap:
-	cd ../nmap && make clean && CC=chibicc  CFLAGS="-fPIC -std=c11" LIBS="-ldbus-1 -latomic -libverbs -lrdmacm" ./configure --with-dbus && make -j$(nproc) && make check
+	cd ../nmap && make clean && CC=chibicc  CFLAGS="-fPIC -std=c11 -g" LIBS="-ldbus-1 -latomic -libverbs -lrdmacm" ./configure --with-dbus && make -j4 && make check
 
 openssl:
-	cd ../openssl && make clean && CC=chibicc CFLAGS="-std=c11" ./Configure && make 
+	cd ../openssl && make clean && CC=chibicc CFLAGS="-std=c11 -g -O0" ./Configure linux-x86_64 --debug enable-fips enable-legacy && make -j4 && HARNESS_JOBS=1 make test
 
 util-linux:
-	cd ../util-linux && make clean && CC=chibicc CFLAGS="-fPIC -std=c11" ./configure && make -j$(nproc) && make check-programs && cd tests && ./run.sh
+	cd ../util-linux && make clean && CC=chibicc CFLAGS="-fPIC -std=c11 -g" ./configure && make -j4 && make check-programs && cd tests && ./run.sh
 
 nginx:
-	cd ../nginx && make clean && CC=chibicc CFLAGS="-fPIC -std=c11" ./auto/configure --with-http_ssl_module && make
+	cd ../nginx && make clean && CC=chibicc CFLAGS="-fPIC -std=c11" ./auto/configure --with-http_ssl_module && make -j4
 
 vim:
-	cd ../vim && make clean && CC=chibicc CFLAGS="-fPIC -std=c11" ./configure && make -j$(nproc) &&  make -j$(nproc) test 
+	cd ../vim && make clean && CC=chibicc CFLAGS="-fPIC -std=c11 -g" ./configure && make -j2 &&  make test 
 
 lxc:
 	cd ../lxc && rm -rf build && CC=gcc \
@@ -103,31 +104,29 @@ lxc:
 	sudo cp /usr/local/bin/chibicc /usr/bin/gcc && meson compile && sudo cp /usr/bin/gcc_backup /usr/bin/gcc
 
 vlc:
-	cd ../vlc && make clean && CC=chibicc CFLAGS="-fPIC -std=c11"  ./configure  \
+	cd ../vlc && make clean && CC=chibicc CFLAGS="-fPIC -std=c11 -g"  ./configure  \
 	--disable-lua --disable-xcb --disable-qt --disable-alsa --disable-sse --host x86_64-linux-gnu && \
-    make all
+    make -j4 all
 
 cpython:
-	cd ../cpython &&  CC=chibicc CFLAGS="-std=c11 -O3" ./configure  \
-	 --build=x86_64-pc-linux-gnu && make clean && make -j$(nproc) && make -j$(nproc) test
-
-# vlc2:
-# 	cd ../vlc && rm -rf build && mymeson setup build && cd build && mymeson compile
+	cd ../cpython &&  CC=chibicc CFLAGS="-std=c11 -O3 -g" ./configure  \
+	 --build=x86_64-pc-linux-gnu && make clean && make -j2 && make test
 
 
 git: 
-	cd ../git && CC=chibicc CFLAGS="-fPIC -std=c11" ./configure && make && make test
+	cd ../git && CC=chibicc CFLAGS="-fPIC -std=c11 -g" ./configure && make && make test
 
 memcached:
-	cd ../memcached && make clean && CC=chibicc CFLAGS="-fPIC -std=c11" ./configure && make -j$$(nproc) && \
-	MC_TIMEDRUN=$${MC_TIMEDRUN:-600}; \
-	MC_TEST_JOBS=$${MC_TEST_JOBS:-2}; \
-	FAST_TESTS=$$(cd t && ls *.t | sed 's|^|t/|'); \
-	MC_TIMEDRUN=$$MC_TIMEDRUN prove -j $$MC_TEST_JOBS $$FAST_TESTS 
+	cd ../memcached && make clean && CC=chibicc CFLAGS="-fPIC -std=c11 -g" ./configure && make -j4 && make test
 
 openssh-portable:
-	cd ../openssh-portable && make clean && CC=chibicc CFLAGS="-std=c11" ./configure && make && make tests
+	cd ../openssh-portable && make clean && CC=chibicc CFLAGS="-std=c11 -g" ./configure && make -j4 && make tests
 
+sqlite:
+	cd ../sqlite && CC=chibicc CFLAGS="-fPIC -std=c11 -g" ./configure && make clean && make -j2 && make test
+
+php-src:
+	cd ../php-src && CC=chibicc CFLAGS="-fPIC -std=c11 -g" ./buildconf && ./configure && make clean && make -j2 && make test
 
 # Misc.
 
@@ -139,7 +138,7 @@ libchibicc.so: $(OBJS)
 	$(CC) $(CFLAGS) -o $@ $^ -shared
 
 clean:
-	rm -rf $(OBJECT) tmp* $(TESTS) issues/*.s issues/*.exe issues/*.dot test/*.s test/*.exe test_spe/*.exe stage2 diagram/*.png test/*.dot $(OBJECTLIB)
+	rm -rf $(OBJECT) tmp* *.zend $(TESTS) issues/*.s issues/*.exe issues/*.dot test/*.s test/*.exe test_spe/*.exe stage2 diagram/*.png test/*.dot $(OBJECTLIB)
 	find * -type f '(' -name '*~' -o -name '*.o' ')' -exec rm {} ';'
 
 install: $(OBJECT)

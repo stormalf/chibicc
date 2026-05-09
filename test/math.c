@@ -8,7 +8,7 @@ static void test_trig(void) {
   assert(isunordered(NAN, 1.0));
   assert(fabs(sin(x) - sinl((long double)x)) < 1e-12);
   assert(fabs(cos(x) - cosl((long double)x)) < 1e-12);
-  //assert(fabs(tan(x) - tanl((long double)x)) < 1e-12);
+  assert(fabs(tan(x) - tanl((long double)x)) < 1e-12);
 
   assert(fabs(asin(sin(x)) - x) < 1e-12);
   assert(fabs(acos(cos(x)) - x) < 1e-12);

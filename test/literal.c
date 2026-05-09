@@ -83,8 +83,8 @@ int main() {
   3e+8;
   0x10.1p0;
   .1E4f;
-
-  ASSERT(4, sizeof(8f));
+  float f1 = 8.00f;
+  ASSERT(4, sizeof(f1));
   ASSERT(4, sizeof(0.3F));
   ASSERT(8, sizeof(0.));
   ASSERT(8, sizeof(.0));

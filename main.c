@@ -1,5 +1,4 @@
 #include "chibicc.h"
-#define MAIN_C "main.c"
 
 #ifndef PREFIX
 #define PREFIX "/usr/local"
@@ -16,6 +15,8 @@ typedef enum
   FILE_RSP,
 } FileType;
 
+
+Standard current_std = STD_GNU89;  // default like GCC
 StringArray include_paths;
 bool opt_fcommon = true;
 bool opt_fbuiltin = true;
@@ -29,11 +30,6 @@ bool opt_sse4;
 bool opt_mmx;
 bool opt_crc32;
 bool opt_g;
-bool opt_c99;
-bool opt_c11;
-bool opt_c17;
-bool opt_c89;
-bool opt_c23;
 bool opt_implicit;
 bool opt_werror;
 bool opt_omit_frame_pointer = false;
@@ -41,6 +37,8 @@ bool opt_optimize = false;
 bool opt_optimize_level1 = false;
 bool opt_optimize_level2 = false;
 bool opt_optimize_level3 = false;
+bool opt_avx2;
+bool opt_avx;
 
 static FileType opt_x;
 static StringArray opt_include;
@@ -113,11 +111,11 @@ static void setup_signal_handlers() {
 }
 
 
-static void print_string_array(StringArray *arr) {
-    for (int i = 0; i < arr->len; i++) {
-        printf("=====ld_extra_args[%d]: %s\n", i, arr->data[i]);
-    }
-}
+// static void print_string_array(StringArray *arr) {
+//     for (int i = 0; i < arr->len; i++) {
+//         printf("=====ld_extra_args[%d]: %s\n", i, arr->data[i]);
+//     }
+// }
 
 
 
@@ -175,7 +173,7 @@ static void check_parms_length(char *arg)
 {
   if (strlen(arg) > MAXLEN)
   {
-    error("%s : %s:%d: error: in check_parms_length maximum length parameter overpassed", MAIN_C, __FILE__, __LINE__);
+    error("%s:%d: error: in check_parms_length maximum length parameter overpassed", __FILE__, __LINE__);
     exit(EXIT_FAILURE);
   }
 }
@@ -241,7 +239,7 @@ static FileType parse_opt_x(char *s)
     return FILE_ASM;     
   if (!strcmp(s, "none"))
     return FILE_NONE;
-  error("%s : %s:%d: error: in parse_opt_x <command line>: unknown argument for -x: %s", MAIN_C, __FILE__, __LINE__, s);
+  error("%s:%d: error: in parse_opt_x <command line>: unknown argument for -x: %s", __FILE__, __LINE__, s);
 }
 
 
@@ -250,7 +248,7 @@ static char *quote_makefile(char *s)
   char *buf = calloc(1, strlen(s) * 2 + 1);
   if (buf == NULL)
   {
-    error("%s : %s:%d: error: in quote_makefile buf pointer is null!", MAIN_C, __FILE__, __LINE__);
+    error("%s:%d: error: in quote_makefile buf pointer is null!", __FILE__, __LINE__);
   }
 
   for (int i = 0, j = 0; s[i]; i++)
@@ -396,6 +394,15 @@ static void parse_args(int argc, char **argv)
       continue;
     }    
 
+    if (!strcmp(argv[i], "-mavx2")) {
+      opt_avx2 = true;
+      continue;
+    }
+
+    if (!strcmp(argv[i], "-mavx")) {
+      opt_avx = true;
+      continue;
+    }
 
     if (startsWith(argv[i], "-flto"))
     {
@@ -869,9 +876,16 @@ static void parse_args(int argc, char **argv)
     }
 
 
-    if (!strcmp(argv[i], "-O0") || !strcmp(argv[i], "-O")) {
+    if (!strcmp(argv[i], "-O0")) {
       opt_omit_frame_pointer = false;
       opt_optimize = false;
+      continue;
+    }
+
+    if (!strcmp(argv[i], "-O")) {
+      opt_omit_frame_pointer = true;
+      opt_optimize = true;
+      opt_optimize_level1 = true;
       continue;
     }
 
@@ -899,6 +913,12 @@ static void parse_args(int argc, char **argv)
       continue;
     }
 
+    if (!strcmp(argv[i], "-foptimize-sibling-calls")) {
+      opt_optimize = true;
+      opt_optimize_level2 = true;
+      continue;
+    }
+
 
     if (!strcmp(argv[i], "-fstack-protector") || !strcmp(argv[i], "-fstack-protector-strong") || !strcmp(argv[i], "-fstack-clash-protection") ) {
       opt_fstack_protector = true;
@@ -923,7 +943,7 @@ static void parse_args(int argc, char **argv)
         path = argv[i] + 8;
     } else {
         if (i+1 >= argc)            
-            error("%s : %s:%d: error: in parse_args expected argument after -isystem", MAIN_C, __FILE__, __LINE__);
+            error("%s:%d: error: in parse_args expected argument after -isystem", __FILE__, __LINE__);
         path = argv[++i];
     }
     strarray_push(&include_paths, path);
@@ -931,11 +951,11 @@ static void parse_args(int argc, char **argv)
     }
 
     if (!strcmp(argv[i], "-Werror=invalid-command-line-argument")) {
-      error("%s : %s:%d: error: in parse_args : argument not accepted : -Werror=invalid-command-line-argument", MAIN_C, __FILE__, __LINE__); 
+      error("%s:%d: error: in parse_args : argument not accepted : -Werror=invalid-command-line-argument", __FILE__, __LINE__); 
     }
 
     if (!strcmp(argv[i], "-Werror=unknown-warning-option")) {
-      error("%s : %s:%d: error: in parse_args : argument not accepted : -Werror=unknown-warning-option", MAIN_C, __FILE__, __LINE__); 
+      error("%s:%d: error: in parse_args : argument not accepted : -Werror=unknown-warning-option", __FILE__, __LINE__); 
     }
 
     // These options are ignored for now.
@@ -1023,6 +1043,8 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-mfsgsbase") ||
         !strcmp(argv[i], "-mavx") ||
         !strcmp(argv[i], "-m3dnow") ||
+        !strcmp(argv[i], "-flax-vector-conversions") ||        
+        startswith(argv[i], "-mavx") ||     
         startswith(argv[i], "-W")     
         )
       continue;
@@ -1032,18 +1054,28 @@ static void parse_args(int argc, char **argv)
     {
       char *stdver = argv[i] + 5; 
 
-      if (!strcmp(stdver, "c99") || !strcmp(stdver, "gnu99")) {
-        opt_c99 = true;
-      } else if (!strcmp(stdver, "c89") || !strcmp(stdver, "gnu89")) {
-        opt_c89 = true;
-      } else if (!strcmp(stdver, "c11") || !strcmp(stdver, "gnu11")) {
-        opt_c11 = true;
-      } else if (!strcmp(stdver, "c17") || !strcmp(stdver, "gnu17")) {
-        opt_c17 = true;
+      if (!strcmp(stdver, "c99")) {
+        current_std = STD_C99;      
+      } else if (!strcmp(stdver, "gnu99")) {
+        current_std = STD_GNU99;
+      } else if (!strcmp(stdver, "c89")) {
+        current_std = STD_C89;
+      } else if (!strcmp(stdver, "gnu89")) {
+        current_std = STD_GNU89;
+      } else if (!strcmp(stdver, "c11")) {
+        current_std = STD_C11;      
+      } else if (!strcmp(stdver, "gnu11")) {
+        current_std = STD_GNU11;
+      } else if (!strcmp(stdver, "c17")) {
+        current_std = STD_C17;
+      } else if (!strcmp(stdver, "gnu17")) {
+        current_std = STD_GNU17;
       } else if (!strcmp(stdver, "c23")) {
-        opt_c23 = true;
-      } else {
-        error("%s : %s:%d: error: in parse_args : unsupported -std option: %s", MAIN_C, __FILE__, __LINE__, stdver);
+        current_std = STD_C23;
+      } else if (!strcmp(stdver, "gnu23")) {
+        current_std = STD_GNU23;
+      } else{
+        error("%s:%d: error: in parse_args : unsupported -std option: %s", __FILE__, __LINE__, stdver);
         exit(1);
       }
       continue;
@@ -1051,7 +1083,7 @@ static void parse_args(int argc, char **argv)
 
 
     if (argv[i][0] == '-' && argv[i][1] != '\0')
-      error("%s : %s:%d: error: in parse_args unknown argument: %s", MAIN_C, __FILE__, __LINE__, argv[i]);
+      error("%s:%d: error: in parse_args unknown argument: %s", __FILE__, __LINE__, argv[i]);
 
     strarray_push(&input_paths, argv[i]);
   }
@@ -1062,7 +1094,7 @@ static void parse_args(int argc, char **argv)
 
   if (input_paths.len == 0) {
     if (!opt_v)
-      error("%s : %s:%d: error: in parse_args no input files", MAIN_C, __FILE__, __LINE__);
+      error("%s:%d: error: in parse_args no input files", __FILE__, __LINE__);
     exit(0);
   }
 
@@ -1079,7 +1111,7 @@ FILE *open_file(char *path)
 
   FILE *out = fopen(path, "w");
   if (!out)
-    error("%s : %s:%d: error: in open_file cannot open output file: %s: %s", MAIN_C, __FILE__, __LINE__, path, strerror(errno));
+    error("%s:%d: error: in open_file cannot open output file: %s: %s", __FILE__, __LINE__, path, strerror(errno));
   return out;
 }
 
@@ -1107,7 +1139,7 @@ char * extract_path(char* tmpl)
 
         parentLen = strlen(tmpl) - strlen(last + 1);
         if (parentLen > 300)
-          error("%s : %s:%d: error: no enough size for parent in getParent function %d expected ", MAIN_C, __FILE__, __LINE__, parentLen);
+          error("%s:%d: error: no enough size for parent in getParent function %d expected ", __FILE__, __LINE__, parentLen);
         strncpy(parent, tmpl, parentLen);
     } 
 
@@ -1148,10 +1180,10 @@ static char *create_tmpfile(void)
 {
   char *path = strdup("/tmp/chibicc-XXXXXX");
   if (path == NULL)
-    error("%s : in create_tmpfile path path is null", MAIN_C);
+    error("%s:%d: error: in create_tmpfile path path is null", __FILE__, __LINE__);
   int fd = mkstemp(path);
   if (fd == -1)
-    error("%s : %s:%d: error: in create_tmpfile mkstemp failed: %s", MAIN_C, __FILE__, __LINE__, strerror(errno));
+    error("%s:%d: error: in create_tmpfile mkstemp failed: %s", __FILE__, __LINE__, strerror(errno));
   close(fd);
 
   strarray_push(&tmpfiles, path);
@@ -1181,7 +1213,7 @@ static void run_subprocess(char **argv)
   {
 
     execvp(argv[0], argv);
-    fprintf(stderr, "%s : %s:%d: error: in run_subprocess exec failed: %s: %s\n", MAIN_C, __FILE__, __LINE__, argv[0], strerror(errno));
+    fprintf(stderr, "%s:%d: error: in run_subprocess exec failed: %s: %s\n", __FILE__, __LINE__, argv[0], strerror(errno));
     _exit(1);
   }
 
@@ -1197,7 +1229,7 @@ static void run_cc1(int argc, char **argv, char *input, char *output)
 {
   char **args = calloc(argc + 10, sizeof(char *));
   if (args == NULL)
-    error("%s : %s:%d: error: in run_cc1 args is null", MAIN_C, __FILE__, __LINE__);
+    error("%s:%d: error: in run_cc1 args is null", __FILE__, __LINE__);
   memcpy(args, argv, argc * sizeof(char *));
   args[argc++] = "-cc1";
 
@@ -1309,7 +1341,7 @@ static Token *must_tokenize_file(char *path)
 {
   Token *tok = tokenize_file(path);
   if (!tok)
-    error("%s : %s:%d: error: in must_tokenize_file %s: %s", MAIN_C, __FILE__, __LINE__, path, strerror(errno));
+    error("%s:%d: error: in must_tokenize_file %s: %s", __FILE__, __LINE__, path, strerror(errno));
   return tok;
 }
 
@@ -1343,7 +1375,7 @@ static void cc1(void)
     {
       path = search_include_paths(incl);
       if (!path)
-        error("%s : %s:%d: error: in cc1 -include: %s: %s", MAIN_C, __FILE__, __LINE__, incl, strerror(errno));
+        error("%s:%d: error: in cc1 -include: %s: %s", __FILE__, __LINE__, incl, strerror(errno));
     }
 
     Token *tok2 = must_tokenize_file(path);
@@ -1455,7 +1487,7 @@ static char *find_libpath(void)
     return "/usr/lib/x86_64-linux-gnu";
   if (file_exists("/usr/lib64/crti.o"))
     return "/usr/lib64";
-  error("%s : %s:%d: error: in find_libpath library path is not found", MAIN_C, __FILE__, __LINE__);
+  error("%s:%d: error: in find_libpath library path is not found", __FILE__, __LINE__);
 }
 
 static char *find_gcc_libpath(void)
@@ -1483,7 +1515,7 @@ static char *find_gcc_libpath(void)
       return dirname(path);
   }
 
-  error("%s : %s:%d: error: in find_gcc_libpath gcc library path is not found", MAIN_C, __FILE__, __LINE__);
+  error("%s:%d: error: in find_gcc_libpath gcc library path is not found", __FILE__, __LINE__);
 }
 
 static void run_linker(StringArray *inputs, char *output)
@@ -1518,8 +1550,8 @@ static void run_linker(StringArray *inputs, char *output)
   }
 
   //enabling verbose mode for linker in case of debug
-  if (isDebug)
-    strarray_push(&arr, "--verbose=1");
+  // if (isDebug)
+  //   strarray_push(&arr, "--verbose=1");
 
   char *libpath = find_libpath();
   char *gcc_libpath = find_gcc_libpath();
@@ -1606,8 +1638,8 @@ static void run_linker(StringArray *inputs, char *output)
   strarray_push(&arr, format("%s/crtn.o", libpath));
   strarray_push(&arr, NULL);
 
-  if (isDebug)
-      print_string_array(&arr);    
+  // if (isDebug)
+  //     print_string_array(&arr);    
   run_subprocess(arr.data);
 }
 
@@ -1619,7 +1651,7 @@ static FileType get_file_type(char *filename)
 
   if (endswith(filename, ".a"))
     return FILE_AR;
-  if (endswith(filename, ".so") || strstr(filename, ".so."))
+  if (endswith(filename, ".so") || strstr(filename, ".so.") || endswith(filename, ".dso"))
     return FILE_DSO;
   if (endswith(filename, ".lo"))
     return FILE_DSO;
@@ -1640,7 +1672,7 @@ static FileType get_file_type(char *filename)
     return opt_x;
 
 
-  error("%s : %s:%d: error: in get_file_type <command line>: unknown file extension: %s", MAIN_C, __FILE__, __LINE__, filename);
+  error("%s:%d: error: in get_file_type <command line>: unknown file extension: %s", __FILE__, __LINE__, filename);
 }
 
 int main(int argc, char **argv)
@@ -1662,7 +1694,7 @@ int main(int argc, char **argv)
     f = fopen(logFile, "w");
     if (f == NULL)
     {
-      error("%s : %s:%d: error: in main Issue with -debug or -printparameter, file not opened!", MAIN_C, __FILE__, __LINE__);
+      error("%s:%d: error: in main Issue with -debug or -printparameter, file not opened!", __FILE__, __LINE__);
       exit(1);
     }
   }
@@ -1678,7 +1710,7 @@ int main(int argc, char **argv)
 
   if (opt_cc1 && !isCc1input)
   {
-    error("%s : %s:%d: error: in main with -cc1 parameter -cc1-input is mandatory!", MAIN_C, __FILE__, __LINE__);
+    error("%s:%d: error: in main with -cc1 parameter -cc1-input is mandatory!", __FILE__, __LINE__);
     usage(-1);
   }
 
@@ -1687,7 +1719,7 @@ int main(int argc, char **argv)
   //from @fuhsnn fix
   if (input_paths.len > 1 && opt_o && (opt_c || opt_S || opt_E))
     if (++file_count > 1)
-    error("%s : %s:%d: error: in main cannot specify '-o' with '-c,' '-S' or '-E' with multiple files", MAIN_C, __FILE__, __LINE__);
+    error("%s:%d: error: in main cannot specify '-o' with '-c,' '-S' or '-E' with multiple files", __FILE__, __LINE__);
 
   StringArray ld_args = {};
 
@@ -1734,8 +1766,15 @@ int main(int argc, char **argv)
     // Handle .s, -S, .asm
     if (type == FILE_ASM)
     {
-      if (!opt_S)
-        assemble(input, output);
+      if (!opt_S) {
+        if (opt_c) {
+          assemble(input, output);
+        } else {
+          char *tmp = create_tmpfile();
+          assemble(input, tmp);
+          strarray_push(&ld_args, tmp);
+        }
+      }
       continue;
     }
 
@@ -1812,4 +1851,8 @@ bool startsWith(const char *restrict string, const char *restrict prefix)
     }
 
     return 1;
+}
+
+bool is_gnu_mode(void) {
+  return current_std == STD_GNU89 || current_std == STD_GNU11;
 }

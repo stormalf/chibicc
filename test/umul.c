@@ -2,7 +2,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <limits.h>
-typedef __int128 __uint128_t;
+typedef unsigned __int128 u128_t;
 bool umul_overflow_u8(uint8_t a, uint8_t b, uint8_t *res) {
     uint16_t r = (uint16_t)a * (uint16_t)b;
     *res = (uint8_t)r;
@@ -22,7 +22,7 @@ bool umul_overflow_u32(uint32_t a, uint32_t b, uint32_t *res) {
 }
 
 bool umul_overflow_u64(uint64_t a, uint64_t b, uint64_t *res) {
-    __uint128_t r = (__uint128_t)a * (__uint128_t)b;
+    u128_t r = (u128_t)a * (u128_t)b;
     *res = (uint64_t)r;
     return r > UINT64_MAX;
 }

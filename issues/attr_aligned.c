@@ -1,9 +1,10 @@
 #include "test.h"
+#include <stddef.h>
 
 #define A1 __attribute__((aligned(1024)))
 #define A2 __attribute__((aligned(4096)))
 
-//#define B1 [[gnu::aligned(1024)]]
+#define B1 [[gnu::aligned(1024)]]
 
 #define P __attribute__((packed))
 
@@ -13,14 +14,14 @@ struct { int i; } A1 g4, g5;
 struct { int i; } g6, A1 g7;
 struct { int i; } g8, g9 A1;
 
-// B1 struct { int i; } g20, g21;
-// struct B1 { int i; } g22, g23;
-// struct { int i; } g28, g29 B1;
+B1 struct { int i; } g20, g21;
+struct B1 { int i; } g22, g23;
+struct { int i; } g28, g29 B1;
 
 struct { int i; } *A1 g31;
 
 struct { int i; } g32 [1]A1;
-//struct { int i; } g33 B1[1];
+struct { int i; } g33 B1[1];
 
 int main(int argc, char **argv) {
   ASSERT(0, (long)&g1 & 1023);
@@ -29,16 +30,16 @@ int main(int argc, char **argv) {
   ASSERT(0, (long)&g7 & 1023);
   ASSERT(0, (long)&g9 & 1023);
 
-  //ASSERT(0, (long)&g21 & 1023);
-  //ASSERT(0, (long)&g23 & 1023);
-  //ASSERT(0, (long)&g29 & 1023);
+  ASSERT(0, (long)&g21 & 1023);
+  ASSERT(0, (long)&g23 & 1023);
+  ASSERT(0, (long)&g29 & 1023);
 
   ASSERT(0, (long)&g31 & 1023);
 
   ASSERT(0, (long)&g32[0] & 1023);
-  //ASSERT(0, (long)&g33[0] & 1023);
+  ASSERT(0, (long)&g33[0] & 1023);
   ASSERT(4, (long)&g32[1] & 1023);
-  //ASSERT(4, (long)&g33[1] & 1023);
+  ASSERT(4, (long)&g33[1] & 1023);
 
   ASSERT(0, ({ A1 struct { int i; } x, y; (long)&y & 1023; }) );
   ASSERT(0, ({ struct A1 { int i; } x, y; (long)&y & 1023; }) );
@@ -55,16 +56,16 @@ int main(int argc, char **argv) {
 #endif
   ASSERT(0, ({ struct { int i, j A1; } x; (long)&x.j & 1023; }) );
 
-  // ASSERT(0, ({ struct { A1 struct { int i; }; } x, y; (long)&y & 1023; }) ); // clang behaviour
+  ASSERT(0, ({ struct { A1 struct { int i; }; } x, y; (long)&y & 1023; }) ); // clang behaviour
   ASSERT(0, ({ struct { struct A1 { int i; }; } x, y; (long)&y & 1023; }) );
   ASSERT(0, ({ struct { struct { int i; } A1; } x, y; (long)&y & 1023; }) );
 
-  //ASSERT(0, ({ B1 struct { int i; } x, y; (long)&y & 1023; }) );
-  //ASSERT(0, ({ struct B1 { int i; } x, y; (long)&y & 1023; }) );
-  //ASSERT(0, ({ struct { int i; } x, y B1; (long)&y & 1023; }) );
+  ASSERT(0, ({ B1 struct { int i; } x, y; (long)&y & 1023; }) );
+  ASSERT(0, ({ struct B1 { int i; } x, y; (long)&y & 1023; }) );
+  ASSERT(0, ({ struct { int i; } x, y B1; (long)&y & 1023; }) );
 
-  //ASSERT(0, ({ struct { B1 int i, j; } x; (long)&x.j & 1023; }) );
-  //ASSERT(0, ({ struct { int i, j B1; } x; (long)&x.j & 1023; }) );
+  ASSERT(0, ({ struct { B1 int i, j; } x; (long)&x.j & 1023; }) );
+  ASSERT(0, ({ struct { int i, j B1; } x; (long)&x.j & 1023; }) );
 
   ASSERT(0, ({ A1 static char x; (long)&x & 1023; }) );
   ASSERT(0, ({ static A1 char x; (long)&x & 1023; }) );
@@ -80,8 +81,8 @@ int main(int argc, char **argv) {
   ASSERT(1024, ({ typedef char A1 c; _Alignof(c); }) );
   ASSERT(1024, ({ typedef char c A1; _Alignof(c); }) );
 
-  //ASSERT(16, ({ [[gnu::aligned]] typedef char c; _Alignof(c); }) );
-  //ASSERT(16, ({ typedef char c [[gnu::aligned]]; _Alignof(c); }) );
+  ASSERT(16, ({ [[gnu::aligned]] typedef char c; _Alignof(c); }) );
+  ASSERT(16, ({ typedef char c [[gnu::aligned]]; _Alignof(c); }) );
 
   ASSERT(1, _Alignof(char));
 
@@ -99,30 +100,30 @@ int main(int argc, char **argv) {
   ASSERT(1, ({ struct S { char c; void*p; } P; offsetof(struct S, p);}) );
   ASSERT(9, ({ struct S { char c; void*p; } P; sizeof(struct S);}) );
 
-  // ASSERT(8, ({ struct S { char c; void*p [[gnu::aligned(2)]]; }; offsetof(struct S, p);}) );
-  // ASSERT(16, ({ struct S { char c; void*p [[gnu::aligned(2)]]; }; sizeof(struct S);}) );
-  // ASSERT(2, ({ struct S { char c; void*p [[gnu::aligned(2)]]; } P; offsetof(struct S, p);}) );
-  // ASSERT(10, ({ struct S { char c; void*p [[gnu::aligned(2)]]; } P; sizeof(struct S);}) );
+  ASSERT(8, ({ struct S { char c; void*p [[gnu::aligned(2)]]; }; offsetof(struct S, p);}) );
+  ASSERT(16, ({ struct S { char c; void*p [[gnu::aligned(2)]]; }; sizeof(struct S);}) );
+  ASSERT(2, ({ struct S { char c; void*p [[gnu::aligned(2)]]; } P; offsetof(struct S, p);}) );
+  ASSERT(10, ({ struct S { char c; void*p [[gnu::aligned(2)]]; } P; sizeof(struct S);}) );
 
-  // ASSERT(8, ({ struct S { char c; void*p [[gnu::aligned(4)]]; }; offsetof(struct S, p);}) );
-  // ASSERT(16, ({ struct S { char c; void*p [[gnu::aligned(4)]]; }; sizeof(struct S);}) );
-  // ASSERT(4, ({ struct S { char c; void*p [[gnu::aligned(4)]]; } P; offsetof(struct S, p);}) );
-  // ASSERT(12, ({ struct S { char c; void*p [[gnu::aligned(4)]]; } P; sizeof(struct S);}) );
+  ASSERT(8, ({ struct S { char c; void*p [[gnu::aligned(4)]]; }; offsetof(struct S, p);}) );
+  ASSERT(16, ({ struct S { char c; void*p [[gnu::aligned(4)]]; }; sizeof(struct S);}) );
+  ASSERT(4, ({ struct S { char c; void*p [[gnu::aligned(4)]]; } P; offsetof(struct S, p);}) );
+  ASSERT(12, ({ struct S { char c; void*p [[gnu::aligned(4)]]; } P; sizeof(struct S);}) );
 
-  // ASSERT(8, ({ struct S { char c; void*p [[gnu::aligned(8)]]; }; offsetof(struct S, p);}) );
-  // ASSERT(16, ({ struct S { char c; void*p [[gnu::aligned(8)]]; }; sizeof(struct S);}) );
-  // ASSERT(8, ({ struct S { char c; void*p [[gnu::aligned(8)]]; } P; offsetof(struct S, p);}) );
-  // ASSERT(16, ({ struct S { char c; void*p [[gnu::aligned(8)]]; } P; sizeof(struct S);}) );
+  ASSERT(8, ({ struct S { char c; void*p [[gnu::aligned(8)]]; }; offsetof(struct S, p);}) );
+  ASSERT(16, ({ struct S { char c; void*p [[gnu::aligned(8)]]; }; sizeof(struct S);}) );
+  ASSERT(8, ({ struct S { char c; void*p [[gnu::aligned(8)]]; } P; offsetof(struct S, p);}) );
+  ASSERT(16, ({ struct S { char c; void*p [[gnu::aligned(8)]]; } P; sizeof(struct S);}) );
 
-  // ASSERT(16, ({ struct S { char c; void*p [[gnu::aligned(16)]]; }; offsetof(struct S, p);}) );
-  // ASSERT(32, ({ struct S { char c; void*p [[gnu::aligned(16)]]; }; sizeof(struct S);}) );
-  // ASSERT(16, ({ struct S { char c; void*p [[gnu::aligned(16)]]; } P; offsetof(struct S, p);}) );
-  // ASSERT(32, ({ struct S { char c; void*p [[gnu::aligned(16)]]; } P; sizeof(struct S);}) );
+  ASSERT(16, ({ struct S { char c; void*p [[gnu::aligned(16)]]; }; offsetof(struct S, p);}) );
+  ASSERT(32, ({ struct S { char c; void*p [[gnu::aligned(16)]]; }; sizeof(struct S);}) );
+  ASSERT(16, ({ struct S { char c; void*p [[gnu::aligned(16)]]; } P; offsetof(struct S, p);}) );
+  ASSERT(32, ({ struct S { char c; void*p [[gnu::aligned(16)]]; } P; sizeof(struct S);}) );
 
-  // ASSERT(32, ({ struct S { char c; void*p [[gnu::aligned(32)]]; }; offsetof(struct S, p);}) );
-  // ASSERT(64, ({ struct S { char c; void*p [[gnu::aligned(32)]]; }; sizeof(struct S);}) );
-  // ASSERT(32, ({ struct S { char c; void*p [[gnu::aligned(32)]]; } P; offsetof(struct S, p);}) );
-  // ASSERT(64, ({ struct S { char c; void*p [[gnu::aligned(32)]]; } P; sizeof(struct S);}) );
+  ASSERT(32, ({ struct S { char c; void*p [[gnu::aligned(32)]]; }; offsetof(struct S, p);}) );
+  ASSERT(64, ({ struct S { char c; void*p [[gnu::aligned(32)]]; }; sizeof(struct S);}) );
+  ASSERT(32, ({ struct S { char c; void*p [[gnu::aligned(32)]]; } P; offsetof(struct S, p);}) );
+  ASSERT(64, ({ struct S { char c; void*p [[gnu::aligned(32)]]; } P; sizeof(struct S);}) );
 
   ASSERT(8192, ({ typedef struct { struct { long m3 A2; }; A1 short m4; } T; sizeof(T); }));
   ASSERT(4096, ({ typedef struct { struct { long m3 A2; }; A1 short m4; } T; offsetof(T, m4); }));
@@ -154,7 +155,7 @@ int main(int argc, char **argv) {
 
   ASSERT(1024, ({ typedef struct { A1 struct { char c; } j; char m6; } T; sizeof(T); }));
   ASSERT(1024, ({ typedef struct { A1 struct { char c; } j; } T; sizeof(T); }));
-//  ASSERT(1024,    ({ typedef struct { A1 struct { char c; }; } T; sizeof(T); })); // clang behaviour
+  ASSERT(1024,    ({ typedef struct { A1 struct { char c; }; } T; sizeof(T); })); // clang behaviour
 #ifdef NOTCLANG
   ASSERT(1,    ({ typedef struct { A1 struct { char c; }; } T; sizeof(T); })); // gcc behaviour
 #endif
@@ -220,7 +221,7 @@ int main(int argc, char **argv) {
   ASSERT(2,    ({ typedef struct { struct { char c; } j, k; char m6; } A1 T; offsetof(T,m6); }));
   ASSERT(2,    ({ typedef struct { struct { char c; } j, k; char m6; } T A1; offsetof(T,m6); }));
 
-//  ASSERT(2, ({ _Alignas(__attribute__((aligned(2))) long) char v; _Alignof(v); }));
+  ASSERT(2, ({ _Alignas(__attribute__((aligned(2))) long) char v; _Alignof(v); }));
 
   {
     typedef const int Ic;
@@ -229,10 +230,10 @@ int main(int argc, char **argv) {
     typedef volatile Ia Iav;
     Ica v1;
     Iav v2;
-    SASSERT(alignof(Ica) == 1024);
-    SASSERT(alignof(Iav) == 1024);
-    SASSERT(alignof(v1) == 1024);
-    SASSERT(alignof(v2) == 1024);
+    SASSERT(__alignof(Ica) == 1024);
+    SASSERT(__alignof(Iav) == 1024);
+    SASSERT(__alignof(v1) == 1024);
+    SASSERT(__alignof(v2) == 1024);
     SASSERT(_Generic(Ica, int const: 1));
     SASSERT(_Generic(Iav, int volatile: 1));
     SASSERT(_Generic(&v1, int const*: 1));

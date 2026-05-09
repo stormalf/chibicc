@@ -1,6 +1,8 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
+#include <assert.h>
+#include <stdio.h>
 
 #define COPY16_SHIFTR(x) \
     "psrlw "x", %%xmm1\n"
@@ -71,6 +73,16 @@ static void Copy2d(uint8_t *dst, size_t dst_pitch,
 
 
 int main() {
+    const int width = 64;
+    uint8_t dst[width];
+    uint8_t src[width];
+    for(int i = 0; i < width; i++) {
+        dst[i] = 1;
+        src[i] = 1;
+    }
+    COPY16(dst, src, "movdqa", "movdqu");
+    printf("%d\n", dst[0]);
+    printf("%d\n", src[0]);
 
     return 0;
 }

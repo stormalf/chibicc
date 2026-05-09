@@ -47,12 +47,11 @@
 #endif
 
 #define PRODUCT "chibicc"
-#define VERSION "1.0.23.3"
+#define VERSION "1.0.24"
 #define MAXLEN 1001
 #define DEFAULT_TARGET_MACHINE "x86_64-linux-gnu"
 #define MAX_BUILTIN_ARGS 8
 #define MAX_WEAK 20
-#define MAX_GLOBAL_VAR 100000
 
 #define STR_HELPER(x) #x
 #define STR(x) STR_HELPER(x)
@@ -115,19 +114,33 @@ this " PRODUCT " contains only some differences for now like new parameters\n"
 -dM Print macro definitions in -E mode instead of normal output\n \
 -print print all tokens in a log file in /tmp/chibicc.log \n \
 -A print Abstract Syntax Tree in a log file in /tmp/chibicc.log \n \
+-msse enabling sse support \n \
+-mno-sse disabling sse support \n \
+-msse2 enabling sse2 support \n \
+-mno-sse2 disabling sse2 support \n \
 -msse3 enabling sse3 support \n\
+-mno-sse3 disabling sse3 support \n \
 -msse4 enabling sse4 support \n \
+-mno-sse4 disabling sse4 support \n \
 -msse4.1 enabling sse4.1 support \n \
 -mcrc32 enabling crc32 instruction support \n \
 -nostdlib  Do not use the standard system startup files or libraries when linking \n \
 -nostdinc Do not use the standard system header files when compiling \n \
 -std=c99 generates an error on implicit function declaration (without -std only a warning is emitted) \n \
 -std=c11 generates an error on implicit function declaration (without -std only a warning is emitted) \n \
--mmmx to allow mmx instructions and builtin functions linked to mmx like __builtin_packuswb... \n \
+-mmmx enabling mmx instructions \n \
+-mno-mmx disabling mmx instructions \n \
+-mavx enabling avx instructions \n \
+-mavx2 enabling avx2 instructions \n \
 -print-search-dirs prints minimal information on install dir. \n \
 -Werror any warning is sent as an error and stops the compile \n \
 -f-omit-frame-pointer omits frame pointer and uses rsp-relative addressing. Minimal stack usage \n \
 -f-no-omit-frame-pointer always keeps frame pointer (default) \n \
+-g enabling debug symbols \n \
+-O0 disabling optimization \n \
+-O or -O1 enabling optimization level 1 \n \
+-O2 enabling optimization level 2 \n \
+-O3 enabling optimization level 3 \n \
 chibicc [ -o <path> ] <file>\n"
 
 typedef struct Type Type;
@@ -201,7 +214,7 @@ struct Token
 {
   TokenKind kind;   // Token kind
   Token *next;      // Next token
-  int64_t val;      // If kind is TK_NUM, its value
+  int64_t val;     // If kind is TK_NUM, its value
   long double fval; // If kind is TK_NUM, its value
   char *loc;        // Token location
   int len;          // Token length
@@ -212,6 +225,7 @@ struct Token
   char *filename;   // Filename
   int line_no;      // Line number
   int line_delta;   // Line number
+  int pack_align;   // Active #pragma pack value (0 means default)
   bool at_bol;      // True if this token is at beginning of line
   bool has_space;   // True if this token follows a space character
   Hideset *hideset; // For macro expansion
@@ -231,6 +245,7 @@ File *new_file(char *name, unsigned int file_no, char *contents);
 Token *tokenize_string_literal(Token *tok, Type *basety);
 Token *tokenize(File *file);
 Token *tokenize_file(char *filename);
+void convert_universal_chars(char *p);
 bool startswith(char *p, char *q);
 
 #define unreachable() \
@@ -245,7 +260,6 @@ void init_macros(void);
 void define_macro(char *name, char *buf);
 void undef_macro(char *name);
 Token *preprocess(Token *tok, bool isReadLine);
-Token *preprocess3(Token *tok);
 void define_typedefs(void);
 void print_all_macros(void);
 
@@ -331,8 +345,6 @@ struct Obj
   bool is_no_caller_saved_registers;
   
   // Function calls vfork returns twice unsafe with stack frames
-
-
   Obj *params;
   Node *body;
   Obj *locals;
@@ -356,7 +368,9 @@ struct Obj
   Initializer *init;
   bool is_address_used;
   bool is_param;
+  char *cleanup_name;
   bool force_frame_pointer;
+  Type *vla_ty;
 };
 
 // Global variable can be initialized either by a constant expression
@@ -481,7 +495,7 @@ typedef enum
   ND_CVTPI2PS,
   ND_CVTPS2PI,
   ND_CLFLUSH,
-  ND_VECINITV2SI,
+  ND_VECINITV2SI, 
   ND_VECEXTV2SI,
   ND_PACKSSWB,
   ND_PACKSSDW,
@@ -536,7 +550,7 @@ typedef enum
   ND_PCMPEQW,
   ND_PCMPGTW,
   ND_PCMPEQD,
-  ND_PCMPGTD,
+  ND_PCMPGTD,  
   ND_VECINITV4HI,
   ND_VECINITV8QI,
   ND_ADDSS,
@@ -713,7 +727,7 @@ typedef enum
   ND_PSUBSB128,
   ND_PSUBSW128,
   ND_PSUBUSB128,
-  ND_PSUBUSW128,
+  ND_PSUBUSW128,  
   ND_PMADDWD128,
   ND_PMULHW128,
   ND_PMULUDQ,
@@ -900,6 +914,33 @@ typedef enum
   ND_SIGNBIT,
   ND_SIGNBITF,
   ND_SIGNBITL,
+  ND_ATOMIC_IS_LOCK_FREE, //builtin atomic is lock free
+  ND_PSUBUSB256,
+  ND_PCMPGTB256_MASK,
+  ND_PSHUFB256,
+  ND_PBLENDVB256,
+  ND_PSRLDQI256,
+  ND_PSLLDQI256,
+  ND_VINSERTF128_SI256,    
+  ND_SI256_SI,
+  ND_SI_SI256,
+  ND_PALIGNR256,
+  ND_VPERM2I128_SI256,
+  ND_PBLENDD256,
+  ND_VEXTRACTF128_SI256,
+  ND_VECEXTV16QI,
+  ND_VECEXTV8HI,
+  ND_ANDNOTSI256,
+  ND_VECEXTV2DI,
+  ND_PMULHUW256,
+  ND_PD256_PD,
+  ND_PS256_PS,
+  ND_PSRLQI256,
+  ND_PSLLQI256,
+  ND_PERMDI256,
+  ND_PSLLDI256,
+  ND_PSRLDI256,
+  ND_PSRADI256,
 } NodeKind;
 
 // AST node type
@@ -1002,13 +1043,14 @@ typedef struct
 } VarScope;
 
 Node *new_cast(Node *expr, Type *ty);
-int64_t const_expr(Token **rest, Token *tok);
+int64_t  const_expr(Token **rest, Token *tok);
 Obj *parse(Token *tok);
 VarScope *find_var(Token *tok);
 Obj *find_func(char *name);
 //from COSMOPOLITAN adding function ConsumeStringLiteral
 char *ConsumeStringLiteral(Token **rest, Token *tok) ;
-int64_t eval(Node *node);
+int64_t  eval(Node *node);
+bool equal_tok(Token *a, Token *b);
 
 extern bool opt_fbuiltin;
 //
@@ -1059,6 +1101,7 @@ struct Type
   Type *pointertype; // store the pointer type int, char...
   Type *origin;      // for type compatibility check
   Type *decl_next;    // forward declarations
+  Token *tag;
 
   // Pointer-to or array-of type. We intentionally use the same member
   // to represent pointer/array duality in C.
@@ -1073,6 +1116,7 @@ struct Type
   // Declaration
   Token *name;
   Token *name_pos;
+  Obj *param_var; // placeholder var for function parameter (used by VLA sizes)
 
   // Array
   int64_t array_len;
@@ -1082,6 +1126,7 @@ struct Type
   // Variable-length array
   Node *vla_len; // # of elements
   Obj *vla_size; // sizeof() value
+  Type *vla_param_ty;   // original VLA type before array→pointer decay in func params
 
   // Struct
   Member *members;
@@ -1099,6 +1144,7 @@ struct Type
   Type *return_ty;
   Type *params;
   bool is_variadic;
+  bool is_oldstyle;
   Type *next;
   char *alias_name; // alias name for function when weak attribute
   char *section;
@@ -1126,7 +1172,11 @@ struct Member
   Token *tok; // for error message
   Token *name;
   int idx;
+  // Natural alignment of the member's type (i.e. before any packing rules).
   int align;
+  // Explicit requested alignment from attributes (_Alignas / __attribute__((aligned))).
+  // This is a minimum alignment request and may override packing.
+  int attr_align;
   int offset;
 
   // Bitfield
@@ -1161,7 +1211,9 @@ extern Type *ty_uint128;
 bool is_integer(Type *ty);
 bool is_flonum(Type *ty);
 bool is_numeric(Type *ty);
+bool is_builtin_canonical_type(Type *ty);
 bool is_compatible(Type *t1, Type *t2);
+bool is_compatible2(Type *t1, Type *t2);
 Type *copy_type(Type *ty);
 Type *pointer_to(Type *base);
 Type *func_type(Type *return_ty);
@@ -1174,9 +1226,12 @@ void add_type(Node *node);
 bool is_bitfield(Node *node);
 bool is_array(Type *ty);
 Type *new_qualified_type(Type *ty);
+Type *unqual(Type *ty);
 bool is_vector(Type *ty);
 bool is_int128(Type *ty);
 bool is_pointer(Type *ty);
+bool is_const_expr(Node *node);
+bool contains_label(Node *node);
 
 extern DebugTypedef *debug_typedefs;
 
@@ -1213,6 +1268,10 @@ char *reg_r8w(int sz);
 char *reg_r9w(int sz);
 char *reg_r10w(int sz);
 char *reg_r11w(int sz);
+char *reg_r12w(int sz);
+char *reg_r13w(int sz);
+char *reg_r14w(int sz);
+char *reg_r15w(int sz);
 void assign_lvar_offsets(Obj *prog);
 int add_register_used(char *regist);
 void clear_register_used();
@@ -1226,6 +1285,8 @@ void check_register_in_template(char *template);
 void pushreg(const char *arg);
 void gen_fpclassify(FpClassify *);
 void println(char *fmt, ...);
+int get_align(Obj *var);
+bool is_omit_fp(Obj *fn);
 
 extern bool dont_reuse_stack;
 
@@ -1237,7 +1298,6 @@ int encode_utf8(char *buf, uint32_t c);
 uint32_t decode_utf8(char **new_pos, char *p);
 bool is_ident1(uint32_t c);
 bool is_ident2(uint32_t c);
-bool is_ident3(uint32_t c); // to fix issue #117
 int display_width(char *p, int len);
 
 //
@@ -1269,6 +1329,21 @@ void hashmap_test(void);
 //
 // main.c
 //
+typedef enum {
+  // ISO modes
+  STD_C89,
+  STD_C99,
+  STD_C11,
+  STD_C17,
+  STD_C23,
+  // GNU modes
+  STD_GNU89,
+  STD_GNU99,    
+  STD_GNU11,
+  STD_GNU17,
+  STD_GNU23,
+} Standard;
+
 
 bool file_exists(char *path);
 void dump_machine(void);
@@ -1301,11 +1376,7 @@ extern bool opt_crc32;
 extern bool opt_g;
 extern FILE *open_file(char *path);
 extern FILE *ofile;
-extern bool opt_c99;
-extern bool opt_c11;
-extern bool opt_c17;
-extern bool opt_c89;
-extern bool opt_c23;
+extern Standard current_std;
 extern char *weak_symbols[MAX_WEAK]; 
 extern int weak_count;
 extern bool opt_implicit;
@@ -1315,6 +1386,8 @@ extern bool opt_optimize_level1;
 extern bool opt_optimize_level2;
 extern bool opt_optimize_level3;
 extern bool opt_omit_frame_pointer;
+extern bool opt_avx2;
+extern bool opt_avx;
 
 //
 // extended_asm.c

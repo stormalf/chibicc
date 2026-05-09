@@ -1,5 +1,4 @@
 #include "chibicc.h"
-#define CODEGEN_C "codegen.c"
 
 #define GP_MAX 6
 #define FP_MAX 8
@@ -19,7 +18,7 @@ static char *newargreg64[] = {"%rcx","%rdx","%rax","%rsi","%rdi","%r8",  "%r9", 
 static char *registerUsed[] = {"free", "free", "free", "free", "free", "free", "free", "free", "free", "free", "free", "free"};
 
 
-extern int64_t eval(Node *node);
+extern int64_t  eval(Node *node);
 
 static Obj *current_fn;
 static char *lvar_ptr;
@@ -31,13 +30,24 @@ extern bool opt_optimize_level3;
 static void gen_expr(Node *node);
 static void gen_stmt(Node *node);
 static void print_offset(Obj *prog);
+
+int get_align(Obj *var) {
+  int align = var->align;
+  if (((var->ty->kind == TY_ARRAY || var->ty->kind == TY_STRUCT || var->ty->kind == TY_UNION) &&
+       var->ty->size >= 16) ||
+      is_vector(var->ty) || var->ty->kind == TY_INT128)
+    align = MAX(16, align);
+  return align;
+}
+
 static int cmp_ctor(const void *a, const void *b);
 static void emit_constructors(void);
 static void emit_destructors(void); 
+static int vec_use_ymm(Type *ty);
 
 
-
-static int last_loc_line = 0;
+static int last_loc_line = -1;
+static int last_loc_file = -1;
 
 typedef struct CtorFunc {
   char *name;
@@ -57,6 +67,10 @@ struct {
   int bottom;
 } static tmp_stack;
 
+static char *sym(Obj *var) {
+  return var->asmname ? var->asmname : var->name;
+}
+
 __attribute__((format(printf, 1, 2))) void println(char *fmt, ...)
 {
   va_list ap;
@@ -74,22 +88,25 @@ static int count(void)
 }
 
 
-static bool is_omit_fp(Obj *fn) {
+bool is_omit_fp(Obj *fn) {
   if (!opt_omit_frame_pointer) return false;
   if (fn->force_frame_pointer) return false;
-  if (fn->stack_align > 16) return false;
-  // 16-byte atomics/int128 on stack can be used by cmpxchg16b paths.
-  // Keep a frame pointer for these cases to preserve slot alignment.
+
+  // ABI: The x86-64 System V ABI requires the stack to be 16-byte aligned before a call.
+  // When omitting the frame pointer, %rsp is '8 mod 16' relative to entry.
+  // chibicc's current local variable placement logic misaligns variables that need 
+  // 16-byte alignment in omit-fp mode. We must preserve the frame pointer for these cases
+  // to ensure pointers passed to external assembly (like OpenSSL's movdqa) are correct.
   for (Obj *var = fn->locals; var; var = var->next) {
-    if (var->ty && var->ty->size == 16 &&
-        (var->ty->is_atomic || var->ty->kind == TY_INT128 || var->ty->kind == TY_LDOUBLE))
+    if (get_align(var) > 8)
       return false;
   }
   for (Obj *var = fn->params; var; var = var->next) {
-    if (var->ty && var->ty->size == 16 &&
-        (var->ty->is_atomic || var->ty->kind == TY_INT128 || var->ty->kind == TY_LDOUBLE))
+    if (get_align(var) > 8)
       return false;
   }
+
+  if (fn->stack_align > 16) return false;
   return true;
 }
 
@@ -142,9 +159,9 @@ static void pop_tmp(char *arg) {
 
 static void push_tmpf(void) {
   if (is_omit_fp(current_fn)) {
-    println("  sub $8, %%rsp");
-    println("  movsd %%xmm0, (%%rsp)");
-    depth++;
+    println("  sub $16, %%rsp");
+    println("  movsd %%xmm0, 8(%%rsp)");
+    depth += 2;
     return;
   }
   int offset = push_tmpstack();
@@ -153,9 +170,9 @@ static void push_tmpf(void) {
 
 static void pop_tmpf(int reg) {
   if (is_omit_fp(current_fn)) {
-    println("  movsd (%%rsp), %%xmm%d", reg);
-    println("  add $8, %%rsp");
-    depth--;
+    println("  movsd 8(%%rsp), %%xmm%d", reg);
+    println("  add $16, %%rsp");
+    depth -= 2;
     return;
   }
   int offset = pop_tmpstack();
@@ -165,6 +182,8 @@ static void pop_tmpf(int reg) {
 static void push(void)
 {
   println("  push %%rax");
+  //temp hack for issue with openssl need to think about replacing push/pop by what gcc is doing
+  //println("  mov %%rax, %%rdx");
   depth++;
 }
 
@@ -188,6 +207,18 @@ static void popf(int reg)
   depth--;
 }
 
+static void pushld(void) {
+  println("  sub $16, %%rsp");
+  println("  fstpt (%%rsp)");
+  depth += 2;
+}
+
+static void popld(void) {
+  println("  fldt (%%rsp)");
+  println("  add $16, %%rsp");
+  depth -= 2;
+}
+
 static void pushv(void) {
   println("  sub $16, %%rsp");
   println("  movdqu %%xmm0, (%%rsp)");
@@ -198,6 +229,27 @@ static void popv(int reg) {
   println("  movdqu (%%rsp), %%xmm%d", reg);
   println("  add $16, %%rsp");
   depth -= 2;
+}
+
+
+static void push_vec(Type *ty) {
+  if (vec_use_ymm(ty)) {
+    println("  sub $32, %%rsp");
+    println("  vmovdqu %%ymm0, (%%rsp)");
+    depth += 4;
+    return;
+  }
+  pushv();
+}
+
+static void pop_vec(Type *ty, int reg) {
+  if (vec_use_ymm(ty)) {
+    println("  vmovdqu (%%rsp), %%ymm%d", reg);
+    println("  add $32, %%rsp");
+    depth -= 4;
+    return;
+  }
+  popv(reg);
 }
 
 void pushx(void) {
@@ -252,6 +304,18 @@ static void pop_xmm(int x) {
   depth -= 2;
 }
 
+static void push_ymm(int x) {
+  println("  sub $32, %%rsp");
+  println("  vmovdqu %%ymm%d, (%%rsp)", x);
+  depth += 4;
+}
+
+static void pop_ymm(int x) {
+  println("  vmovdqu (%%rsp), %%ymm%d", x);
+  println("  add $32, %%rsp");
+  depth -= 4;
+}
+
 
 
 // Round up `n` to the nearest multiple of `align`. For instance,
@@ -264,19 +328,15 @@ int align_to(int n, int align)
 static void print_visibility(Obj *obj) {
   if (obj->visibility) {
     if (!strcmp(obj->visibility, "hidden")) {
-      println("  .hidden\t%s", obj->name);
+      println("  .hidden\t%s", sym(obj));
     } else if (!strcmp(obj->visibility, "protected")) {
-      println("  .protected %s", obj->name);
+      println("  .protected %s", sym(obj));
     }
   } 
   if (obj->is_static) {
-    println("  .local\t%s", obj->name);
+    println("  .local\t%s", sym(obj));
   } else {
-    println("  .globl\t%s", obj->name);
-  }
-  if (obj->is_weak) {
-    
-    println("  .weak\t%s", obj->name);
+    println("  .globl\t%s", sym(obj));
   }
 }
 
@@ -294,7 +354,7 @@ char *reg_dx(int sz)
   case 8:
     return "%rdx";
   }
-  unreachable();
+  return "%rdx";
 }
 
 
@@ -311,7 +371,7 @@ char *reg_di(int sz)
   case 8:
     return "%rdi";
   }
-  unreachable();
+  return "%rdi";
 }
 
 char *reg_si(int sz)
@@ -327,7 +387,7 @@ char *reg_si(int sz)
   case 8:
     return "%rsi";
   }
-  unreachable();
+  return "%rsi";
 }
 
 
@@ -344,7 +404,7 @@ char *reg_r8w(int sz)
   case 8:
     return "%r8";
   }
-  unreachable();
+  return "%r8";
 }
 
 char *reg_r9w(int sz)
@@ -360,7 +420,7 @@ char *reg_r9w(int sz)
   case 8:
     return "%r9";
   }
-  unreachable();
+  return "%r9";
 }
 
 
@@ -377,7 +437,7 @@ char *reg_r10w(int sz)
   case 8:
     return "%r10";
   }
-  unreachable();
+  return "%r10";
 }
 
 char *reg_r11w(int sz)
@@ -393,7 +453,72 @@ char *reg_r11w(int sz)
   case 8:
     return "%r11";
   }
-  unreachable();
+  return "%r11";
+}
+
+
+char *reg_r12w(int sz)
+{
+  switch (sz)
+  {
+  case 1:
+    return "%r12b";
+  case 2:
+    return "%r12w";
+  case 4:
+    return "%r12d";
+  case 8:
+    return "%r12";
+  }
+  return "%r12";
+}
+
+char *reg_r13w(int sz)
+{
+  switch (sz)
+  {
+  case 1:
+    return "%r13b";
+  case 2:
+    return "%r13w";
+  case 4:
+    return "%r13d";
+  case 8:
+    return "%r13";
+  }
+  return "%r13";
+}
+
+char *reg_r14w(int sz)
+{
+  switch (sz)
+  {
+  case 1:
+    return "%r14b";
+  case 2:
+    return "%r14w";
+  case 4:
+    return "%r14d";
+  case 8:
+    return "%r14";
+  }
+  return "%r14";
+}
+
+char *reg_r15w(int sz)
+{
+  switch (sz)
+  {
+  case 1:
+    return "%r15b";
+  case 2:
+    return "%r15w";
+  case 4:
+    return "%r15d";
+  case 8:
+    return "%r15";
+  }
+  return "%r15";
 }
 
 
@@ -410,7 +535,7 @@ char *reg_bx(int sz)
   case 8:
     return "%rbx";
   }
-  unreachable();
+  return "%rbx";
 }
 
 char *reg_cx(int sz)
@@ -426,7 +551,7 @@ char *reg_cx(int sz)
   case 8:
     return "%rcx";
   }
-  unreachable();
+  return "%rcx";
 }
 
 char *reg_ax(int sz)
@@ -443,7 +568,7 @@ char *reg_ax(int sz)
   case 8:
     return "%rax";
   }
-  unreachable();
+  return "%rax";
 }
 
 // Compute the absolute address of a given node.
@@ -456,6 +581,8 @@ static void gen_addr(Node *node)
     // Variable-length array, which is always local.
     if (node->var->ty->kind == TY_VLA)
     {
+      if (!node->var->ptr)
+        error("%s:%d: error: in gen_addr : VLA pointer is null", __FILE__, __LINE__);
       if (is_omit_fp(current_fn))
         println("  mov %d(%%rsp), %%rax", node->var->offset + current_fn->stack_size + depth * 8);
       else
@@ -466,6 +593,8 @@ static void gen_addr(Node *node)
     // Local variable
     if (node->var->is_local)
     {
+      if (!node->var->ptr)
+        error("%s:%d: error: in gen_addr : VLA pointer is null", __FILE__, __LINE__);    
       if (is_omit_fp(current_fn))
         println("  lea %d(%%rsp), %%rax", node->var->offset + current_fn->stack_size + depth * 8);
       else
@@ -479,7 +608,7 @@ static void gen_addr(Node *node)
       // Thread-local variable
       if (node->var->is_tls)
       {
-        println("  data16 lea \"%s\"@tlsgd(%%rip), %%rdi", node->var->name);
+        println("  data16 lea \"%s\"@tlsgd(%%rip), %%rdi", sym(node->var));
         println("  .value 0x6666");
         println("  rex64");
         println("  call __tls_get_addr@PLT");
@@ -487,7 +616,7 @@ static void gen_addr(Node *node)
       }
 
       // Function or global variable
-      println("  mov \"%s\"@GOTPCREL(%%rip), %%rax", node->var->name);
+      println("  mov \"%s\"@GOTPCREL(%%rip), %%rax", sym(node->var));
       return;
     }
 
@@ -496,9 +625,9 @@ static void gen_addr(Node *node)
     {
       println("  mov %%fs:0, %%rax");
       if (node->var->is_definition)
-        println("  add $\"%s\"@tpoff, %%rax", node->var->name);
+        println("  add $\"%s\"@tpoff, %%rax", sym(node->var));
       else 
-        println("  add %s@gottpoff(%%rip), %%rax", node->var->name);
+        println("  add %s@gottpoff(%%rip), %%rax", sym(node->var));
       return;
     }
 
@@ -529,14 +658,14 @@ static void gen_addr(Node *node)
     if (node->ty->kind == TY_FUNC)
     {
       if (node->var->is_definition)
-        println("  lea \"%s\"(%%rip), %%rax", node->var->name);
+        println("  lea \"%s\"(%%rip), %%rax", sym(node->var));
       else
-        println("  mov \"%s\"@GOTPCREL(%%rip), %%rax", node->var->name);
+        println("  mov \"%s\"@GOTPCREL(%%rip), %%rax", sym(node->var));
       return;
     }
 
     // Global variable
-    println("  lea \"%s\"(%%rip), %%rax", node->var->name);
+    println("  lea \"%s\"(%%rip), %%rax", sym(node->var));
     return;
   case ND_DEREF:
     gen_expr(node->lhs);
@@ -607,33 +736,33 @@ static void gen_addr(Node *node)
   
   }
 
-  error_tok(node->tok, "%s:%d not an lvalue %d", CODEGEN_C, __LINE__, node->kind);
+  error_tok(node->tok, "%s:%d not an lvalue %d", __FILE__, __LINE__, node->kind);
 }
 
 // Copy n bytes from the source address in %rax to the destination in dst_reg.
 static void gen_mem_copy(const char *dst_reg, int n) {
   int i = 0;
   while (n >= 8) {
-    println("  movq %d(%%rax), %%r8", i);
-    println("  movq %%r8, %d(%s)", i, dst_reg);
+    println("  movq %d(%%rax), %%r10", i);
+    println("  movq %%r10, %d(%s)", i, dst_reg);
     n -= 8;
     i += 8;
   }
   while (n >= 4) {
-    println("  movl %d(%%rax), %%r8d", i);
-    println("  movl %%r8d, %d(%s)", i, dst_reg);
+    println("  movl %d(%%rax), %%r10d", i);
+    println("  movl %%r10d, %d(%s)", i, dst_reg);
     n -= 4;
     i += 4;
   }
   while (n >= 2) {
-    println("  movw %d(%%rax), %%r8w", i);
-    println("  movw %%r8w, %d(%s)", i, dst_reg);
+    println("  movw %d(%%rax), %%r10w", i);
+    println("  movw %%r10w, %d(%s)", i, dst_reg);
     n -= 2;
     i += 2;
   }
   while (n >= 1) {
-    println("  movb %d(%%rax), %%r8b", i);
-    println("  movb %%r8b, %d(%s)", i, dst_reg);
+    println("  movb %d(%%rax), %%r10b", i);
+    println("  movb %%r10b, %d(%s)", i, dst_reg);
     --n;
     ++i;
   }
@@ -643,26 +772,26 @@ static void gen_mem_copy(const char *dst_reg, int n) {
 static void gen_mem_copy_with_offset(const char *dst_reg, int offset, int n) {
   int i = 0;
   while (n >= 8) {
-    println("  movq %d(%%rax), %%r8", i);
-    println("  movq %%r8, %d(%s)", offset + i, dst_reg);
+    println("  movq %d(%%rax), %%r10", i);
+    println("  movq %%r10, %d(%s)", offset + i, dst_reg);
     n -= 8;
     i += 8;
   }
   while (n >= 4) {
-    println("  movl %d(%%rax), %%r8d", i);
-    println("  movl %%r8d, %d(%s)", offset + i, dst_reg);
+    println("  movl %d(%%rax), %%r10d", i);
+    println("  movl %%r10d, %d(%s)", offset + i, dst_reg);
     n -= 4;
     i += 4;
   }
   while (n >= 2) {
-    println("  movw %d(%%rax), %%r8w", i);
-    println("  movw %%r8w, %d(%s)", offset + i, dst_reg);
+    println("  movw %d(%%rax), %%r10w", i);
+    println("  movw %%r10w, %d(%s)", offset + i, dst_reg);
     n -= 2;
     i += 2;
   }
   while (n >= 1) {
-    println("  movb %d(%%rax), %%r8b", i);
-    println("  movb %%r8b, %d(%s)", offset + i, dst_reg);
+    println("  movb %d(%%rax), %%r10b", i);
+    println("  movb %%r10b, %d(%s)", offset + i, dst_reg);
     --n;
     ++i;
   }
@@ -708,22 +837,44 @@ static void gen_mem_zero(int offset, int n) {
   }
 }
 
+static int vec_use_ymm(Type *ty) {
+  return ty->size > 16;
+}
+
+
 // Load a value from where %rax is pointing to.
 static void load(Type *ty)
 {
   if (!ty)
-    error("%s: %s:%d: error: in load : ty is null!", CODEGEN_C, __FILE__, __LINE__);
+    error("%s:%d: error: in load : ty is null!", __FILE__, __LINE__);
 
   switch (ty->kind)
   {
   case TY_VECTOR: {
-    if (ty->base->kind == TY_FLOAT || ty->base->kind == TY_DOUBLE) {      
-      println("  movups (%%rax), %%xmm0");  
-    } else if (is_integer(ty->base)) {
-     
-      println("  movdqu (%%rax), %%xmm0"); 
+    if (vec_use_ymm(ty)) {
+      if (ty->align < 32) {
+        if (ty->base->kind == TY_FLOAT || ty->base->kind == TY_DOUBLE)
+          println("  vmovups (%%rax), %%ymm0");
+        else
+          println("  vmovdqu (%%rax), %%ymm0");
+      } else {
+        if (ty->base->kind == TY_FLOAT || ty->base->kind == TY_DOUBLE)
+          println("  vmovaps (%%rax), %%ymm0");
+        else
+          println("  vmovdqa (%%rax), %%ymm0");
+      }
     } else {
-      error("%s: %s:%d: error: in load : unsupported vector base type %d", CODEGEN_C, __FILE__, __LINE__, ty->base->kind);
+      if (ty->align < 16) {
+        if (ty->base->kind == TY_FLOAT || ty->base->kind == TY_DOUBLE)
+          println("  vmovups (%%rax), %%xmm0");
+        else
+          println("  vmovdqu (%%rax), %%xmm0");
+      } else {
+        if (ty->base->kind == TY_FLOAT || ty->base->kind == TY_DOUBLE)
+          println("  vmovaps (%%rax), %%xmm0");
+        else
+          println("  vmovdqa (%%rax), %%xmm0");
+      }
     }
     return;
   }
@@ -765,8 +916,12 @@ static void load(Type *ty)
     println("  %sbl (%%rax), %%eax", insn);
   else if (ty->size == 2)
     println("  %swl (%%rax), %%eax", insn);
-  else if (ty->size == 4)
-    println("  movsxd (%%rax), %%rax");
+  else if (ty->size == 4) {
+    if (ty->is_unsigned)
+      println("  movl (%%rax), %%eax");
+    else
+      println("  movsxd (%%rax), %%rax");
+  }
   else
     println("  mov (%%rax), %%rax");
 }
@@ -775,24 +930,43 @@ static void load(Type *ty)
 static void store(Type *ty)
 {
   if (!ty)
-    error("%s %d: in store : ty is null!", CODEGEN_C, __LINE__);
+    error("%s:%d: in store : ty is null!", __FILE__, __LINE__);
   pop_tmp("%rdi");
 
 
   switch (ty->kind)
   {
   case TY_VECTOR:
-    if (ty->base->kind == TY_FLOAT || ty->base->kind == TY_DOUBLE) {
-      println("  movups %%xmm0, (%%rdi)");  // store into rdi, not rax
-    } else if (is_integer(ty->base)) {
-      println("  movdqu %%xmm0, (%%rdi)");
+    if (vec_use_ymm(ty)) {
+      if (ty->align < 32) {
+        if (ty->base->kind == TY_FLOAT || ty->base->kind == TY_DOUBLE)
+          println("  vmovups %%ymm0, (%%rdi)");
+        else
+          println("  vmovdqu %%ymm0, (%%rdi)");
+      } else {
+        if (ty->base->kind == TY_FLOAT || ty->base->kind == TY_DOUBLE)
+          println("  vmovaps %%ymm0, (%%rdi)");
+        else
+          println("  vmovdqa %%ymm0, (%%rdi)");
+      }
     } else {
-      error("%s %d: in store : unsupported vector base type %d", CODEGEN_C, __LINE__, ty->base->kind);
+      if (ty->align < 16) {
+        if (ty->base->kind == TY_FLOAT || ty->base->kind == TY_DOUBLE)
+          println("  vmovups %%xmm0, (%%rdi)");
+        else
+          println("  vmovdqu %%xmm0, (%%rdi)");
+      } else {
+        if (ty->base->kind == TY_FLOAT || ty->base->kind == TY_DOUBLE)
+          println("  vmovaps %%xmm0, (%%rdi)");
+        else
+          println("  vmovdqa %%xmm0, (%%rdi)");
+      }
     }
     return;
   case TY_STRUCT:
   case TY_UNION:
     gen_mem_copy("%rdi", ty->size);
+    println("  mov %%rdi, %%rax");
     return;
   case TY_FLOAT:
     println("  movss %%xmm0, (%%rdi)");
@@ -801,6 +975,7 @@ static void store(Type *ty)
     println("  movsd %%xmm0, (%%rdi)");
     return;
   case TY_LDOUBLE:
+    println("  fld %%st(0)");
     println("  fstpt (%%rdi)");
     return;
   case TY_INT128:
@@ -822,7 +997,7 @@ static void store(Type *ty)
 static void cmp_zero(Type *ty)
 {
   if (!ty)
-    error("%s %d: in cmp_zero : ty is null!", CODEGEN_C, __LINE__);
+    error("%s:%d: in cmp_zero : ty is null!", __FILE__, __LINE__);
   switch (ty->kind)
   {
   case TY_FLOAT:
@@ -862,7 +1037,7 @@ static void cmp_zero(Type *ty)
 #define i64i128 "cqto"
 #define u8i128  "movzbq\t%al,%rax\n\txor\t%edx,%edx"
 #define u16i128 "movzwq\t%ax,%rax\n\txor\t%edx,%edx"
-#define u32i128 "cltq\n\txor\t%edx,%edx"
+#define u32i128 "mov\t%eax,%eax\n\txor\t%edx,%edx"
 #define u64i128 "xor\t%edx,%edx"
 #define i128f32 "mov\t%rax,%rdi\n\tmov\t%rdx,%rsi\n\tcall\t__floattisf"
 #define i128f64 "mov\t%rax,%rdi\n\tmov\t%rdx,%rsi\n\tcall\t__floattidf"
@@ -1012,7 +1187,7 @@ static const char *const cast_table[13][13] = /* clang-format off */ {
   {i32i8,  i32i16,  NULL,    NULL,    i32u8,  i32u16,  NULL,    NULL,    i64f32,  i64f64,  i64f80,  i64i128, i64i128}, // i64
   {i32i8,  NULL,    NULL,    i32i64,  NULL,   NULL,    NULL,    i32i64,  i32f32,  i32f64,  i32f80,  i32i128, i32i128}, // u8
   {i32i8,  i32i16,  NULL,    i32i64,  i32u8,  NULL,    NULL,    i32i64,  i32f32,  i32f64,  i32f80,  i32i128, i32i128}, // u16
-  {i32i8,  i32i16,  NULL,    u32i64,  i32u8,  i32u16,  NULL,    u32i64,  u32f32,  u32f64,  u32f80,  u32i128, i32i128}, // u32
+  {i32i8,  i32i16,  NULL,    u32i64,  i32u8,  i32u16,  NULL,    u32i64,  u32f32,  u32f64,  u32f80,  u32i128, u32i128}, // u32
   {i32i8,  i32i16,  NULL,    NULL,    i32u8,  i32u16,  NULL,    NULL,    u64f32,  u64f64,  u64f80,  u64i128, u64i128}, // u64
   {f32i8,  f32i16,  f32i32,  f32i64,  f32u8,  f32u16,  f32u32,  f32u64,  NULL,    f32f64,  f32f80,  f32i128, f32u128}, // f32
   {f64i8,  f64i16,  f64i32,  f64i64,  f64u8,  f64u16,  f64u32,  f64u64,  f64f32,  NULL,    f64f80,  f64i128, f64u128}, // f64
@@ -1024,7 +1199,7 @@ static const char *const cast_table[13][13] = /* clang-format off */ {
 static void cast(Type *from, Type *to)
 {
   if (!to)
-    error("%s %d: in cast : to type is null!", CODEGEN_C, __LINE__);    
+    error("%s:%d: in cast : to type is null!", __FILE__, __LINE__);    
   if (!from)
     from = copy_type(to);    
   if (to->kind == TY_VOID)
@@ -1033,7 +1208,14 @@ static void cast(Type *from, Type *to)
   if (to->kind == TY_BOOL)
   {
     cmp_zero(from);
-    println("  setne %%al");
+    if (is_flonum(from)) {
+      println("  setne %%al");
+      println("  setp %%dl");
+      println("  or %%dl, %%al");
+   } else {
+      println("  setne %%al");
+   }
+
     println("  movzx %%al, %%eax");
     return;
   }
@@ -1213,7 +1395,10 @@ static void push_args2(Node *args, bool first_pass)
       println("  movsd %%xmm0, %d(%%rsp)", args->stack_offset);
       break;
     case TY_VECTOR:
-      println("  movdqu %%xmm0, %d(%%rsp)", args->stack_offset);
+      if (vec_use_ymm(args->ty))
+        println("  vmovdqu %%ymm0, %d(%%rsp)", args->stack_offset);
+      else
+        println("  movdqu %%xmm0, %d(%%rsp)", args->stack_offset);
       break;
     case TY_LDOUBLE:
       println("  fstpt %d(%%rsp)", args->stack_offset);
@@ -1235,7 +1420,7 @@ static void push_args2(Node *args, bool first_pass)
       push_struct(args);
       break;
     case TY_VECTOR:
-      pushv();
+      push_vec(args->ty);
       break;
     case TY_FLOAT:
     case TY_DOUBLE:
@@ -1308,7 +1493,7 @@ static int push_args(Node *node)
   {
     Type *ty = arg->ty;
     if (!ty)
-      error("%s %d: in push_args : type is null!", CODEGEN_C, __LINE__);  
+      error("%s:%d: in push_args : type is null!", __FILE__, __LINE__);  
 
     switch (ty->kind)
     {
@@ -1390,7 +1575,7 @@ static void copy_ret_buffer(Obj *var)
 {
   Type *ty = var->ty;
   if (!ty)
-    error("%s %d: in copy_ret_buffer : type is null!", CODEGEN_C, __LINE__);  
+    error("%s:%d: in copy_ret_buffer : type is null!", __FILE__, __LINE__);  
 
   int gp = 0, fp = 0;
 
@@ -1457,7 +1642,7 @@ static void copy_struct_reg(void)
 {
   Type *ty = current_fn->ty->return_ty;
   if (!ty)
-    error("%s %d: in copy_struct_reg : type is null!", CODEGEN_C, __LINE__);  
+    error("%s:%d: in copy_struct_reg : type is null!", __FILE__, __LINE__);  
   int gp = 0, fp = 0;
 
   println("  mov %%rax, %%rdi");
@@ -1511,7 +1696,7 @@ static void copy_struct_mem(void)
   Type *ty = current_fn->ty->return_ty;
 
   if (!ty)
-    error("%s %d: in copy_struct_mem : type is null!", CODEGEN_C, __LINE__);  
+    error("%s:%d: in copy_struct_mem : type is null!", __FILE__, __LINE__);  
   Obj *var = current_fn->params;
   if (is_omit_fp(current_fn))
     println("  mov %d(%%rsp), %%rdi", var->offset + current_fn->stack_size + depth * 8);
@@ -1524,41 +1709,48 @@ static void copy_struct_mem(void)
 
 static void builtin_alloca(Node *node)
 {
-  // Align size to 16 bytes.
-  // println("  add $15, %%rdi");
-  // println("  and $0xfffffff0, %%edi");
+  // Align the resulting pointer, not just the size.
   int align = node->val > 16 ? node->val : 16;
-  println("  add $%d, %%rdi", align - 1);
-  println("  and $-%d, %%rdi", align);
 
   if (!current_fn->alloca_bottom) {
-    println("  sub %%rdi, %%rsp");
+    // new_rsp = (rsp - size) & -align; return new_rsp
     println("  mov %%rsp, %%rax");
+    println("  sub %%rdi, %%rax");
+    println("  and $-%d, %%rax", align);
+    println("  mov %%rax, %%rsp");
     return;
   }
 
-  // Shift the temporary area by %rdi.
-  println("  mov %d(%s), %%rcx", current_fn->alloca_bottom->offset, current_fn->alloca_bottom->ptr);
-  println("  sub %%rsp, %%rcx");
-  println("  mov %%rsp, %%rax");
-  println("  sub %%rdi, %%rsp");
-  println("  mov %%rsp, %%rdx");
+  // Shift the temporary area by delta, where:
+  // new_bottom = (old_bottom - size) & -align
+  // delta = old_bottom - new_bottom
+  println("  mov %d(%s), %%rax", current_fn->alloca_bottom->offset, current_fn->alloca_bottom->ptr); // old_bottom
+  println("  mov %%rax, %%rcx");
+  println("  sub %%rsp, %%rcx"); // tmp_size
+  println("  mov %%rax, %%rdx");
+  println("  sub %%rdi, %%rdx");
+  println("  and $-%d, %%rdx", align); // new_bottom
+  println("  mov %%rax, %%rsi");
+  println("  sub %%rdx, %%rsi"); // delta
+
+  println("  mov %%rsp, %%r8");  // old_rsp (src)
+  println("  sub %%rsi, %%rsp"); // new_rsp
+  println("  mov %%rsp, %%r9");  // new_rsp (dst)
+
   println("1:");
   println("  cmp $0, %%rcx");
   println("  je 2f");
-  println("  mov (%%rax), %%r8b");
-  println("  mov %%r8b, (%%rdx)");
-  println("  inc %%rdx");
-  println("  inc %%rax");
+  println("  mov (%%r8), %%r10b");
+  println("  mov %%r10b, (%%r9)");
+  println("  inc %%r8");
+  println("  inc %%r9");
   println("  dec %%rcx");
   println("  jmp 1b");
   println("2:");
 
-  // Move alloca_bottom pointer.
-  println("  mov %d(%s), %%rax", current_fn->alloca_bottom->offset, current_fn->alloca_bottom->ptr);
-  println("  sub %%rdi, %%rax");
-  println("  and $-%d, %%rax", align);
-  println("  mov %%rax, %d(%s)", current_fn->alloca_bottom->offset, current_fn->alloca_bottom->ptr);
+  // Move alloca_bottom pointer and return new_bottom in rax
+  println("  mov %%rdx, %d(%s)", current_fn->alloca_bottom->offset, current_fn->alloca_bottom->ptr);
+  println("  mov %%rdx, %%rax");
 }
 
 //from cosmopolitan
@@ -1568,8 +1760,8 @@ static void HandleAtomicArithmetic(Node *node, const char *op, bool return_new) 
   gen_expr(node->rhs);
 
   if (node->ty->size == 16) {
-    println("  mov %%rax, %%r8"); // val low
-    println("  mov %%rdx, %%r9"); // val high
+    println("  mov %%rax, %%r10"); // val low
+    println("  mov %%rdx, %%r11"); // val high
     pop_tmp("%rdi"); // addr
 
     println("  mov (%%rdi), %%rax"); // old low
@@ -1579,8 +1771,8 @@ static void HandleAtomicArithmetic(Node *node, const char *op, bool return_new) 
     println("  mov %%rax, %%rbx");
     println("  mov %%rdx, %%rcx");
     
-    println("  %s %%r8, %%rbx", op);
-    println("  %s %%r9, %%rcx", op);
+    println("  %s %%r10, %%rbx", op);
+    println("  %s %%r11, %%rcx", op);
 
     println("  lock cmpxchg16b (%%rdi)");
     println("  jnz 1b");
@@ -1592,13 +1784,13 @@ static void HandleAtomicArithmetic(Node *node, const char *op, bool return_new) 
     return;
   }
 
-  pop_tmp("%r9");
+  pop_tmp("%r11");
   println("  mov %s, %s", reg_ax(node->ty->size), reg_si(node->ty->size));
-  println("  mov (%%r9), %s", reg_ax(node->ty->size));
+  println("  mov (%%r11), %s", reg_ax(node->ty->size));
   println("1:  mov %s, %s", reg_ax(node->ty->size), reg_dx(node->ty->size));
   println("  mov %s, %s", reg_ax(node->ty->size), reg_di(node->ty->size));
   println("  %s %s, %s", op, reg_si(node->ty->size), reg_dx(node->ty->size));
-  println("  lock cmpxchg %s, (%%r9)", reg_dx(node->ty->size));
+  println("  lock cmpxchg %s, (%%r11)", reg_dx(node->ty->size));
   println("  jnz 1b");
   if (return_new)
     println("  mov %s, %s", reg_dx(node->ty->size), reg_ax(node->ty->size));
@@ -1618,11 +1810,11 @@ static void gen_memset(Node *node) {
     pop_tmp("%rcx");  
     pop_tmp("%rsi");  
     pop_tmp("%rdi");  
-    println("  mov %%rdi, %%r8");
+    println("  mov %%rdi, %%r10");
     println("  mov %%sil, %%al");  
     println("  cld");
     println("  rep stosb");  
-    println("  mov %%r8, %%rax");
+    println("  mov %%r10, %%rax");
   }     
 }
 
@@ -1712,10 +1904,10 @@ static void gen_int128_op(Node *node) {
       println("  xor %%rsi, %%rdx");   
       break;  
     case ND_EQ:
-      println("  mov %%rax, %%r8"); // Move lower 64 bits of lhs to r8
-      println("  mov %%rdx, %%r9"); // Move upper 64 bits of lhs to r9
-      println("  xor %%r8, %%rdi"); // Compare lower 64 bits of lhs and rhs
-      println("  xor %%r9, %%rsi"); // Compare upper 64 bits of lhs and rhs
+      println("  mov %%rax, %%r10"); // Move lower 64 bits of lhs to r8
+      println("  mov %%rdx, %%r11"); // Move upper 64 bits of lhs to r9
+      println("  xor %%r10, %%rdi"); // Compare lower 64 bits of lhs and rhs
+      println("  xor %%r11, %%rsi"); // Compare upper 64 bits of lhs and rhs
       println("  or %%rsi, %%rdi"); // Combine the results
       println("  sete %%al");       // Set AL if the result is zero (equal)
       println("  movzx %%al, %%eax"); // Zero extend AL to EAX            
@@ -1771,7 +1963,7 @@ static void gen_int128_op(Node *node) {
       if (node->lhs->ty->is_unsigned) {
         // Handle unsigned 128-bit shift right
         println("  cmp $64, %%rcx");
-        println("  ja .Lshift_gt64_unsigned_%d", c);
+        println("  jae .Lshift_gt64_unsigned_%d", c);
 
         // Common shift logic for shifts within 64 bits
         println("  shrd %%cl, %%rdx, %%rax");  // Shift right double
@@ -1787,7 +1979,7 @@ static void gen_int128_op(Node *node) {
       } else {
         // Handle signed 128-bit shift right (arithmetic)
         println("  cmp $64, %%rcx");
-        println("  ja .Lshift_gt64_signed_%d", c);
+        println("  jae .Lshift_gt64_signed_%d", c);
 
         // Common shift logic for shifts within 64 bits
         println("  shrd %%cl, %%rdx, %%rax");  // Shift right double
@@ -1805,7 +1997,7 @@ static void gen_int128_op(Node *node) {
       break;
     }
     default:
-        error_tok(node->tok,"%s: %s:%d: error: in gen_int128_op : unsupported int128 operation %d", CODEGEN_C, __FILE__, __LINE__, node->kind);
+        error_tok(node->tok,"%s:%d: error: in gen_int128_op : unsupported int128 operation %d", __FILE__, __LINE__, node->kind);
     }
 }
 
@@ -1827,32 +2019,66 @@ static void scalar_to_xmm(Type *vec_ty, const char *xmm_reg) {
       println("  shufpd $0x00, %s, %s", xmm_reg, xmm_reg);
       break;
     default:
-      error("%s: %s:%d: error: in scalar_to_xmm : unsupported vector base type for scalar promotion %d", CODEGEN_C, __FILE__, __LINE__, vec_ty->base->kind);
+      error("%s:%d: error: in scalar_to_xmm : unsupported vector base type for scalar promotion %d", __FILE__, __LINE__, vec_ty->base->kind);
     }
 }
 
 
 static void gen_vector_op(Node *node) {
+  Type *vec_ty = node->lhs->ty;
+  if (vec_ty->kind == TY_PTR && vec_ty->base->kind == TY_VECTOR)
+    vec_ty = vec_ty->base;
+
+  if (vec_ty->kind != TY_VECTOR)
+    error_tok(node->tok, "%s:%d: error: in gen_vector_op : lhs is not a vector", __FILE__, __LINE__);
+
+  bool use_ymm = vec_use_ymm(vec_ty);
+
   if (node->rhs) {
     gen_expr(node->rhs);
-    if (node->rhs->is_scalar_promoted)
+    if (node->rhs->is_scalar_promoted) {
       scalar_to_xmm(node->rhs->ty, "%xmm0");
-    push_xmm(0);      
+      if (use_ymm) {
+        println("  vxorps %%ymm1, %%ymm1, %%ymm1");
+        println("  vinsertf128 $0, %%xmm0, %%ymm1, %%ymm1");
+        println("  vinsertf128 $1, %%xmm0, %%ymm1, %%ymm0");
+      }
+    }
+    if (use_ymm)
+      push_ymm(0);
+    else
+      push_xmm(0);
   }
+
   if (node->lhs) {
-    gen_expr(node->lhs); 
-    if (node->lhs->is_scalar_promoted)
+    gen_expr(node->lhs);
+    if (node->lhs->is_scalar_promoted) {
       scalar_to_xmm(node->lhs->ty, "%xmm0");
+      if (use_ymm) {
+        println("  vxorps %%ymm1, %%ymm1, %%ymm1");
+        println("  vinsertf128 $0, %%xmm0, %%ymm1, %%ymm1");
+        println("  vinsertf128 $1, %%xmm0, %%ymm1, %%ymm0");
+      }
+    }
   }
-  
-  if (node->rhs)
-    pop_xmm(1);
+
+  if (node->rhs) {
+    if (use_ymm)
+      pop_ymm(1);
+    else
+      pop_xmm(1);
+  }
 
 
   switch (node->kind) {
   case ND_ADD:
   case ND_SUB:
   case ND_MUL:
+    break;
+  case ND_EQ:
+  case ND_NE:
+  case ND_LT:
+  case ND_LE:
     break;
   case ND_BITXOR:
   case ND_BITAND:
@@ -1861,159 +2087,548 @@ static void gen_vector_op(Node *node) {
     break;
   case ND_DIV:
     if (is_integer(node->lhs->ty->base))
-      error_tok(node->tok, "%s: %s:%d: error: in gen_vector_op :  integer vector division not supported", CODEGEN_C, __FILE__, __LINE__);
+      error_tok(node->tok, "%s:%d: error: in gen_vector_op :  integer vector division not supported", __FILE__, __LINE__);
     break;
   case ND_NEG:
     //gen_expr(node->lhs);          // materialize operand in %xmm0
     break;    
   default:
-    error_tok(node->tok, "%s: %s:%d: error: in gen_vector_op :  unsupported vector operation %d", CODEGEN_C, __FILE__, __LINE__, node->kind);
+    error_tok(node->tok, "%s:%d: error: in gen_vector_op :  unsupported vector operation %d", __FILE__, __LINE__, node->kind);
   }
-
-  Type *vec_ty = node->lhs->ty;
-  if (vec_ty->kind == TY_PTR && vec_ty->base->kind == TY_VECTOR)
-    vec_ty = vec_ty->base;
-
-  if (vec_ty->kind != TY_VECTOR)
-    error_tok(node->tok, "%s: %s:%d: error: in gen_vector_op : lhs is not a vector", CODEGEN_C, __FILE__, __LINE__);
-
-  // if (node->rhs)
-  //   load_vector_operand(node->rhs, "%xmm1");    
-  // load_vector_operand(node->lhs, "%xmm0");
-
 
   switch (vec_ty->base->kind) {
     case TY_FLOAT:
       switch (node->kind) {
       case ND_ADD:
-        println("  addps %%xmm1, %%xmm0");
+        if (use_ymm)
+          println("  vaddps %%ymm1, %%ymm0, %%ymm0");
+        else
+          println("  addps %%xmm1, %%xmm0");
         break;
       case ND_SUB:
-        println("  subps %%xmm1, %%xmm0");
+        if (use_ymm)
+          println("  vsubps %%ymm1, %%ymm0, %%ymm0");
+        else
+          println("  subps %%xmm1, %%xmm0");
         break;
       case ND_MUL:
-        println("  mulps %%xmm1, %%xmm0");
+        if (use_ymm)
+          println("  vmulps %%ymm1, %%ymm0, %%ymm0");
+        else
+          println("  mulps %%xmm1, %%xmm0");
         break;
       case ND_DIV:
-        println("  divps %%xmm1, %%xmm0");
+        if (use_ymm)
+          println("  vdivps %%ymm1, %%ymm0, %%ymm0");
+        else
+          println("  divps %%xmm1, %%xmm0");
         break;
       case ND_BITXOR:
-        println("  pxor %%xmm1, %%xmm0");
+        if (use_ymm)
+          println("  vpxor %%ymm1, %%ymm0, %%ymm0");
+        else
+          println("  pxor %%xmm1, %%xmm0");
         break;
       case ND_BITAND:
-        println("  pand %%xmm1, %%xmm0");
+        if (use_ymm)
+          println("  vpand %%ymm1, %%ymm0, %%ymm0");
+        else
+          println("  pand %%xmm1, %%xmm0");
         break;
       case ND_BITOR:
-        println("  por %%xmm1, %%xmm0");
+        if (use_ymm)
+          println("  vpor %%ymm1, %%ymm0, %%ymm0");
+        else
+          println("  por %%xmm1, %%xmm0");
         break;
       case ND_NEG: 
-        println("  xorps %%xmm1, %%xmm1");     
-        println("  subps %%xmm0, %%xmm1");     
-        println("  movups %%xmm1, %%xmm0"); 
+        if (use_ymm) {
+          println("  vxorps %%ymm1, %%ymm1, %%ymm1");
+          println("  vsubps %%ymm0, %%ymm1, %%ymm1");
+          println("  vmovaps %%ymm1, %%ymm0");
+        } else {
+          println("  xorps %%xmm1, %%xmm1");
+          println("  subps %%xmm0, %%xmm1");
+          println("  movaps %%xmm1, %%xmm0");
+        }
         break;                
       default:
-        error_tok(node->tok, "%s: %s:%d: error: unsupported float vector operation", CODEGEN_C, __FILE__, __LINE__);
+        error_tok(node->tok, "%s:%d: error: unsupported float vector operation", __FILE__, __LINE__);
       }
       break;
   case TY_DOUBLE:
     switch (node->kind) {
     case ND_ADD:
-      println("  addpd %%xmm1, %%xmm0");
+      if (use_ymm)
+        println("  vaddpd %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  addpd %%xmm1, %%xmm0");
       break;
     case ND_SUB:
-      println("  subpd %%xmm1, %%xmm0");
+      if (use_ymm)
+        println("  vsubpd %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  subpd %%xmm1, %%xmm0");
       break;
     case ND_MUL:
-      println("  mulpd %%xmm1, %%xmm0");
+      if (use_ymm)
+        println("  vmulpd %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  mulpd %%xmm1, %%xmm0");
       break;
     case ND_DIV:
-      println("  divpd %%xmm1, %%xmm0");
+      if (use_ymm)
+        println("  vdivpd %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  divpd %%xmm1, %%xmm0");
       break;
     case ND_BITXOR:
-      println("  pxor %%xmm1, %%xmm0");
+      if (use_ymm)
+        println("  vpxor %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  pxor %%xmm1, %%xmm0");
       break;
     case ND_BITAND:
-      println("  pand %%xmm1, %%xmm0");
+      if (use_ymm)
+        println("  vpand %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  pand %%xmm1, %%xmm0");
       break;
     case ND_BITOR:
-      println("  por %%xmm1, %%xmm0");
+      if (use_ymm)
+        println("  vpor %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  por %%xmm1, %%xmm0");
       break;
     case ND_NEG: 
-      println("  xorpd %%xmm1, %%xmm1");     
-      println("  subpd %%xmm0, %%xmm1");     
-      println("  movapd %%xmm1, %%xmm0");  
+      if (use_ymm) {
+        println("  vxorpd %%ymm1, %%ymm1, %%ymm1");
+        println("  vsubpd %%ymm0, %%ymm1, %%ymm1");
+        println("  vmovapd %%ymm1, %%ymm0");
+      } else {
+        println("  xorpd %%xmm1, %%xmm1");
+        println("  subpd %%xmm0, %%xmm1");
+        println("  movapd %%xmm1, %%xmm0");
+      }
       break;      
     default:
-      error_tok(node->tok, "%s: %s:%d: error: unsupported double vector operation", CODEGEN_C, __FILE__, __LINE__);
+      error_tok(node->tok, "%s:%d: error: unsupported double vector operation", __FILE__, __LINE__);
+    }
+    break;
+  case TY_CHAR:
+    switch (node->kind) {
+    case ND_ADD:
+      if (use_ymm)
+        println("  vpaddb %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  paddb %%xmm1, %%xmm0");
+      break;
+    case ND_SUB:
+      if (use_ymm)
+        println("  vpsubb %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  psubb %%xmm1, %%xmm0");
+      break;
+    case ND_BITXOR:
+      if (use_ymm)
+        println("  vpxor %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  pxor %%xmm1, %%xmm0");
+      break;
+    case ND_BITAND:
+      if (use_ymm)
+        println("  vpand %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  pand %%xmm1, %%xmm0");
+      break;
+    case ND_BITOR:
+      if (use_ymm)
+        println("  vpor %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  por %%xmm1, %%xmm0");
+      break;
+    case ND_NEG:
+      if (use_ymm) {
+        println("  vpxor %%ymm2, %%ymm2, %%ymm2");
+        println("  vpsubb %%ymm0, %%ymm2, %%ymm0");
+      } else {
+        println("  pxor %%xmm2, %%xmm2");
+        println("  psubb %%xmm0, %%xmm2");
+        println("  movdqu %%xmm2, %%xmm0");
+      }
+      break;
+    case ND_BITNOT:
+      if (use_ymm) {
+        println("  vpcmpeqd %%ymm2, %%ymm2, %%ymm2");
+        println("  vpxor %%ymm2, %%ymm0, %%ymm0");
+      } else {
+        println("  pcmpeqd %%xmm2, %%xmm2");
+        println("  pxor %%xmm2, %%xmm0");
+      }
+      break;
+    case ND_EQ:
+      if (use_ymm)
+        println("  vpcmpeqb %%ymm1, %%ymm0, %%ymm0");
+      else {
+        println("  movdqu %%xmm0, %%xmm2");
+        println("  pcmpeqb %%xmm1, %%xmm2");
+        println("  movdqu %%xmm2, %%xmm0");
+      }
+      break;
+    case ND_NE:
+      if (use_ymm) {
+        println("  vpcmpeqb %%ymm1, %%ymm0, %%ymm0");
+        println("  vpcmpeqd %%ymm2, %%ymm2, %%ymm2");
+        println("  vpxor %%ymm2, %%ymm0, %%ymm0");
+      } else {
+        println("  movdqu %%xmm0, %%xmm2");
+        println("  pcmpeqb %%xmm1, %%xmm2");
+        println("  pcmpeqd %%xmm3, %%xmm3");
+        println("  pxor %%xmm3, %%xmm2");
+        println("  movdqu %%xmm2, %%xmm0");
+      }
+      break;
+    case ND_LT:
+      if (use_ymm) {
+        println("  vpcmpgtb %%ymm0, %%ymm1, %%ymm0");
+      } else {
+        println("  movdqu %%xmm1, %%xmm2");
+        println("  pcmpgtb %%xmm0, %%xmm2");
+        println("  movdqu %%xmm2, %%xmm0");
+      }
+      break;
+    case ND_LE:
+      if (use_ymm) {
+        println("  vpcmpgtb %%ymm1, %%ymm0, %%ymm0");
+        println("  vpcmpeqd %%ymm2, %%ymm2, %%ymm2");
+        println("  vpxor %%ymm2, %%ymm0, %%ymm0");
+      } else {
+        println("  movdqu %%xmm0, %%xmm2");
+        println("  pcmpgtb %%xmm1, %%xmm2");
+        println("  pcmpeqd %%xmm3, %%xmm3");
+        println("  pxor %%xmm3, %%xmm2");
+        println("  movdqu %%xmm2, %%xmm0");
+      }
+      break;
+    default:
+      error_tok(node->tok, "%s:%d: error: char vector operation not supported", __FILE__, __LINE__);
+    }
+    break;
+  case TY_SHORT:
+    switch (node->kind) {
+    case ND_ADD:
+      if (use_ymm)
+        println("  vpaddw %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  paddw %%xmm1, %%xmm0");
+      break;
+    case ND_SUB:
+      if (use_ymm)
+        println("  vpsubw %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  psubw %%xmm1, %%xmm0");
+      break;
+    case ND_MUL:
+      if (use_ymm)
+        println("  vpmullw %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  pmullw %%xmm1, %%xmm0");
+      break;
+    case ND_BITXOR:
+      if (use_ymm)
+        println("  vpxor %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  pxor %%xmm1, %%xmm0");
+      break;
+    case ND_BITAND:
+      if (use_ymm)
+        println("  vpand %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  pand %%xmm1, %%xmm0");
+      break;
+    case ND_BITOR:
+      if (use_ymm)
+        println("  vpor %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  por %%xmm1, %%xmm0");
+      break;
+    case ND_NEG:
+      if (use_ymm) {
+        println("  vpxor %%ymm2, %%ymm2, %%ymm2");
+        println("  vpsubw %%ymm0, %%ymm2, %%ymm0");
+      } else {
+        println("  pxor %%xmm2, %%xmm2");
+        println("  psubw %%xmm0, %%xmm2");
+        println("  movdqu %%xmm2, %%xmm0");
+      }
+      break;
+    case ND_BITNOT:
+      if (use_ymm) {
+        println("  vpcmpeqd %%ymm2, %%ymm2, %%ymm2");
+        println("  vpxor %%ymm2, %%ymm0, %%ymm0");
+      } else {
+        println("  pcmpeqd %%xmm2, %%xmm2");
+        println("  pxor %%xmm2, %%xmm0");
+      }
+      break;
+    case ND_EQ:
+      if (use_ymm)
+        println("  vpcmpeqw %%ymm1, %%ymm0, %%ymm0");
+      else {
+        println("  movdqu %%xmm0, %%xmm2");
+        println("  pcmpeqw %%xmm1, %%xmm2");
+        println("  movdqu %%xmm2, %%xmm0");
+      }
+      break;
+    case ND_NE:
+      if (use_ymm) {
+        println("  vpcmpeqw %%ymm1, %%ymm0, %%ymm0");
+        println("  vpcmpeqd %%ymm2, %%ymm2, %%ymm2");
+        println("  vpxor %%ymm2, %%ymm0, %%ymm0");
+      } else {
+        println("  movdqu %%xmm0, %%xmm2");
+        println("  pcmpeqw %%xmm1, %%xmm2");
+        println("  pcmpeqd %%xmm3, %%xmm3");
+        println("  pxor %%xmm3, %%xmm2");
+        println("  movdqu %%xmm2, %%xmm0");
+      }
+      break;
+    case ND_LT:
+      if (use_ymm) {
+        println("  vpcmpgtw %%ymm0, %%ymm1, %%ymm0");
+      } else {
+        println("  movdqu %%xmm1, %%xmm2");
+        println("  pcmpgtw %%xmm0, %%xmm2");
+        println("  movdqu %%xmm2, %%xmm0");
+      }
+      break;
+    case ND_LE:
+      if (use_ymm) {
+        println("  vpcmpgtw %%ymm1, %%ymm0, %%ymm0");
+        println("  vpcmpeqd %%ymm2, %%ymm2, %%ymm2");
+        println("  vpxor %%ymm2, %%ymm0, %%ymm0");
+      } else {
+        println("  movdqu %%xmm0, %%xmm2");
+        println("  pcmpgtw %%xmm1, %%xmm2");
+        println("  pcmpeqd %%xmm3, %%xmm3");
+        println("  pxor %%xmm3, %%xmm2");
+        println("  movdqu %%xmm2, %%xmm0");
+      }
+      break;
+    default:
+      error_tok(node->tok, "%s:%d: error: short vector operation not supported", __FILE__, __LINE__);
     }
     break;
   case TY_LLONG:
   case TY_LONG:
     switch (node->kind) {
     case ND_ADD:
-      println("  paddq %%xmm1, %%xmm0");
+      if (use_ymm)
+        println("  vpaddq %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  paddq %%xmm1, %%xmm0");
       break;
     case ND_SUB:
-      println("  psubq %%xmm1, %%xmm0");
+      if (use_ymm)
+        println("  vpsubq %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  psubq %%xmm1, %%xmm0");
       break;
     case ND_MUL:
-      println("  pmulld %%xmm1, %%xmm0"); // Note: no native 64-bit integer multiply in SSE2; might need scalar fallback
+      error_tok(node->tok, "%s:%d: error: 64-bit integer vector multiply not supported", __FILE__, __LINE__);
       break;
     case ND_BITXOR:
-      println("  pxor %%xmm1, %%xmm0");
+      if (use_ymm)
+        println("  vpxor %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  pxor %%xmm1, %%xmm0");
       break;
     case ND_BITAND:
-      println("  pand %%xmm1, %%xmm0");
+      if (use_ymm)
+        println("  vpand %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  pand %%xmm1, %%xmm0");
       break;
     case ND_BITOR:
-      println("  por %%xmm1, %%xmm0");
+      if (use_ymm)
+        println("  vpor %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  por %%xmm1, %%xmm0");
       break;
     case ND_NEG:
-      println("  pxor %%xmm1, %%xmm1");
-      println("  psubq %%xmm0, %%xmm1");
-      println("  movdqa %%xmm1, %%xmm0");
+      if (use_ymm) {
+        println("  vpxor %%ymm2, %%ymm2, %%ymm2");
+        println("  vpsubq %%ymm0, %%ymm2, %%ymm0");
+      } else {
+        println("  pxor %%xmm1, %%xmm1");
+        println("  psubq %%xmm0, %%xmm1");
+        println("  movdqu %%xmm1, %%xmm0");
+      }
       break;
     case ND_BITNOT:
-      println("  pcmpeqq %%xmm1, %%xmm1"); // SSE4.1; for SSE2 use two 32-bit pcmpeqd and pack
-      println("  pxor %%xmm1, %%xmm0");
+      if (use_ymm) {
+        println("  vpcmpeqd %%ymm2, %%ymm2, %%ymm2");
+        println("  vpxor %%ymm2, %%ymm0, %%ymm0");
+      } else {
+        println("  pcmpeqd %%xmm1, %%xmm1");
+        println("  pxor %%xmm1, %%xmm0");
+      }
+      break;
+    case ND_EQ:
+      if (use_ymm)
+        println("  vpcmpeqq %%ymm1, %%ymm0, %%ymm0");
+      else {
+        println("  movdqu %%xmm0, %%xmm2");
+        println("  pcmpeqq %%xmm1, %%xmm2");
+        println("  movdqu %%xmm2, %%xmm0");
+      }
+      break;
+    case ND_NE:
+      if (use_ymm) {
+        println("  vpcmpeqq %%ymm1, %%ymm0, %%ymm0");
+        println("  vpcmpeqd %%ymm2, %%ymm2, %%ymm2");
+        println("  vpxor %%ymm2, %%ymm0, %%ymm0");
+      } else {
+        println("  movdqu %%xmm0, %%xmm2");
+        println("  pcmpeqq %%xmm1, %%xmm2");
+        println("  pcmpeqd %%xmm3, %%xmm3");
+        println("  pxor %%xmm3, %%xmm2");
+        println("  movdqu %%xmm2, %%xmm0");
+      }
+      break;
+    case ND_LT:
+      if (use_ymm) {
+        println("  vpcmpgtq %%ymm0, %%ymm1, %%ymm0");
+      } else {
+        println("  movdqu %%xmm1, %%xmm2");
+        println("  pcmpgtq %%xmm0, %%xmm2");
+        println("  movdqu %%xmm2, %%xmm0");
+      }
+      break;
+    case ND_LE:
+      if (use_ymm) {
+        println("  vpcmpgtq %%ymm1, %%ymm0, %%ymm0");
+        println("  vpcmpeqd %%ymm2, %%ymm2, %%ymm2");
+        println("  vpxor %%ymm2, %%ymm0, %%ymm0");
+      } else {
+        println("  movdqu %%xmm0, %%xmm2");
+        println("  pcmpgtq %%xmm1, %%xmm2");
+        println("  pcmpeqd %%xmm3, %%xmm3");
+        println("  pxor %%xmm3, %%xmm2");
+        println("  movdqu %%xmm2, %%xmm0");
+      }
       break;
     default:
-      error_tok(node->tok, "%s: %s:%d: error: long vector operation not supported", CODEGEN_C, __FILE__, __LINE__);
+      error_tok(node->tok, "%s:%d: error: long vector operation not supported", __FILE__, __LINE__);
     }
     break;
   case TY_INT:
     switch (node->kind) {
     case ND_ADD:
-      println("  paddd %%xmm1, %%xmm0");
+      if (use_ymm)
+        println("  vpaddd %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  paddd %%xmm1, %%xmm0");
       break;
     case ND_SUB:
-      println("  psubd %%xmm1, %%xmm0");
+      if (use_ymm)
+        println("  vpsubd %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  psubd %%xmm1, %%xmm0");
       break;
     case ND_MUL:
-      println("  pmulld %%xmm1, %%xmm0");
+      if (use_ymm)
+        println("  vpmulld %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  pmulld %%xmm1, %%xmm0");
       break;
     case ND_BITXOR:
-      println("  pxor %%xmm1, %%xmm0");
+      if (use_ymm)
+        println("  vpxor %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  pxor %%xmm1, %%xmm0");
       break;
     case ND_BITAND:
-      println("  pand %%xmm1, %%xmm0");
+      if (use_ymm)
+        println("  vpand %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  pand %%xmm1, %%xmm0");
       break;
     case ND_BITOR:
-      println("  por %%xmm1, %%xmm0");
+      if (use_ymm)
+        println("  vpor %%ymm1, %%ymm0, %%ymm0");
+      else
+        println("  por %%xmm1, %%xmm0");
       break;
     case ND_NEG: 
-      println("  pxor %%xmm1, %%xmm1");      
-      println("  psubd %%xmm0, %%xmm1");     
-      println("  movdqa %%xmm1, %%xmm0");
+      if (use_ymm) {
+        println("  vpxor %%ymm2, %%ymm2, %%ymm2");
+        println("  vpsubd %%ymm0, %%ymm2, %%ymm0");
+      } else {
+        println("  pxor %%xmm1, %%xmm1");
+        println("  psubd %%xmm0, %%xmm1");
+        println("  movdqu %%xmm1, %%xmm0");
+      }
       break;
     case ND_BITNOT:
-      println("  pcmpeqd %%xmm1, %%xmm1"); 
-      println("  pxor %%xmm1, %%xmm0");  
+      if (use_ymm) {
+        println("  vpcmpeqd %%ymm2, %%ymm2, %%ymm2");
+        println("  vpxor %%ymm2, %%ymm0, %%ymm0");
+      } else {
+        println("  pcmpeqd %%xmm1, %%xmm1");
+        println("  pxor %%xmm1, %%xmm0");
+      }
       break;      
+    case ND_EQ:
+      if (use_ymm)
+        println("  vpcmpeqd %%ymm1, %%ymm0, %%ymm0");
+      else {
+        println("  movdqu %%xmm0, %%xmm2");
+        println("  pcmpeqd %%xmm1, %%xmm2");
+        println("  movdqu %%xmm2, %%xmm0");
+      }
+      break;
+    case ND_NE:
+      if (use_ymm) {
+        println("  vpcmpeqd %%ymm1, %%ymm0, %%ymm0");
+        println("  vpcmpeqd %%ymm2, %%ymm2, %%ymm2");
+        println("  vpxor %%ymm2, %%ymm0, %%ymm0");
+      } else {
+        println("  movdqu %%xmm0, %%xmm2");
+        println("  pcmpeqd %%xmm1, %%xmm2");
+        println("  pcmpeqd %%xmm3, %%xmm3");
+        println("  pxor %%xmm3, %%xmm2");
+        println("  movdqu %%xmm2, %%xmm0");
+      }
+      break;
+    case ND_LT:
+      if (use_ymm) {
+        println("  vpcmpgtd %%ymm0, %%ymm1, %%ymm0");
+      } else {
+        println("  movdqu %%xmm1, %%xmm2");
+        println("  pcmpgtd %%xmm0, %%xmm2");
+        println("  movdqu %%xmm2, %%xmm0");
+      }
+      break;
+    case ND_LE:
+      if (use_ymm) {
+        println("  vpcmpgtd %%ymm1, %%ymm0, %%ymm0");
+        println("  vpcmpeqd %%ymm2, %%ymm2, %%ymm2");
+        println("  vpxor %%ymm2, %%ymm0, %%ymm0");
+      } else {
+        println("  movdqu %%xmm0, %%xmm2");
+        println("  pcmpgtd %%xmm1, %%xmm2");
+        println("  pcmpeqd %%xmm3, %%xmm3");
+        println("  pxor %%xmm3, %%xmm2");
+        println("  movdqu %%xmm2, %%xmm0");
+      }
+      break;
     default:
-      error_tok(node->tok, "%s: %s:%d: error: integer vector operation not supported", CODEGEN_C, __FILE__, __LINE__);
+      error_tok(node->tok, "%s:%d: error: integer vector operation not supported", __FILE__, __LINE__);
     }
     break;
+  default:
+    error_tok(node->tok, "%s:%d: error: vector base type not supported %d", __FILE__, __LINE__, vec_ty->base->kind);
   }
 }
 
@@ -2029,10 +2644,10 @@ static void gen_cmpxchg(Node *node) {
   pop_tmp("%rdi");
 
   if (sz == 16) {
-     println("  mov %%rcx, %%r8"); // desired ptr
+     println("  mov %%rcx, %%r10"); // desired ptr
      
-     println("  mov (%%r8), %%rbx");
-     println("  mov 8(%%r8), %%rcx");
+     println("  mov (%%r10), %%rbx");
+     println("  mov 8(%%r10), %%rcx");
      
      println("  mov (%%rsi), %%rax");
      println("  mov 8(%%rsi), %%rdx");
@@ -2089,6 +2704,10 @@ static void gen_cmpxchgn(Node *node) {
     gen_expr(node->cas_expected);
     push_tmp();
     gen_expr(node->cas_desired);
+    if (node->cas_desired->ty->kind == TY_FLOAT)
+        println("  movd %%xmm0, %%eax");
+    else if (node->cas_desired->ty->kind == TY_DOUBLE)
+        println("  movq %%xmm0, %%rax");
     println("  mov %%rax, %%rcx");
 
     if (sz == 16) {
@@ -2175,6 +2794,17 @@ static void gen_signbit(Node *node) {
 }
 
 static void gen_isunordered(Node *node) {
+  if (node->lhs->ty && node->rhs->ty && (node->lhs->ty->kind == TY_LDOUBLE || node->rhs->ty->kind == TY_LDOUBLE)) {
+    gen_expr(node->lhs);
+    pushld();
+    gen_expr(node->rhs);
+    popld();
+    println("  fucomip");
+    println("  fstp %%st(0)");
+    println("  setp %%al");
+    println("  movzx %%al, %%eax");
+    return;
+  }
   gen_expr(node->lhs);
   push_tmpf();
   gen_expr(node->rhs);
@@ -2209,9 +2839,28 @@ static void gen_vec_ext(Node *node) {
   push_xmm(0);
   gen_expr(node->rhs);
   println("  movslq %%eax, %%rcx");
-  println("  and $%d, %%ecx", node->kind == ND_VECEXTV2SI ? 1 : 3);
-  println("  movl (%%rsp,%%rcx,4), %%eax");
+  if (node->kind == ND_VECEXTV16QI) {
+    println("  and $15, %%ecx");
+    println("  movzbl (%%rsp,%%rcx), %%eax");
+  } else if (node->kind == ND_VECEXTV8HI) {
+    println("  and $7, %%ecx");
+    println("  movswl (%%rsp,%%rcx,2), %%eax");
+  } else if (node->kind == ND_VECEXTV2DI) {
+    println("  and $1, %%ecx");
+    println("  movq (%%rsp,%%rcx,8), %%rax");
+  } else {
+    println("  and $%d, %%ecx", node->kind == ND_VECEXTV2SI ? 1 : 3);
+    println("  movl (%%rsp,%%rcx,4), %%eax");
+  }
   pop_xmm(0);
+}
+
+static void gen_psubusb256(Node *node) {
+  gen_expr(node->rhs); // B
+  push_ymm(0);
+  gen_expr(node->lhs); // A
+  pop_ymm(1);
+  println("  vpsubusb %%ymm1, %%ymm0, %%ymm0");
 }
 
 static void gen_vec_init_binop(Node *node, const char *insn) {
@@ -2241,7 +2890,7 @@ static void gen_shuf_binop(Node *node, const char *insn) {
   push_xmm(0);
   gen_expr(node->lhs);
   pop_xmm(1);
-  println("  %s $%ld, %%xmm1, %%xmm0", insn, node->rhs->val);
+  println("  %s $%ld, %%xmm1, %%xmm0", insn, (int64_t)node->rhs->val);
 }
 
 static void gen_psll_binop(Node *node, const char *insn) {
@@ -2250,19 +2899,19 @@ static void gen_psll_binop(Node *node, const char *insn) {
   gen_expr(node->rhs);
   pop_xmm(1);
   if (node->rhs->kind == ND_NUM)
-    println("  %s $%ld, %%xmm1", insn, node->rhs->val);
+    println("  %s $%ld, %%xmm1", insn, (int64_t)node->rhs->val);
   else {
     println("  movq %%rax, %%xmm0");
     println("  %s %%xmm0, %%xmm1", insn);
   }
-  println("  movups %%xmm1, %%xmm0");      
+  println("  movaps %%xmm1, %%xmm0");      
 }
 
 
 // Walk node to find a numeric constant. Works for ND_ASSIGN, ND_COMMA, ND_CAST etc.
 static int get_const_int_from_node(Node *node) {
   if (!node)
-    error("%s: %s:%d: error: in get_const_int_from_node : expected constant node", CODEGEN_C, __FILE__, __LINE__);
+    error("%s:%d: error: in get_const_int_from_node : expected constant node", __FILE__, __LINE__);
   while (true) {
     if (node->kind == ND_NUM) return node->val;
     if (node->kind == ND_CAST) { node = node->lhs; continue; }
@@ -2271,7 +2920,7 @@ static int get_const_int_from_node(Node *node) {
     break;
   }
 
-  error_tok(node->tok, "%s: %s:%d: error: in get_const_int_from_node : not a compile-time integer constant", CODEGEN_C, __FILE__, __LINE__);
+  error_tok(node->tok, "%s:%d: error: in get_const_int_from_node : not a compile-time integer constant", __FILE__, __LINE__);
  
 }
 
@@ -2285,7 +2934,7 @@ static Node *unwrap_casts(Node *node) {
 static void get_mask_values(Node *mask_node, int *vals, int expected_len) {
   mask_node = unwrap_casts(mask_node);
   if (!mask_node->var || !mask_node->var->init)
-    error_tok(mask_node->tok, "%s: %s:%d: error: in get_mask_values : shuffle mask must be a constant vector initializer! %d", CODEGEN_C, __FILE__, __LINE__, mask_node->kind);
+    error_tok(mask_node->tok, "%s:%d: error: in get_mask_values : shuffle mask must be a constant vector initializer! %d", __FILE__, __LINE__, mask_node->kind);
 
   Initializer *init = mask_node->var->init;
   int len = mask_node->var->ty->array_len;
@@ -2354,10 +3003,10 @@ static void gen_shuffle(Node *node, const char *insn) {
   assert(node->builtin_nargs == 3);
   // Evaluate args so %xmm0 ends with lhs and %xmm1 ends with rhs as before:
   gen_expr(node->builtin_args[0]);        // leaves a in %xmm0
-  println("  movups %%xmm0, %%xmm2");     // save a in xmm2
+  println("  movaps %%xmm0, %%xmm2");     // save a in xmm2
   gen_expr(node->builtin_args[1]);        // leaves b in %xmm0
-  println("  movups %%xmm0, %%xmm1");     // save b in xmm1
-  println("  movups %%xmm2, %%xmm0");     // restore a into xmm0 (dest)
+  println("  movaps %%xmm0, %%xmm1");     // save b in xmm1
+  println("  movaps %%xmm2, %%xmm0");     // restore a into xmm0 (dest)
   // read the 4 mask values
   int mask[4];
   get_mask_values(node->builtin_args[2], mask, 4);
@@ -2530,7 +3179,7 @@ static void gen_readeflags_u64(Node *node) {
 
 static void gen_writeeflags_u64(Node *node) {
   gen_expr(node->lhs);
-  println("  pushq $%ld", node->lhs->val);
+  println("  pushq $%ld", (int64_t)node->lhs->val);
   println("  popfq");
 }
 
@@ -2575,7 +3224,7 @@ static void gen_wrussq(Node *node) {
 static void gen_clrssbsy(Node *node) {
   gen_expr(node->lhs);
   if (node->lhs->kind == ND_NUM)
-    println("  clrssbsy %ld", node->lhs->val);
+    println("  clrssbsy %ld", (int64_t)node->lhs->val);
   else
     println("  clrssbsy (%%rax)");
 }
@@ -2624,9 +3273,9 @@ static void gen_addcarryx_u32(Node *node) {
   gen_expr(node->builtin_args[3]);
   println("  movq %%rax, %%rcx");    
   println("  movl %%esi, %%eax");
-  println("  movzx %%dil, %%r8d ");
+  println("  movzx %%dil, %%r10d ");
   println("  addl %%edx, %%eax");
-  println("  addl %%r8d, %%eax");
+  println("  addl %%r10d, %%eax");
   println("  setc %%al");
   println("  movl %%eax, (%%rcx)");
 }
@@ -2715,7 +3364,7 @@ static void gen_singleop(Node *node, const char *insn) {
 
 static void gen_mul_overflow(Node *node) {
   int c = count(); 
-  Type *ty = node->lhs->ty;  
+  Type *ty = node->lhs->ty;
   if (ty->base)
     ty = ty->base;
   int size = ty->size;
@@ -2737,7 +3386,7 @@ static void gen_mul_overflow(Node *node) {
       println("  imul %%sil");
     println("  jo .L.overflowm%d", c);
     println("  mov %%al, (%%rcx)");
-    println("  mov $0, %%al");       
+    println("  mov $0, %%eax");
     println("  jmp .L.donem%d", c);   
   } else if (size == 2) {
     // For 16-bit values (short)
@@ -2748,7 +3397,7 @@ static void gen_mul_overflow(Node *node) {
       println("  imul %%si");
     println("  jo .L.overflowm%d", c);
     println("  mov %%ax, (%%rcx)");
-    println("  mov $0, %%ax");       
+    println("  mov $0, %%eax");
     println("  jmp .L.donem%d", c);   
   } else if (size == 4) {
     // For 32-bit values (int)
@@ -2759,7 +3408,7 @@ static void gen_mul_overflow(Node *node) {
       println("  imul %%esi");
     println("  jo .L.overflowm%d", c);  
     println("  mov %%eax, (%%rcx)");   
-    println("  mov $0, %%eax");       
+    println("  mov $0, %%eax");
     println("  jmp .L.donem%d", c);   
   } else if (size == 8) {
     // For 64-bit values (long long)
@@ -2787,48 +3436,208 @@ static void gen_mul_overflow(Node *node) {
 
 static void gen_sub_overflow(Node *node) {
     int c = count(); 
-    Type *ty = node->builtin_dest->ty;  
+    Type *ty = node->builtin_dest->ty;
     if (ty->base)
       ty = ty->base;
+
     gen_expr(node->lhs);
-    if (ty->size == 16) pushx_tmp(); else push_tmp();
+    if (ty->size == 16)
+      pushx_tmp();
+    else
+      push_tmp();
     gen_expr(node->rhs);
-    if (ty->size == 16) pushx_tmp(); else push_tmp();
+    if (ty->size == 16)
+      pushx_tmp();
+    else
+      push_tmp();
     gen_expr(node->builtin_dest);
     push_tmp();
-    pop_tmp("%rdx");  
-    if (ty->size == 16) popx_tmp("%rcx", "%rsi"); else pop_tmp("%rsi");
-    if (ty->size == 16) popx_tmp("%rax", "%rdi"); else pop_tmp("%rdi");
+
+    pop_tmp("%rdx");  // dest ptr
+    if (ty->size == 16)
+      popx_tmp("%rcx", "%rsi"); // rhs low/high
+    else
+      pop_tmp("%rsi");          // rhs
+    if (ty->size == 16)
+      popx_tmp("%rax", "%rdi"); // lhs low/high
+    else
+      pop_tmp("%rdi");          // lhs
 
     if (ty->size == 1) {
-        println("  mov %%dil, %%al");
-        println("  sub %%sil, %%al");
+        // Promote operands to signed 64-bit infinite precision values.
+        // lhs -> %rax
+        if (node->lhs->ty->is_unsigned) {
+          println("  movzbl %%dil, %%eax");
+        } else {
+          println("  movsbl %%dil, %%eax");
+        }
+        println("  movslq %%eax, %%rax");
+
+        // rhs -> %rcx
+        if (node->rhs->ty->is_unsigned) {
+          println("  movzbl %%sil, %%ecx");
+        } else {
+          println("  movsbl %%sil, %%ecx");
+        }
+        println("  movslq %%ecx, %%rcx");
+
+        // wide = lhs - rhs
+        println("  sub %%rcx, %%rax");
+
+        // store truncated result
         println("  mov %%al, (%%rdx)");
+
+        // overflow check vs destination type
+        if (ty->is_unsigned) {
+          // 0..255
+          println("  cmp $0, %%rax");
+          println("  jl .Loverflows%d", c);
+          println("  cmp $255, %%rax");
+          println("  jg .Loverflows%d", c);
+        } else {
+          // -128..127
+          println("  cmp $-128, %%rax");
+          println("  jl .Loverflows%d", c);
+          println("  cmp $127, %%rax");
+          println("  jg .Loverflows%d", c);
+        }
+        println("  mov $0, %%eax");
+        println("  jmp .Lends%d", c);
+        println(".Loverflows%d:", c);
+        println("  mov $1, %%eax");
+        println(".Lends%d:", c);
+        return;
     } else if (ty->size == 2) {
-        println("  mov %%di, %%ax");
-        println("  sub %%si, %%ax");
+        if (node->lhs->ty->is_unsigned) {
+          println("  movzwl %%di, %%eax");
+        } else {
+          println("  movswl %%di, %%eax");
+        }
+        println("  movslq %%eax, %%rax");
+
+        if (node->rhs->ty->is_unsigned) {
+          println("  movzwl %%si, %%ecx");
+        } else {
+          println("  movswl %%si, %%ecx");
+        }
+        println("  movslq %%ecx, %%rcx");
+
+        println("  sub %%rcx, %%rax");
         println("  mov %%ax, (%%rdx)");
+
+        if (ty->is_unsigned) {
+          // 0..65535
+          println("  cmp $0, %%rax");
+          println("  jl .Loverflows%d", c);
+          println("  cmp $65535, %%rax");
+          println("  jg .Loverflows%d", c);
+        } else {
+          // -32768..32767
+          println("  cmp $-32768, %%rax");
+          println("  jl .Loverflows%d", c);
+          println("  cmp $32767, %%rax");
+          println("  jg .Loverflows%d", c);
+        }
+        println("  mov $0, %%eax");
+        println("  jmp .Lends%d", c);
+        println(".Loverflows%d:", c);
+        println("  mov $1, %%eax");
+        println(".Lends%d:", c);
+        return;
     } else if (ty->size == 4) {
+        // lhs -> %rax
         println("  mov %%edi, %%eax");
-        println("  sub %%esi, %%eax");
+        if (!node->lhs->ty->is_unsigned)
+          println("  movslq %%eax, %%rax");
+
+        // rhs -> %rcx
+        println("  mov %%esi, %%ecx");
+        if (!node->rhs->ty->is_unsigned)
+          println("  movslq %%ecx, %%rcx");
+
+        println("  sub %%rcx, %%rax");
         println("  mov %%eax, (%%rdx)");
+
+        if (ty->is_unsigned) {
+          // 0..4294967295
+          println("  cmp $0, %%rax");
+          println("  jl .Loverflows%d", c);
+          println("  mov $4294967295, %%rcx");
+          println("  cmp %%rcx, %%rax");
+          println("  jg .Loverflows%d", c);
+        } else {
+          // -2147483648..2147483647
+          println("  mov $-2147483648, %%rcx");
+          println("  cmp %%rcx, %%rax");
+          println("  jl .Loverflows%d", c);
+          println("  mov $2147483647, %%rcx");
+          println("  cmp %%rcx, %%rax");
+          println("  jg .Loverflows%d", c);
+        }
+        println("  mov $0, %%eax");
+        println("  jmp .Lends%d", c);
+        println(".Loverflows%d:", c);
+        println("  mov $1, %%eax");
+        println(".Lends%d:", c);
+        return;
     } else if (ty->size == 8) {
+        // Use 128-bit arithmetic for 64-bit operands.
+        // Build lhs128 in rax:rcx, rhs128 in rbx:r8 (low:high).
+        // lhs low in %rdi, rhs low in %rsi.
         println("  mov %%rdi, %%rax");
-        println("  sub %%rsi, %%rax");
+        if (node->lhs->ty->is_unsigned) {
+          println("  xor %%rcx, %%rcx");
+        } else {
+          println("  mov %%rdi, %%rcx");
+          println("  sar $63, %%rcx");
+        }
+
+        println("  mov %%rsi, %%rbx");
+        if (node->rhs->ty->is_unsigned) {
+          println("  xor %%r8, %%r8");
+        } else {
+          println("  mov %%rsi, %%r8");
+          println("  sar $63, %%r8");
+        }
+
+        // rax:rcx = lhs, rbx:r8 = rhs
+        println("  sub %%rbx, %%rax");
+        println("  sbb %%r8, %%rcx");
+
+        // Now wide result is in rax:rcx.
+        // Store truncated 64-bit result.
         println("  mov %%rax, (%%rdx)");
-    } else if (ty->size == 16) { // __int128
-        // lhs in rax:rdi (low:high), rhs in rcx:rsi. rdx is result ptr
+
+        if (ty->is_unsigned) {
+          // Unsigned 64-bit destination: overflow iff high 64 bits are not 0.
+          println("  test %%rcx, %%rcx");
+          println("  sete %%al");
+          println("  xor $1, %%al");
+          println("  movzx %%al, %%eax");
+        } else {
+          // Signed 64-bit destination: overflow iff high 64 bits are not
+          // sign-extension of low 64 bits.
+          println("  mov %%rax, %%r8");
+          println("  sar $63, %%r8");        // expected high (-1 or 0)
+          println("  cmp %%r8, %%rcx");
+          println("  sete %%al");
+          println("  xor $1, %%al");
+          println("  movzx %%al, %%eax");
+        }
+
+        return;
+    } else if (ty->size == 16) { // __int128 destination
         println("  sub %%rcx, %%rax");        // sub low
         println("  sbb %%rsi, %%rdi");        // sbb high
-
         println("  mov %%rax, (%%rdx)");      // store result low
         println("  mov %%rdi, 8(%%rdx)");     // store result high
     }
+
     if (ty->is_unsigned)
       println("  setc %%al");
     else
       println("  seto %%al");
-    println("  movzx %%al, %%eax");  
+    println("  movzx %%al, %%eax");
     println("  cmp $0, %%eax");
     println("  jne .Loverflows%d", c);
     println("  mov $0, %%eax");
@@ -2844,8 +3653,8 @@ static void gen_fetchadd(Node *node) {
   push_tmp();
   gen_expr(node->rhs);
   if (node->ty->size == 16) {
-    println("  mov %%rax, %%r8"); // val low
-    println("  mov %%rdx, %%r9"); // val high
+    println("  mov %%rax, %%r10"); // val low
+    println("  mov %%rdx, %%r11"); // val high
     pop_tmp("%rdi"); // addr
 
     println("  mov (%%rdi), %%rax"); // old low
@@ -2853,9 +3662,9 @@ static void gen_fetchadd(Node *node) {
 
     println("1:");
     println("  mov %%rax, %%rbx");
-    println("  add %%r8, %%rbx");
+    println("  add %%r10, %%rbx");
     println("  mov %%rdx, %%rcx");
-    println("  adc %%r9, %%rcx");
+    println("  adc %%r11, %%rcx");
 
     println("  lock cmpxchg16b (%%rdi)");
     println("  jnz 1b");
@@ -2870,8 +3679,8 @@ static void gen_add_fetch(Node *node) {
   push_tmp();
   gen_expr(node->rhs);
   if (node->ty->size == 16) {
-    println("  mov %%rax, %%r8"); // val low
-    println("  mov %%rdx, %%r9"); // val high
+    println("  mov %%rax, %%r10"); // val low
+    println("  mov %%rdx, %%r11"); // val high
     pop_tmp("%rdi"); // addr
 
     println("  mov (%%rdi), %%rax"); // old low
@@ -2879,9 +3688,9 @@ static void gen_add_fetch(Node *node) {
 
     println("1:");
     println("  mov %%rax, %%rbx");
-    println("  add %%r8, %%rbx");
+    println("  add %%r10, %%rbx");
     println("  mov %%rdx, %%rcx");
-    println("  adc %%r9, %%rcx");
+    println("  adc %%r11, %%rcx");
 
     println("  lock cmpxchg16b (%%rdi)");
     println("  jnz 1b");
@@ -2902,8 +3711,8 @@ static void gen_sub_fetch(Node *node) {
   push_tmp();
   gen_expr(node->rhs);  
   if (node->ty->size == 16) {
-    println("  mov %%rax, %%r8"); // val low
-    println("  mov %%rdx, %%r9"); // val high
+    println("  mov %%rax, %%r10"); // val low
+    println("  mov %%rdx, %%r11"); // val high
     pop_tmp("%rdi"); // addr
 
     println("  mov (%%rdi), %%rax"); // old low
@@ -2911,9 +3720,9 @@ static void gen_sub_fetch(Node *node) {
 
     println("1:");
     println("  mov %%rax, %%rbx");
-    println("  sub %%r8, %%rbx");
+    println("  sub %%r10, %%rbx");
     println("  mov %%rdx, %%rcx");
-    println("  sbb %%r9, %%rcx");
+    println("  sbb %%r11, %%rcx");
 
     println("  lock cmpxchg16b (%%rdi)");
     println("  jnz 1b");
@@ -2934,8 +3743,8 @@ static void gen_fetchsub(Node *node) {
   push_tmp();
   gen_expr(node->rhs);
   if (node->ty->size == 16) {
-    println("  mov %%rax, %%r8"); // val low
-    println("  mov %%rdx, %%r9"); // val high
+    println("  mov %%rax, %%r10"); // val low
+    println("  mov %%rdx, %%r11"); // val high
     pop_tmp("%rdi"); // addr
 
     println("  mov (%%rdi), %%rax"); // old low
@@ -2943,9 +3752,9 @@ static void gen_fetchsub(Node *node) {
 
     println("1:");
     println("  mov %%rax, %%rbx");
-    println("  sub %%r8, %%rbx");
+    println("  sub %%r10, %%rbx");
     println("  mov %%rdx, %%rcx");
-    println("  sbb %%r9, %%rcx");
+    println("  sbb %%r11, %%rcx");
 
     println("  lock cmpxchg16b (%%rdi)");
     println("  jnz 1b");
@@ -3238,7 +4047,7 @@ static void gen_movnti(Node *node) {
   push_tmp();
   gen_expr(node->rhs);
   if (node->rhs->kind == ND_NUM)
-    println("  mov $%ld, %%ecx", node->rhs->val);
+    println("  mov $%ld, %%ecx", (int64_t)node->rhs->val);
   else 
     println("  movq (%%rax), %%rcx");
   pop_tmp("%rax");
@@ -3250,7 +4059,7 @@ static void gen_movnti64(Node *node) {
   push_tmp();
   gen_expr(node->rhs);
   if (node->rhs->kind == ND_NUM)
-    println("  mov $%ld, %%rcx", node->rhs->val);
+    println("  mov $%ld, %%rcx", (int64_t)node->rhs->val);
   else 
     println("  movq (%%rax), %%rcx");
   pop_tmp("%rax");
@@ -3390,7 +4199,7 @@ static void gen_sse_binop7(Node *node, const char *insn) {
   gen_expr(node->rhs);
   pop_xmm(1);
   println("  %s %%xmm0, %%xmm1", insn);  
-  println("  movdqa %%xmm1, %%xmm0");  
+  println("  movdqu %%xmm1, %%xmm0");  
 }
 
 static void gen_sse_binop8(Node *node, const char *insn, const char *reg) {
@@ -3424,7 +4233,7 @@ static void gen_sse_binop11(Node *node, const char *insn, const char *reg) {
 
 static void gen_sse_binop12(Node *node, const char *insn) {
   gen_expr(node->lhs); 
-  println("  movups %%xmm0, %%xmm1");   
+  println("  movaps %%xmm0, %%xmm1");   
   println("  %s  %%xmm0, %%xmm1", insn);  
 }
 
@@ -3438,12 +4247,25 @@ static void gen_lddqu(Node *node) {
 static void gen_sse_pblendvb128(Node *node) {
   assert(node->builtin_nargs == 3);  
   gen_expr(node->builtin_args[0]); 
-  println("  movups %%xmm0, %%xmm1"); 
+  println("  movaps %%xmm0, %%xmm1"); 
   gen_expr(node->builtin_args[1]);      
-  println("  movups %%xmm0, %%xmm2"); 
+  println("  movaps %%xmm0, %%xmm2"); 
   gen_expr(node->builtin_args[2]); 
   println("  pblendvb %%xmm2, %%xmm1"); 
-  println("  movups %%xmm1, %%xmm0");
+  println("  movaps %%xmm1, %%xmm0");
+}
+
+static void gen_pblendvb256(Node *node) {
+  assert(node->builtin_nargs == 3);
+  gen_expr(node->builtin_args[2]); // mask -> ymm0
+  push_ymm(0);
+  gen_expr(node->builtin_args[1]); // src2 -> ymm0
+  push_ymm(0);
+  gen_expr(node->builtin_args[0]); // src1 -> ymm0
+  pop_ymm(2); // src2 -> ymm2
+  pop_ymm(1); // mask -> ymm1
+  // GCC: vpblendvb %ymm1, %ymm2, %ymm0, %ymm0
+  println("  vpblendvb %%ymm1, %%ymm2, %%ymm0, %%ymm0");
 }
 
 static void gen_sse_blendvpx(Node *node, const char *insn) {
@@ -3455,9 +4277,162 @@ static void gen_sse_blendvpx(Node *node, const char *insn) {
   gen_expr(node->builtin_args[2]); 
   println("  movups (%%rax), %%xmm0"); 
   println("  %s %%xmm0, %%xmm2, %%xmm1", insn); 
-  println("  movups %%xmm1, %%xmm0");
+  println("  movaps %%xmm1, %%xmm0");
 }
 
+static void gen_pcmpgtb256_mask(Node *node) {
+  assert(node->builtin_nargs == 3);
+  // __builtin_ia32_pcmpgtb256_mask(A, B, U) returns a __mmask32 with:
+  //   result = U & (A > B) (signed compare per-lane)
+  //
+  // We don't require AVX-512 to compute the mask; AVX2 can do it via:
+  //   vpcmpgtb -> 0x00/0xff bytes
+  //   vpmovmskb -> extract MSBs to a 32-bit mask
+  gen_expr(node->builtin_args[2]);
+  push_tmp();
+
+  gen_expr(node->builtin_args[0]);
+  //println("  vmovdqu %%ymm0, %%ymm1");
+  push_ymm(0);
+  gen_expr(node->builtin_args[1]);
+  push_ymm(0);
+  //println("  vmovdqu %%ymm0, %%ymm2");
+  pop_ymm(2);
+  pop_ymm(1);
+  println("  vpcmpgtb %%ymm2, %%ymm1, %%ymm0");
+  println("  vpmovmskb %%ymm0, %%eax");
+  pop_tmp("%rcx");
+  println("  andl %%ecx, %%eax");
+  println("  vzeroupper");
+}
+
+static void gen_pshufb256(Node *node) {
+  gen_expr(node->rhs);
+  //println("  vmovdqu %%ymm0, %%ymm1");
+  push_ymm(0);
+  gen_expr(node->lhs);
+  push_ymm(0);
+  pop_ymm(0);
+  pop_ymm(1);
+  println("  vpshufb %%ymm1, %%ymm0, %%ymm0");
+}
+
+
+static void gen_avx2_256(Node *node, const char *insn) {  
+  gen_expr(node->lhs);
+  int64_t imm_bits = eval(node->rhs);
+  if (imm_bits < 0 || imm_bits > 255 * 8)
+    error_tok(node->tok, "%s:%d: in gen_avx2_256: immediate out of range", __FILE__, __LINE__);
+  
+  if (imm_bits % 8 != 0)
+    error_tok(node->tok, "%s:%d: in gen_avx2_256: immediate must be multiple of 8", __FILE__, __LINE__);
+
+  int64_t imm_bytes = imm_bits / 8;
+  println("  %s $%ld, %%ymm0, %%ymm0", insn, imm_bytes);
+}
+
+static void gen_vinsertf128_si256(Node *node) {
+  assert(node->builtin_nargs == 3);
+  gen_expr(node->builtin_args[0]);   // -> ymm0
+  //println("  vmovdqu %%ymm0, %%ymm1");
+  push_ymm(0);
+  gen_expr(node->builtin_args[1]);   // -> xmm0
+  //println("  vmovdqu %%xmm0, %%xmm2");
+  push_ymm(0);
+  pop_ymm(2);
+  pop_ymm(1);
+  // imm must be constant
+  Node *imm = node->builtin_args[2];
+  int64_t imm8 = eval(imm);
+  if (imm8 < 0 || imm8 > 1)
+    error_tok(imm->tok, "%s:%d: error: vinsertf128 imm must be 0 or 1", __FILE__, __LINE__);
+  int val = imm8 & 1;
+
+  println("  vinsertf128 $%d, %%xmm2, %%ymm1, %%ymm0", val);
+}
+
+static void gen_avx2_permdi256(Node *node) {
+  gen_expr(node->lhs);  
+  println("  vpermq $%ld, %%ymm0, %%ymm0", (int64_t)eval(node->rhs));
+}
+
+static void gen_avx2_psll_binop(Node *node, const char *insn) {
+  gen_expr(node->lhs); // ymm0 = lhs
+  if (node->rhs->kind == ND_NUM) {
+    println("  %s $%ld, %%ymm0, %%ymm0", insn, (int64_t)node->rhs->val);
+  } else {
+    // Shift with non-immediate count takes an xmm for the count.
+    // The count is in the low 64 bits of the xmm.
+    push_vec(node->lhs->ty);
+    gen_expr(node->rhs);
+    println("  movq %%rax, %%xmm1");
+    pop_vec(node->lhs->ty, 0);
+    println("  %s %%xmm1, %%ymm0, %%ymm0", insn);
+  }
+}
+
+static void gen_avx2_palignr256(Node *node) {
+  assert(node->builtin_nargs == 3);
+  gen_expr(node->builtin_args[1]); // B -> ymm0
+  //println("  vmovdqu %%ymm0, %%ymm1"); // ymm1 = B
+  push_ymm(0);
+  gen_expr(node->builtin_args[0]); // A -> ymm0
+  pop_ymm(1);
+  int64_t imm_bytes = eval(node->builtin_args[2]) / 8;
+  println("  vpalignr $%ld, %%ymm1, %%ymm0, %%ymm0", imm_bytes);
+}
+
+static void gen_vperm2i128_si256(Node *node) {
+  assert(node->builtin_nargs == 3);
+  gen_expr(node->builtin_args[1]); // Y -> ymm0
+  //println("  vmovdqu %%ymm0, %%ymm1"); // ymm1 = Y
+  push_ymm(0);
+  gen_expr(node->builtin_args[0]); // X -> ymm0
+  pop_ymm(1);
+  int64_t imm = eval(node->builtin_args[2]);
+  println("  vperm2i128 $%ld, %%ymm1, %%ymm0, %%ymm0", imm);
+}
+
+static void gen_pblendd256(Node *node) {
+  assert(node->builtin_nargs == 3);
+  gen_expr(node->builtin_args[1]); // B -> ymm0
+  //println("  vmovdqu %%ymm0, %%ymm1"); // ymm1 = B
+  push_ymm(0);
+  gen_expr(node->builtin_args[0]); // A -> ymm0
+  pop_ymm(1);
+  int64_t imm = eval(node->builtin_args[2]);
+  println("  vpblendd $%ld, %%ymm1, %%ymm0, %%ymm0", imm);
+}
+
+static void gen_pmulhuw256(Node *node) {
+  gen_expr(node->lhs); // A -> ymm0
+  //println("  vmovdqu %%ymm0, %%ymm1"); // ymm1 = A
+  push_ymm(0);
+  gen_expr(node->rhs); // B -> ymm0
+  pop_ymm(1);
+  println("  vpmulhuw %%ymm0, %%ymm1, %%ymm0"); // ymm0 = (A * B) >> 16
+}
+
+static void gen_andnotsi256(Node *node) {
+  gen_expr(node->lhs); 
+  //println("  vmovdqu %%ymm0, %%ymm1"); // ymm1 = A
+  push_ymm(0);
+  gen_expr(node->rhs); // B -> ymm0
+  pop_ymm(1);
+  println("  vpandn %%ymm0, %%ymm1, %%ymm0");
+}
+
+static void gen_vextractf128_si256(Node *node) {  
+  gen_expr(node->lhs); // Source vector -> ymm0
+  Node *imm_node = node->rhs;
+  int64_t imm = eval(imm_node);
+  if (imm < 0 || imm > 1) error_tok(imm_node->tok, "vextractf128 imm must be 0 or 1");
+  println("  vextractf128 $%ld, %%ymm0, %%xmm0", imm);
+}
+
+static void gen_si256 (Node *node) {
+  gen_expr(node->lhs);
+}
 
 
 static void gen_cvt_mmx_binop(Node *node, const char *insn) {
@@ -3504,7 +4479,7 @@ static void gen_mmx_binop(Node *node, const char *insn, bool rhs_is_imm) {
 
   if (rhs_is_imm) {
     if (node->rhs->kind == ND_NUM) {
-      println("  %s $%ld, %%mm0", insn, node->rhs->val);
+      println("  %s $%ld, %%mm0", insn, (int64_t)node->rhs->val);
     } else {
       gen_expr(node->rhs);
       println("  movq %%rax, %%mm1");
@@ -3570,13 +4545,13 @@ static void gen_cas(Node *node)   {
   if (node->cas_addr->ty->base->size == 16) {
     gen_expr(node->cas_addr);
     push_tmp();
-    if (node->cas_new->ty->kind == TY_LDOUBLE && node->cas_new->kind == ND_VAR) {
+    if (node->cas_new->ty && node->cas_new->ty->kind == TY_LDOUBLE && node->cas_new->kind == ND_VAR) {
         gen_addr(node->cas_new);
         println("  mov 8(%%rax), %%rdx");
         println("  mov (%%rax), %%rax");
     } else {
         gen_expr(node->cas_new);
-        if (node->cas_new->ty->kind == TY_LDOUBLE) {
+        if (node->cas_new->ty && node->cas_new->ty->kind == TY_LDOUBLE) {
              println("  sub $16, %%rsp");
              println("  fstpt (%%rsp)");
              println("  pop %%rax");
@@ -3585,9 +4560,9 @@ static void gen_cas(Node *node)   {
     }
     pushx_tmp();
     gen_expr(node->cas_old);
-    println("  mov %%rax, %%r8");
-    println("  mov (%%r8), %%rax");
-    println("  mov 8(%%r8), %%rdx");
+    println("  mov %%rax, %%r10");
+    println("  mov (%%r10), %%rax");
+    println("  mov 8(%%r10), %%rdx");
     
     popx_tmp("%rbx", "%rcx"); // new -> rcx:rbx
     pop_tmp("%rdi"); // addr
@@ -3595,8 +4570,8 @@ static void gen_cas(Node *node)   {
     println("  lock cmpxchg16b (%%rdi)");
     println("  sete %%cl");
     println("  je 1f");
-    println("  mov %%rax, (%%r8)");
-    println("  mov %%rdx, 8(%%r8)");
+    println("  mov %%rax, (%%r10)");
+    println("  mov %%rdx, 8(%%r10)");
     println("1:");
     println("  movzbl %%cl, %%eax");
     return;
@@ -3607,18 +4582,19 @@ static void gen_cas(Node *node)   {
   gen_expr(node->cas_new);
   push_tmp();
   gen_expr(node->cas_old);
-  println("  mov %%rax, %%r8");
+  println("  mov %%rax, %%r10");
   if (!node->cas_old->ty->base)
-    error("%s %d: in gen_expr : ND_CAS node base type is null!", CODEGEN_C, __LINE__); 
+    error("%s:%d: in gen_cas :node->cas_old base type is null!", __FILE__, __LINE__); 
   load(node->cas_old->ty->base);
   pop_tmp("%rdx"); // new
   pop_tmp("%rdi"); // addr
-
+  if (!node->cas_addr->ty->base)
+    error("%s:%d: in gen_cas : node->cas_addr base type is null!", __FILE__, __LINE__); 
   int sz = node->cas_addr->ty->base->size;
   println("  lock cmpxchg %s, (%%rdi)", reg_dx(sz));
   println("  sete %%cl");
   println("  je 1f");
-  println("  mov %s, (%%r8)", reg_ax(sz));
+  println("  mov %s, (%%r10)", reg_ax(sz));
   println("1:");
   println("  movzbl %%cl, %%eax");
   return;
@@ -3631,7 +4607,7 @@ static void gen_bool_cas(Node *node) {
   if (node->cas_ptr->ty->base->size == 16) {
     pushx_tmp();
     gen_expr(node->cas_desired);
-    if (node->cas_desired->ty->kind == TY_LDOUBLE) {
+    if (node->cas_desired->ty && node->cas_desired->ty->kind == TY_LDOUBLE) {
         println("  sub $16, %%rsp");
         println("  fstpt (%%rsp)");
         println("  pop %%rax");
@@ -3656,6 +4632,8 @@ static void gen_bool_cas(Node *node) {
   pop_tmp("%rax");
   pop_tmp("%rdi");
   int sz = node->cas_ptr->ty->base->size;
+  if (!node->cas_ptr->ty->base)
+    error("%s:%d: in gen_bool_cas : node->cas_ptr base type is null!", __FILE__, __LINE__);   
   println("  lock cmpxchg %s, (%%rdi)", reg_dx(sz)); 
   println("  sete %%al");       
   println("  movzbl %%al, %%eax"); 
@@ -3667,8 +4645,8 @@ static void  gen_add_and_fetch(Node *node) {
   push_tmp();
   gen_expr(node->rhs);
   if (node->lhs->ty->base->size == 16) {
-    println("  mov %%rax, %%r8"); // val low
-    println("  mov %%rdx, %%r9"); // val high
+    println("  mov %%rax, %%r10"); // val low
+    println("  mov %%rdx, %%r11"); // val high
     pop_tmp("%rdi"); // addr
 
     println("  mov (%%rdi), %%rax"); // old low
@@ -3676,9 +4654,9 @@ static void  gen_add_and_fetch(Node *node) {
 
     println("1:");
     println("  mov %%rax, %%rbx");
-    println("  add %%r8, %%rbx");
+    println("  add %%r10, %%rbx");
     println("  mov %%rdx, %%rcx");
-    println("  adc %%r9, %%rcx");
+    println("  adc %%r11, %%rcx");
 
     println("  lock cmpxchg16b (%%rdi)");
     println("  jnz 1b");
@@ -3700,8 +4678,8 @@ static void gen_sub_and_fetch(Node *node) {
   push_tmp();
   gen_expr(node->rhs);    
   if (node->ty->size == 16) {
-    println("  mov %%rax, %%r8"); // val low
-    println("  mov %%rdx, %%r9"); // val high
+    println("  mov %%rax, %%r10"); // val low
+    println("  mov %%rdx, %%r11"); // val high
     pop_tmp("%rdi"); // addr
 
     println("  mov (%%rdi), %%rax"); // old low
@@ -3709,9 +4687,9 @@ static void gen_sub_and_fetch(Node *node) {
 
     println("1:");
     println("  mov %%rax, %%rbx");
-    println("  sub %%r8, %%rbx");
+    println("  sub %%r10, %%rbx");
     println("  mov %%rdx, %%rcx");
-    println("  sbb %%r9, %%rcx");
+    println("  sbb %%r11, %%rcx");
 
     println("  lock cmpxchg16b (%%rdi)");
     println("  jnz 1b");
@@ -3766,8 +4744,8 @@ static void gen_fetchnand(Node *node) {
     gen_expr(node->rhs);  
     
     if (node->lhs->ty->base->size == 16) {
-        println("  mov %%rax, %%r8"); // val low
-        println("  mov %%rdx, %%r9"); // val high
+        println("  mov %%rax, %%r10"); // val low
+        println("  mov %%rdx, %%r11"); // val high
         pop_tmp("%rdi"); // addr
 
         println("  mov (%%rdi), %%rax"); // old low
@@ -3777,8 +4755,8 @@ static void gen_fetchnand(Node *node) {
         println("  mov %%rax, %%rbx");
         println("  mov %%rdx, %%rcx");
         
-        println("  and %%r8, %%rbx");
-        println("  and %%r9, %%rcx");
+        println("  and %%r10, %%rbx");
+        println("  and %%r11, %%rcx");
         println("  not %%rbx");
         println("  not %%rcx");
 
@@ -3800,7 +4778,7 @@ static void gen_fetchnand(Node *node) {
         case 2: println("  movzwl (%%rdi), %%rax"); break;
         case 4: println("  movl (%%rdi), %%eax");   break;
         case 8: println("  movq (%%rdi), %%rax");   break;
-        default: error("%s %d: in gen_fetchnand : unsupported size %d!", CODEGEN_C, __LINE__, sz); 
+        default: error("%s:%d: in gen_fetchnand : unsupported size %d!", __FILE__, __LINE__, sz); 
     }
     int label = count();
     println(".L.fetchnand_loop_%d:", label);
@@ -3821,16 +4799,16 @@ static void gen_cas_n(Node *node)   {
   gen_expr(node->cas_addr);
   push_tmp();
   gen_expr(node->cas_new);  
-  if (node->cas_new->ty->kind == TY_LDOUBLE) {
+  if (node->cas_new->ty && node->cas_new->ty->kind == TY_LDOUBLE) {
       println("  sub $16, %%rsp");
       println("  fstpt (%%rsp)");
       println("  pop %%rax");
       println("  pop %%rdx");
   }
-  if (node->cas_addr->ty->base->size == 16) {
+  if (node->cas_addr->ty && node->cas_addr->ty->base && node->cas_addr->ty->base->size == 16) {
     pushx_tmp();
     gen_expr(node->cas_old);
-    if (node->cas_old->ty->kind == TY_LDOUBLE) {
+    if (node->cas_old->ty && node->cas_old->ty->kind == TY_LDOUBLE) {
         println("  sub $16, %%rsp");
         println("  fstpt (%%rsp)");
         println("  pop %%rax");
@@ -3852,6 +4830,8 @@ static void gen_cas_n(Node *node)   {
   pop_tmp("%rdx"); /* new */
   pop_tmp("%rdi"); /* addr */
   int sz = node->cas_addr->ty->base->size;
+  if (!node->cas_addr->ty->base)
+    error("%s:%d: in gen_cas_n : node->cas_addr base type is null!", __FILE__, __LINE__);   
 
   println("  lock cmpxchg %s, (%%rdi)", reg_dx(sz));
 
@@ -3895,14 +4875,30 @@ static void gen_cvt_binop(Node *node, const char *insn) {
   }
 }
 
+static void gen_atomic_is_lock_free(Node *node) {
+  gen_expr(node->lhs);
+  int label = count();
+  println("  cmp $0, %%rax");
+  println("  jle .L.not_lock_free.%d", label);
+  println("  cmp $8, %%rax");
+  println("  jle .L.lock_free.%d", label);
+  println(".L.not_lock_free.%d:", label);
+  println("  mov $0, %%rax");
+  println("  jmp .L.lock_free_done.%d", label);
+  println(".L.lock_free.%d:", label);
+  println("  mov $1, %%rax");
+  println(".L.lock_free_done.%d:", label);
+}
+
 // Generate code for a given node.
 static void gen_expr(Node *node)
 {
   if (!node)
-    error("%s: %s:%d: error: in gen_expr : node is null!", CODEGEN_C, __FILE__, __LINE__);
-  if (node->tok && node->tok->line_no != last_loc_line) {
-  println("  .loc %d %u", node->tok->file->file_no, node->tok->line_no);
-      last_loc_line = node->tok->line_no;
+    error("%s:%d: error: in gen_expr : node is null!", __FILE__, __LINE__);
+  if (node->tok && (node->tok->line_no != last_loc_line || node->tok->file->file_no != last_loc_file)) {
+    println("  .loc %d %u", node->tok->file->file_no, node->tok->line_no);
+    last_loc_line = node->tok->line_no;
+    last_loc_file = node->tok->file->file_no;
   }
 
   switch (node->kind)
@@ -3954,7 +4950,7 @@ static void gen_expr(Node *node)
 
     }
 
-    println("  mov $%ld, %%rax", node->val);
+    println("  mov $%ld, %%rax", (int64_t)node->val);
     return;
   }
   case ND_POS:
@@ -4003,7 +4999,7 @@ static void gen_expr(Node *node)
   {
     gen_addr(node);
     if (!node->ty)
-      error("%s %d: in gen_expr : ND_MEMBER node type is null!", CODEGEN_C, __LINE__);  
+      error("%s:%d: in gen_expr : ND_MEMBER node type is null!", __FILE__, __LINE__);  
     load(node->ty);
 
     Member *mem = node->member;
@@ -4026,7 +5022,7 @@ static void gen_expr(Node *node)
   case ND_DEREF:    
     gen_expr(node->lhs);
     if (!node->ty)
-      error("%s %d: in gen_expr : ND_DEREF node type is null!", CODEGEN_C, __LINE__); 
+      error("%s:%d: in gen_expr : ND_DEREF node type is null!", __FILE__, __LINE__); 
     load(node->ty);
     return;
   case ND_ADDR:
@@ -4037,7 +5033,7 @@ static void gen_expr(Node *node)
     // This avoids keeping the address on stack while evaluating RHS (which might involve calls).
     if (!is_bitfield(node->lhs) && 
         !is_int128(node->ty) && 
-        !is_vector(node->ty) &&
+        !is_vector(node->ty) && node->ty &&
         node->ty->kind != TY_STRUCT && node->ty->kind != TY_UNION &&
         node->ty->kind != TY_FLOAT && node->ty->kind != TY_DOUBLE && node->ty->kind != TY_LDOUBLE) 
     {
@@ -4058,10 +5054,15 @@ static void gen_expr(Node *node)
     gen_expr(node->rhs);
     if (node->lhs->kind == ND_MEMBER && node->lhs->member->is_bitfield)
     {
-      println("  mov %%rax, %%r8");
+      println("  mov %%rax, %%r10");
       Member *mem = node->lhs->member;
       println("  mov %%rax, %%rdi");
-      if (mem->bit_width >= 32)
+      if (mem->bit_width >= 64)
+      {
+        println("  mov $-1, %%rax");
+        println("  and %%rax, %%rdi");
+      }
+      else if (mem->bit_width >= 32)
       {
         println("  mov $%ld, %%rax", (1L << mem->bit_width) - 1);
         println("  and %%rax, %%rdi");
@@ -4080,37 +5081,72 @@ static void gen_expr(Node *node)
 
         
       long mask = ((1L << mem->bit_width) - 1) << mem->bit_offset;
-      println("  mov $%ld, %%r9", ~mask);
-      println("  and %%r9, %%rax");
+      println("  mov $%ld, %%r11", ~mask);
+      println("  and %%r11, %%rax");
       println("  or %%rdi, %%rax");
       store(node->ty);
-      println("  mov %%r8, %%rax");
+      println("  mov %%r10, %%rax");
       if (mem->ty->kind == TY_BOOL)
         return;
 
-      long mask2 = (1L << mem->bit_width) - 1;
-      println("  mov $%ld, %%r9", mask2);
-      println("  and %%r9, %%rax");       
-      int shift = 64 - mem->bit_width - mem->bit_offset;
-      println("  shl $%d, %%rax", shift);
-      println("  sar $%d, %%rax", shift);
+      if (mem->bit_width < 64) {
+        long mask2 = (1L << mem->bit_width) - 1;
+        println("  mov $%ld, %%r11", mask2);
+        println("  and %%r11, %%rax");
+
+        // Assignment to a bitfield yields the stored field value.
+        // Normalize by field width only (independent of storage bit offset).
+        if (!mem->ty->is_unsigned) {
+          int shift = 64 - mem->bit_width;
+          println("  shl $%d, %%rax", shift);
+          println("  sar $%d, %%rax", shift);
+        }
+      }
 
       return;
     }
     store(node->ty);
+
+    // Keep assignment-expression results canonical for narrow integer types.
+    // The value in %rax may still carry wider intermediate bits even though
+    // only 1/2 bytes were stored to memory.
+    if (is_integer(node->ty)) {
+      if (node->ty->kind == TY_BOOL) {
+        println("  movzbl %%al, %%eax");
+      } else if (node->ty->size == 1) {
+        if (node->ty->is_unsigned)
+          println("  movzbl %%al, %%eax");
+        else
+          println("  movsbl %%al, %%eax");
+      } else if (node->ty->size == 2) {
+        if (node->ty->is_unsigned)
+          println("  movzwl %%ax, %%eax");
+        else
+          println("  movswl %%ax, %%eax");
+      }
+    }
     return;
   case ND_STMT_EXPR:
     for (Node *n = node->body; n; n = n->next)
-      gen_stmt(n);
+    {
+      if (n->next)
+        gen_stmt(n);
+      else if (n->kind == ND_EXPR_STMT)
+        gen_expr(n->lhs);
+      else
+        gen_stmt(n);
+    }
     return;
   case ND_COMMA:
     gen_expr(node->lhs);
+    if (node->lhs->ty && node->lhs->ty->kind == TY_LDOUBLE)
+      println("  fstp %%st(0)");
     gen_expr(node->rhs);
     return;
   case ND_CAST:
     gen_expr(node->lhs);    
     if (!node->ty)   
-      error("%s %d: in gen_expr : ND_CAST node type is null!", CODEGEN_C, __LINE__); 
+      error("%s:%d: in gen_expr : ND_CAST node type is null!", __FILE__, __LINE__); 
     cast(node->lhs->ty, node->ty);
     return;
   case ND_MEMZERO:
@@ -4118,6 +5154,12 @@ static void gen_expr(Node *node)
     return;
   case ND_COND:
   {
+    if (is_const_expr(node->cond)) {
+      Node *n = eval(node->cond) ? node->then : node->els;
+      if (n)
+        gen_expr(n);
+      return;
+    }
     int c = count();
     gen_expr(node->cond);
     cmp_zero(node->cond->ty);
@@ -4197,7 +5239,7 @@ static void gen_expr(Node *node)
   }
   case ND_FUNCALL:
   {
-    if (node->lhs->kind == ND_VAR && (!strcmp(node->lhs->var->name, "alloca") ||  !strcmp(node->lhs->var->name, "__builtin_alloca")))
+    if (node->lhs->kind == ND_VAR && (!strcmp(sym(node->lhs->var), "alloca") ||  !strcmp(sym(node->lhs->var), "__builtin_alloca")))
     {
       gen_expr(node->args);
       println("  mov %%rax, %%rdi");
@@ -4220,7 +5262,7 @@ static void gen_expr(Node *node)
     {
       Type *ty = arg->ty;
       if (!ty)
-        error("%s %d: in gen_expr : type is null!", CODEGEN_C, __LINE__);  
+        error("%s:%d: in gen_expr : type is null!", __FILE__, __LINE__);  
 
       switch (ty->kind)
       {
@@ -4245,7 +5287,7 @@ static void gen_expr(Node *node)
         break;
       case TY_VECTOR:
         if (fp < FP_MAX)
-          popv(fp++);
+          pop_vec(ty, fp++);
         break;      
       case TY_FLOAT:
       case TY_DOUBLE:
@@ -4279,9 +5321,9 @@ static void gen_expr(Node *node)
     if (node->is_tail && opt_optimize_level3) {
         char *funcname = NULL;
         if (node->lhs->kind == ND_VAR && node->lhs->var->is_function)
-            funcname = node->lhs->var->name;
+            funcname = sym(node->lhs->var);
 
-        if (funcname && strcmp(funcname, current_fn->name) == 0) {
+        if (funcname && strcmp(funcname, sym(current_fn)) == 0) {
             // Recursive tail call optimization
             Node *arg = node->args;
             Obj *param = current_fn->params;
@@ -4315,7 +5357,7 @@ static void gen_expr(Node *node)
             }
 
             depth -= stack_args;
-            println("  jmp .L.body.%s", current_fn->name);
+            println("  jmp .L.body.%s", sym(current_fn));
             return;
         }
 
@@ -4378,6 +5420,7 @@ static void gen_expr(Node *node)
     return;
   case ND_CAS: gen_cas(node); return;
   case ND_CAS_N: gen_cas_n(node); return;
+  case ND_ATOMIC_IS_LOCK_FREE: gen_atomic_is_lock_free(node); return;
   case ND_FETCHNAND:
   case ND_NANDFETCH: gen_fetchnand(node); return;
   case ND_ADD_AND_FETCH: gen_add_and_fetch(node); return;
@@ -4441,7 +5484,9 @@ static void gen_expr(Node *node)
     
     println("  cmp $0, %%rax");
     println("  je .Lframe_address_%d", c);
-    println("  mov %s, %%rcx", lvar_ptr);
+    // Frame-chain builtins must walk canonical frame pointers (%rbp),
+    // not lvar_ptr (which may be %rbx when stack is realigned).
+    println("  mov %%rbp, %%rcx");
 
 
     println(".Lframe_address_loop%d:", c);
@@ -4458,7 +5503,7 @@ static void gen_expr(Node *node)
   println("  jmp .Lframe_address_return%d", c);
 
     println(".Lframe_address_%d:", c);
-    println("  mov %s, %%rax", lvar_ptr);  // level 0: return current frame
+    println("  mov %%rbp, %%rax");  // level 0: return current frame
   println("  jmp .Lframe_address_return%d", c);
 
   println(".Lframe_address_null%d:", c);
@@ -4485,7 +5530,8 @@ static void gen_expr(Node *node)
   }
   case ND_RETURN_ADDR: {
 
-    println("  mov %s, %%rax", lvar_ptr);
+    // Return-address builtin is also anchored on canonical frame pointer.
+    println("  mov %%rbp, %%rax");
     int tmpdepth = eval(node->lhs);
     
     for (int i = 0; i < tmpdepth; i++) {
@@ -4552,8 +5598,12 @@ static void gen_expr(Node *node)
     gen_expr(node->lhs);
     push_tmp();
     gen_expr(node->rhs);    
+    if (node->ty && node->ty->kind == TY_FLOAT)
+        println("  movd %%xmm0, %%eax");
+    else if (node->ty->kind == TY_DOUBLE)
+        println("  movq %%xmm0, %%rax");
     if (node->ty->size == 16) {
-      if (node->rhs->ty->kind == TY_LDOUBLE) {
+      if (node->rhs->ty && node->rhs->ty->kind == TY_LDOUBLE) {
           println("  sub $16, %%rsp");
           println("  fstpt (%%rsp)");
           println("  pop %%rax");
@@ -4571,6 +5621,10 @@ static void gen_expr(Node *node)
     }
     pop_tmp("%rdi");
     println("  xchg %s, (%%rdi)", reg_ax(node->ty->size));
+    if (node->ty->kind == TY_FLOAT)
+         println("  movd %%eax, %%xmm0");
+    else if (node->ty->kind == TY_DOUBLE)
+         println("  movq %%rax, %%xmm0");
     return;
   }
   case ND_CMPEXCH: gen_cmpxchg(node); return;
@@ -4621,6 +5675,10 @@ static void gen_expr(Node *node)
       println("  mov (%%rax), %%rax");
     } else {
       println(" mov (%%rax), %s", reg_ax(node->ty->size));
+      if (node->ty->kind == TY_FLOAT)
+         println("  movd %%eax, %%xmm0");
+      else if (node->ty->kind == TY_DOUBLE)
+         println("  movq %%rax, %%xmm0");
     }
     if (node->memorder) {
         println("  mfence");
@@ -4653,8 +5711,12 @@ static void gen_expr(Node *node)
     gen_expr(node->lhs);
     push_tmp();
     gen_expr(node->rhs);    
-    if (node->ty->size == 16) {
-      if (node->rhs->ty->kind == TY_LDOUBLE) {
+    if (node->ty && node->ty->kind == TY_FLOAT)
+        println("  movd %%xmm0, %%eax");
+    else if (node->ty && node->ty->kind == TY_DOUBLE)
+        println("  movq %%xmm0, %%rax");
+    if (node->ty && node->ty->size == 16) {
+      if (node->rhs->ty && node->rhs->ty->kind == TY_LDOUBLE) {
           println("  sub $16, %%rsp");
           println("  fstpt (%%rsp)");
           println("  pop %%rax");
@@ -4765,7 +5827,10 @@ static void gen_expr(Node *node)
   case ND_MOVMSKPS: gen_sse_binop2(node, "movmskps", "eax", false);  return;   
   case ND_CLFLUSH: gen_single_addr_binop(node, "clflush"); return;
   case ND_VECINITV2SI: gen_vec_init_v2si(node); return;
-  case ND_VECEXTV2SI: gen_vec_ext(node); return;
+  case ND_VECEXTV16QI:
+  case ND_VECEXTV8HI: 
+  case ND_VECEXTV2SI:
+   case ND_VECEXTV2DI: 
   case ND_VECEXTV4SI: gen_vec_ext(node); return;
   case ND_PACKSSWB:   gen_mmx_binop(node, "packsswb", false); return;
   case ND_PACKSSDW:   gen_mmx_binop(node, "packssdw", false); return;
@@ -4891,7 +5956,7 @@ static void gen_expr(Node *node)
   case ND_PAVGW: gen_mmx_binop(node, "pavgw", false);  return;      
   case ND_PSADBW: gen_mmx_binop(node, "psadbw", false);  return;   
   case ND_MOVNTQ: gen_sse_binop10(node, "movnti", "rax"); return;   
-  case ND_MOVNTPS: gen_sse_binop10(node, "movups", "xmm0"); return;
+  case ND_MOVNTPS: gen_sse_binop10(node, "movaps", "xmm0"); return;
   case ND_ADDSD: gen_sse_binop3(node, "addsd", false);  return;    
   case ND_SUBSD: gen_sse_binop3(node, "subsd", false);  return;  
   case ND_MULSD: gen_sse_binop3(node, "mulsd", false);  return;    
@@ -5057,8 +6122,9 @@ static void gen_expr(Node *node)
   case ND_PABSD: gen_mmx_binop1(node, "pabsd"); return;
   case ND_PTESTZ128: gen_sse_testz(node); return;
   case ND_PTESTC128: gen_sse_testc(node); return;
-  case ND_PTESTNZC128: gen_sse_testnzc(node); return;
+  case ND_PTESTNZC128: gen_sse_testnzc(node); return;  
   case ND_PBLENDVB128: gen_sse_pblendvb128(node); return;
+  case ND_PBLENDVB256: gen_pblendvb256(node); return;
   case ND_BLENDVPS: gen_sse_blendvpx(node, "blendvps"); return;
   case ND_BLENDVPD: gen_sse_blendvpx(node, "blendvpd"); return;
   case ND_PMINSB128: gen_sse_binop3(node, "pminsb", false); return; 
@@ -5144,6 +6210,29 @@ static void gen_expr(Node *node)
   case ND_SIGNBIT:
   case ND_SIGNBITF:
   case ND_SIGNBITL: gen_signbit(node); return;
+  case ND_PSUBUSB256: gen_psubusb256(node); return;
+  case ND_PCMPGTB256_MASK: gen_pcmpgtb256_mask(node); return;
+  case ND_PSHUFB256: gen_pshufb256(node); return;
+  case ND_PSRLDQI256: gen_avx2_256(node, "vpsrldq"); return;
+  case ND_PSLLDQI256: gen_avx2_256(node, "vpslldq"); return;
+  case ND_VINSERTF128_SI256: gen_vinsertf128_si256(node); return;
+  case ND_SI256_SI: gen_si256(node); return;  
+  case ND_SI_SI256: gen_si256(node); return;  
+  case ND_PD256_PD: gen_si256(node); return;
+  case ND_PS256_PS: gen_si256(node); return;
+  case ND_PALIGNR256: gen_avx2_palignr256(node); return;
+  case ND_VPERM2I128_SI256: gen_vperm2i128_si256(node); return;
+  case ND_PSRLQI256: gen_avx2_psll_binop(node, "vpsrlq"); return;
+  case ND_PSLLQI256: gen_avx2_psll_binop(node, "vpsllq"); return;
+  case ND_PBLENDD256: gen_pblendd256(node); return;
+  case ND_VEXTRACTF128_SI256: gen_vextractf128_si256(node); return;
+  case ND_PERMDI256: gen_avx2_permdi256(node); return;
+  case ND_ANDNOTSI256: gen_andnotsi256(node); return;
+  case ND_PMULHUW256: gen_pmulhuw256(node); return;
+  case ND_PSLLDI256: gen_avx2_psll_binop(node, "vpslld"); return;
+  case ND_PSRLDI256: gen_avx2_psll_binop(node, "vpsrld"); return;
+  case ND_PSRADI256: gen_avx2_psll_binop(node, "vpsrad"); return;
+  
 }
   
 if (node->lhs && (is_vector(node->lhs->ty) || (node->rhs && is_vector(node->rhs->ty)))) {
@@ -5214,12 +6303,14 @@ switch (node->lhs->ty->kind)
       return;
     }
 
-    error_tok(node->tok, "%s invalid expression", CODEGEN_C);
+    error_tok(node->tok, "%s invalid expression", __FILE__);
   }
   case TY_LDOUBLE:
   {
     gen_expr(node->lhs);
+    pushld();
     gen_expr(node->rhs);
+    popld();
 
     switch (node->kind)
     {
@@ -5227,13 +6318,13 @@ switch (node->lhs->ty->kind)
       println("  faddp");
       return;
     case ND_SUB:
-      println("  fsubrp");
+      println("  fsubp");
       return;
     case ND_MUL:
       println("  fmulp");
       return;
     case ND_DIV:
-      println("  fdivrp");
+      println("  fdivp");
       return;
     case ND_EQ:
     case ND_NE:
@@ -5250,10 +6341,14 @@ switch (node->lhs->ty->kind)
         println("  setne %%al");
         println("  setp %%dl");
         println("  or %%dl, %%al");
-      } else if (node->kind == ND_LT) {
-        println("  seta %%al");
+      } else if (node->kind == ND_LT) {        
+        println("  setb %%al");
+        println("  setnp %%dl");
+        println("  and %%dl, %%al");
       } else {
-        println("  setae %%al");
+        println("  setbe %%al");
+        println("  setnp %%dl");
+        println("  and %%dl, %%al");   
       }
 
       println("  movzbl %%al, %%eax");
@@ -5261,7 +6356,7 @@ switch (node->lhs->ty->kind)
     }
 
 
-    error_tok(node->tok, "%s invalid expression", CODEGEN_C);
+    error_tok(node->tok, "%s invalid expression", __FILE__);
   }
   }
 
@@ -5302,7 +6397,12 @@ switch (node->lhs->ty->kind)
     println("  sub %s, %s", di, ax);
     return;
   case ND_MUL:
-    println("  imul %s, %s", di, ax);
+    //println("  imul %s, %s", di, ax);
+    if (node->lhs->ty->is_unsigned && node->rhs->ty->is_unsigned) {
+      println("  mul %s", di);
+    } else {      
+      println("  imul %s, %s", di, ax);
+    }
     return;
   case ND_DIV:
   case ND_MOD:
@@ -5366,37 +6466,70 @@ switch (node->lhs->ty->kind)
   case ND_SHL:
     println("  mov %%rdi, %%rcx");
     println("  shl %%cl, %s", ax);
+    println("  xor %%r11, %%r11");
+    println("  cmp $%d, %%ecx", (int)node->ty->size * 8);
+    println("  cmovge %s, %s", (node->ty->size == 8) ? "%r11" : "%r11d", ax);
     return;
   case ND_SHR:
     println("  mov %%rdi, %%rcx");
-    if (node->lhs->ty->is_unsigned)
+    if (node->ty->is_unsigned) {
       println("  shr %%cl, %s", ax);
-    else
+      println("  xor %%r11, %%r11");
+      println("  cmp $%d, %%ecx", (int)node->ty->size * 8);
+      println("  cmovge %s, %s", (node->ty->size == 8) ? "%r11" : "%r11d", ax);
+    } else {
       println("  sar %%cl, %s", ax);
+      int c = count();
+      println("  cmp $%d, %%ecx", (int)node->ty->size * 8);
+      println("  jl .L.shift_done.%d", c);
+      if (node->ty->size == 8) {
+        println("  sar $63, %%rax");
+      } else {
+        println("  sar $31, %%eax");
+        println("  movsxd %%eax, %%rax");
+      }
+      println(".L.shift_done.%d:", c);
+    }
     return;
   }
 
-  error_tok(node->tok, "%s invalid expression", CODEGEN_C);
+  error_tok(node->tok, "%s invalid expression", __FILE__);
 }
 
 static void gen_stmt(Node *node)
 {
   if (!node)
-    error("%s: %s:%d: error: in gen_stmt : node is null!", CODEGEN_C, __FILE__, __LINE__);
-  if (node->tok && node->tok->line_no != last_loc_line) {
-  println("  .loc %d %u", node->tok->file->file_no, node->tok->line_no);
-        last_loc_line = node->tok->line_no;
+    error("%s:%d: error: in gen_stmt : node is null!", __FILE__, __LINE__);
+  if (node->tok && (node->tok->line_no != last_loc_line || node->tok->file->file_no != last_loc_file)) {
+    println("  .loc %d %u", node->tok->file->file_no, node->tok->line_no);
+    last_loc_line = node->tok->line_no;
+    last_loc_file = node->tok->file->file_no;
   }
 
   switch (node->kind)
   {
   case ND_IF:
   {
+    if (is_const_expr(node->cond)) {
+      if (eval(node->cond)) {
+        if (!contains_label(node->els)) {
+          if (node->then)
+            gen_stmt(node->then);
+          return;
+        }
+      } else {
+        if (!contains_label(node->then)) {
+          if (node->els)
+            gen_stmt(node->els);
+          return;
+        }
+      }
+    }
     int c = count();
     gen_expr(node->cond);
     cmp_zero(node->cond->ty);
     println("  je  .L.else.%d", c);
-    gen_stmt(node->then);
+    if (node->then) gen_stmt(node->then);
     println("  jmp .L.end.%d", c);
     println(".L.else.%d:", c);
     if (node->els)
@@ -5406,6 +6539,13 @@ static void gen_stmt(Node *node)
   }
   case ND_FOR:
   {
+    if (node->cond && is_const_expr(node->cond) && !eval(node->cond)) {
+      if (!contains_label(node->then)) {
+        if (node->init)
+          gen_stmt(node->init);
+        return;
+      }
+    }
     int c = count();
     if (node->init)
       gen_stmt(node->init);
@@ -5515,17 +6655,21 @@ static void gen_stmt(Node *node)
       }
     }
 
-    println("  jmp .L.return.%s", current_fn->name);
+    println("  jmp .L.return.%s", sym(current_fn));
     return;
   case ND_EXPR_STMT:
     gen_expr(node->lhs);
+    if (node->lhs->ty && node->lhs->ty->kind == TY_LDOUBLE)
+      println("  fstp %%st(0)");
+    return;
+  case ND_NULL_EXPR:
     return;
   case ND_ASM:
     println("  %s", node->asm_str);
     return;
   }
 
-  error_tok(node->tok, "%s invalid statement", CODEGEN_C);
+  error_tok(node->tok, "%s invalid statement", __FILE__);
 }
 
 
@@ -5533,22 +6677,16 @@ static void emit_data(Obj *prog)
 {
   for (Obj *var = prog; var; var = var->next)
   {
-    //issue 35 about array not initialized completely.
     if (var->ty->size != 0)
       println("  .zero %ld", labs(var->ty->size));
     if (var->alias_name)
-      println("  .set \"%s\", %s", var->name, var->alias_name);
+      println("  .set %s, %s", sym(var), var->alias_name);
     if (var->is_weak)
-      println("  .weak \"%s\"", var->name);
+      println("  .weak %s", sym(var));
+
     if (var->is_function || !var->is_definition)
       continue;
     print_visibility(var);
-    // if (var->is_static)
-    //   println("  .local %s", var->name);
-    // else if (var->ty->is_weak)
-    //   println("  .weak \"%s\"", var->name);
-    // else
-    //   println("  .globl %s", var->name);
 
     int align = (var->ty->kind == TY_ARRAY && var->ty->size >= 16)
                     ? MAX(16, var->align)
@@ -5557,10 +6695,12 @@ static void emit_data(Obj *prog)
     // Common symbol
     if (opt_fcommon && var->is_tentative && !var->is_tls && !var->section && !var->is_static)
     {
+      if (var->ty->kind == TY_FUNC)
+         continue;
       //from @fuhsnn incomplete array assuming to have one element
       if (var->ty->kind == TY_ARRAY && var->ty->size < 0)
         var->ty->size = var->ty->base->size;
-      println("  .comm %s, %ld, %d", var->name, var->ty->size, align);
+      println("  .comm %s, %ld, %d", sym(var), var->ty->size, align);
       continue;
     }
     
@@ -5578,10 +6718,10 @@ static void emit_data(Obj *prog)
         println("  .section .data,\"aw\",@progbits");
 
             
-      println("  .type %s, @object", var->name);
-      println("  .size %s, %ld", var->name, labs(var->ty->size));
+      println("  .type %s, @object", sym(var));
+      println("  .size %s, %ld", sym(var), labs(var->ty->size));
       if (align > 1) println("  .align %d", align);
-      println("%s:", var->name);
+      println("%s:", sym(var));
 
 
       Relocation *rel = var->rel;
@@ -5593,11 +6733,15 @@ static void emit_data(Obj *prog)
         {
           if (var->is_function) {
             println("  .long %s - . + %ld", *rel->label, rel->addend);
+            pos += 4;
           } else if (!var->is_extern) {
             println("  .quad %s%+ld", *rel->label, rel->addend);
+            pos += 8;
+          } else {
+             // Fallback for unexpected case
+             pos += 8;
           }
           rel = rel->next;
-          pos += 8;
         }
         else
         {
@@ -5626,7 +6770,7 @@ static void emit_data(Obj *prog)
       }
 
 
-      println("  .size %s, %ld", var->name, var->ty->size);
+      println("  .size %s, %ld", sym(var), var->ty->size);
       continue;
     }
 
@@ -5639,7 +6783,7 @@ static void emit_data(Obj *prog)
       println("  .section .bss,\"aw\",@nobits");
 
     if (align > 1) println("  .align %d", align);
-    println("%s:", var->name);
+    println("%s:", sym(var));
     if (var->ty->size != 0)
       println("  .zero %ld", labs(var->ty->size));
   }
@@ -5662,7 +6806,11 @@ static void store_fp(int r, int offset, int sz, char *ptr)
     println("  movsd %%xmm%d, %d(%s)", r, offset, ptr);
     return;
   case 16:
-    println("  movups %%xmm%d, %d(%s)", r, offset, ptr); // movaps for 16-byte (128-bit) vector
+    println("  movups %%xmm%d, %d(%s)", r, offset, ptr); 
+    return;
+  case 32:
+    // 256-bit vector arguments/returns use YMM registers in the SysV ABI.
+    println("  vmovdqu %%ymm%d, %d(%s)", r, offset, ptr);
     return;
   }
   
@@ -5725,7 +6873,7 @@ static void emit_text(Obj *prog)
         priority = 65535;
 
       CtorFunc *f = calloc(1, sizeof(CtorFunc));
-      f->name = fn->name;
+      f->name = sym(fn);
       f->priority = priority;
       constructors[constructor_cnt++] = f;
     }
@@ -5739,7 +6887,7 @@ static void emit_text(Obj *prog)
         priority = 65535;
 
       CtorFunc *f = calloc(1, sizeof(CtorFunc));
-      f->name = fn->name;
+      f->name = sym(fn);
       f->priority = priority;
       destructors[destructor_cnt++] = f;
     }
@@ -5750,13 +6898,6 @@ static void emit_text(Obj *prog)
   println(".L.text_start:");
   for (Obj *fn = prog; fn; fn = fn->next)
   {
-    // Emit alias if fn->alias_name is set
-    if (fn->alias_name) {
-      // Handle weak alias
-      println("  .weak %s", fn->name);                 // Mark the function as weak
-      println("  .set %s, %s", fn->name, fn->alias_name);  // Define alias
-    }
-
     if (!fn->is_function || !fn->is_definition)
       continue;
 
@@ -5767,17 +6908,20 @@ static void emit_text(Obj *prog)
       continue;
 
     if (fn->is_static)
-      println("  .local %s", fn->name);
+      println("  .local %s", sym(fn));
     else 
-      println("  .globl %s", fn->name);
+      println("  .globl %s", sym(fn));
 
     // Respect section attribute if set
     if (fn->section)
       println("  .section %s,\"ax\",@progbits", fn->section);
     else
       println("  .section .text,\"ax\",@progbits");
-    println("  .type %s, @function", fn->name);
-    println("%s:", fn->name);
+    println("  .type %s, @function", sym(fn));
+    println("  .loc %d %d", fn->file_no, fn->line_no);
+    last_loc_line = fn->line_no;
+    last_loc_file = fn->file_no;
+    println("%s:", sym(fn));
 
     current_fn = fn;
     tmp_stack.bottom = fn->stack_size;
@@ -5808,13 +6952,13 @@ static void emit_text(Obj *prog)
     // - AFTER sub for omit-fp functions (avoids re-allocating stack on each jump)
     // Note: Recursive TCO is disabled for omit-fp with stack params, so no offset issues
     if (!is_omit_fp(fn))
-      println(".L.body.%s:", fn->name);
+      println(".L.body.%s:", sym(fn));
     
     reserved_pos = ftell(output_file);
     println("                           ");
     
     if (is_omit_fp(fn))
-      println(".L.body.%s:", fn->name);
+      println(".L.body.%s:", sym(fn));
     
     // Save RSP for alloca/VLA support if needed
     if (fn->alloca_bottom && fn->alloca_bottom->offset)
@@ -5839,7 +6983,7 @@ static void emit_text(Obj *prog)
       {
         Type *ty = var->ty;
         if (!ty)
-          error("%s %d: in emit_text : type is null!", CODEGEN_C, __LINE__);  
+          error("%s:%d: in emit_text : type is null!", __FILE__, __LINE__);  
         switch (ty->kind)
         {
           case TY_STRUCT:
@@ -5897,23 +7041,23 @@ static void emit_text(Obj *prog)
       println("  addq $%d, %d(%s)", fn->overflow_arg_area, off + 8, ptr);
       }
       println("  movq %s, %d(%s)", ptr, off + 16, ptr); // reg_save_area
-      println("  addq $%d, %d(%s)", off + 24, off + 16, ptr);
+      println("  addq $%d, %d(%s)", off + 32, off + 16, ptr);
 
       // __reg_save_area__
-      println("  movq %%rdi, %d(%s)", off + 24, ptr);
-      println("  movq %%rsi, %d(%s)", off + 32, ptr);
-      println("  movq %%rdx, %d(%s)", off + 40, ptr);
-      println("  movq %%rcx, %d(%s)", off + 48, ptr);
-      println("  movq %%r8, %d(%s)", off + 56, ptr);
-      println("  movq %%r9, %d(%s)", off + 64, ptr);
-      println("  movups %%xmm0, %d(%s)", off + 72, ptr);
-      println("  movups %%xmm1, %d(%s)", off + 88, ptr);
-      println("  movups %%xmm2, %d(%s)", off + 104, ptr);
-      println("  movups %%xmm3, %d(%s)", off + 120, ptr);
-      println("  movups %%xmm4, %d(%s)", off + 136, ptr);
-      println("  movups %%xmm5, %d(%s)", off + 152, ptr);
-      println("  movups %%xmm6, %d(%s)", off + 168, ptr);
-      println("  movups %%xmm7, %d(%s)", off + 184, ptr);
+      println("  movq %%rdi, %d(%s)", off + 32, ptr);
+      println("  movq %%rsi, %d(%s)", off + 40, ptr);
+      println("  movq %%rdx, %d(%s)", off + 48, ptr);
+      println("  movq %%rcx, %d(%s)", off + 56, ptr);
+      println("  movq %%r8, %d(%s)", off + 64, ptr);
+      println("  movq %%r9, %d(%s)", off + 72, ptr);
+      println("  movups %%xmm0, %d(%s)", off + 80, ptr);
+      println("  movups %%xmm1, %d(%s)", off + 96, ptr);
+      println("  movups %%xmm2, %d(%s)", off + 112, ptr);
+      println("  movups %%xmm3, %d(%s)", off + 128, ptr);
+      println("  movups %%xmm4, %d(%s)", off + 144, ptr);
+      println("  movups %%xmm5, %d(%s)", off + 160, ptr);
+      println("  movups %%xmm6, %d(%s)", off + 176, ptr);
+      println("  movups %%xmm7, %d(%s)", off + 192, ptr);
     }
 
     // Save passed-by-register arguments to the stack
@@ -5936,7 +7080,7 @@ static void emit_text(Obj *prog)
 
       Type *ty = var->ty;
       if (!ty)
-        error("%s %d: in emit_text : type is null!", CODEGEN_C, __LINE__);  
+        error("%s:%d: in emit_text : type is null!", __FILE__, __LINE__);  
       switch (ty->kind)
       {
       case TY_VECTOR:
@@ -5945,7 +7089,7 @@ static void emit_text(Obj *prog)
         } else if (is_integer(ty->base)) {
           store_fp(fp++, offset, ty->size, var->ptr);
         } else {
-          error("%s %d: in emit_text : Unsupported vector base type", CODEGEN_C, __LINE__);  
+          error("%s:%d: in emit_text : Unsupported vector base type", __FILE__, __LINE__);  
         }
         break;
       case TY_STRUCT:
@@ -5994,12 +7138,12 @@ static void emit_text(Obj *prog)
     // a special rule for the main function. Reaching the end of the
     // main function is equivalent to returning 0, even though the
     // behavior is undefined for the other functions.
-    if (strcmp(fn->name, "main") == 0) {
+    if (strcmp(sym(fn), "main") == 0) {
       println("  mov $0, %%rax");
     } 
 
     // Epilogue
-    println(".L.return.%s:", fn->name);
+    println(".L.return.%s:", sym(fn));
     if (use_rbx)
       println("  mov -8(%%rbp), %%rbx");
     if (!is_omit_fp(fn)) {
@@ -6012,8 +7156,8 @@ static void emit_text(Obj *prog)
     println("  ret");
     if (!is_omit_fp(fn)) 
       println("  .cfi_endproc");
-    println("  .size %s, .-%s", fn->name, fn->name);
-    println(".L.end.%s:", fn->name);
+    println("  .size %s, .-%s", sym(fn), sym(fn));
+    println(".L.end.%s:", sym(fn));
   }
   println(".L.text_end:");
   emit_constructors(); 
@@ -6050,25 +7194,17 @@ static void print_offset(Obj *prog)
       
     for (Obj *var = fn->params; var; var = var->next)
     {
-    printf("=====fn_name=%s var_name=%s offset=%d stack_size=%d var_alignment=%d\n", fn->name, var->name, var->offset, fn->stack_size, var->stack_align );
+    printf("=====fn_name=%s var_name=%s offset=%d stack_size=%d var_alignment=%d\n", sym(fn), sym(var), var->offset, fn->stack_size, var->stack_align );
     }
     for (Obj *var = fn->locals; var; var = var->next)
     {
-      printf("=====fn_name=%s var_name=%s offset=%d stack_size=%d var_alignment=%d\n", fn->name, var->name, var->offset, fn->stack_size, var->align );
+      printf("=====fn_name=%s var_name=%s offset=%d stack_size=%d var_alignment=%d\n", sym(fn), sym(var), var->offset, fn->stack_size, var->align );
       //update the function name if it's missing
       if (!var->funcname)
-        var->funcname = fn->name;
+        var->funcname = sym(fn);
     }
 
   }
-}
-
-static int get_align(Obj *var) {
-  int align = var->align;
-  if ((var->ty->kind == TY_ARRAY && var->ty->size >= 16) || 
-      is_vector(var->ty) || var->ty->kind == TY_INT128)
-    align = MAX(16, align);
-  return align;
 }
 
 static int get_lvar_align(Obj *fn, int align) {
@@ -6086,7 +7222,13 @@ static int assign_lvar_offsets2(Obj *fn, int bottom, char *ptr) {
       continue;
     }
 
-    bottom = align_to(bottom + var->ty->size, align);
+    // When the frame uses a super-aligned base pointer (stack_align > 16),
+    // each variable's slot size must be a multiple of stack_align
+    int size = var->ty->size;
+    if (fn->stack_align > 16)
+      size = align_to(size, fn->stack_align);
+
+    bottom = align_to(bottom + size, align);
     var->offset = -bottom;
     var->ptr = ptr;
   }
@@ -6109,13 +7251,24 @@ void assign_lvar_offsets(Obj *prog) {
     int gp = 0, fp = 0;
     int max_align = 8;
     int stack = 0;
+    int param_idx = 0;
 
-    for (Obj *var = fn->params; var; var = var->next) {
+    // If variables already have offsets (assigned during parsing for inline asm),
+    // ensure 'bottom' reflects the space they occupy.
+    for (Obj *var = fn->locals; var; var = var->next) {
+      if (var->offset && !var->is_param) {
+        int limit = -var->offset; // offsets are negative
+        if (limit > bottom) bottom = limit;
+      }
+    }
+
+    for (Obj *var = fn->params; var; var = var->next) {      
       var->is_param = true;
+      var->nbparm = param_idx++;
       if (var->offset) continue;
 
       Type *ty = var->ty;
-      if (!ty) error("%s %d: type is null!", CODEGEN_C, __LINE__);
+      if (!ty) error("%s:%d: type is null!", __FILE__, __LINE__);
 
       // ABI: Check if passed in registers
       if (ty->kind == TY_STRUCT || ty->kind == TY_UNION) {
@@ -6182,7 +7335,7 @@ char *register_available() {
       }
   }
   //no registry available
-  error("%s: %s:%d: error: in register_available : no register available!", CODEGEN_C, __FILE__, __LINE__);
+  error("%s:%d: error: in register_available : no register available!", __FILE__, __LINE__);
 }
 
 //check if a specific register is available in priority if not try to found a new available
@@ -6210,7 +7363,7 @@ int i;
           return newargreg64[i];
       }
   }
-  error("%s: %s:%d: error: in register8_to_64 : unexpected error!", CODEGEN_C, __FILE__, __LINE__);
+  error("%s:%d: error: in register8_to_64 : unexpected error!", __FILE__, __LINE__);
 }
 
 //convert register 16 to register 64
@@ -6226,7 +7379,7 @@ int i;
           return newargreg64[i];
       }
   }
-  error("%s: %s:%d: error: in register16_to_64 : unexpected error!", CODEGEN_C, __FILE__, __LINE__);
+  error("%s:%d: error: in register16_to_64 : unexpected error!", __FILE__, __LINE__);
 }
 
 //convert register 32 to register 64
@@ -6242,7 +7395,7 @@ int i;
           return newargreg64[i];
       }
   }
-  error("%s: %s:%d: error: in register32_to_64 : unexpected error!", CODEGEN_C, __FILE__, __LINE__);
+  error("%s:%d: error: in register32_to_64 : unexpected error!", __FILE__, __LINE__);
 }
 
 //add a register in the list of used registers
@@ -6371,7 +7524,7 @@ static void emit_destructors(void) {
 
 
 #define FPCLASSIFY_FLOAT \
-  "\tmovaps\t%%xmm0,%%xmm1\n\
+  "\tmovups\t%%xmm0,%%xmm1\n\
 \tmov\t$0x7fffffff,%%eax\n\
 \tmovd\t%%eax,%%xmm2\n\
 \tandps\t%%xmm2,%%xmm1\n\
