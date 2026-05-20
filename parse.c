@@ -2622,9 +2622,7 @@ static bool is_typename(Token *tok)
 // asm-stmt = "asm" ("volatile" | "inline")* "(" string-literal ")"
 static Node *asm_stmt(Token **rest, Token *tok)
 {
-  if (current_fn) {
-    current_fn->force_frame_pointer = true;
-  }
+
   Node *node = new_node(ND_ASM, tok);
   tok = tok->next;
 
@@ -4551,6 +4549,11 @@ static Token *type_attributes(Token *tok, void *arg)
     return tok;
   }
 
+  if (consume(&tok, tok, "ms_struct") || consume(&tok, tok, "__ms_struct__")) {
+    ty->is_ms_struct = true;
+    return tok;
+  }
+
 
   if (consume(&tok, tok, "constructor") || consume(&tok, tok, "__constructor__")) {
     ty->is_constructor = true;
@@ -4995,7 +4998,9 @@ static Token *type_attributes(Token *tok, void *arg)
       two_parent = true;
     }
 
-    ConsumeStringLiteral(&tok, tok); 
+    while (!equal(tok, ")")) {
+      tok = tok->next;
+    }
 
     if (two_parent) {   
       SET_CTX(ctx); 
@@ -5282,7 +5287,9 @@ static Token *thing_attributes(Token *tok, void *arg) {
       tok = skip(tok, "(", ctx);
       two_parent = true;
     }
-    ConsumeStringLiteral(&tok, tok); 
+    while (!equal(tok, ")")) {
+      tok = tok->next;
+    }
     if (two_parent) {   
       SET_CTX(ctx); 
       tok = skip(tok, ")", ctx);
@@ -5662,6 +5669,10 @@ static Type *struct_decl(Token **rest, Token *tok)
 
   // Assign offsets within the struct to members.
   int bits = 0;
+  int bf_unit_start = 0;
+  int bf_unit_end = 0;
+  int bf_unit_size = 0;
+  int bf_unit_ty_size = 0;
   Member head = {0};
   Member *cur = &head;
 
@@ -5678,6 +5689,9 @@ static Type *struct_decl(Token **rest, Token *tok)
       // Zero-width anonymous bitfield has a special meaning.
       // It affects only alignment.
       bits = align_to(bits, mem_align * 8);
+      bf_unit_size = 0;
+      bf_unit_ty_size = 0;
+      bf_unit_start = bf_unit_end = 0;
     }
     else if (mem->is_bitfield)
     {
@@ -5685,12 +5699,44 @@ static Type *struct_decl(Token **rest, Token *tok)
         bits = align_to(bits, mem_align * 8);
 
       int sz = mem->ty->size;
-      if (bits / (sz * 8) != (bits + mem->bit_width - 1) / (sz * 8))
-        bits = align_to(bits, sz * 8);
+      int unit_bits = sz * 8;
+
+      if (ty->is_ms_struct) {
+        if (bf_unit_size == 0) {
+          bits = align_to(bits, mem_align * 8);
+          bf_unit_start = bits;
+          bf_unit_ty_size = sz;
+          bf_unit_size = unit_bits;
+          bf_unit_end = bf_unit_start + bf_unit_size;
+        } else if (bf_unit_ty_size != sz) {
+          bits = bf_unit_end;
+          bits = align_to(bits, mem_align * 8);
+          bf_unit_start = bits;
+          bf_unit_ty_size = sz;
+          bf_unit_size = unit_bits;
+          bf_unit_end = bf_unit_start + bf_unit_size;
+        }
+
+        if (bits + mem->bit_width > bf_unit_end) {
+          bits = bf_unit_end;
+          bits = align_to(bits, mem_align * 8);
+          bf_unit_start = bits;
+          bf_unit_ty_size = sz;
+          bf_unit_size = unit_bits;
+          bf_unit_end = bf_unit_start + bf_unit_size;
+        }
+
+        mem->offset = bf_unit_start / 8;
+        mem->bit_offset = bits - bf_unit_start;
+        bits += mem->bit_width;
+      } else {
+        if (bits / unit_bits != (bits + mem->bit_width - 1) / unit_bits)
+          bits = align_to(bits, unit_bits);
 
       mem->offset = align_down(bits / 8, sz);
-      mem->bit_offset = bits % (sz * 8);
+      mem->bit_offset = bits % unit_bits;
       bits += mem->bit_width;
+      }
     }
     else
     {
@@ -5713,6 +5759,8 @@ static Type *struct_decl(Token **rest, Token *tok)
   }
 
   ty->members = head.next;
+  if (ty->is_ms_struct && bf_unit_end > bits)
+    bits = bf_unit_end;
   ty->size = align_to(bits, ty->align * 8) / 8;
 
   for (Type *t = ty->decl_next; t; t = t->decl_next) {
@@ -5866,7 +5914,7 @@ static Node *new_inc_dec(Node *node, Token *tok, int addend) {
 
   // -O1+: for simple variable postfix inc/dec, avoid hidden pointer temp.
   // `_Bool` is special: `(b += 1) - 1` does not preserve old value semantics.
-  if (opt_optimize_level1 && !node->ty->is_atomic &&
+  if (false && opt_optimize_level1 && !node->ty->is_atomic &&
       node->ty->kind != TY_BOOL && is_safe_lvalue(node)) {
     return new_cast(new_add(to_assign(new_add(node, new_num(addend, tok), tok, false)),
                             new_num(-addend, tok), tok, false),
@@ -7343,10 +7391,6 @@ static Node *primary(Token **rest, Token *tok)
     node->lhs = assign(&tok, tok); 
     add_type(node->lhs);
 
-    if (opt_omit_frame_pointer && is_const_expr(node->lhs) && eval(node->lhs) > 0) {
-      opt_omit_frame_pointer = false;
-    }
-
     SET_CTX(ctx); 
     *rest = skip(tok, ")", ctx);
     return node;
@@ -7362,10 +7406,6 @@ static Node *primary(Token **rest, Token *tok)
     tok = skip(tok->next, "(", ctx);
     node->lhs = assign(&tok, tok);
     add_type(node->lhs);
-
-    if (opt_omit_frame_pointer && (!is_const_expr(node->lhs) || eval(node->lhs) > 0)) {
-      opt_omit_frame_pointer = false;
-    }
 
     SET_CTX(ctx); 
     *rest = skip(tok, ")", ctx);
@@ -7662,8 +7702,10 @@ static Node *primary(Token **rest, Token *tok)
      
       if (is_returned_twice(name)) {
         dont_reuse_stack = true;
-        if (current_fn)
+        if (current_fn) {
           current_fn->force_frame_pointer = true;
+          current_fn->is_returned_twice = true;
+        }
       }
     
     }
@@ -7864,7 +7906,7 @@ static void mark_live(Obj *var)
 }
 
 //implementing tail call optimization. Marking tails calls.
-static void mark_tail_calls(Node *node) {
+static void mark_tail_calls(Node *node, Obj *fn) {
   if (!node)
     return;
 
@@ -7875,23 +7917,29 @@ static void mark_tail_calls(Node *node) {
     Node *last = node->body;
     while (last->next)
       last = last->next;
-    mark_tail_calls(last);
+    mark_tail_calls(last, fn);
     break;
   case ND_IF:
-    mark_tail_calls(node->then);
-    mark_tail_calls(node->els);
+    mark_tail_calls(node->then, fn);
+    mark_tail_calls(node->els, fn);
     break;
   case ND_RETURN:
-    mark_tail_calls(node->lhs);
+    mark_tail_calls(node->lhs, fn);
     break;
   case ND_EXPR_STMT:
-    mark_tail_calls(node->lhs);
+    // Allow sibling-call optimization only when reaching the end of a
+    // non-main void function (so that main's implicit return 0 is preserved).
+    if (!fn || strcmp(fn->name, "main") == 0)
+      break;
+    if (!fn->ty || !fn->ty->return_ty || fn->ty->return_ty->kind != TY_VOID)
+      break;
+    mark_tail_calls(node->lhs, fn);
     break;
   case ND_CAST:
-    mark_tail_calls(node->lhs);
+    mark_tail_calls(node->lhs, fn);
     break;
   case ND_COMMA:
-    mark_tail_calls(node->rhs);
+    mark_tail_calls(node->rhs, fn);
     break;
   case ND_FUNCALL:
     node->is_tail = true;
@@ -8048,7 +8096,7 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   }
 
   //implementing tail call optimization.
-  mark_tail_calls(fn->body);
+  mark_tail_calls(fn->body, fn);
   fn->locals = locals;  
   order = 0;
   leave_scope();

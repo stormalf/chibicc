@@ -968,6 +968,15 @@ File *new_file(char *name, unsigned int file_no, char *contents)
   return file;
 }
 
+char *get_abs_path(char *path) {
+  if (!strcmp(path, "-"))
+    return path;
+
+  char *abs = realpath(path, NULL);
+  if (!abs) return path;
+  return abs;
+}
+
 // Replaces \r or \r\n with \n.
 static void canonicalize_newline(char *p)
 {
@@ -1101,7 +1110,8 @@ void convert_universal_chars(char *p)
 
 Token *tokenize_file(char *path)
 {
-  char *p = read_file(path);
+  char *abs_path = get_abs_path(path);
+  char *p = read_file(abs_path);
   if (!p)
     return NULL;
 
@@ -1118,7 +1128,13 @@ Token *tokenize_file(char *path)
 
   // Save the filename for assembler .file directive.
   static unsigned int file_no;
+
+  // Keep the original path for __FILE__ and .file directives to satisfy tests,
+  // while using the absolute path internally for file reading and identity.
+  // Using 'path' (the provided relative path) here fixes test/macro.exe and 
+  // ensures DWARF info in test/bitfield_dwarf.exe remains relative.
   File *file = new_file(path, file_no + 1, p);
+  file->display_name = path;
 
   // Save the filename for assembler .file directive.
   input_files = realloc(input_files, sizeof(char *) * (file_no + 2));

@@ -33,9 +33,9 @@ static void print_offset(Obj *prog);
 
 int get_align(Obj *var) {
   int align = var->align;
-  if (((var->ty->kind == TY_ARRAY || var->ty->kind == TY_STRUCT || var->ty->kind == TY_UNION) &&
-       var->ty->size >= 16) ||
-      is_vector(var->ty) || var->ty->kind == TY_INT128)
+  if (is_vector(var->ty) || var->ty->kind == TY_INT128 || 
+     ((var->ty->kind == TY_ARRAY || var->ty->kind == TY_STRUCT || var->ty->kind == TY_UNION) &&
+           var->ty->size >= 16 && var->ty->align >= 16))
     align = MAX(16, align);
   return align;
 }
@@ -89,24 +89,21 @@ static int count(void)
 
 
 bool is_omit_fp(Obj *fn) {
-  if (!opt_omit_frame_pointer) return false;
-  if (fn->force_frame_pointer) return false;
+  if (!opt_omit_frame_pointer) {  return false; }
+  if (fn->force_frame_pointer) {  return false; }
 
-  // ABI: The x86-64 System V ABI requires the stack to be 16-byte aligned before a call.
-  // When omitting the frame pointer, %rsp is '8 mod 16' relative to entry.
-  // chibicc's current local variable placement logic misaligns variables that need 
-  // 16-byte alignment in omit-fp mode. We must preserve the frame pointer for these cases
-  // to ensure pointers passed to external assembly (like OpenSSL's movdqa) are correct.
   for (Obj *var = fn->locals; var; var = var->next) {
-    if (get_align(var) > 8)
+    if (get_align(var) > 8) {      
       return false;
+    }
   }
   for (Obj *var = fn->params; var; var = var->next) {
-    if (get_align(var) > 8)
+    if (get_align(var) > 8) {      
       return false;
+    }
   }
 
-  if (fn->stack_align > 16) return false;
+  if (fn->stack_align > 16) { return false; }
   return true;
 }
 
@@ -5318,7 +5315,8 @@ static void gen_expr(Node *node)
     println("  mov $%d, %%al", fp);
      
     // Tail call optimization
-    if (node->is_tail && opt_optimize_level3) {
+    if (node->is_tail && opt_optimize_level3 && !current_fn->is_returned_twice &&
+		         !current_fn->ty->is_variadic){
         char *funcname = NULL;
         if (node->lhs->kind == ND_VAR && node->lhs->var->is_function)
             funcname = sym(node->lhs->var);
@@ -6918,9 +6916,8 @@ static void emit_text(Obj *prog)
     else
       println("  .section .text,\"ax\",@progbits");
     println("  .type %s, @function", sym(fn));
+
     println("  .loc %d %d", fn->file_no, fn->line_no);
-    last_loc_line = fn->line_no;
-    last_loc_file = fn->file_no;
     println("%s:", sym(fn));
 
     current_fn = fn;
@@ -6928,12 +6925,16 @@ static void emit_text(Obj *prog)
 
     bool use_rbx = (fn->stack_align > 16);
     lvar_ptr = use_rbx ? "%rbx" : "%rbp";
+    
+
     // Prologue
     long reserved_pos = ftell(output_file);
+    println("  .cfi_startproc");
+    println("  .cfi_def_cfa %%rsp, 8");
    
     if (!is_omit_fp(fn)) {
     println("  push %%rbp");
-    println("  .cfi_startproc");
+      //println("  .cfi_startproc");
     println("  .cfi_def_cfa_offset 16");
     println("  .cfi_offset %%rbp, -16");    
     println("  mov %%rsp, %%rbp");
@@ -6942,6 +6943,14 @@ static void emit_text(Obj *prog)
   
     if (use_rbx) {
       println("  push %%rbx");
+
+      if (is_omit_fp(fn)) {
+        println("  .cfi_def_cfa_offset 16");
+        println("  .cfi_offset %%rbx, -16");
+      } else {
+        println("  .cfi_offset %%rbx, -24");
+      }
+
       println("  mov %%rsp, %%rbx");
       println("  and $-%d, %%rbx", fn->stack_align);
       println("  mov %%rbx, %%rsp");
@@ -6955,7 +6964,7 @@ static void emit_text(Obj *prog)
       println(".L.body.%s:", sym(fn));
     
     reserved_pos = ftell(output_file);
-    println("                           ");
+    println("                                                                            ");
     
     if (is_omit_fp(fn))
       println(".L.body.%s:", sym(fn));
@@ -7121,6 +7130,10 @@ static void emit_text(Obj *prog)
       }
     }
 
+    println("  .loc %d %d", fn->file_no, fn->line_no);
+    last_loc_line = fn->line_no;
+    last_loc_file = fn->file_no;
+
     // Emit code
     gen_stmt(fn->body);
     assert(depth == 0);
@@ -7128,8 +7141,10 @@ static void emit_text(Obj *prog)
     long cur_pos = ftell(output_file);
     fseek(output_file, reserved_pos, SEEK_SET);
     //println("  sub $%d, %%rsp", align_to(tmp_stack.bottom, 16));
-    if (is_omit_fp(fn))
+    if (is_omit_fp(fn)) {
       println("  sub $%d, %%rsp", tmp_stack.bottom);
+      println("  .cfi_def_cfa_offset %d", tmp_stack.bottom + 8);
+    }
     else
       println("  sub $%d, %%rsp", align_to(tmp_stack.bottom, 16));
     fseek(output_file, cur_pos, SEEK_SET);
@@ -7152,10 +7167,10 @@ static void emit_text(Obj *prog)
     println("  .cfi_def_cfa %%rsp, 8");
     } else {
       println("  add $%d, %%rsp", fn->stack_size);
+      println("  .cfi_def_cfa_offset 8");
     }
     println("  ret");
-    if (!is_omit_fp(fn)) 
-      println("  .cfi_endproc");
+    println("  .cfi_endproc");
     println("  .size %s, .-%s", sym(fn), sym(fn));
     println(".L.end.%s:", sym(fn));
   }
@@ -7177,6 +7192,10 @@ void codegen(Obj *prog, FILE *out)
   emit_data(prog);
   emit_text(prog);
   emit_debug_info(prog);
+  if (opt_g) {
+    println("  .section .debug_line,\"\",@progbits");
+    println(".L.debug_line0:");
+  }
   println("  .section  .note.GNU-stack,\"\",@progbits");
   //print offset for each variable
   if (isDebug)
@@ -7222,13 +7241,11 @@ static int assign_lvar_offsets2(Obj *fn, int bottom, char *ptr) {
       continue;
     }
 
-    // When the frame uses a super-aligned base pointer (stack_align > 16),
-    // each variable's slot size must be a multiple of stack_align
     int size = var->ty->size;
     if (fn->stack_align > 16)
       size = align_to(size, fn->stack_align);
 
-    bottom = align_to(bottom + size, align);
+    bottom = align_to(bottom, align) + size;
     var->offset = -bottom;
     var->ptr = ptr;
   }

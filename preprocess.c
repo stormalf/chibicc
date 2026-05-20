@@ -1088,7 +1088,8 @@ static bool expand_macro(Token **rest, Token *tok)
     for (Token *t = body; t->kind != TK_EOF; t = t->next)
     {
       t->origin = tok;
-
+      t->file = tok->file;
+      t->line_no = tok->line_no;
     }
     *rest = append(body, tok->next);
     //(*rest)->at_bol = tok->at_bol;
@@ -1117,6 +1118,8 @@ static bool expand_macro(Token **rest, Token *tok)
     body = add_hideset(body, hs);
     for (Token *t = body; t->kind != TK_EOF; t = t->next) {
       t->origin = macro_token;
+      t->file = macro_token->file;
+      t->line_no = macro_token->line_no;
     }
     *rest = append(body, tok->next);
     (*rest)->at_bol = macro_token->at_bol;
@@ -1254,15 +1257,17 @@ static char *detect_include_guard(Token *tok)
 
 static Token *include_file(Token *tok, char *path, Token *filename_tok)
 {
+  char *abs_path = get_abs_path(path);
+
   // Check for "#pragma once"
-  if (hashmap_get(&pragma_once, path))
+  if (hashmap_get(&pragma_once, abs_path))
     return tok;
 
   // If we read the same file before, and if the file was guarded
   // by the usual #ifndef ... #endif pattern, we may be able to
   // skip the file without opening it.
   static HashMap include_guards;
-  char *guard_name = hashmap_get(&include_guards, path);
+  char *guard_name = hashmap_get(&include_guards, abs_path);
   if (guard_name && hashmap_get(&macros, guard_name))
     return tok;
 
@@ -1272,7 +1277,7 @@ static Token *include_file(Token *tok, char *path, Token *filename_tok)
 
   guard_name = detect_include_guard(tok2);
   if (guard_name)
-    hashmap_put(&include_guards, path, guard_name);
+    hashmap_put(&include_guards, abs_path, guard_name);
 
   return append(tok2, tok);
 }
@@ -1541,7 +1546,10 @@ static Token *preprocess2(Token *tok)
 
     if (equal(tok, "pragma") && equal(tok->next, "once"))
     {
-      hashmap_put(&pragma_once, tok->file->name, (void *)1);
+      // Since tok->file->name is now relative to satisfy tests, we must
+      // normalize it to an absolute path here so it matches the identity
+      // check in include_file().
+      hashmap_put(&pragma_once, get_abs_path(tok->file->name), (void *)1);
       tok = skip_line(tok->next->next);
       continue;
     }
@@ -1692,6 +1700,9 @@ void init_macros(void)
   if (opt_avx) {
     define_macro("__AVX__", "1");
   }
+  // if (opt_optimize) {
+  //   define_macro("__OPTIMIZE__", "1");    
+  // }
 
   // Define predefined macros
   define_macro("__VERSION__", "\"" VERSION "\"");

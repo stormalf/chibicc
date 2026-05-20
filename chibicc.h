@@ -1,4 +1,5 @@
 #define _POSIX_C_SOURCE 200809L
+#define _GNU_SOURCE
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
@@ -59,7 +60,7 @@
 
 #define HELP PRODUCT " is a C compiler based on " PRODUCT " created by Rui Ueyama.\n \
 See original project https://github.com/rui314/chibicc for more information\n \
-this " PRODUCT " contains only some differences for now like new parameters\n"
+this " PRODUCT " supports vector, some extended assembly and int128 \n"
 
 #define USAGE PRODUCT " usage :\n \
 --help or -h print the help\n \
@@ -246,6 +247,7 @@ Token *tokenize_string_literal(Token *tok, Type *basety);
 Token *tokenize(File *file);
 Token *tokenize_file(char *filename);
 void convert_universal_chars(char *p);
+char *get_abs_path(char *path);
 bool startswith(char *p, char *q);
 
 #define unreachable() \
@@ -371,6 +373,7 @@ struct Obj
   char *cleanup_name;
   bool force_frame_pointer;
   Type *vla_ty;
+  bool is_returned_twice;
 };
 
 // Global variable can be initialized either by a constant expression
@@ -1132,6 +1135,7 @@ struct Type
   Member *members;
   bool is_flexible;
   bool is_packed;
+  bool is_ms_struct;
   bool has_vla;  
   //from COSMOPOLITAN adding is_aligned
   bool is_aligned;

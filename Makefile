@@ -5,7 +5,7 @@ GCC_VERSION!=gcc -dumpversion
 CC=gcc
 CFLAGS =-std=c11 -g -fno-common -Wall -Wno-switch -DPREFIX=\"$(PREFIX)\" -DGCC_VERSION=\"$(GCC_VERSION)\"
 CFLAGS_DIAG= -std=c11 -g -mavx2
-CFLAGS_SPE = -g -fomit-frame-pointer -O3 -mavx2
+CFLAGS_SPE = -g -fomit-frame-pointer -O3 -mavx2 -DOMIT_FRAME_POINTER
 LDFLAGS = -lcrypto
 TEST_JOBS ?=
 TEST_TIMEOUT ?= 30
