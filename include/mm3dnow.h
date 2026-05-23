@@ -160,40 +160,40 @@ _m_femms (void)
 //   return (__m64)__builtin_ia32_pmulhrw ((__v4hi)__A, (__v4hi)__B);
 // }
 
-// extern __inline void __attribute__((__gnu_inline__, __always_inline__, __artificial__))
-// _m_prefetch (void *__P)
-// {
-//   __builtin_prefetch (__P, 0, 3 /* _MM_HINT_T0 */);
-// }
+extern __inline void __attribute__((__gnu_inline__, __always_inline__, __artificial__))
+_m_prefetch (void *__P)
+{
+  __builtin_prefetch (__P, 0, 3 /* _MM_HINT_T0 */);
+}
 
-// extern __inline __m64 __attribute__((__gnu_inline__, __always_inline__, __artificial__))
-// _m_from_float (float __A)
-// {
-//   return __extension__ (__m64)(__v2sf){ __A, 0.0f };
-// }
+extern __inline __m64 __attribute__((__gnu_inline__, __always_inline__, __artificial__))
+_m_from_float (float __A)
+{
+  return __extension__ (__m64)(__v2sf){ __A, 0.0f };
+}
 
-// extern __inline float __attribute__((__gnu_inline__, __always_inline__, __artificial__))
-// _m_to_float (__m64 __A)
-// {
-//   union { __v2sf v; float a[2]; } __tmp;
-//   __tmp.v = (__v2sf)__A;
-//   return __tmp.a[0];
-// }
+extern __inline float __attribute__((__gnu_inline__, __always_inline__, __artificial__))
+_m_to_float (__m64 __A)
+{
+  union { __v2sf v; float a[2]; } __tmp;
+  __tmp.v = (__v2sf)__A;
+  return __tmp.a[0];
+}
 
-// #ifdef __DISABLE_3dNOW__
-// #undef __DISABLE_3dNOW__
-// #pragma GCC pop_options
-// #endif /* __DISABLE_3dNOW__ */
+#ifdef __DISABLE_3dNOW__
+#undef __DISABLE_3dNOW__
+#pragma GCC pop_options
+#endif /* __DISABLE_3dNOW__ */
 
-// #if defined __x86_64__ && !defined __SSE__ || !defined __3dNOW_A__
-// #pragma GCC push_options
-// #ifdef __x86_64__
-// #pragma GCC target("sse,3dnowa")
-// #else
-// #pragma GCC target("3dnowa")
-// #endif
-// #define __DISABLE_3dNOW_A__
-// #endif /* __3dNOW_A__ */
+#if defined __x86_64__ && !defined __SSE__ || !defined __3dNOW_A__
+#pragma GCC push_options
+#ifdef __x86_64__
+#pragma GCC target("sse,3dnowa")
+#else
+#pragma GCC target("3dnowa")
+#endif
+#define __DISABLE_3dNOW_A__
+#endif /* __3dNOW_A__ */
 
 // extern __inline __m64 __attribute__((__gnu_inline__, __always_inline__, __artificial__))
 // _m_pf2iw (__m64 __A)
