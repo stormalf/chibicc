@@ -5360,10 +5360,7 @@ static void gen_expr(Node *node)
         }
 
         if (stack_args == 0 && current_fn->stack_size == 0) {
-            if (is_omit_fp(current_fn)) {
-                //println("  add $%d, %%rsp", current_fn->stack_size);
-                println("  add $%d, %%rsp", stack_args * 8);
-            } else {
+            if (!is_omit_fp(current_fn)) {
                 println("  mov %%rbp, %%rsp");
                 println("  pop %%rbp");
             }
@@ -6933,12 +6930,11 @@ static void emit_text(Obj *prog)
     println("  .cfi_def_cfa %%rsp, 8");
    
     if (!is_omit_fp(fn)) {
-    println("  push %%rbp");
-      //println("  .cfi_startproc");
-    println("  .cfi_def_cfa_offset 16");
-    println("  .cfi_offset %%rbp, -16");    
-    println("  mov %%rsp, %%rbp");
-    println("  .cfi_def_cfa_register %%rbp");  
+      println("  push %%rbp");
+      println("  .cfi_def_cfa_offset 16");
+      println("  .cfi_offset %%rbp, -16");    
+      println("  mov %%rsp, %%rbp");
+      println("  .cfi_def_cfa_register %%rbp");  
     }
   
     if (use_rbx) {

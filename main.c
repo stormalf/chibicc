@@ -845,8 +845,7 @@ static void parse_args(int argc, char **argv)
       continue;
     }
 
-    if (!strncmp(argv[i], "-g", 2)) {
-      opt_omit_frame_pointer = false;      
+    if (!strncmp(argv[i], "-g", 2)) {   
       if (argv[i][2] == '0')
         opt_g = false;
       else
@@ -1572,7 +1571,7 @@ static void run_linker(StringArray *inputs, char *output)
       //strarray_push(&arr, format("%s/crtendS.o", gcc_libpath));
 
     }
-  else
+    else
     {
       strarray_push(&arr, format("%s/crt1.o", libpath));
       strarray_push(&arr, format("%s/crti.o", libpath));

@@ -157,12 +157,14 @@ static bool hasInput = false;
 static bool hasOutput = false;
 static bool isToNegate = false;
 static bool hasOperandName = false;
+static bool isOmitFp = false;
 
 static char *register_lower(char *reg);
 static char *register_higher(char *reg);
 static char *register_word(char *reg);
 static bool parse_simple_binary_input(Token **rest, Token *tok, Obj *locals);
 static char *arith_opcode(char op, int size);
+static char *callee_save(char *asm_str);
 
 static bool is_mem_placeholder(char *s) {
     return s && !strcmp(s, "%mem");
@@ -216,7 +218,7 @@ static void ensure_output_reg(AsmOutput *out, char *preferred64) {
 }
 
 
-char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
+char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals, Obj *current_fn)
 {
     char *input_asm_str;
     char *output_loading;
@@ -253,6 +255,11 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
     char *input_for_output = calloc(1, sizeof(char) * 4000);
     asmExt->template->templatestr = template;
     // asmExt->template->hasPercent = check_template(template);
+
+    if (opt_omit_frame_pointer && !current_fn->force_frame_pointer)
+        isOmitFp = true;
+    else
+        isOmitFp = false;
 
     //clear the registerUsed array
     clear_register_used();
@@ -510,6 +517,12 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals)
     
     if (isDebug)
         printf("=====template=%s\n====asm_str=%s\n====input_final==%s\n====output_asm_str===%s\n", template, asm_str, input_final, output_asm_str);
+
+    // Save/restore callee-saved registers allocated for this asm block.
+    // The register pool includes %r12-%r15 and %rbx may be allocated by
+    // fixed-register constraints ("=b", "+b", "b").  These are all
+    // callee-saved and must be preserved for the caller.
+    asm_str = callee_save(asm_str);
 
     tok = tok->next;
     //printf("tok=%s\n", tok->loc);
@@ -917,7 +930,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 else {
                     asmExt->output[nbOutput]->prefix = "+";
                 }
-                asmExt->output[nbOutput]->reg = specific_register_available("%rax");
+                asmExt->output[nbOutput]->reg = use_fixed_register("%rdi");
                 if (!asmExt->output[nbOutput]->reg)
                     error("%s:%d: error: in output_asm function :reg is null!", __FILE__, __LINE__);
                 asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg;    
@@ -936,7 +949,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 else {
                     asmExt->output[nbOutput]->prefix = "+";
                 }
-                asmExt->output[nbOutput]->reg = specific_register_available("%rax");
+                asmExt->output[nbOutput]->reg = use_fixed_register("%rsi");
                 if (!asmExt->output[nbOutput]->reg)
                     error("%s:%d: error: in output_asm function :reg is null!", __FILE__, __LINE__);
                 asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg;     
@@ -1582,7 +1595,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
         {
             asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(nbOutput + nbInput);
             asmExt->input[nbInput]->index = nbOutput + nbInput;
-            asmExt->input[nbInput]->reg = specific_register_available("%rdx");
+            asmExt->input[nbInput]->reg = use_fixed_register("%rdi");
             if (!asmExt->input[nbInput]->reg)
                  error_tok(tok,"%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__);            
             asmExt->input[nbInput]->reg64 = asmExt->input[nbInput]->reg;
@@ -1597,7 +1610,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
         {
             asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(nbOutput + nbInput);
             asmExt->input[nbInput]->index = nbOutput + nbInput;
-            asmExt->input[nbInput]->reg = specific_register_available("%r11");
+            asmExt->input[nbInput]->reg = use_fixed_register("%rsi");
             if (!asmExt->input[nbInput]->reg)
                  error_tok(tok, "%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__);            
             asmExt->input[nbInput]->reg64 = asmExt->input[nbInput]->reg;
@@ -2254,7 +2267,10 @@ char *load_variable(int offset)
     int length = snprintf(targetaddr, 20, "%d", offset);
     if (length < 0)
         error("%s:%d : error:in load_variable : error during snprintf function! offset=%d length=%d", __FILE__, __LINE__, offset, length);
-    strncat(targetaddr, "(%rbp)", 7);
+    if (isOmitFp)
+        strncat(targetaddr, "(%rsp)", 7);
+    else
+        strncat(targetaddr, "(%rbp)", 7);
     return targetaddr;
 }
 
@@ -2514,4 +2530,50 @@ static char *register_word(char *reg) {
     if (!strncmp(reg, "%r15", 4)) return "%r15w";
 
     return NULL;
+}
+
+
+//save register to avoid segfault
+static char *callee_save(char *asm_str) {
+  static char *callee[] = {
+    "%rbx",
+    "%r12",
+    "%r13",
+    "%r14",
+    "%r15",
+    "%rbp",
+  };
+
+  int len = strlen(asm_str);
+  int extra = 0;
+
+  for (int i = 0; i < 6; i++) {
+    if (check_register_used(callee[i]))
+      extra += 16;
+  }
+
+  if (extra == 0)
+    return asm_str;
+
+  char *buf = calloc(1, len + extra * 2 + 1);
+  char *p = buf;
+
+  for (int i = 0; i < 6; i++) {
+    if (!check_register_used(callee[i]))
+      continue;
+
+    p += sprintf(p, "  push %s\n", callee[i]);
+  }
+
+  p += sprintf(p, "%s", asm_str);
+
+  for (int i = 4; i >= 0; i--) {
+    if (!check_register_used(callee[i]))
+      continue;
+
+    p += sprintf(p, "  pop %s\n", callee[i]);
+  }
+
+  free(asm_str);
+  return buf;
 }

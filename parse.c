@@ -2153,7 +2153,7 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
     if (equal(tok, "{"))
       array_initializer1(rest, tok, init);
     else
-    array_initializer2(rest, tok, init, 0);
+      array_initializer2(rest, tok, init, 0);
     return;
   }
 
@@ -2638,8 +2638,10 @@ static Node *asm_stmt(Token **rest, Token *tok)
   if (equal(tok->next, ":"))
   {
     //need_alloca_bottom();
-    opt_omit_frame_pointer = false;
-    node->asm_str = extended_asm(node, rest, tok, locals);
+    if (current_fn)
+      current_fn->force_frame_pointer = true;
+    //opt_omit_frame_pointer = false;
+    node->asm_str = extended_asm(node, rest, tok, locals, current_fn);
     if (!node->asm_str)
       error_tok(tok, "%s:%d: in asm_stmt : error during extended_asm function null returned!", __FILE__, __LINE__);
     return node;
@@ -4088,7 +4090,7 @@ static Node *new_add(Node *lhs, Node *rhs, Token *tok, bool is_op)
     if (!lhs->ty->base->vla_size)
       rhs = new_binary(ND_MUL, rhs, new_long(lhs->ty->base->base->size, tok), tok);
     else
-    rhs = new_binary(ND_MUL, rhs, new_var_node(lhs->ty->base->vla_size, tok), tok);
+      rhs = new_binary(ND_MUL, rhs, new_var_node(lhs->ty->base->vla_size, tok), tok);
     return new_binary(ND_ADD, lhs, rhs, tok);
   }
 
@@ -6150,7 +6152,7 @@ static Node *funcall(Token **rest, Token *tok, Node *fn)
       arg = new_cast(arg, ty_double);
     } else if (is_array(arg->ty))
         arg = new_cast(arg, pointer_to(arg->ty->base));
-      else if (arg->ty->kind == TY_FUNC)
+    else if (arg->ty->kind == TY_FUNC)
         arg = new_cast(arg, pointer_to(arg->ty));
 
 
@@ -6372,7 +6374,7 @@ static Node *primary(Token **rest, Token *tok)
       // GCC: array in comma-expr decays (unless compound literal).
       if (node->kind == ND_COMMA && node->rhs && is_array(node->rhs->ty)
           && node->rhs->var && !node->rhs->var->is_compound_lit)
-      if (is_array(node->ty) &&
+        if (is_array(node->ty) &&
           ((node->kind == ND_COMMA && node->rhs && node->rhs->var && !node->rhs->var->is_compound_lit) ||
            (node->kind == ND_COND))) {
         node->ty = pointer_to(node->ty->base);

@@ -1397,7 +1397,7 @@ extern bool opt_avx;
 // extended_asm.c
 //
 
-char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals);
+char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals, Obj *current_fn);
 void output_asm(Node *node, Token **rest, Token *tok, Obj *locals);
 void input_asm(Node *node, Token **rest, Token *tok, Obj *locals);
 char *subst_asm(char *template, char *output_str, char *input_str);
