@@ -158,6 +158,7 @@ static bool hasOutput = false;
 static bool isToNegate = false;
 static bool hasOperandName = false;
 static bool isOmitFp = false;
+static Obj *current_fn_asm;
 
 static char *register_lower(char *reg);
 static char *register_higher(char *reg);
@@ -256,10 +257,8 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals, Obj *curre
     asmExt->template->templatestr = template;
     // asmExt->template->hasPercent = check_template(template);
 
-    if (opt_omit_frame_pointer && !current_fn->force_frame_pointer)
-        isOmitFp = true;
-    else
-        isOmitFp = false;
+    current_fn_asm = current_fn;
+    isOmitFp = is_omit_fp(current_fn);
 
     //clear the registerUsed array
     clear_register_used();
@@ -330,12 +329,25 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals, Obj *curre
         case AT_CLOBBER: // clobbers
             if (equal(tok, ":"))
                 break;
-            asmExt->clobber[nbClobber]->clobber = tok->loc;
+            char *name = tok->str;
+            asmExt->clobber[nbClobber]->clobber = name;
+
+            // Mark clobbered registers as used so callee_save preserves them.
+            char reg[16];
+            if (name[0] == '%')
+                snprintf(reg, sizeof(reg), "%s", name);
+            else
+                snprintf(reg, sizeof(reg), "%%%s", name);
+
+            if (!check_register_used(reg))
+                add_register_used(reg);
+
+            if (!strncmp(reg, "%rbx", 4))
+                node->clobbers_rbx = true;
+
             tok = tok->next;
-            // if (equal(tok, ","))
-            //     tok = tok->next;
             *rest = tok;
-            nbClobber++;            
+            nbClobber++;
             break;
         case AT_LABEL: // labels
             //nbLabel++;
@@ -493,6 +505,12 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals, Obj *curre
         }
     }
 
+
+    if (node->clobbers_rbx && current_fn_asm && current_fn_asm->stack_align > 16) {
+        char restore[100];
+        sprintf(restore, "\n  mov %%rbp, %%rbx;\n  sub $8, %%rbx;\n  and $-%d, %%rbx;\n", current_fn_asm->stack_align);
+        strncat(asm_str, restore, strlen(restore));
+    }
 
     //generate the output instructions
     if (hasOutput && output_asm_str != NULL)
@@ -2267,8 +2285,11 @@ char *load_variable(int offset)
     int length = snprintf(targetaddr, 20, "%d", offset);
     if (length < 0)
         error("%s:%d : error:in load_variable : error during snprintf function! offset=%d length=%d", __FILE__, __LINE__, offset, length);
+    
     if (isOmitFp)
         strncat(targetaddr, "(%rsp)", 7);
+    else if (current_fn_asm && current_fn_asm->stack_align > 16)
+        strncat(targetaddr, "(%rbx)", 7);
     else
         strncat(targetaddr, "(%rbp)", 7);
     return targetaddr;
@@ -2567,7 +2588,7 @@ static char *callee_save(char *asm_str) {
 
   p += sprintf(p, "%s", asm_str);
 
-  for (int i = 4; i >= 0; i--) {
+  for (int i = 5; i >= 0; i--) {
     if (!check_register_used(callee[i]))
       continue;
 
