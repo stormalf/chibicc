@@ -704,7 +704,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             {
                 asmExt->output[nbOutput]->isRegister = true;
                 asmExt->output[nbOutput]->prefix = "=";
-                asmExt->output[nbOutput]->reg = specific_register_available("%r10");
+                asmExt->output[nbOutput]->reg = specific_register_available("%r9");
                 if (!asmExt->output[nbOutput]->reg)
                     error("%s:%d: error: in output_asm function :reg is null!", __FILE__,  __LINE__);
                 asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg;
@@ -1548,7 +1548,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
 
             asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(nbOutput + nbInput);
             asmExt->input[nbInput]->index = nbOutput + nbInput;
-            asmExt->input[nbInput]->reg = specific_register_available("%r10");
+            asmExt->input[nbInput]->reg = specific_register_available("%r9");
             asmExt->input[nbInput]->isq = true;
             if (!asmExt->input[nbInput]->reg)
                  error_tok(tok, "%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__);            
@@ -1578,7 +1578,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
 
             asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(nbOutput + nbInput);
             asmExt->input[nbInput]->index = nbOutput + nbInput;
-            asmExt->input[nbInput]->reg = specific_register_available("%r10");
+            asmExt->input[nbInput]->reg = specific_register_available("%r9");
             asmExt->input[nbInput]->isl = true;
             if (!asmExt->input[nbInput]->reg)
                  error_tok(tok, "%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__);            
@@ -1594,7 +1594,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
         {
             asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(nbOutput + nbInput);
             asmExt->input[nbInput]->index = nbOutput + nbInput;
-            asmExt->input[nbInput]->reg = specific_register_available("%r10");
+            asmExt->input[nbInput]->reg = specific_register_available("%r9");
             if (!asmExt->input[nbInput]->reg)
                 error_tok(tok,"%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__);            
             asmExt->input[nbInput]->reg64 = asmExt->input[nbInput]->reg;
