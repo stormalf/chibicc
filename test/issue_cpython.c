@@ -1,37 +1,36 @@
-
 #include "test.h"
 
-typedef struct { int dummy; } PyObject;
+typedef struct {
+    int type;
+    const char *func;
+    const char *err_msg;
+} PyStatus;
 
-static inline void hmacmodule_clear(PyObject *mod) {
-    (void)mod; 
-    printf("hmacmodule_clear called\n");
+PyStatus _PyStatus_OK() {
+    return (PyStatus){0, NULL, NULL};
 }
 
-static inline void hmacmodule_free(void *mod) {
-    // call clear but cast to PyObject*
-    (void)hmacmodule_clear((PyObject *)mod);
+PyStatus _PyTime_Init(int *time) {
+    *time = 123;
+    return _PyStatus_OK();
 }
 
-struct PyModuleDef {
-    const char *m_name;
-    int m_size;
-    void (*m_traverse)(void);
-    void (*m_clear)(void *);
-    void (*m_free)(void *);
-};
+int _PyStatus_EXCEPTION(PyStatus status) {
+    return status.type != 0;
+}
 
-static struct PyModuleDef _hmacmodule = {
-    .m_name = "_hmac",
-    .m_size = sizeof(PyObject),
-    .m_traverse = NULL,
-    .m_clear = (void (*)(void *))hmacmodule_clear,
-    .m_free = hmacmodule_free,  // <-- inline function assigned directly
-};
+PyStatus test_func(int *time) {
+    PyStatus status = _PyTime_Init(time);
+    if (_PyStatus_EXCEPTION(status)) {
+        return status;
+    }
+    return _PyStatus_OK();
+}
 
 int main() {
-    PyObject obj;
-    if (_hmacmodule.m_free)
-        _hmacmodule.m_free(&obj);  // will try to call hmacmodule_free
+    int time = 0;
+    PyStatus status = test_func(&time);
+    ASSERT(0, status.type);
+    ASSERT(123, time);
     return 0;
 }

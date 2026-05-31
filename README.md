@@ -624,7 +624,8 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.24.1    Managing ms_struct attribute. Fixing 2 issues with cpython tests. Fixing remaining issue with dwarf info not correct for struct, typedef and bitfields. Fixing ISS-208 regression caused by b4f8d21dad78c7a3a0fecdb42818e5d389237e0b
+1.0.24.1    Managing ms_struct attribute. Fixing 2 issues with cpython tests. Fixing remaining issue with dwarf info not correct for struct, typedef and bitfields. Fixing ISS-208 regression caused by b4f8d21dad78c7a3a0fecdb42818e5d389237e0b. Fixing issue with omit frame pointer and return buffer.
+
 
 
 ## old release notes

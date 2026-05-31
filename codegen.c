@@ -90,6 +90,7 @@ static int count(void)
 
 bool is_omit_fp(Obj *fn) {
   if (!opt_omit_frame_pointer) {  return false; }
+  if (!fn) { return true;}
   if (fn->force_frame_pointer) {  return false; }
 
   for (Obj *var = fn->locals; var; var = var->next) {
@@ -104,6 +105,18 @@ bool is_omit_fp(Obj *fn) {
   }
 
   if (fn->stack_align > 16) { return false; }
+
+  // Support for omit-fp with alignment > 8 is currently broken/incomplete.
+  // Fall back to frame pointer if any local/param needs more than 8-byte alignment.
+  for (Obj *var = fn->locals; var; var = var->next) {
+    if (get_align(var) > 8)
+      return false;
+  }
+  for (Obj *var = fn->params; var; var = var->next) {
+    if (get_align(var) > 8)
+      return false;
+  }
+
   return true;
 }
 
@@ -179,8 +192,6 @@ static void pop_tmpf(int reg) {
 static void push(void)
 {
   println("  push %%rax");
-  //temp hack for issue with openssl need to think about replacing push/pop by what gcc is doing
-  //println("  mov %%rax, %%rdx");
   depth++;
 }
 
@@ -1551,6 +1562,7 @@ static int push_args(Node *node)
   }
 
   if (max_align > 16) {
+    println("  # REALIGNING STACK TO %d", max_align);
     println("  and $-%d, %%rsp", max_align);
   }
 
@@ -1561,7 +1573,10 @@ static int push_args(Node *node)
   // a pointer to a buffer as if it were the first argument.
   if (node->ret_buffer && node->ty->size > 16)
   {
-    println("  lea %d(%s), %%rax", node->ret_buffer->offset, node->ret_buffer->ptr);
+    if (is_omit_fp(current_fn))
+      println("  lea %d(%%rsp), %%rax", node->ret_buffer->offset + current_fn->stack_size + depth * 8);
+    else
+      println("  lea %d(%s), %%rax", node->ret_buffer->offset, node->ret_buffer->ptr);
     push();
   }
 
@@ -5247,7 +5262,6 @@ static void gen_expr(Node *node)
 
     int stack_args = push_args(node);
     gen_expr(node->lhs);
-
     int gp = 0, fp = 0;
 
     // If the return type is a large struct/union, the caller passes
@@ -5309,9 +5323,8 @@ static void gen_expr(Node *node)
 
 
 
-    // Function call
+    // Function call    
     println("  mov %%rax, %%r10");
-    //println("  mov $%d, %%rax", fp);
     println("  mov $%d, %%al", fp);
      
     // Tail call optimization

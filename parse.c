@@ -2640,7 +2640,7 @@ static Node *asm_stmt(Token **rest, Token *tok)
     //need_alloca_bottom();
     if (current_fn)
       current_fn->force_frame_pointer = true;
-    //opt_omit_frame_pointer = false;
+
     node->asm_str = extended_asm(node, rest, tok, locals, current_fn);
     if (!node->asm_str)
       error_tok(tok, "%s:%d: in asm_stmt : error during extended_asm function null returned!", __FILE__, __LINE__);
