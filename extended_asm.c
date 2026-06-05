@@ -184,6 +184,37 @@ static Obj *find_obj_by_tok(Obj *locals, Token *tok) {
     return NULL;
 }
 
+static Member *find_struct_member(Type *ty, Token *tok) {
+    if (!ty || !ty->members || !tok || tok->kind != TK_IDENT)
+        return NULL;
+
+    for (Member *mem = ty->members; mem; mem = mem->next) {
+        if (!mem->name)
+            continue;
+        if (mem->name->len == tok->len &&
+            !strncmp(mem->name->loc, tok->loc, tok->len))
+            return mem;
+        if (mem->ty && (mem->ty->kind == TY_STRUCT || mem->ty->kind == TY_UNION)) {
+            Member *nested = find_struct_member(mem->ty, tok);
+            if (nested)
+                return nested;
+        }
+    }
+    return NULL;
+}
+
+static char *scratch_register(AsmOutput *out) {
+    char *avoid = out && out->reg64 ? out->reg64 : NULL;
+    char *candidates[] = {"%r11", "%r10", "%r9", "%r8", "%rdi", "%rsi", "%rdx", "%rcx", "%rax"};
+
+    for (int i = 0; i < (int)(sizeof(candidates) / sizeof(candidates[0])); i++) {
+        if (!avoid || strcmp(candidates[i], avoid))
+            return candidates[i];
+    }
+    return "%r11";
+}
+
+
 static char *use_fixed_register(char *reg64) {
     // Fixed constraints like "a" or "d" must use the exact register even if
     // other operands are present; flexible constraints should adapt instead.
@@ -1079,57 +1110,97 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     return;
                 }
 
-                //Trying to fix ISS-164 special case of ptr->value form (ptr to a struct)
-                Token *arrow = tok->next;
-                while (equal(arrow, ")")) arrow = arrow->next;
-                if (sc->var->ty->kind == TY_PTR && equal(arrow, "->")) {
-                    if (!sc->var->ty->base)
-                        error_tok(tok, "%s:%d: in output_asm function : expecting struct base but base is null!", __FILE__, __LINE__);
-                    asmExt->output[nbOutput]->output = tok;
-                    SET_CTX(ctx);
-                    tok = skip(arrow, "->", ctx);
-                    Token * tokmbr = tok;
-                    // retrieve the size of the variable to determine the register to use here we use RAX variation
-                    asmExt->output[nbOutput]->isAddress = true;  
-                    asmExt->output[nbOutput]->isStruct = true;     
-                    asmExt->output[nbOutput]->size = sc->var->ty->size;
-                    if (!asmExt->output[nbOutput]->reg)
-                        error_tok(tok, "%s:%d: in output_asm function : reg is null extended assembly not managed yet", __FILE__, __LINE__);                
-                    ensure_output_reg(asmExt->output[nbOutput], "%r11");
-                    asmExt->output[nbOutput]->reg = update_register_size(asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->size);
-                    asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
-                    if (!sc->var->ty->base->members)
+
+// Handle struct member outputs like `r.a` or `ptr->a`.
+                Token *member_tok = tok->next;
+                while (equal(member_tok, ")"))
+                    member_tok = member_tok->next;
+                if ((sc->var->ty->kind == TY_STRUCT || sc->var->ty->kind == TY_UNION) && equal(member_tok, ".")) {
+                    Type *base = sc->var->ty;
+                    if (!base->members)
                         error_tok(tok, "%s:%d: in output_asm function : expecting members but members is null", __FILE__, __LINE__);
+
+                    Token *tokmbr = member_tok->next;
+                    while (equal(tokmbr, ")"))
+                        tokmbr = tokmbr->next;
+                    if (tokmbr->kind != TK_IDENT)
+                        error_tok(tokmbr, "%s:%d: in output_asm function : expected member identifier", __FILE__, __LINE__);
+
+                    Member *mbr = find_struct_member(base, tokmbr);
+                    if (!mbr)
+                        error_tok(tokmbr, "%s:%d: in output_asm function : no such member", __FILE__, __LINE__);
+
+                    asmExt->output[nbOutput]->output = tok;
+                    asmExt->output[nbOutput]->isVariable = false;
+                    asmExt->output[nbOutput]->isStruct = true;
+                    asmExt->output[nbOutput]->isAddress = false;
+                    asmExt->output[nbOutput]->size = mbr->ty->size;                    
                     if (sc->var->funcname) {
                         update_offset(sc->var->funcname, locals);
                         asmExt->output[nbOutput]->offset = sc->var->offset;
-                        asmExt->output[nbOutput]->offsetStruct = sc->var->ty->base->members->offset ;
-                    }
-                    else {
+                    } else {
                         asmExt->output[nbOutput]->offset = 0;
                     }
-                    //need to update the specific struct field offset
-                    char *toktmp = calloc(1, sizeof(char) * 300);
-                    for (Member *mbr = sc->var->ty->base->members; mbr; mbr = mbr->next) {
-                        if (mbr->name->len > 59)
-                            error_tok(tok, "%s:%d %d: in output_asm function : not enough size for toktmp", __FILE__, __LINE__, mbr->name->len);
-                        strncat(toktmp, mbr->name->loc, mbr->name->len);
-                        if (equal(tokmbr, toktmp)) {
-                            asmExt->output[nbOutput]->offsetStruct = mbr->offset ;
-                            asmExt->output[nbOutput]->size = mbr->ty->size ;
-                            if (!asmExt->output[nbOutput]->reg)
-                                error_tok(tok, "%s:%d: in output_asm function : reg is null extended assembly not managed yet", __FILE__, __LINE__);
-                            asmExt->output[nbOutput]->reg = update_register_size(asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->size);
-                        }
-                    }
-                    tok = tok->next;
+                    asmExt->output[nbOutput]->offsetStruct = mbr->offset;
+                    asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
+                    if (asmExt->output[nbOutput]->letter == 'm') {
+                        int member_offset = asmExt->output[nbOutput]->offset + asmExt->output[nbOutput]->offsetStruct;
+                        asmExt->output[nbOutput]->reg = load_variable(member_offset);
+                        asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg;                        
+                        asmExt->output[nbOutput]->isStruct = false;                        
+                    } else {
+                        if (!asmExt->output[nbOutput]->reg)
+                            error_tok(tok, "%s:%d: in output_asm function : reg is null extended assembly not managed yet", __FILE__, __LINE__);
+                        ensure_output_reg(asmExt->output[nbOutput], "%r11");
+                        asmExt->output[nbOutput]->reg = update_register_size(asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->size);
+                    }                    
+                    tok = tokmbr->next;                    
                     SET_CTX(ctx);
                     while (equal(tok, ")"))
                         tok = tok->next;
                     *rest = tok;
                     return;
                 }
+                if (sc->var->ty->kind == TY_PTR && equal(member_tok, "->")) {
+                    Type *base = sc->var->ty->base;
+                    if (!base)
+                        error_tok(tok, "%s:%d: in output_asm function : expecting struct base but base is null!", __FILE__, __LINE__);
+                    if (!base->members)
+                        error_tok(tok, "%s:%d: in output_asm function : expecting members but members is null", __FILE__, __LINE__);
 
+                    Token *tokmbr = member_tok->next;
+                    while (equal(tokmbr, ")"))
+                        tokmbr = tokmbr->next;
+                    if (tokmbr->kind != TK_IDENT)
+                        error_tok(tokmbr, "%s:%d: in output_asm function : expected member identifier", __FILE__, __LINE__);
+
+                    Member *mbr = find_struct_member(base, tokmbr);
+                    if (!mbr)
+                        error_tok(tokmbr, "%s:%d: in output_asm function : no such member", __FILE__, __LINE__);
+
+                    asmExt->output[nbOutput]->output = tok;
+                    asmExt->output[nbOutput]->isVariable = false;
+                    asmExt->output[nbOutput]->isStruct = true;
+                    asmExt->output[nbOutput]->isAddress = true;
+                    asmExt->output[nbOutput]->size = mbr->ty->size;
+                    if (sc->var->funcname) {
+                        update_offset(sc->var->funcname, locals);
+                        asmExt->output[nbOutput]->offset = sc->var->offset;
+                    } else {
+                        asmExt->output[nbOutput]->offset = 0;
+                    }
+                    asmExt->output[nbOutput]->offsetStruct = mbr->offset;
+                    ensure_output_reg(asmExt->output[nbOutput], "%r11");
+                    asmExt->output[nbOutput]->reg = update_register_size(asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->size);
+                    asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
+
+                    tok = tokmbr->next;
+                    SET_CTX(ctx);
+                    while (equal(tok, ")"))
+                        tok = tok->next;
+                    *rest = tok;
+                    return;
+                }
                 if (asmExt->output[nbOutput]->letter == 'm')
                     asmExt->output[nbOutput]->reg = load_variable(asmExt->output[nbOutput]->offset);
                 else
@@ -2185,7 +2256,7 @@ char *generate_output_asm(char *output_str)
         return tmp;
     }
     //case not an address it means that it's an immediate value should probably never exists
-    else if (!asmExt->output[nbOutput]->isAddress)
+    else if (!asmExt->output[nbOutput]->isAddress && !asmExt->output[nbOutput]->isStruct)
     {
         strncat(tmp, opcode(asmExt->output[nbOutput]->size), strlen(opcode(asmExt->output[nbOutput]->size)));
         strncat(tmp, " $", 3);
@@ -2197,43 +2268,64 @@ char *generate_output_asm(char *output_str)
     }
     //case it's an array with address we need to generate the correct output for the specified index
     else if (asmExt->output[nbOutput]->isAddress && asmExt->output[nbOutput]->isArray) {
+        char *scratch = scratch_register(asmExt->output[nbOutput]);
         strncat(tmp, "\n", 3);
         strncat(tmp, "  movq ", 8);
         strncat(tmp, load_variable(asmExt->output[nbOutput]->offsetArray), strlen(load_variable(asmExt->output[nbOutput]->offsetArray)));
-        strncat(tmp, ", %rsi\n", 8);
+        strncat(tmp, ", ", 3);
+        strncat(tmp, scratch, strlen(scratch));
+        strncat(tmp, "\n", 2);
         strncat(tmp, opcode(asmExt->output[nbOutput]->size), strlen(opcode(asmExt->output[nbOutput]->size)));
         strncat(tmp, asmExt->output[nbOutput]->variableNumber, strlen(asmExt->output[nbOutput]->variableNumber));
         //if index 0 we move the value into address pointed by rsi, if index 1 the value will be stored at address pointed by rsi + size of one element
         //if index 2 the value will be stored at address pointed by rsi + (index * size of one element)...
         char *tmp2 = calloc(1, sizeof(char) * 100);
         if (asmExt->output[nbOutput]->indexArray == 0)
-            strncat(tmp, ", (%rsi)\n", 11);
+            {
+                strncat(tmp, ", (", 4);
+                strncat(tmp, scratch, strlen(scratch));
+                strncat(tmp, ")\n", 3);
+            }
         else {
             strncat(tmp, ", ", 3);
             snprintf(tmp2, 100, "%d", asmExt->output[nbOutput]->offset);
-            strncat(tmp2, "(%rsi)\n", 9); //to have example 4(%rsi) for index 1, 8(%rsi) for index 2...
+            strncat(tmp2, "(", 2);
+            strncat(tmp2, scratch, strlen(scratch));
+            strncat(tmp2, ")\n", 3); //to have example 4(%rsi) for index 1, 8(%rsi) for index 2...
             strncat(tmp, tmp2, strlen(tmp2));
         }
         return tmp;
     }
 
     //Trying to fix ======ISS-164 case it's a struct with address we need to generate the correct output for the specified struct member
-    else if (asmExt->output[nbOutput]->isAddress && asmExt->output[nbOutput]->isStruct && strncmp(asmExt->output[nbOutput]->prefix, "=", 2)) {
+    else if (asmExt->output[nbOutput]->isStruct) {
+        char *scratch = scratch_register(asmExt->output[nbOutput]);
         strncat(tmp, "\n", 3);
-        strncat(tmp, "  movq ", 8);
+        if (asmExt->output[nbOutput]->isAddress)
+            strncat(tmp, "  movq ", 8);
+        else
+            strncat(tmp, "  leaq ", 8);
         strncat(tmp, load_variable(asmExt->output[nbOutput]->offset), strlen(load_variable(asmExt->output[nbOutput]->offset)));
-        strncat(tmp, ", %rsi\n", 8);
+        strncat(tmp, ", ", 3);
+        strncat(tmp, scratch, strlen(scratch));
+        strncat(tmp, "\n", 2);
         strncat(tmp, opcode(asmExt->output[nbOutput]->size), strlen(opcode(asmExt->output[nbOutput]->size)));
         strncat(tmp, asmExt->output[nbOutput]->variableNumber, strlen(asmExt->output[nbOutput]->variableNumber));
         //if index 0 we move the value into address pointed by rsi, if index 1 the value will be stored at address pointed by rsi + size of one element
         //if index 2 the value will be stored at address pointed by rsi + (index * size of one element)...
         char *tmp2 = calloc(1, sizeof(char) * 100);
         if (asmExt->output[nbOutput]->offsetStruct == 0)
-            strncat(tmp, ", (%rsi)\n", 11);
+            {
+                strncat(tmp, ", (", 4);
+                strncat(tmp, scratch, strlen(scratch));
+                strncat(tmp, ")\n", 3);
+            }
         else {
             strncat(tmp, ", ", 3);
             snprintf(tmp2, 100, "%d", asmExt->output[nbOutput]->offsetStruct);
-            strncat(tmp2, "(%rsi)\n", 9); //to have example 4(%rsi) for index 1, 8(%rsi) for index 2...
+            strncat(tmp2, "(", 2);
+            strncat(tmp2, scratch, strlen(scratch));
+            strncat(tmp2, ")\n", 3); //to have example 4(%rsi) for index 1, 8(%rsi) for index 2...
             strncat(tmp, tmp2, strlen(tmp2));
         }
         return tmp;
@@ -2242,13 +2334,18 @@ char *generate_output_asm(char *output_str)
     //case it's an address 
     else if (asmExt->output[nbOutput]->isAddress)
     {
+        char *scratch = scratch_register(asmExt->output[nbOutput]);
         if (asmExt->output[nbOutput]->letter == 'm'|| asmExt->output[nbOutput]->letter == 'r' || asmExt->output[nbOutput]->letter == 'q') {
         strncat(tmp, "\n", 3);
         strncat(tmp, "  movq ", 8);
         strncat(tmp, load_variable(asmExt->output[nbOutput]->offset), strlen(load_variable(asmExt->output[nbOutput]->offset)));
-        strncat(tmp, ", %rsi\n", 8);
+        strncat(tmp, ", ", 3);
+        strncat(tmp, scratch, strlen(scratch));
+        strncat(tmp, "\n", 2);
         strncat(tmp, opcode(asmExt->output[nbOutput]->size), strlen(opcode(asmExt->output[nbOutput]->size)));
-        strncat(tmp, " (%rsi), ", 11);
+        strncat(tmp, " (", 3);
+        strncat(tmp, scratch, strlen(scratch));
+        strncat(tmp, "), ", 4);
         strncat(tmp, asmExt->output[nbOutput]->variableNumber, strlen(asmExt->output[nbOutput]->variableNumber));
         strncat(tmp, "\n", 3);
         return tmp;
@@ -2256,10 +2353,14 @@ char *generate_output_asm(char *output_str)
         strncat(tmp, "\n", 3);
         strncat(tmp, "  movq ", 8);
         strncat(tmp, load_variable(asmExt->output[nbOutput]->offset), strlen(load_variable(asmExt->output[nbOutput]->offset)));
-        strncat(tmp, ", %rsi\n", 8);
+        strncat(tmp, ", ", 3);
+        strncat(tmp, scratch, strlen(scratch));
+        strncat(tmp, "\n", 2);
         strncat(tmp, opcode(asmExt->output[nbOutput]->size), strlen(opcode(asmExt->output[nbOutput]->size)));
         strncat(tmp, asmExt->output[nbOutput]->variableNumber, strlen(asmExt->output[nbOutput]->variableNumber));
-        strncat(tmp, ", (%rsi)\n", 11);
+        strncat(tmp, ", (", 4);
+        strncat(tmp, scratch, strlen(scratch));
+        strncat(tmp, ")\n", 3);
         return tmp;
         }
     }
