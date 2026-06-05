@@ -1376,75 +1376,92 @@ static void push_struct(Node *arg)
 }
 
 
-static void push_args2(Node *args, bool first_pass)
+// Evaluate and store stack-passed arguments into their pre-allocated %rsp slots.
+// Must be called after the stack space has been reserved by push_args().
+static void place_stack_args(Node *args)
 {
   if (!args)
     return;
-  push_args2(args->next, first_pass);
+  place_stack_args(args->next);
 
-  if (first_pass != args->pass_by_stack)
+  if (!args->pass_by_stack)
     return;
 
   gen_expr(args);
 
-  if (first_pass) {
-    switch (args->ty->kind)
-    {
-    case TY_STRUCT:
-    case TY_UNION:
-      if (args->ty->size == 0)
-        return;    
-      push_struct(args);
-      break;
-    case TY_FLOAT:
-      println("  movss %%xmm0, %d(%%rsp)", args->stack_offset);
-      break;
-    case TY_DOUBLE:
-      println("  movsd %%xmm0, %d(%%rsp)", args->stack_offset);
-      break;
-    case TY_VECTOR:
-      if (vec_use_ymm(args->ty))
-        println("  vmovdqu %%ymm0, %d(%%rsp)", args->stack_offset);
-      else
-        println("  movdqu %%xmm0, %d(%%rsp)", args->stack_offset);
-      break;
-    case TY_LDOUBLE:
-      println("  fstpt %d(%%rsp)", args->stack_offset);
-      break;
-    case TY_INT128:
-      println("  mov %%rax, %d(%%rsp)", args->stack_offset);
-      println("  mov %%rdx, %d(%%rsp)", args->stack_offset + 8);
-      break;
-    default:
-      println("  mov %%rax, %d(%%rsp)", args->stack_offset);
-    }
-  } else {
-    switch (args->ty->kind)
-    {
-    case TY_STRUCT:
-    case TY_UNION:
-      if (args->ty->size == 0)
-        return;    
-      push_struct(args);
-      break;
-    case TY_VECTOR:
-      push_vec(args->ty);
-      break;
-    case TY_FLOAT:
-    case TY_DOUBLE:
-      pushf();
-      break;
-    case TY_LDOUBLE:
-      println("  sub $16, %%rsp");
-      println("  fstpt (%%rsp)");
-      depth += 2;
-      break;
-    case TY_INT128:
-      pushx();
-      break;    
-    default:
-      push();
-    }
+  switch (args->ty->kind)
+  {
+  case TY_STRUCT:
+  case TY_UNION:
+    if (args->ty->size == 0)
+      return;
+    push_struct(args);
+    break;
+  case TY_FLOAT:
+    println("  movss %%xmm0, %d(%%rsp)", args->stack_offset);
+    break;
+  case TY_DOUBLE:
+    println("  movsd %%xmm0, %d(%%rsp)", args->stack_offset);
+    break;
+  case TY_VECTOR:
+    if (vec_use_ymm(args->ty))
+      println("  vmovdqu %%ymm0, %d(%%rsp)", args->stack_offset);
+    else
+      println("  movdqu %%xmm0, %d(%%rsp)", args->stack_offset);
+    break;
+  case TY_LDOUBLE:
+    println("  fstpt %d(%%rsp)", args->stack_offset);
+    break;
+  case TY_INT128:
+    println("  mov %%rax, %d(%%rsp)", args->stack_offset);
+    println("  mov %%rdx, %d(%%rsp)", args->stack_offset + 8);
+    break;
+  default:
+    println("  mov %%rax, %d(%%rsp)", args->stack_offset);
+  }
+}
+
+// Evaluate register-passed arguments and push them onto the stack in
+// right-to-left order (via recursion).  They will be popped into the
+// actual argument registers (rdi/rsi/xmm0...) after the callee address
+// has been resolved and saved in %r10, so that the callee evaluation
+// cannot clobber the already-loaded registers.
+static void place_reg_args(Node *args)
+{
+  if (!args)
+    return;
+  place_reg_args(args->next);
+
+  if (args->pass_by_stack)
+    return;
+
+  gen_expr(args);
+
+  switch (args->ty->kind)
+  {
+  case TY_STRUCT:
+  case TY_UNION:
+    if (args->ty->size == 0)
+      return;
+    push_struct(args);
+    break;
+  case TY_VECTOR:
+    push_vec(args->ty);
+    break;
+  case TY_FLOAT:
+  case TY_DOUBLE:
+    pushf();
+    break;
+  case TY_LDOUBLE:
+    println("  sub $16, %%rsp");
+    println("  fstpt (%%rsp)");
+    depth += 2;
+    break;
+  case TY_INT128:
+    pushx();
+    break;
+  default:
+    push();
   }
 }
 
@@ -1566,8 +1583,9 @@ static int push_args(Node *node)
     println("  and $-%d, %%rsp", max_align);
   }
 
-  push_args2(node->args, true);  // stack pass
-  push_args2(node->args, false); // reg pass
+  place_stack_args(node->args); // evaluate + store stack-passed args to rsp slots
+  place_reg_args(node->args);   // evaluate register-passed args and push onto stack;
+                                 // they will be popped into arg regs after gen_expr(lhs)
 
   // If the return type is a large struct/union, the caller passes
   // a pointer to a buffer as if it were the first argument.
@@ -5323,7 +5341,8 @@ static void gen_expr(Node *node)
 
 
 
-    // Function call    
+    // Function call
+    // %r10 was set before place_reg_args; %rax is free for al=fp_count.
     println("  mov %%rax, %%r10");
     println("  mov $%d, %%al", fp);
      
