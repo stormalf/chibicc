@@ -166,6 +166,7 @@ static char *register_word(char *reg);
 static bool parse_simple_binary_input(Token **rest, Token *tok, Obj *locals);
 static char *arith_opcode(char op, int size);
 static char *callee_save(char *asm_str);
+static void handle_dialect_alternatives(char *str);
 
 static bool is_mem_placeholder(char *s) {
     return s && !strcmp(s, "%mem");
@@ -563,6 +564,7 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals, Obj *curre
     asm_str = subst_asm(asm_str, " {", "%{");
     asm_str = subst_asm(asm_str, " |", "%|");
     asm_str = subst_asm(asm_str, " }", "%}");
+    handle_dialect_alternatives(asm_str);
     
     if (isDebug)
         printf("=====template=%s\n====asm_str=%s\n====input_final==%s\n====output_asm_str===%s\n", template, asm_str, input_final, output_asm_str);
@@ -2088,6 +2090,43 @@ char *string_replace(char *str, char *oldstr, char *newstr)
     return str;
 }
 
+// Handle GCC dialect alternative syntax {att|intel} in inline asm strings.
+// Since chibicc always generates AT&T syntax, keep the AT&T (first) part
+// and remove the dialect markers. This is called AFTER %{/%|/%} have been
+// replaced so escaped braces are not confused with dialect alternatives.
+static void handle_dialect_alternatives(char *str) {
+    int i, j;
+    for (i = 0, j = 0; str[i]; i++) {
+        if (str[i] == '{') {
+            int pipe = -1, close = -1;
+            for (int k = i + 1; str[k]; k++) {
+                if (str[k] == '|' && pipe < 0)
+                    pipe = k;
+                if (str[k] == '}') {
+                    close = k;
+                    break;
+                }
+            }
+            if (close >= 0) {
+                // Complete {att|intel} or {att}
+                int start = i + 1;
+                int end = (pipe >= 0) ? pipe : close;
+                int len = end - start;
+                for (int k = 0; k < len; k++)
+                    str[j++] = str[start + k];
+                i = close;
+                continue;
+            }
+            // Unmatched { - skip it (as doesn't accept bare {)
+            continue;
+        }
+        // Skip bare | and } dialect markers
+        if (str[i] == '|' || str[i] == '}')
+            continue;
+        str[j++] = str[i];
+    }
+    str[j] = '\0';
+}
 
 
 

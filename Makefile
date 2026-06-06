@@ -110,14 +110,14 @@ vlc:
 
 cpython:
 	cd ../cpython &&  CC=chibicc CFLAGS="-std=c11 -O3 -g" ./configure  \
-	 --build=x86_64-pc-linux-gnu && make clean && make -j2 && make test
+	 --build=x86_64-pc-linux-gnu && make clean && make && make test
 
 
 git: 
 	cd ../git && CC=chibicc CFLAGS="-fPIC -std=c11 -g" ./configure && make && make test
 
 memcached:
-	cd ../memcached && make clean && CC=chibicc CFLAGS="-fPIC -std=c11 -g" ./configure && make -j4 && make test
+	cd ../memcached && make clean && CC=chibicc CFLAGS="-fPIC -std=c11 -g" ./configure && make && make test
 
 openssh-portable:
 	cd ../openssh-portable && make clean && CC=chibicc CFLAGS="-std=c11 -g" ./configure && make -j4 && make tests
