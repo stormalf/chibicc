@@ -6672,7 +6672,8 @@ static Node *primary(Token **rest, Token *tok)
     equal(tok, "__builtin_ia32_rstorssp") || equal(tok, "__builtin_ia32_clrssbsy") || 
     equal(tok, "__builtin_ia32_rsqrtss") || equal(tok, "__builtin_ia32_tzcnt_u16") || 
     equal(tok, "__builtin_ia32_si256_si") || equal(tok, "__builtin_ia32_si_si256") ||
-    equal(tok, "__builtin_ia32_pd_pd256") || equal(tok, "__builtin_ia32_ps_ps256")) {
+    equal(tok, "__builtin_ia32_pd_pd256") || equal(tok, "__builtin_ia32_ps_ps256") ||
+    equal(tok, "__builtin_stdc_bit_ceil")) {
     int builtin = builtin_enum(tok);
     if (builtin != -1) {
       Node *node = new_node(builtin, tok);    
@@ -8485,6 +8486,7 @@ char *nodekind2str(NodeKind kind)
   case ND_POPCOUNTLL: return "POPCOUNTLL";
   case ND_RETURN_ADDR: return "RETURN_ADDRESS";  
   case ND_BUILTIN_FRAME_ADDRESS: return "FRAME_ADDRESS"; 
+  case ND_STDC_BIT_CEIL: return "STDC_BIT_CEIL"; 
   case ND_BUILTIN_ADD_OVERFLOW: return "ADD_OVERFLOW";    
   case ND_BUILTIN_SUB_OVERFLOW: return "SUB_OVERFLOW";    
   case ND_BUILTIN_MUL_OVERFLOW: return "MUL_OVERFLOW"; 
@@ -9498,6 +9500,8 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_movlhps", ND_MOVLHPS },         
     { "__builtin_ia32_movhlps", ND_MOVHLPS },         
     { "__builtin_ia32_unpckhps", ND_UNPCKHPS },    
+    { "__builtin_stdc_bit_ceil", ND_STDC_BIT_CEIL },
+
     { "__builtin_ia32_unpcklps", ND_UNPCKLPS },         
     { "__builtin_ia32_loadhps", ND_LOADHPS },   
     { "__builtin_ia32_storehps", ND_STOREHPS },        

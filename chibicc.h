@@ -489,6 +489,7 @@ typedef enum
   ND_BUILTIN_BSWAP32, //builtin bswap32
   ND_BUILTIN_BSWAP64, //builtin bswap64,
   ND_BUILTIN_FRAME_ADDRESS, // builtin frame address
+  ND_STDC_BIT_CEIL, // builtin stdc bit ceil
   ND_EMMS,
   ND_SFENCE,
   ND_LFENCE,

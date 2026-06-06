@@ -2853,6 +2853,40 @@ static void gen_builtin(Node *node, const char *insn, const char *reg) {
     println("  %s %%%s, %%%s", insn, reg, reg); 
 }
 
+static void gen_builtin_stdc_bit_ceil(Node *node)  {
+  int c = count();
+  gen_expr(node->lhs);
+  int sz = node->lhs->ty->size;
+  
+  if (sz == 8) {
+    println("  cmp $1, %%rax");
+    println("  ja .Lceil_greater_%d", c);
+    println("  mov $1, %%rax");
+    println("  jmp .Lceil_done_%d", c);
+    println(".Lceil_greater_%d:", c);
+    println("  dec %%rax");
+    println("  bsr %%rax, %%rax");
+    println("  add $1, %%rax");
+    println("  mov %%rax, %%rcx");
+    println("  mov $1, %%rax");
+    println("  shl %%cl, %%rax");
+    println(".Lceil_done_%d:", c);
+  } else {
+    println("  cmp $1, %%eax");
+    println("  ja .Lceil_greater_%d", c);
+    println("  mov $1, %%eax");
+    println("  jmp .Lceil_done_%d", c);
+    println(".Lceil_greater_%d:", c);
+    println("  dec %%eax");
+    println("  bsr %%eax, %%eax");
+    println("  add $1, %%eax");
+    println("  mov %%eax, %%ecx");
+    println("  mov $1, %%eax");
+    println("  shl %%cl, %%eax");
+    println(".Lceil_done_%d:", c);
+  }    
+}
+
 static void gen_vec_init_v2si(Node *node) {
   gen_expr(node->lhs);
   push_tmp();
@@ -5497,6 +5531,7 @@ static void gen_expr(Node *node)
       println("  bswap %%rax");     
       return;
   }  
+  case ND_STDC_BIT_CEIL: gen_builtin_stdc_bit_ceil(node);return;
   case ND_BUILTIN_FRAME_ADDRESS: {
     int c = count();
   

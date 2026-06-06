@@ -697,6 +697,9 @@ void add_type(Node *node)
   case ND_BUILTIN_MEMCPY:
     node->ty = ty_void_ptr;
     return;
+  case ND_STDC_BIT_CEIL:
+    node->ty = node->lhs->ty;
+    return;
   case ND_PSADBW:
   case ND_PMULUDQ:
     node->ty = vector_of(ty_ulong, 1);

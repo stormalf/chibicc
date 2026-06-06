@@ -30,6 +30,12 @@ double ldexp(double x, int exp);
 double log(double x);
 double log10(double x);
 double modf(double x, double *iptr);
+float modff(float x, float *iptr);
+long double modfl(long double x, long double *iptr);
+void sincos(double x, double *sinx, double *cosx);
+void sincosf(float x, float *sinx, float *cosx);
+void sincosl(long double x, long double *sinx, long double *cosx);
+float logf(float);
 
 float expf(float);
 long double expl(long double);
