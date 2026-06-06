@@ -630,14 +630,22 @@ static bool parse_simple_binary_input(Token **rest, Token *tok, Obj *locals)
         VarScope *sc = find_var(lhs);
         if (!sc)
             error_tok(lhs, "%s:%d: in %s: variable undefined", __FILE__, __LINE__, __func__);
-        if (!sc->var->ty)
-            error_tok(lhs, "%s:%d: in %s: variable type unknown", __FILE__, __LINE__, __func__);
-        in->bin_lhs_is_imm = false;
-        in->bin_lhs_offset = sc->var->offset;
-        in->bin_lhs_size = sc->var->ty->size;
-        if (sc->var->funcname) {
-            update_offset(sc->var->funcname, locals);
+        if (sc->enum_ty) {
+            in->bin_lhs_is_imm = true;
+            in->bin_lhs_imm = sc->enum_val;
+            in->bin_lhs_size = 8;
+        } else {
+            if (!sc->var)
+                error_tok(lhs, "%s:%d: in %s: not a variable", __FILE__, __LINE__, __func__);
+            if (!sc->var->ty)
+                error_tok(lhs, "%s:%d: in %s: variable type unknown", __FILE__, __LINE__, __func__);
+            in->bin_lhs_is_imm = false;
             in->bin_lhs_offset = sc->var->offset;
+            in->bin_lhs_size = sc->var->ty->size;
+            if (sc->var->funcname) {
+                update_offset(sc->var->funcname, locals);
+                in->bin_lhs_offset = sc->var->offset;
+            }
         }
     } else {
         in->bin_lhs_is_imm = true;
@@ -649,14 +657,22 @@ static bool parse_simple_binary_input(Token **rest, Token *tok, Obj *locals)
         VarScope *sc = find_var(rhs);
         if (!sc)
             error_tok(rhs, "%s:%d: in %s: variable undefined", __FILE__, __LINE__, __func__);
-        if (!sc->var->ty)
-            error_tok(rhs, "%s:%d: in %s: variable type unknown", __FILE__, __LINE__, __func__);
-        in->bin_rhs_is_imm = false;
-        in->bin_rhs_offset = sc->var->offset;
-        in->bin_rhs_size = sc->var->ty->size;
-        if (sc->var->funcname) {
-            update_offset(sc->var->funcname, locals);
+        if (sc->enum_ty) {
+            in->bin_rhs_is_imm = true;
+            in->bin_rhs_imm = sc->enum_val;
+            in->bin_rhs_size = 8;
+        } else {
+            if (!sc->var)
+                error_tok(rhs, "%s:%d: in %s: not a variable", __FILE__, __LINE__, __func__);
+            if (!sc->var->ty)
+                error_tok(rhs, "%s:%d: in %s: variable type unknown", __FILE__, __LINE__, __func__);
+            in->bin_rhs_is_imm = false;
             in->bin_rhs_offset = sc->var->offset;
+            in->bin_rhs_size = sc->var->ty->size;
+            if (sc->var->funcname) {
+                update_offset(sc->var->funcname, locals);
+                in->bin_rhs_offset = sc->var->offset;
+            }
         }
     } else {
         in->bin_rhs_is_imm = true;
@@ -1035,7 +1051,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 //need to check if the variable is in the correct function
                 asmExt->output[nbOutput]->output = tok;
                 sc = find_var(tok);
-                if (!sc)
+                if (!sc || !sc->var)
                     error_tok(tok, "%s:%d: in %s: variable undefined", __FILE__, __LINE__, __func__);
                 if (!sc->var->ty)
                     error_tok(tok, "%s:%d: in %s: variable type unknown", __FILE__, __LINE__, __func__);
@@ -1227,7 +1243,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     ensure_output_reg(asmExt->output[nbOutput], "%r11");
                     asmExt->output[nbOutput]->output = tok;
                     sc = find_var(tok);
-                    if (!sc)
+                    if (!sc || !sc->var)
                         error_tok(tok, "%s:%d: in %s: variable undefined2", __FILE__, __LINE__, __func__);
                     if (!sc->var->ty)
                         error_tok(tok, "%s:%d: in %s: variable type unknown2", __FILE__, __LINE__, __func__);
@@ -1280,7 +1296,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                             asmExt->output[nbOutput]->output = tok;
 
                             VarScope *sc = find_var(tok);
-                            if (!sc)
+                            if (!sc || !sc->var)
                                 error_tok(tok, "%s:%d: in %s: variable undefined after cast", __FILE__, __LINE__, __func__);
                             if (!sc->var->ty)
                                 error_tok(tok, "%s:%d: in %s: variable type unknown after cast", __FILE__, __LINE__, __func__);                                
@@ -1719,6 +1735,32 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 tok = tok->next;
             if (parse_simple_binary_input(rest, tok, locals))
                 return;
+
+            // Handle constant expressions (e.g. sizeof(fd_set)/sizeof(__fd_mask))
+            if (equal(tok, "sizeof")) {
+                Node *node = conditional(rest, tok);
+                add_type(node);
+                if (!is_const_expr(node))
+                    error_tok(tok, "expression is not a compile-time constant");
+                int64_t val = eval(node);
+                int length = snprintf(NULL, 0, "%ld", val);
+                snprintf(input_value, length + 1, "%ld", val);
+                asmExt->input[nbInput]->input = tok;
+                asmExt->input[nbInput]->isVariable = false;
+                asmExt->input[nbInput]->isAddress = false;
+                asmExt->input[nbInput]->input_value = input_value;
+                asmExt->input[nbInput]->size = 8;
+                if (!asmExt->input[nbInput]->reg)
+                    error_tok(tok, "%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__);
+                asmExt->input[nbInput]->reg = update_register_size(asmExt->input[nbInput]->reg, asmExt->input[nbInput]->size);
+                tok = *rest;
+                SET_CTX(ctx);
+                while (equal(tok, ")"))
+                    tok = tok->next;
+                *rest = tok;
+                return;
+            }
+
             // check if the variable is defined
             if (equal(tok, "-")) 
             {
@@ -1735,6 +1777,28 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 sc = find_var(tok);
                 if (!sc)
                     error_tok(tok, "%s:%d: in %s: variable undefined", __FILE__, __LINE__, __func__);
+                if (sc->enum_ty) {
+                    long val = isToNegate ? -sc->enum_val : sc->enum_val;
+                    isToNegate = false;
+                    int length = snprintf(NULL, 0, "%ld", val);
+                    snprintf(input_value, length + 1, "%ld", val);
+                    asmExt->input[nbInput]->input = tok;
+                    asmExt->input[nbInput]->isVariable = false;
+                    asmExt->input[nbInput]->isAddress = false;
+                    asmExt->input[nbInput]->input_value = input_value;
+                    asmExt->input[nbInput]->size = 8;
+                    if (!asmExt->input[nbInput]->reg)
+                        error_tok(tok, "%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__);
+                    asmExt->input[nbInput]->reg = update_register_size(asmExt->input[nbInput]->reg, asmExt->input[nbInput]->size);
+                    tok = tok->next;
+                    SET_CTX(ctx);
+                    while (equal(tok, ")"))
+                        tok = tok->next;
+                    *rest = tok;
+                    return;
+                }
+                if (!sc->var)
+                    error_tok(tok, "%s:%d: in %s: not a variable", __FILE__, __LINE__, __func__);
                 if (!sc->var->ty)
                     error_tok(tok, "%s:%d: in %s: variable type unknown", __FILE__, __LINE__, __func__);
                 asmExt->input[nbInput]->input = tok;
@@ -1901,8 +1965,10 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 {
                     asmExt->input[nbInput]->input = tok;                    
                     sc = find_var(tok);
-                    if (!sc)
+                    if (!sc || !sc->var)
                         error_tok(tok, "%s:%d: in %s: variable undefined2", __FILE__, __LINE__, __func__);
+                    if (!sc->var->ty)
+                        error_tok(tok, "%s:%d: in %s: variable type unknown2", __FILE__, __LINE__, __func__);
                     asmExt->input[nbInput]->input = tok;
                     asmExt->input[nbInput]->isVariable = true;
                     asmExt->input[nbInput]->isAddress = true;
@@ -1953,7 +2019,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                         asmExt->input[nbInput]->isAddress = true;
 
                         sc = find_var(tok);
-                        if (!sc)
+                        if (!sc || !sc->var)
                             error_tok(tok, "%s:%d: error: in %s: variable undefined", __FILE__, __LINE__, __func__);
                         if (!sc->var->ty)
                             error_tok(tok, "%s:%d: error: in %s: variable type undefined", __FILE__, __LINE__, __func__);
@@ -1987,7 +2053,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 {
                     asmExt->input[nbInput]->input = tok;
                     sc = find_var(tok);
-                    if (!sc)
+                    if (!sc || !sc->var)
                         error_tok(tok, "%s:%d: error: in %s: variable undefined", __FILE__, __LINE__, __func__);
                     asmExt->input[nbInput]->input = tok;
                     asmExt->input[nbInput]->isVariable = true;
@@ -2015,7 +2081,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 {
                     asmExt->output[nbOutput]->output = tok;
                     sc = find_var(tok);
-                    if (!sc)
+                    if (!sc || !sc->var)
                         error_tok(tok, "%s:%d: in %s: variable undefined", __FILE__, __LINE__, __func__);
                     if (!sc->var->ty)
                         error_tok(tok, "%s:%d: in %s: variable type unknown", __FILE__, __LINE__, __func__);

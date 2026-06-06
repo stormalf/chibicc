@@ -146,7 +146,7 @@ static Obj *eval_lval_obj(Node *node, int64_t *offset);
 static Node *assign(Token **rest, Token *tok);
 static Node *logor(Token **rest, Token *tok);
 static long double eval_double(Node *node);
-static Node *conditional(Token **rest, Token *tok);
+Node *conditional(Token **rest, Token *tok);
 static Node *logand(Token **rest, Token *tok);
 static Node * bitor (Token * *rest, Token *tok);
 static Node *bitxor(Token **rest, Token *tok);
@@ -3835,7 +3835,7 @@ static Node *assign(Token **rest, Token *tok)
 }
 
 // conditional = logor ("?" expr? ":" conditional)?
-static Node *conditional(Token **rest, Token *tok)
+Node *conditional(Token **rest, Token *tok)
 {
   Node *cond = logor(&tok, tok);
 

@@ -1049,6 +1049,7 @@ typedef struct
 
 Node *new_cast(Node *expr, Type *ty);
 int64_t  const_expr(Token **rest, Token *tok);
+Node *conditional(Token **rest, Token *tok);
 Obj *parse(Token *tok);
 VarScope *find_var(Token *tok);
 Obj *find_func(char *name);
