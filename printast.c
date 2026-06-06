@@ -64,7 +64,7 @@ static const char kTypeKindStr[17][8] = {
 };
 
 
-static const char kNodeKindStr[554][21] = {
+const char kNodeKindStr[554][21] = {
     "NULL_EXPR", "ADD", "SUB", "MUL", "DIV", "NEG", "MOD", "BITAND",  "BITOR", "BITXOR", "SHL", "SHR", "EQ", "NE",
     "LT", "LE", "ASSIGN", "COND", "COMMA", "MEMBER", "ADDR", "DEREF", "NOT", "BITNOT", "LOGAND", "LOGOR", "RETURN",
     "IF", "FOR", "DO", "SWITCH", "CASE", "BLOCK", "GOTO", "GOTO_EXPR", "LABEL", "LABEL_VAL",  "FUNCALL", "EXPR_STMT", "STMT_EXPR", "VAR", "VLA_PTR", "NUM", "CAST", "MEMZERO",

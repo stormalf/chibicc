@@ -1242,12 +1242,11 @@ bool contains_label(Node *node);
 extern DebugTypedef *debug_typedefs;
 
 
-char *nodekind2str(NodeKind kind);
-
 //
 // printast.c
 //
 
+extern const char kNodeKindStr[][21];
 void print_ast(FILE *, Obj *);
 
 //
@@ -1262,8 +1261,14 @@ void emit_debug_info(Obj *prog);
 // codegen.c
 //
 
+void gen_expr(Node *node);
 void codegen(Obj *prog, FILE *out);
 int align_to(int n, int align);
+int count(void);
+int push_tmp(void);
+void pop_tmp(char *arg);
+void pushx_tmp(void);
+void popx_tmp(char *a, char *b);
 char *reg_ax(int sz);
 char *reg_bx(int sz);
 char *reg_cx(int sz);
@@ -1293,8 +1298,168 @@ void gen_fpclassify(FpClassify *);
 void println(char *fmt, ...);
 int get_align(Obj *var);
 bool is_omit_fp(Obj *fn);
+Obj *get_current_fn(void);
+void gen_addr(Node *node);
+void load(Type *ty);
+void push_xmm(int x);
+void pop_xmm(int x);
+void push_ymm(int x);
+void pop_ymm(int x);
+void push_vec(Type *ty);
+void pop_vec(Type *ty, int reg);
+void pushv(void);
+void popv(int reg);
+void push_tmpf(void);
+void pop_tmpf(int reg);
+void pushld(void);
+void popld(void);
+int vec_use_ymm(Type *ty);
 
 extern bool dont_reuse_stack;
+extern char *lvar_ptr;
+extern int depth;
+
+//
+// builtin.c
+//
+
+void gen_builtin_alloca(Node *node);
+void gen_memset(Node *node);
+void gen_memcpy(Node *node);
+void gen_builtin_single(Node *node, const char *insn, const char *reg);
+void gen_builtin_stdc_bit_ceil(Node *node);
+void gen_add_overflow(Node *node);
+void gen_sub_overflow(Node *node);
+void gen_mul_overflow(Node *node);
+void gen_umul_overflow(Node *node);
+void gen_uadd_overflow(Node *node);
+void gen_alloc(Node *node);
+void gen_prefetch(Node *node);
+void gen_builtin_clz(Node *node);
+void gen_builtin_clzl(Node *node);
+void gen_builtin_bswap16(Node *node);
+void gen_builtin_bswap32(Node *node);
+void gen_builtin_bswap64(Node *node);
+void gen_builtin_frame_address(Node *node);
+void gen_builtin_expect(Node *node);
+void gen_builtin_abort(Node *node);
+void gen_builtin_return_address(Node *node);
+void gen_builtin_isnan(Node *node);
+void gen_builtin_nanf(Node *node);
+void gen_builtin_nan(Node *node);
+void gen_builtin_nanl(Node *node);
+void gen_tzcnt_u16(Node *node);
+void gen_bextr_u32(Node *node);
+void gen_binop1(Node *node, const char *insn);
+void gen_binop2(Node *node, const char *insn);
+void gen_nothing(Node *node);
+void gen_singleop(Node *node, const char *insn);
+void gen_fetchadd(Node *node);
+void gen_add_fetch(Node *node);
+void gen_sub_fetch(Node *node);
+void gen_fetchsub(Node *node);
+void gen_crc32qi(Node *node);
+void gen_crc32di(Node *node);
+void gen_crc32hi(Node *node);
+void gen_crc32si(Node *node);
+void gen_release(Node *node);
+void gen_rdtsc(Node *node);
+void gen_rdpkru(Node *node);
+void gen_bsrsi(Node *node);
+void gen_bsrdi(Node *node);
+void gen_rdpmc(Node *node);
+void gen_rdtscp(Node *node);
+void gen_rolqi(Node *node);
+void gen_rorqi(Node *node);
+void gen_rolhi(Node *node);
+void gen_rorhi(Node *node);
+void gen_readeflags_u64(Node *node);
+void gen_writeeflags_u64(Node *node);
+void gen_incsspq(Node *node);
+void gen_rstorssp(Node *node);
+void gen_wrssd(Node *node);
+void gen_wrssq(Node *node);
+void gen_wrussd(Node *node);
+void gen_wrussq(Node *node);
+void gen_clrssbsy(Node *node);
+void gen_sbb_u32(Node *node);
+void gen_sbb_u64(Node *node);
+void gen_addcarryx_u32(Node *node);
+void gen_addcarryx_u64(Node *node);
+void gen_cas(Node *node);
+void gen_bool_cas(Node *node);
+void gen_add_and_fetch(Node *node);
+void gen_sub_and_fetch(Node *node);
+void gen_fetchnand(Node *node);
+void gen_cas_n(Node *node);
+void gen_single_binop(const char *insn);
+void gen_cvt_binop(Node *node, const char *insn);
+void gen_atomic_is_lock_free(Node *node);
+void gen_store_binop(Node *node, const char *insn);
+void gen_loadlps(Node *node);
+void gen_stmxcsr(Node *node);
+void gen_single_addr_binop(Node *node, const char *insn);
+void gen_parity(Node *node);
+void gen_mwait(Node *node);
+void gen_monitor(Node *node);
+void gen_movq128(Node *node);
+void gen_movnti(Node *node);
+void gen_movnti64(Node *node);
+void gen_movnt_binop(Node *node, const char *insn);
+void gen_movntdqa(Node *node);
+void gen_sse_binop1(Node *node, const char *insn, bool rhs_is_imm);
+void gen_sse_binop2(Node *node, const char *insn, const char *reg, bool rhs_is_imm);
+void gen_sse_binop3(Node *node, const char *insn, bool rhs_is_imm);
+void gen_sse_binop4(Node *node, const char *insn, const char *insn2);
+void gen_sse_binop5(Node *node, const char *insn, const char *insn2);
+void gen_sse_binop6(Node *node, const char *insn, const char *insn2);
+void gen_sse_binop7(Node *node, const char *insn);
+void gen_sse_binop8(Node *node, const char *insn, const char *reg);
+void gen_sse_binop9(Node *node, const char *insn);
+void gen_sse_binop10(Node *node, const char *insn, const char *reg);
+void gen_sse_binop11(Node *node, const char *insn, const char *reg);
+void gen_sse_binop12(Node *node, const char *insn);
+void gen_lddqu(Node *node);
+void gen_signbit(Node *node);
+void gen_isunordered(Node *node);
+void gen_vec_init_v2si(Node *node);
+void gen_vec_ext(Node *node);
+void gen_psubusb256(Node *node);
+void gen_vec_init_binop(Node *node, const char *insn);
+void gen_pshufd(Node *node);
+void gen_shuf_binop(Node *node, const char *insn);
+void gen_psll_binop(Node *node, const char *insn);
+void gen_shuffle(Node *node, const char *insn);
+void gen_maskmovq(Node *node);
+void gen_maskmovdqu(Node *node);
+void gen_cvtpi2ps(Node *node);
+void gen_loadhps(Node *node);
+void gen_packss128_binop(Node *node, const char *insn);
+void gen_sse_pblendvb128(Node *node);
+void gen_pblendvb256(Node *node);
+void gen_sse_blendvpx(Node *node, const char *insn);
+void gen_pcmpgtb256_mask(Node *node);
+void gen_pshufb256(Node *node);
+void gen_avx2_256(Node *node, const char *insn);
+void gen_vinsertf128_si256(Node *node);
+void gen_avx2_permdi256(Node *node);
+void gen_avx2_psll_binop(Node *node, const char *insn);
+void gen_avx2_palignr256(Node *node);
+void gen_vperm2i128_si256(Node *node);
+void gen_pblendd256(Node *node);
+void gen_pmulhuw256(Node *node);
+void gen_andnotsi256(Node *node);
+void gen_vextractf128_si256(Node *node);
+void gen_si256(Node *node);
+void gen_cvt_mmx_binop(Node *node, const char *insn);
+void gen_cvt_sse_binop2(Node *node, const char *insn, const char *reg, bool is_address);
+void gen_cvt_mmx_binop3(Node *node, const char *insn);
+void gen_cvt_mmx_binop4(Node *node, const char *insn);
+void gen_mmx_binop(Node *node, const char *insn, bool rhs_is_imm);
+void gen_mmx_binop1(Node *node, const char *insn);
+void gen_sse_testz(Node *node);
+void gen_sse_testc(Node *node);
+void gen_sse_testnzc(Node *node);
 
 //
 // unicode.c
