@@ -1193,12 +1193,12 @@ void gen_cas(Node *node)   {
   gen_expr(node->cas_old);
   println("  mov %%rax, %%r9");
   if (!node->cas_old->ty->base)
-    error("%s:%d: in gen_cas :node->cas_old base type is null!", __FILE__, __LINE__); 
+    error("%s:%d: in %s :node->cas_old base type is null!", __FILE__, __LINE__, __func__); 
   load(node->cas_old->ty->base);
   pop_tmp("%rdx"); // new
   pop_tmp("%rdi"); // addr
   if (!node->cas_addr->ty->base)
-    error("%s:%d: in gen_cas : node->cas_addr base type is null!", __FILE__, __LINE__); 
+    error("%s:%d: in %s : node->cas_addr base type is null!", __FILE__, __LINE__, __func__); 
   int sz = node->cas_addr->ty->base->size;
   println("  lock cmpxchg %s, (%%rdi)", reg_dx(sz));
   println("  sete %%cl");
@@ -1242,7 +1242,7 @@ void gen_bool_cas(Node *node) {
   pop_tmp("%rdi");
   int sz = node->cas_ptr->ty->base->size;
   if (!node->cas_ptr->ty->base)
-    error("%s:%d: in gen_bool_cas : node->cas_ptr base type is null!", __FILE__, __LINE__);   
+    error("%s:%d: in %s : node->cas_ptr base type is null!", __FILE__, __LINE__, __func__);   
   println("  lock cmpxchg %s, (%%rdi)", reg_dx(sz)); 
   println("  sete %%al");       
   println("  movzbl %%al, %%eax"); 
@@ -1355,7 +1355,7 @@ void gen_fetchnand(Node *node) {
         case 2: println("  movzwl (%%rdi), %%rax"); break;
         case 4: println("  movl (%%rdi), %%eax");   break;
         case 8: println("  movq (%%rdi), %%rax");   break;
-        default: error("%s:%d: in gen_fetchnand : unsupported size %d!", __FILE__, __LINE__, sz); 
+        default: error("%s:%d: in %s : unsupported size %d!", __FILE__, __LINE__, __func__, sz); 
     }
     int label = count();
     println(".L.fetchnand_loop_%d:", label);
@@ -1405,7 +1405,7 @@ void gen_cas_n(Node *node)   {
   pop_tmp("%rdi"); /* addr */
   int sz = node->cas_addr->ty->base->size;
   if (!node->cas_addr->ty->base)
-    error("%s:%d: in gen_cas_n : node->cas_addr base type is null!", __FILE__, __LINE__);   
+    error("%s:%d: in %s : node->cas_addr base type is null!", __FILE__, __LINE__, __func__);   
 
   println("  lock cmpxchg %s, (%%rdi)", reg_dx(sz));
 
@@ -1864,7 +1864,7 @@ void gen_psll_binop(Node *node, const char *insn) {
 
 static int get_const_int_from_node(Node *node) {
   if (!node)
-    error("%s:%d: error: in get_const_int_from_node : expected constant node", __FILE__, __LINE__);
+    error("%s:%d: error: in %s : expected constant node", __FILE__, __LINE__, __func__);
   while (true) {
     if (node->kind == ND_NUM) return node->val;
     if (node->kind == ND_CAST) { node = node->lhs; continue; }
@@ -1873,7 +1873,7 @@ static int get_const_int_from_node(Node *node) {
     break;
   }
 
-  error_tok(node->tok, "%s:%d: error: in get_const_int_from_node : not a compile-time integer constant", __FILE__, __LINE__);
+  error_tok(node->tok, "%s:%d: error: in %s : not a compile-time integer constant", __FILE__, __LINE__, __func__);
  
 }
 
@@ -1886,7 +1886,7 @@ static Node *unwrap_casts(Node *node) {
 static void get_mask_values(Node *mask_node, int *vals, int expected_len) {
   mask_node = unwrap_casts(mask_node);
   if (!mask_node->var || !mask_node->var->init)
-    error_tok(mask_node->tok, "%s:%d: error: in get_mask_values : shuffle mask must be a constant vector initializer! %d", __FILE__, __LINE__, mask_node->kind);
+    error_tok(mask_node->tok, "%s:%d: error: in %s : shuffle mask must be a constant vector initializer! %d", __FILE__, __LINE__, __func__,  mask_node->kind);
 
   Initializer *init = mask_node->var->init;
   int len = mask_node->var->ty->array_len;
@@ -2087,10 +2087,10 @@ void gen_avx2_256(Node *node, const char *insn) {
   gen_expr(node->lhs);
   int64_t imm_bits = eval(node->rhs);
   if (imm_bits < 0 || imm_bits > 255 * 8)
-    error_tok(node->tok, "%s:%d: in gen_avx2_256: immediate out of range", __FILE__, __LINE__);
+    error_tok(node->tok, "%s:%d: in %s: immediate out of range", __FILE__, __LINE__, __func__);
   
   if (imm_bits % 8 != 0)
-    error_tok(node->tok, "%s:%d: in gen_avx2_256: immediate must be multiple of 8", __FILE__, __LINE__);
+    error_tok(node->tok, "%s:%d: in %s: immediate must be multiple of 8", __FILE__, __LINE__, __func__);
 
   int64_t imm_bytes = imm_bits / 8;
   println("  %s $%ld, %%ymm0, %%ymm0", insn, imm_bytes);
@@ -2107,7 +2107,7 @@ void gen_vinsertf128_si256(Node *node) {
   Node *imm = node->builtin_args[2];
   int64_t imm8 = eval(imm);
   if (imm8 < 0 || imm8 > 1)
-    error_tok(imm->tok, "%s:%d: error: vinsertf128 imm must be 0 or 1", __FILE__, __LINE__);
+    error_tok(imm->tok, "%s:%d: error: in %s: imm must be 0 or 1", __FILE__, __LINE__, __func__);
   int val = imm8 & 1;
 
   println("  vinsertf128 $%d, %%xmm2, %%ymm1, %%ymm0", val);

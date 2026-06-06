@@ -229,7 +229,7 @@ static void ensure_input_reg(AsmInput *in, char *preferred64) {
 
     in->reg = specific_register_available(preferred64);
     if (!in->reg)
-        error("%s:%d: error: in ensure_input_reg :reg is null!", __FILE__, __LINE__);
+        error("%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__);
     in->reg64 = in->reg;
     in->regh = register_higher(in->reg64);
     in->regl = register_lower(in->reg64);
@@ -242,7 +242,7 @@ static void ensure_output_reg(AsmOutput *out, char *preferred64) {
 
     out->reg = specific_register_available(preferred64);
     if (!out->reg)
-        error("%s:%d: error: in ensure_output_reg :reg is null!", __FILE__, __LINE__);
+        error("%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__);
     out->reg64 = out->reg;
     out->regh = register_higher(out->reg64);
     out->regl = register_lower(out->reg64);
@@ -265,7 +265,7 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals, Obj *curre
     // string_replace() assumes enough capacity (up to 10000 bytes).
     char *template = calloc(1, sizeof(char) * 10000);
     if (!template)
-        error("%s:%d: error: in extended_asm : out of memory", __FILE__, __LINE__);
+        error("%s:%d: error: in %s: out of memory", __FILE__, __LINE__, __func__);
     strncpy(template, tok->str, 9999);
     char *asm_str = calloc(1, sizeof(char) * 10000);
     if (isDebug)
@@ -312,9 +312,9 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals, Obj *curre
                 output_loading = generate_output_asm(asmExt->output[nbOutput]->variableNumber);
                 // replace %9 by the correct register
                 if (!output_loading)
-                 error("%s:%d: error: in extended_asm function extended_asm :output_loading is null!", __FILE__, __LINE__);
+                 error("%s:%d: error: in %s: output_loading is null!", __FILE__, __LINE__, __func__);
                 if (!asmExt->output[nbOutput]->reg)
-                error("%s:%d: error: in extended_asm function extended_asm :asmExt->output[nbOutput]->reg is null!", __FILE__, __LINE__);
+                error("%s:%d: error: in %s: asmExt->output[nbOutput]->reg is null!", __FILE__, __LINE__, __func__);
                  output_loading = subst_asm(output_loading, asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->variableNumber);
                 //generate the ouput instruction
                 strncat(output_asm_str, output_loading, strlen(output_loading));
@@ -337,9 +337,9 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals, Obj *curre
                 input_asm_str = generate_input_asm(asmExt->input[nbInput]->variableNumber);
                 //replace %9, by the correct
                 if (!input_asm_str)
-                    error("%s:%d: error: in extended_asm function extended_asm :input_asm_str is null!", __FILE__, __LINE__);
+                    error("%s:%d: error: in %s: input_asm_str is null!", __FILE__, __LINE__, __func__);
                 if (!asmExt->input[nbInput]->reg)
-                    error("%s:%d: error: in extended_asm function extended_asm :asmExt->input[nbInput]->reg is null!", __FILE__, __LINE__);
+                    error("%s:%d: error: in %s: asmExt->input[nbInput]->reg is null!", __FILE__, __LINE__, __func__);
                 if (asmExt->input[nbInput]->isAddress)
                     input_asm_str = subst_asm(input_asm_str, asmExt->input[nbInput]->reg64, asmExt->input[nbInput]->variableNumber);
                 else
@@ -386,7 +386,7 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals, Obj *curre
             *rest = tok;            
             break;
         default: // error
-            error_tok(tok, "%s:%d : in extended_asm function : too much parameters or complex extended assembly not managed!", __FILE__, __LINE__);
+            error_tok(tok, "%s:%d: in %s: too much parameters or complex extended assembly not managed!", __FILE__, __LINE__, __func__);
         }
         if (equal(tok, ":")) {
             asmtype += 1;
@@ -627,9 +627,9 @@ static bool parse_simple_binary_input(Token **rest, Token *tok, Obj *locals)
     if (lhs->kind == TK_IDENT) {
         VarScope *sc = find_var(lhs);
         if (!sc)
-            error_tok(lhs, "%s:%d: in input_asm function : variable undefined", __FILE__, __LINE__);
+            error_tok(lhs, "%s:%d: in %s: variable undefined", __FILE__, __LINE__, __func__);
         if (!sc->var->ty)
-            error_tok(lhs, "%s:%d: in input_asm function : variable type unknown", __FILE__, __LINE__);
+            error_tok(lhs, "%s:%d: in %s: variable type unknown", __FILE__, __LINE__, __func__);
         in->bin_lhs_is_imm = false;
         in->bin_lhs_offset = sc->var->offset;
         in->bin_lhs_size = sc->var->ty->size;
@@ -646,9 +646,9 @@ static bool parse_simple_binary_input(Token **rest, Token *tok, Obj *locals)
     if (rhs->kind == TK_IDENT) {
         VarScope *sc = find_var(rhs);
         if (!sc)
-            error_tok(rhs, "%s:%d: in input_asm function : variable undefined", __FILE__, __LINE__);
+            error_tok(rhs, "%s:%d: in %s: variable undefined", __FILE__, __LINE__, __func__);
         if (!sc->var->ty)
-            error_tok(rhs, "%s:%d: in input_asm function : variable type unknown", __FILE__, __LINE__);
+            error_tok(rhs, "%s:%d: in %s: variable type unknown", __FILE__, __LINE__, __func__);
         in->bin_rhs_is_imm = false;
         in->bin_rhs_offset = sc->var->offset;
         in->bin_rhs_size = sc->var->ty->size;
@@ -672,7 +672,7 @@ static bool parse_simple_binary_input(Token **rest, Token *tok, Obj *locals)
 
     in->size = size;
     if (!in->reg)
-        error_tok(lhs, "%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__);
+        error_tok(lhs, "%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__);
     in->reg = update_register_size(in->reg, size);
 
     *rest = end;
@@ -700,7 +700,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 tok = tok->next;
                 // Now consume the closing ] or }
                 if (!equal(tok, (char[]){closing, 0})) {
-                    error_tok(tok, "%s:%d: error: in output_asm function : expected closing %c after operand name", __FILE__, __LINE__, closing);
+                    error_tok(tok, "%s:%d: error: in %s: expected closing %c after operand name", __FILE__, __LINE__, __func__, closing);
                 }
                 tok = tok->next;
             }
@@ -723,7 +723,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 // common patterns like "+r"(carry) alongside "a"(low).
                 asmExt->output[nbOutput]->reg = register_available();
                 if (!asmExt->output[nbOutput]->reg)
-                    error("%s:%d: error: in output_asm function :reg is null!", __FILE__, __LINE__);
+                    error("%s:%d: error: in %s:reg is null!", __FILE__, __LINE__, __func__);
                 asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg;
                 asmExt->output[nbOutput]->regh = register_higher(asmExt->output[nbOutput]->reg64);
                 asmExt->output[nbOutput]->regl = register_lower(asmExt->output[nbOutput]->reg64);
@@ -737,7 +737,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 asmExt->output[nbOutput]->prefix = "=";
                 asmExt->output[nbOutput]->reg = specific_register_available("%r9");
                 if (!asmExt->output[nbOutput]->reg)
-                    error("%s:%d: error: in output_asm function :reg is null!", __FILE__,  __LINE__);
+                    error("%s:%d: error: in %s: reg is null!", __FILE__,  __LINE__, __func__);
                 asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg;
                 asmExt->output[nbOutput]->regh = register_higher(asmExt->output[nbOutput]->reg64);
                 asmExt->output[nbOutput]->regl = register_lower(asmExt->output[nbOutput]->reg64);
@@ -774,7 +774,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 }
                 asmExt->output[nbOutput]->reg = register_available();
                 if (!asmExt->output[nbOutput]->reg)
-                    error("%s:%d: error: in output_asm function :reg is null!", __FILE__, __LINE__);
+                    error("%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__);
                 asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg; 
                 asmExt->output[nbOutput]->regh = register_higher(asmExt->output[nbOutput]->reg64);
                 asmExt->output[nbOutput]->regl = register_lower(asmExt->output[nbOutput]->reg64);  
@@ -795,7 +795,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 }
                 asmExt->output[nbOutput]->reg = register_available();
                 if (!asmExt->output[nbOutput]->reg)
-                    error("%s:%d: error: in output_asm function :reg is null!", __FILE__, __LINE__);
+                    error("%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__);
                 asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg;    
                 asmExt->output[nbOutput]->regh = register_higher(asmExt->output[nbOutput]->reg64);
                 asmExt->output[nbOutput]->regl = register_lower(asmExt->output[nbOutput]->reg64);
@@ -816,7 +816,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 }
                 asmExt->output[nbOutput]->reg = register_available();
                 if (!asmExt->output[nbOutput]->reg)
-                    error("%s:%d: error: in output_asm function :reg is null!", __FILE__, __LINE__);
+                    error("%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__);
                 asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg;
                 asmExt->output[nbOutput]->regh = register_higher(asmExt->output[nbOutput]->reg64);
                 asmExt->output[nbOutput]->regl = register_lower(asmExt->output[nbOutput]->reg64);
@@ -837,7 +837,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->output[nbOutput]->prefix = "=";
                     asmExt->output[nbOutput]->reg = specific_register_available("%rax");
                     if (!asmExt->output[nbOutput]->reg)
-                       error("%s:%d: error: in output_asm function :reg is null!", __FILE__, __LINE__);
+                       error("%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__);
                     asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg;  
                     asmExt->output[nbOutput]->regh = register_higher(asmExt->output[nbOutput]->reg64);
                     asmExt->output[nbOutput]->regl = register_lower(asmExt->output[nbOutput]->reg64);
@@ -851,7 +851,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->output[nbOutput]->prefix = "=";
                     asmExt->output[nbOutput]->reg = specific_register_available("%rbx");
                     if (!asmExt->output[nbOutput]->reg)
-                        error("%s:%d: error: in output_asm function :reg is null!", __FILE__, __LINE__);
+                        error("%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__);
                     asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg; 
                     asmExt->output[nbOutput]->regh = register_higher(asmExt->output[nbOutput]->reg64);
                     asmExt->output[nbOutput]->regl = register_lower(asmExt->output[nbOutput]->reg64); 
@@ -864,7 +864,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->output[nbOutput]->prefix = "=";
                     asmExt->output[nbOutput]->reg = specific_register_available("%rcx");
                     if (!asmExt->output[nbOutput]->reg)
-                        error("%s:%d: error: in output_asm function :reg is null!", __FILE__, __LINE__);
+                        error("%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__);
                     asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg; 
                     asmExt->output[nbOutput]->regh = register_higher(asmExt->output[nbOutput]->reg64);
                     asmExt->output[nbOutput]->regl = register_lower(asmExt->output[nbOutput]->reg64);  
@@ -877,7 +877,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->output[nbOutput]->prefix = "=";
                     asmExt->output[nbOutput]->reg = specific_register_available("%rdx");
                     if (!asmExt->output[nbOutput]->reg)
-                        error("%s:%d: error: in output_asm function :reg is null!", __FILE__, __LINE__);
+                        error("%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__);
                     asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg; 
                     asmExt->output[nbOutput]->regh = register_higher(asmExt->output[nbOutput]->reg64);
                     asmExt->output[nbOutput]->regl = register_lower(asmExt->output[nbOutput]->reg64);    
@@ -907,7 +907,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->output[nbOutput]->prefix = "+";
                     asmExt->output[nbOutput]->reg = specific_register_available("%rax");
                     if (!asmExt->output[nbOutput]->reg)
-                       error("%s:%d: error: in output_asm function :reg is null!", __FILE__, __LINE__);
+                       error("%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__);
                     asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg; 
                     asmExt->output[nbOutput]->regh = register_higher(asmExt->output[nbOutput]->reg64);
                     asmExt->output[nbOutput]->regl = register_lower(asmExt->output[nbOutput]->reg64);   
@@ -921,7 +921,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->output[nbOutput]->prefix = "+";
                     asmExt->output[nbOutput]->reg = specific_register_available("%rbx");
                     if (!asmExt->output[nbOutput]->reg)
-                        error("%s:%d: error: in output_asm function :reg is null!", __FILE__, __LINE__);
+                        error("%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__);
                     asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg; 
                     asmExt->output[nbOutput]->regh = register_higher(asmExt->output[nbOutput]->reg64);
                     asmExt->output[nbOutput]->regl = register_lower(asmExt->output[nbOutput]->reg64);     
@@ -934,7 +934,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->output[nbOutput]->prefix = "+";
                     asmExt->output[nbOutput]->reg = specific_register_available("%rcx");
                     if (!asmExt->output[nbOutput]->reg)
-                        error("%s:%d: error: in output_asm function :reg is null!", __FILE__, __LINE__);
+                        error("%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__);
                     asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg; 
                     asmExt->output[nbOutput]->regh = register_higher(asmExt->output[nbOutput]->reg64);
                     asmExt->output[nbOutput]->regl = register_lower(asmExt->output[nbOutput]->reg64);  
@@ -947,7 +947,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->output[nbOutput]->prefix = "+";
                     asmExt->output[nbOutput]->reg = specific_register_available("%rdx");
                     if (!asmExt->output[nbOutput]->reg)
-                        error("%s:%d: error: in output_asm function :reg is null!", __FILE__, __LINE__);
+                        error("%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__);
                     asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg; 
                     asmExt->output[nbOutput]->regh = register_higher(asmExt->output[nbOutput]->reg64);
                     asmExt->output[nbOutput]->regl = register_lower(asmExt->output[nbOutput]->reg64);  
@@ -981,7 +981,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 }
                 asmExt->output[nbOutput]->reg = use_fixed_register("%rdi");
                 if (!asmExt->output[nbOutput]->reg)
-                    error("%s:%d: error: in output_asm function :reg is null!", __FILE__, __LINE__);
+                    error("%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__);
                 asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg;    
                 asmExt->output[nbOutput]->regh = register_higher(asmExt->output[nbOutput]->reg64);
                 asmExt->output[nbOutput]->regl = register_lower(asmExt->output[nbOutput]->reg64);  
@@ -1000,7 +1000,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 }
                 asmExt->output[nbOutput]->reg = use_fixed_register("%rsi");
                 if (!asmExt->output[nbOutput]->reg)
-                    error("%s:%d: error: in output_asm function :reg is null!", __FILE__, __LINE__);
+                    error("%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__);
                 asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg;     
                 asmExt->output[nbOutput]->regh = register_higher(asmExt->output[nbOutput]->reg64);
                 asmExt->output[nbOutput]->regl = register_lower(asmExt->output[nbOutput]->reg64); 
@@ -1034,13 +1034,13 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 asmExt->output[nbOutput]->output = tok;
                 sc = find_var(tok);
                 if (!sc)
-                    error_tok(tok, "%s:%d: in output_asm function : variable undefined", __FILE__, __LINE__);
+                    error_tok(tok, "%s:%d: in %s: variable undefined", __FILE__, __LINE__, __func__);
                 if (!sc->var->ty)
-                    error_tok(tok, "%s:%d: in output_asm function : variable type unknown", __FILE__, __LINE__);
+                    error_tok(tok, "%s:%d: in %s: variable type unknown", __FILE__, __LINE__, __func__);
                 // retrieve the size of the variable to determine the register to use here we use RAX variation
                 asmExt->output[nbOutput]->size = sc->var->ty->size;
                 if (!asmExt->output[nbOutput]->reg)
-                    error_tok(tok, "%s:%d: in output_asm function : reg is null extended assembly not managed yet", __FILE__, __LINE__);
+                    error_tok(tok, "%s:%d: in %s: reg is null extended assembly not managed yet", __FILE__, __LINE__, __func__);
                 asmExt->output[nbOutput]->isVariable = true;
                 asmExt->output[nbOutput]->output = tok;
                 asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
@@ -1068,7 +1068,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->output[nbOutput]->indexArray = tok->val;
                     asmExt->output[nbOutput]->size = sc->var->ty->base->size;
                     if (!asmExt->output[nbOutput]->reg)
-                        error("%s:%d: error: in output_asm function :reg is null!", __FILE__, __LINE__);
+                        error("%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__);
                     if (asmExt->output[nbOutput]->letter != 'm')
                         asmExt->output[nbOutput]->reg = update_register_size(asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->size);
                     //calculate the offset for each element from the bottom to the top r[0] has the lowest offset example -48, r[1] - 44, r[2] -40, r[3] - 36
@@ -1095,7 +1095,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->output[nbOutput]->indexArray = tok->val;
                     asmExt->output[nbOutput]->size = sc->var->ty->base->size;
                     if (!asmExt->output[nbOutput]->reg)
-                        error_tok(tok, "%s:%d: in output_asm function : reg is null extended assembly not managed yet", __FILE__, __LINE__);
+                        error_tok(tok, "%s:%d: in %s: reg is null extended assembly not managed yet", __FILE__, __LINE__, __func__);
                     ensure_output_reg(asmExt->output[nbOutput], "%r11");
                     asmExt->output[nbOutput]->reg = update_register_size(asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->size);
                     //calculate the offset for each element from the bottom to the top r[0] has the lowest offset example -48, r[1] - 44, r[2] -40, r[3] - 36
@@ -1118,17 +1118,17 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 if ((sc->var->ty->kind == TY_STRUCT || sc->var->ty->kind == TY_UNION) && equal(member_tok, ".")) {
                     Type *base = sc->var->ty;
                     if (!base->members)
-                        error_tok(tok, "%s:%d: in output_asm function : expecting members but members is null", __FILE__, __LINE__);
+                        error_tok(tok, "%s:%d: in %s: expecting members but members is null", __FILE__, __LINE__, __func__);
 
                     Token *tokmbr = member_tok->next;
                     while (equal(tokmbr, ")"))
                         tokmbr = tokmbr->next;
                     if (tokmbr->kind != TK_IDENT)
-                        error_tok(tokmbr, "%s:%d: in output_asm function : expected member identifier", __FILE__, __LINE__);
+                        error_tok(tokmbr, "%s:%d: in %s: expected member identifier", __FILE__, __LINE__, __func__);
 
                     Member *mbr = find_struct_member(base, tokmbr);
                     if (!mbr)
-                        error_tok(tokmbr, "%s:%d: in output_asm function : no such member", __FILE__, __LINE__);
+                        error_tok(tokmbr, "%s:%d: in %s: no such member", __FILE__, __LINE__, __func__);
 
                     asmExt->output[nbOutput]->output = tok;
                     asmExt->output[nbOutput]->isVariable = false;
@@ -1150,7 +1150,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                         asmExt->output[nbOutput]->isStruct = false;                        
                     } else {
                         if (!asmExt->output[nbOutput]->reg)
-                            error_tok(tok, "%s:%d: in output_asm function : reg is null extended assembly not managed yet", __FILE__, __LINE__);
+                            error_tok(tok, "%s:%d: in %s: reg is null extended assembly not managed yet", __FILE__, __LINE__, __func__);
                         ensure_output_reg(asmExt->output[nbOutput], "%r11");
                         asmExt->output[nbOutput]->reg = update_register_size(asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->size);
                     }                    
@@ -1164,19 +1164,19 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 if (sc->var->ty->kind == TY_PTR && equal(member_tok, "->")) {
                     Type *base = sc->var->ty->base;
                     if (!base)
-                        error_tok(tok, "%s:%d: in output_asm function : expecting struct base but base is null!", __FILE__, __LINE__);
+                        error_tok(tok, "%s:%d: in %s: expecting struct base but base is null!", __FILE__, __LINE__, __func__);
                     if (!base->members)
-                        error_tok(tok, "%s:%d: in output_asm function : expecting members but members is null", __FILE__, __LINE__);
+                        error_tok(tok, "%s:%d: in %s: expecting members but members is null", __FILE__, __LINE__, __func__);
 
                     Token *tokmbr = member_tok->next;
                     while (equal(tokmbr, ")"))
                         tokmbr = tokmbr->next;
                     if (tokmbr->kind != TK_IDENT)
-                        error_tok(tokmbr, "%s:%d: in output_asm function : expected member identifier", __FILE__, __LINE__);
+                        error_tok(tokmbr, "%s:%d: in %s: expected member identifier", __FILE__, __LINE__, __func__);
 
                     Member *mbr = find_struct_member(base, tokmbr);
                     if (!mbr)
-                        error_tok(tokmbr, "%s:%d: in output_asm function : no such member", __FILE__, __LINE__);
+                        error_tok(tokmbr, "%s:%d: in %s: no such member", __FILE__, __LINE__, __func__);
 
                     asmExt->output[nbOutput]->output = tok;
                     asmExt->output[nbOutput]->isVariable = false;
@@ -1209,7 +1209,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 // tok = tok->next;
                 tok = tok->next;                
                 if (!equal(tok, ")"))
-                    error_tok(tok, "%s:%d: in output_asm function : extended assembly not managed yet", __FILE__, __LINE__);
+                    error_tok(tok, "%s:%d: in %s: extended assembly not managed yet", __FILE__, __LINE__, __func__);
                 SET_CTX(ctx);
                 while (equal(tok, ")")) tok = tok->next;
                     *rest = tok;
@@ -1226,9 +1226,9 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->output[nbOutput]->output = tok;
                     sc = find_var(tok);
                     if (!sc)
-                        error_tok(tok, "%s:%d: in output_asm function : variable undefined2", __FILE__, __LINE__);
+                        error_tok(tok, "%s:%d: in %s: variable undefined2", __FILE__, __LINE__, __func__);
                     if (!sc->var->ty)
-                        error_tok(tok, "%s:%d: in output_asm function : variable type unknown2", __FILE__, __LINE__);
+                        error_tok(tok, "%s:%d: in %s: variable type unknown2", __FILE__, __LINE__, __func__);
                     // retrieve the size of the variable to determine the register to use here we use RAX variation
                     // skip the variable to go to next token that should be a ")"
                 
@@ -1242,7 +1242,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
 
                     }
                     if (!asmExt->output[nbOutput]->reg)
-                        error_tok(tok, "%s:%d: in output_asm function : reg is null extended assembly not managed yet", __FILE__, __LINE__);
+                        error_tok(tok, "%s:%d: in %s: reg is null extended assembly not managed yet", __FILE__, __LINE__, __func__);
                     asmExt->output[nbOutput]->reg = update_register_size(asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->size);
                     asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
                     tok = tok->next;
@@ -1255,7 +1255,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                             // Skip '(('
                             tok = tok->next->next;
                             if (!equal(tok, "void"))
-                                error_tok(tok, "%s:%d: in output_asm function : expected cast to (void **)", __FILE__, __LINE__);
+                                error_tok(tok, "%s:%d: in %s: expected cast to (void **)", __FILE__, __LINE__, __func__);
 
                             tok = tok->next;
 
@@ -1266,12 +1266,12 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                             }
 
                             if (!equal(tok, ")"))
-                                error_tok(tok, "%s:%d: in output_asm function : expected ')' after cast type", __FILE__, __LINE__);
+                                error_tok(tok, "%s:%d: in %s: expected ')' after cast type", __FILE__, __LINE__, __func__);
 
                             tok = tok->next; 
 
                             if (tok->kind != TK_IDENT)
-                                error_tok(tok, "%s:%d: in output_asm function : expected identifier after cast", __FILE__, __LINE__);
+                                error_tok(tok, "%s:%d: in %s: expected identifier after cast", __FILE__, __LINE__, __func__);
 
                             // At this point: we are at the identifier (like 'ofs')
                             asmExt->output[nbOutput]->isAddress = true;
@@ -1279,9 +1279,9 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
 
                             VarScope *sc = find_var(tok);
                             if (!sc)
-                                error_tok(tok, "%s:%d: in output_asm function : variable undefined after cast", __FILE__, __LINE__);
+                                error_tok(tok, "%s:%d: in %s: variable undefined after cast", __FILE__, __LINE__, __func__);
                             if (!sc->var->ty)
-                                error_tok(tok, "%s:%d: in output_asm function : variable type unknown after cast", __FILE__, __LINE__);                                
+                                error_tok(tok, "%s:%d: in %s: variable type unknown after cast", __FILE__, __LINE__, __func__);                                
 
                             asmExt->output[nbOutput]->size = sc->var->ty->size;
                             if (sc->var->funcname) {
@@ -1297,7 +1297,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                             tok = tok->next;
 
                             if (!equal(tok, ")"))
-                                error_tok(tok, "%s:%d: in output_asm function : expected ')' after cast type", __FILE__, __LINE__);
+                                error_tok(tok, "%s:%d: in %s: expected ')' after cast type", __FILE__, __LINE__, __func__);
 
                             tok = tok->next; //first parenthesis
                             
@@ -1310,7 +1310,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
 
                                     
                 else {
-                    error_tok(tok, "%s:%d: in output_asm function : extended assembly not managed yet", __FILE__, __LINE__);
+                    error_tok(tok, "%s:%d: in %s: extended assembly not managed yet", __FILE__, __LINE__, __func__);
                 }
             }
         }
@@ -1345,7 +1345,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 tok = tok->next;                
                 // Now consume the closing ] or }
                 if (!equal(tok, (char[]){closing, 0})) {
-                    error_tok(tok, "%s:%d: error: in input_asm function : expected closing %c after operand name", __FILE__, __LINE__, closing);
+                    error_tok(tok, "%s:%d: error: in %s: expected closing %c after operand name", __FILE__, __LINE__, __func__, closing);
                 }
                 tok = tok->next;                              
             }
@@ -1357,7 +1357,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             asmExt->input[nbInput]->index = 0;
             asmExt->input[nbInput]->reg = asmExt->output[0]->reg;
             if (!asmExt->input[nbInput]->reg)
-                error("%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__);            
+                error("%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__);            
             asmExt->input[nbInput]->reg64 = asmExt->output[0]->reg64;
             asmExt->input[nbInput]->regh = register_higher(asmExt->input[nbInput]->reg64);
             asmExt->input[nbInput]->regl = register_lower(asmExt->input[nbInput]->reg64);
@@ -1370,7 +1370,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             asmExt->input[nbInput]->index = 1;
             asmExt->input[nbInput]->reg = asmExt->output[1]->reg;
             if (!asmExt->input[nbInput]->reg)
-                error("%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__);            
+                error("%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__);            
             asmExt->input[nbInput]->reg64 = asmExt->output[1]->reg64;
             asmExt->input[nbInput]->regh = register_higher(asmExt->input[nbInput]->reg64);
             asmExt->input[nbInput]->regl = register_lower(asmExt->input[nbInput]->reg64);
@@ -1383,7 +1383,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             asmExt->input[nbInput]->index = 2;
             asmExt->input[nbInput]->reg = asmExt->output[2]->reg;
             if (!asmExt->input[nbInput]->reg)
-                error("%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__);            
+                error("%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__);            
             asmExt->input[nbInput]->reg64 = asmExt->output[2]->reg64;
             asmExt->input[nbInput]->regh = register_higher(asmExt->input[nbInput]->reg64);
             asmExt->input[nbInput]->regl = register_lower(asmExt->input[nbInput]->reg64);
@@ -1396,7 +1396,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             asmExt->input[nbInput]->index = 3;
             asmExt->input[nbInput]->reg = asmExt->output[3]->reg;
             if (!asmExt->input[nbInput]->reg)
-                error("%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__);            
+                error("%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__);            
 
             asmExt->input[nbInput]->reg64 = asmExt->output[3]->reg64;
             asmExt->input[nbInput]->regh = register_higher(asmExt->input[nbInput]->reg64);
@@ -1410,7 +1410,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             asmExt->input[nbInput]->index = digit;
             asmExt->input[nbInput]->reg = asmExt->output[digit]->reg;
             if (!asmExt->input[nbInput]->reg)
-                error("%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__);            
+                error("%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__);            
             asmExt->input[nbInput]->reg64 = asmExt->output[digit]->reg64;
             asmExt->input[nbInput]->regh = register_higher(asmExt->input[nbInput]->reg64);
             asmExt->input[nbInput]->regl = register_lower(asmExt->input[nbInput]->reg64);
@@ -1425,7 +1425,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             if (retrieve_output_index_from_letter('a') == -1) {
                 asmExt->input[nbInput]->reg = use_fixed_register("%rax");
                 if (!asmExt->input[nbInput]->reg)
-                    error("%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__);  
+                    error("%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__);  
                 asmExt->input[nbInput]->reg64 = asmExt->input[nbInput]->reg;
                 asmExt->input[nbInput]->regh = register_higher(asmExt->input[nbInput]->reg64);
                 asmExt->input[nbInput]->regl = register_lower(asmExt->input[nbInput]->reg64);
@@ -1435,7 +1435,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             else {
                 asmExt->input[nbInput]->reg = asmExt->output[retrieve_output_index_from_letter('a')]->reg;
                 if (!asmExt->input[nbInput]->reg)
-                    error("%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__);
+                    error("%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__);
                 asmExt->input[nbInput]->reg64 = asmExt->output[retrieve_output_index_from_letter('a')]->reg64;
                 asmExt->input[nbInput]->regh = register_higher(asmExt->input[nbInput]->reg64);
                 asmExt->input[nbInput]->regl = register_lower(asmExt->input[nbInput]->reg64);
@@ -1452,7 +1452,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             if (retrieve_output_index_from_letter('b') == -1) {
                 asmExt->input[nbInput]->reg = use_fixed_register("%rbx");
                 if (!asmExt->input[nbInput]->reg)
-                    error("%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__);  
+                    error("%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__);  
                 asmExt->input[nbInput]->reg64 = asmExt->input[nbInput]->reg;
                 asmExt->input[nbInput]->regh = register_higher(asmExt->input[nbInput]->reg64);
                 asmExt->input[nbInput]->regl = register_lower(asmExt->input[nbInput]->reg64);
@@ -1462,7 +1462,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             else {            
                 asmExt->input[nbInput]->reg = asmExt->output[retrieve_output_index_from_letter('b')]->reg;
                 if (!asmExt->input[nbInput]->reg)
-                     error("%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__);
+                     error("%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__);
                 asmExt->input[nbInput]->reg64 = asmExt->output[retrieve_output_index_from_letter('b')]->reg64;
                 asmExt->input[nbInput]->regh = register_higher(asmExt->input[nbInput]->reg64);
                 asmExt->input[nbInput]->regl = register_lower(asmExt->input[nbInput]->reg64);
@@ -1479,7 +1479,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             if (retrieve_output_index_from_letter('c') == -1) {
                 asmExt->input[nbInput]->reg = use_fixed_register("%rcx");
                 if (!asmExt->input[nbInput]->reg)
-                    error("%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__);
+                    error("%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__);
                 asmExt->input[nbInput]->reg64 = asmExt->input[nbInput]->reg;
                 asmExt->input[nbInput]->regh = register_higher(asmExt->input[nbInput]->reg64);
                 asmExt->input[nbInput]->regl = register_lower(asmExt->input[nbInput]->reg64);
@@ -1489,7 +1489,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             else {
                 asmExt->input[nbInput]->reg = asmExt->output[retrieve_output_index_from_letter('c')]->reg;
                 if (!asmExt->input[nbInput]->reg)
-                     error("%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__);
+                     error("%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__);
                 asmExt->input[nbInput]->reg64 = asmExt->output[retrieve_output_index_from_letter('c')]->reg64;
                 asmExt->input[nbInput]->regh = register_higher(asmExt->input[nbInput]->reg64);
                 asmExt->input[nbInput]->regl = register_lower(asmExt->input[nbInput]->reg64);
@@ -1507,7 +1507,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             if (retrieve_output_index_from_letter('d') == -1) {
                 asmExt->input[nbInput]->reg = use_fixed_register("%rdx");
                 if (!asmExt->input[nbInput]->reg)
-                    error("%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__); 
+                    error("%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__); 
                 asmExt->input[nbInput]->reg64 = asmExt->input[nbInput]->reg;
                 asmExt->input[nbInput]->regh = register_higher(asmExt->input[nbInput]->reg64);
                 asmExt->input[nbInput]->regl = register_lower(asmExt->input[nbInput]->reg64);
@@ -1517,7 +1517,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             else {            
                 asmExt->input[nbInput]->reg = asmExt->output[retrieve_output_index_from_letter('d')]->reg;
                 if (!asmExt->input[nbInput]->reg)
-                    error("%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__); 
+                    error("%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__); 
                 asmExt->input[nbInput]->reg64 = asmExt->output[retrieve_output_index_from_letter('d')]->reg64;
                 asmExt->input[nbInput]->regh = register_higher(asmExt->input[nbInput]->reg64);
                 asmExt->input[nbInput]->regl = register_lower(asmExt->input[nbInput]->reg64);
@@ -1534,7 +1534,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             if (retrieve_output_index_from_letter('g') == -1) {
                 asmExt->input[nbInput]->reg = register_available();
                 if (!asmExt->input[nbInput]->reg)
-                    error("%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__); 
+                    error("%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__); 
                 asmExt->input[nbInput]->reg64 = asmExt->input[nbInput]->reg;
                 asmExt->input[nbInput]->regh = register_higher(asmExt->input[nbInput]->reg64);
                 asmExt->input[nbInput]->regl = register_lower(asmExt->input[nbInput]->reg64);
@@ -1544,7 +1544,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             else {            
                 asmExt->input[nbInput]->reg = asmExt->output[retrieve_output_index_from_letter('g')]->reg;
                 if (!asmExt->input[nbInput]->reg)
-                    error("%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__); 
+                    error("%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__); 
                 asmExt->input[nbInput]->reg64 = asmExt->output[retrieve_output_index_from_letter('g')]->reg64;
                 asmExt->input[nbInput]->regh = register_higher(asmExt->input[nbInput]->reg64);
                 asmExt->input[nbInput]->regl = register_lower(asmExt->input[nbInput]->reg64);
@@ -1562,14 +1562,14 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             if (retrieve_output_index_from_letter('N') == -1) {
                 asmExt->input[nbInput]->reg = use_fixed_register("%rdx");
                 if (!asmExt->input[nbInput]->reg)
-                    error("%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__); 
+                    error("%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__); 
                 asmExt->input[nbInput]->reg64 = asmExt->input[nbInput]->reg;                
                 asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(nbOutput + nbInput);
             }
             else {            
                 asmExt->input[nbInput]->reg = asmExt->output[retrieve_output_index_from_letter('N')]->reg;
                 if (!asmExt->input[nbInput]->reg)
-                    error("%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__); 
+                    error("%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__); 
                 asmExt->input[nbInput]->reg64 = asmExt->output[retrieve_output_index_from_letter('N')]->reg64;
             }            
             asmExt->input[nbInput]->regh = register_higher(asmExt->input[nbInput]->reg64);
@@ -1586,7 +1586,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             if (retrieve_output_index_from_letter(tok->str[0]) == -1) {
                 asmExt->input[nbInput]->reg = specific_register_available("%rax");
                 if (!asmExt->input[nbInput]->reg)
-                    error("%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__); 
+                    error("%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__); 
                 asmExt->input[nbInput]->reg64 = asmExt->input[nbInput]->reg;
                 asmExt->input[nbInput]->regh = register_higher(asmExt->input[nbInput]->reg64);
                 asmExt->input[nbInput]->regl = register_lower(asmExt->input[nbInput]->reg64);
@@ -1622,7 +1622,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             asmExt->input[nbInput]->reg = specific_register_available("%r9");
             asmExt->input[nbInput]->isq = true;
             if (!asmExt->input[nbInput]->reg)
-                 error_tok(tok, "%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__);            
+                 error_tok(tok, "%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__);            
             asmExt->input[nbInput]->reg64 = asmExt->input[nbInput]->reg;
             asmExt->input[nbInput]->regh = register_higher(asmExt->input[nbInput]->reg64);
             asmExt->input[nbInput]->regl = register_lower(asmExt->input[nbInput]->reg64);
@@ -1637,7 +1637,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             asmExt->input[nbInput]->reg = specific_register_available("%rax");
             asmExt->input[nbInput]->isq = true;
             if (!asmExt->input[nbInput]->reg)
-                 error_tok(tok, "%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__);            
+                 error_tok(tok, "%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__);            
             asmExt->input[nbInput]->reg64 = asmExt->input[nbInput]->reg;
             asmExt->input[nbInput]->regh = register_higher(asmExt->input[nbInput]->reg64);
             asmExt->input[nbInput]->regl = register_lower(asmExt->input[nbInput]->reg64);
@@ -1652,7 +1652,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             asmExt->input[nbInput]->reg = specific_register_available("%r9");
             asmExt->input[nbInput]->isl = true;
             if (!asmExt->input[nbInput]->reg)
-                 error_tok(tok, "%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__);            
+                 error_tok(tok, "%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__);            
             asmExt->input[nbInput]->reg64 = asmExt->input[nbInput]->reg;
             asmExt->input[nbInput]->regh = register_higher(asmExt->input[nbInput]->reg64);
             asmExt->input[nbInput]->regl = register_lower(asmExt->input[nbInput]->reg64);
@@ -1667,7 +1667,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             asmExt->input[nbInput]->index = nbOutput + nbInput;
             asmExt->input[nbInput]->reg = specific_register_available("%r9");
             if (!asmExt->input[nbInput]->reg)
-                error_tok(tok,"%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__);            
+                error_tok(tok,"%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__);            
             asmExt->input[nbInput]->reg64 = asmExt->input[nbInput]->reg;
             asmExt->input[nbInput]->regh = register_higher(asmExt->input[nbInput]->reg64);
             asmExt->input[nbInput]->regl = register_lower(asmExt->input[nbInput]->reg64);
@@ -1686,7 +1686,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             asmExt->input[nbInput]->index = nbOutput + nbInput;
             asmExt->input[nbInput]->reg = use_fixed_register("%rdi");
             if (!asmExt->input[nbInput]->reg)
-                 error_tok(tok,"%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__);            
+                 error_tok(tok,"%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__);            
             asmExt->input[nbInput]->reg64 = asmExt->input[nbInput]->reg;
             asmExt->input[nbInput]->regh = register_higher(asmExt->input[nbInput]->reg64);
             asmExt->input[nbInput]->regl = register_lower(asmExt->input[nbInput]->reg64);
@@ -1701,7 +1701,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             asmExt->input[nbInput]->index = nbOutput + nbInput;
             asmExt->input[nbInput]->reg = use_fixed_register("%rsi");
             if (!asmExt->input[nbInput]->reg)
-                 error_tok(tok, "%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__);            
+                 error_tok(tok, "%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__);            
             asmExt->input[nbInput]->reg64 = asmExt->input[nbInput]->reg;
             asmExt->input[nbInput]->regh = register_higher(asmExt->input[nbInput]->reg64);
             asmExt->input[nbInput]->regl = register_lower(asmExt->input[nbInput]->reg64);
@@ -1732,9 +1732,9 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     
                 sc = find_var(tok);
                 if (!sc)
-                    error_tok(tok, "%s:%d: in input_asm function : variable undefined", __FILE__, __LINE__);
+                    error_tok(tok, "%s:%d: in %s: variable undefined", __FILE__, __LINE__, __func__);
                 if (!sc->var->ty)
-                    error_tok(tok, "%s:%d: in input_asm function : variable type unknown", __FILE__, __LINE__);
+                    error_tok(tok, "%s:%d: in %s: variable type unknown", __FILE__, __LINE__, __func__);
                 asmExt->input[nbInput]->input = tok;
                 asmExt->input[nbInput]->isVariable = true;
                 asmExt->input[nbInput]->size = sc->var->ty->size;
@@ -1750,7 +1750,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 }
                 int base_off = asmExt->input[nbInput]->offset;
                 if (!asmExt->input[nbInput]->reg) {
-                    error_tok(tok, "%s:%d: error: in input_asm function input_asm :reg is null! %d", __FILE__, __LINE__, nbInput);
+                    error_tok(tok, "%s:%d: error: in %s: reg is null! %d", __FILE__, __LINE__, __func__, nbInput);
                 }
 
                 //managing specific case of arrays
@@ -1764,7 +1764,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->input[nbInput]->isAddress = false;
                     asmExt->input[nbInput]->size = sc->var->ty->base->size;
                     if (!asmExt->input[nbInput]->reg)
-                        error_tok(tok, "%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__);
+                        error_tok(tok, "%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__);
                     if (asmExt->input[nbInput]->letter != 'm')
                         asmExt->input[nbInput]->reg = update_register_size(asmExt->input[nbInput]->reg, asmExt->input[nbInput]->size);
                     //calculate the offset for each element from the bottom to the top r[0] has the lowest offset example -48, r[1] - 44, r[2] -40, r[3] - 36
@@ -1791,7 +1791,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->input[nbInput]->indexArray = tok->val;
                     asmExt->input[nbInput]->size = sc->var->ty->base->size;
                     if (!asmExt->input[nbInput]->reg)
-                        error_tok(tok, "%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__);                    
+                        error_tok(tok, "%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__);                    
                     ensure_input_reg(asmExt->input[nbInput], "%r11");
                     asmExt->input[nbInput]->reg = update_register_size(asmExt->input[nbInput]->reg, asmExt->input[nbInput]->size);
                     //calculate the offset for each element from the bottom to the top r[0] has the lowest offset example -48, r[1] - 44, r[2] -40, r[3] - 36
@@ -1811,7 +1811,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     Token *arrow = tok->next;
                     while (equal(arrow, ")")) arrow = arrow->next;
                     if (!sc->var->ty->base)
-                        error_tok(tok, "%s:%d: in input_asm function : expecting struct base but base is null!", __FILE__, __LINE__);
+                        error_tok(tok, "%s:%d: in %s: expecting struct base but base is null!", __FILE__, __LINE__, __func__);
                     asmExt->input[nbInput]->input = tok;
                     SET_CTX(ctx);
                     tok = skip(arrow, (char *)(equal(arrow, "->") ? "->" : "."), ctx);
@@ -1821,12 +1821,12 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->input[nbInput]->isStruct = true;     
                     asmExt->input[nbInput]->size = sc->var->ty->size;
                     if (!asmExt->input[nbInput]->reg)
-                        error_tok(tok, "%s:%d: in input_asm function : reg is null extended assembly not managed yet", __FILE__, __LINE__);                
+                        error_tok(tok, "%s:%d: in %s: reg is null extended assembly not managed yet", __FILE__, __LINE__, __func__);                
                     ensure_input_reg(asmExt->input[nbInput], "%r11");
                     asmExt->input[nbInput]->reg = update_register_size(asmExt->input[nbInput]->reg, asmExt->input[nbInput]->size);
                     //asmExt->input[nbInput]->variableNumber = retrieveVariableNumber(nbInput);
                     if (!sc->var->ty->base->members)
-                        error_tok(tok, "%s:%d: in input_asm function : expecting members but members is null", __FILE__, __LINE__);
+                        error_tok(tok, "%s:%d: in %s: expecting members but members is null", __FILE__, __LINE__, __func__);
                     if (sc->var->funcname) {
                         update_offset(sc->var->funcname, locals);
                         asmExt->input[nbInput]->offset = sc->var->offset;
@@ -1838,13 +1838,13 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     char *toktmp = calloc(1, sizeof(char) * 300);                    
                     for (Member *mbr = sc->var->ty->base->members; mbr; mbr = mbr->next) {
                         if (mbr->name->len > 59)
-                            error_tok(tok, "%s:%d %d: in input_asm function : not enough size for toktmp", __FILE__, __LINE__, mbr->name->len);
+                            error_tok(tok, "%s:%d %d: in %s: not enough size for toktmp", __FILE__, __LINE__, mbr->name->len, __func__);
                         strncat(toktmp, mbr->name->loc, mbr->name->len);                            
                         if (equal(tokmbr, toktmp)) {
                             asmExt->input[nbInput]->offsetStruct = mbr->offset ;
                             asmExt->input[nbInput]->size = mbr->ty->size ;
                             if (!asmExt->input[nbInput]->reg)
-                                error_tok(tok, "%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__);
+                                error_tok(tok, "%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__);
                             asmExt->input[nbInput]->reg = update_register_size(asmExt->input[nbInput]->reg, asmExt->input[nbInput]->size);
                         }
                     }
@@ -1900,7 +1900,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->input[nbInput]->input = tok;                    
                     sc = find_var(tok);
                     if (!sc)
-                        error_tok(tok, "%s:%d: in input_asm function : variable undefined2", __FILE__, __LINE__);
+                        error_tok(tok, "%s:%d: in %s: variable undefined2", __FILE__, __LINE__, __func__);
                     asmExt->input[nbInput]->input = tok;
                     asmExt->input[nbInput]->isVariable = true;
                     asmExt->input[nbInput]->isAddress = true;
@@ -1912,7 +1912,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                         asmExt->input[nbInput]->offset = sc->var->offset;
                     } 
                     if (!asmExt->input[nbInput]->reg)
-                        error_tok(tok,"%s:%d: error: in input_asm function input_asm :reg is null!", __FILE__, __LINE__);
+                        error_tok(tok,"%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__);
                     asmExt->input[nbInput]->reg = update_register_size(asmExt->input[nbInput]->reg, asmExt->input[nbInput]->size);
                     tok = tok->next;
                     SET_CTX(ctx);
@@ -1927,7 +1927,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
 
                         // Parse cast type — here just support 'void **' for now
                         if (!equal(tok, "void"))
-                            error_tok(tok, "%s:%d: error: in input_asm function input_asm : expected cast to (void **)!", __FILE__, __LINE__);
+                            error_tok(tok, "%s:%d: error: in %s: expected cast to (void **)!", __FILE__, __LINE__, __func__);
 
                         tok = tok->next;
 
@@ -1938,13 +1938,13 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                         }
 
                         if (!equal(tok, ")"))
-                            error_tok(tok, "expected ')' after cast type");
+                            error_tok(tok, "%s:%d: error: in %s: expected ')' after cast type", __FILE__, __LINE__, __func__);
 
                         tok = tok->next; // skip first ')'
 
                         // Now expect TK_IDENT
                         if (tok->kind != TK_IDENT)
-                            error_tok(tok, "expected identifier after cast");
+                            error_tok(tok, "%s:%d: error: in %s: expected identifier after cast", __FILE__, __LINE__, __func__);
 
                         asmExt->input[nbInput]->input = tok;
                         asmExt->input[nbInput]->isVariable = true;
@@ -1952,9 +1952,9 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
 
                         sc = find_var(tok);
                         if (!sc)
-                            error_tok(tok, "%s:%d: variable undefined in input_asm", __FILE__, __LINE__);
+                            error_tok(tok, "%s:%d: error: in %s: variable undefined", __FILE__, __LINE__, __func__);
                         if (!sc->var->ty)
-                            error_tok(tok, "%s:%d: variable type undefined in input_asm", __FILE__, __LINE__);
+                            error_tok(tok, "%s:%d: error: in %s: variable type undefined", __FILE__, __LINE__, __func__);
 
                         asmExt->input[nbInput]->size = sc->var->ty->size;
 
@@ -1967,7 +1967,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
 
                         tok = tok->next;
                         if (!equal(tok, ")"))
-                            error_tok(tok, "%s:%d: input_asm: expected ')' after cast", __FILE__, __LINE__);
+                            error_tok(tok, "%s:%d: error: in %s: expected ')' after cast", __FILE__, __LINE__, __func__);
                         tok = tok->next; 
                         
 
@@ -1986,7 +1986,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->input[nbInput]->input = tok;
                     sc = find_var(tok);
                     if (!sc)
-                        error_tok(tok, "variable undefined in input_asm");
+                        error_tok(tok, "%s:%d: error: in %s: variable undefined", __FILE__, __LINE__, __func__);
                     asmExt->input[nbInput]->input = tok;
                     asmExt->input[nbInput]->isVariable = true;
                     asmExt->input[nbInput]->isLea = true;
@@ -1996,7 +1996,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                         asmExt->input[nbInput]->offset = sc->var->offset;
                     }
                     if (!asmExt->input[nbInput]->reg)
-                         error_tok(tok, "reg is null in input_asm");
+                         error_tok(tok, "%s:%d: error: in %s: reg is null", __FILE__, __LINE__, __func__);
                     asmExt->input[nbInput]->reg = update_register_size(asmExt->input[nbInput]->reg, 8);
                     tok = tok->next;
                     SET_CTX(ctx);
@@ -2014,9 +2014,9 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     asmExt->output[nbOutput]->output = tok;
                     sc = find_var(tok);
                     if (!sc)
-                        error_tok(tok, "%s:%d: in output_asm function : variable undefined", __FILE__, __LINE__);
+                        error_tok(tok, "%s:%d: in %s: variable undefined", __FILE__, __LINE__, __func__);
                     if (!sc->var->ty)
-                        error_tok(tok, "%s:%d: in output_asm function : variable type unknown", __FILE__, __LINE__);
+                        error_tok(tok, "%s:%d: in %s: variable type unknown", __FILE__, __LINE__, __func__);
                     
                     asmExt->output[nbOutput]->size = sc->var->ty->size;
                     if (sc->var->funcname) {
@@ -2027,7 +2027,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     }
                     asmExt->output[nbOutput]->isVariable = true;
                     if (!asmExt->output[nbOutput]->reg)
-                        error_tok(tok, "%s:%d: in output_asm function : reg is null", __FILE__, __LINE__);
+                        error_tok(tok, "%s:%d: in %s: reg is null", __FILE__, __LINE__, __func__);
                     asmExt->output[nbOutput]->reg = update_register_size(asmExt->output[nbOutput]->reg, asmExt->output[nbOutput]->size);
                     asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
                     tok = tok->next;
@@ -2044,7 +2044,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
             tok = skip(tok, ",", ctx); continue;
         }
         else {            
-            error_tok(tok, "%s:%d : in input_asm function : input complex constraint not managed yet! %.*s", __FILE__, __LINE__, tok->len, tok->loc);
+            error_tok(tok, "%s:%d: in %s: input complex constraint not managed yet! %.*s", __FILE__, __LINE__, __func__, tok->len, tok->loc);
         }
 
         tok = tok->next;
@@ -2079,12 +2079,12 @@ char *string_replace(char *str, char *oldstr, char *newstr)
             strncat(bstr, str + i, 1);
         }
         if (strlen(bstr) + 2 >= cap)
-            error("%s:%d: error: in string_replace : not enough memory!", __FILE__, __LINE__);
+            error("%s:%d: error: in %s: not enough memory!", __FILE__, __LINE__, __func__);
     }
 
     strncpy(str, bstr, strlen(bstr) + 1);
     if (strlen(str)> 10000)
-        error("%s:%d: error: in string_replace : not enough memory!", __FILE__, __LINE__);
+        error("%s:%d: error: in %s: not enough memory!", __FILE__, __LINE__, __func__);
     return str;
 }
 
@@ -2216,7 +2216,7 @@ char *generate_input_asm(char *input_str)
         return tmp;
     }
     
-    error("%s:%d: error: in extended_asm function generate_input_asm : unexpected error! %s", __FILE__, __LINE__, asmExt->template->templatestr);
+    error("%s:%d: error: in %s: unexpected error! %s", __FILE__, __LINE__, __func__, asmExt->template->templatestr);
     //return NULL;
 }
 
@@ -2365,7 +2365,7 @@ char *generate_output_asm(char *output_str)
         }
     }
 
-    error("%s:%d: error: in extended_asm function generate_output_asm : unexpected error! %s", __FILE__, __LINE__, asmExt->template->templatestr);
+    error("%s:%d: error: in %s: unexpected error! %s", __FILE__, __LINE__, __func__, asmExt->template->templatestr);
 
     //return NULL;
 }
@@ -2380,12 +2380,12 @@ char *load_variable(int offset)
 {
     //generic solution to handle all values of offset 
     // if (offset == 0)
-    //     error("%s:%d : error: in load_variable : incorrect offset %d or not managed yet!", __FILE__,__LINE__, offset);
+    //     error("%s:%d: error: in %s: incorrect offset %d or not managed yet!", __FILE__,__LINE__, __func__, offset);
     char *targetaddr = calloc(20, sizeof(char));
     
     int length = snprintf(targetaddr, 20, "%d", offset);
     if (length < 0)
-        error("%s:%d : error:in load_variable : error during snprintf function! offset=%d length=%d", __FILE__, __LINE__, offset, length);
+        error("%s:%d: error: in %s: error during snprintf function! offset=%d length=%d", __FILE__, __LINE__, __func__, offset, length);
     
     if (isOmitFp)
         strncat(targetaddr, "(%rsp)", 7);
@@ -2411,7 +2411,7 @@ char *opcode(int size)
     case 16:
         return "  mov ";        
     default:
-        error("%s:%d: error: in opcode : size %d unexpected!", __FILE__, __LINE__, size);
+        error("%s:%d: error: in %s: size %d unexpected!", __FILE__, __LINE__, __func__, size);
     }
 }
 
@@ -2430,7 +2430,7 @@ static char *arith_opcode(char op, int size)
     case 16:
         return (op == '+') ? "  add " : "  sub ";
     default:
-        error("%s:%d: error: in arith_opcode : size %d unexpected!", __FILE__, __LINE__, size);
+        error("%s:%d: error: in %s: size %d unexpected!", __FILE__, __LINE__, __func__, size);
     }
 }
 
@@ -2478,7 +2478,7 @@ void update_offset(char *funcname, Obj *locals)
 char *update_register_size(char *reg, int size)
 {
     if (!reg)
-        error("%s:%d: error: in update_register_size : reg is null!", __FILE__, __LINE__);
+        error("%s:%d: error: in %s: reg is null!", __FILE__, __LINE__, __func__);
     if (!strncmp(reg, "%rax", 4) || !strncmp(reg, "%eax", 4) || !strncmp(reg, "%ax", 3) || !strncmp(reg, "%ah", 3) || !strncmp(reg, "%al", 3))
         return reg_ax(size);
     else if (!strncmp(reg, "%rbx", 4) || !strncmp(reg, "%ebx", 4) || !strncmp(reg, "%bx", 3) || !strncmp(reg, "%bh", 3) || !strncmp(reg, "%bl", 3))
@@ -2529,14 +2529,14 @@ char * retrieveVariableNumber(int index)
 {
     
     if (index > 8)
-        error("%s:%d: error: in retrieveVariableNumber : index %d not managed yet!", __FILE__, __LINE__, index);
+        error("%s:%d: error: in %s: index %d not managed yet!", __FILE__, __LINE__, __func__, index);
     char *tmp;        
     char *variableNumberStr = calloc(20, sizeof(char));
     char *indexstr = calloc(20, sizeof(char));
     strncat(variableNumberStr, "%", 2);
     int length = snprintf(indexstr, 20, "%d", index);
     if (length < 0)
-        error("%s:%d : error: in retrieveVariableNumber : error during snprintf function! index=%d length=%d", __FILE__, __LINE__, index, length);
+        error("%s:%d: error: in %s: error during snprintf function! index=%d length=%d", __FILE__, __LINE__, __func__, index, length);
     strncat(variableNumberStr, indexstr, strlen(indexstr));
     tmp = variableNumberStr;
     return tmp;

@@ -173,7 +173,7 @@ static void check_parms_length(char *arg)
 {
   if (strlen(arg) > MAXLEN)
   {
-    error("%s:%d: error: in check_parms_length maximum length parameter overpassed", __FILE__, __LINE__);
+    error("%s:%d: error: in %s: maximum length parameter overpassed", __FILE__, __LINE__, __func__);
     exit(EXIT_FAILURE);
   }
 }
@@ -239,7 +239,7 @@ static FileType parse_opt_x(char *s)
     return FILE_ASM;     
   if (!strcmp(s, "none"))
     return FILE_NONE;
-  error("%s:%d: error: in parse_opt_x <command line>: unknown argument for -x: %s", __FILE__, __LINE__, s);
+  error("%s:%d: error: in %s: <command line>: unknown argument for -x: %s", __FILE__, __LINE__, __func__, s);
 }
 
 
@@ -248,7 +248,7 @@ static char *quote_makefile(char *s)
   char *buf = calloc(1, strlen(s) * 2 + 1);
   if (buf == NULL)
   {
-    error("%s:%d: error: in quote_makefile buf pointer is null!", __FILE__, __LINE__);
+    error("%s:%d: error: in %s: buf pointer is null!", __FILE__, __LINE__, __func__);
   }
 
   for (int i = 0, j = 0; s[i]; i++)
@@ -942,7 +942,7 @@ static void parse_args(int argc, char **argv)
         path = argv[i] + 8;
     } else {
         if (i+1 >= argc)            
-            error("%s:%d: error: in parse_args expected argument after -isystem", __FILE__, __LINE__);
+            error("%s:%d: error: in %s: expected argument after -isystem", __FILE__, __LINE__, __func__);
         path = argv[++i];
     }
     strarray_push(&include_paths, path);
@@ -950,11 +950,11 @@ static void parse_args(int argc, char **argv)
     }
 
     if (!strcmp(argv[i], "-Werror=invalid-command-line-argument")) {
-      error("%s:%d: error: in parse_args : argument not accepted : -Werror=invalid-command-line-argument", __FILE__, __LINE__); 
+      error("%s:%d: error: in %s: argument not accepted : -Werror=invalid-command-line-argument", __FILE__, __LINE__, __func__); 
     }
 
     if (!strcmp(argv[i], "-Werror=unknown-warning-option")) {
-      error("%s:%d: error: in parse_args : argument not accepted : -Werror=unknown-warning-option", __FILE__, __LINE__); 
+      error("%s:%d: error: in %s: argument not accepted : -Werror=unknown-warning-option", __FILE__, __LINE__, __func__); 
     }
 
     // These options are ignored for now.
@@ -1074,7 +1074,7 @@ static void parse_args(int argc, char **argv)
       } else if (!strcmp(stdver, "gnu23")) {
         current_std = STD_GNU23;
       } else{
-        error("%s:%d: error: in parse_args : unsupported -std option: %s", __FILE__, __LINE__, stdver);
+        error("%s:%d: error: in %s: unsupported -std option: %s", __FILE__, __LINE__, __func__, stdver);
         exit(1);
       }
       continue;
@@ -1082,7 +1082,7 @@ static void parse_args(int argc, char **argv)
 
 
     if (argv[i][0] == '-' && argv[i][1] != '\0')
-      error("%s:%d: error: in parse_args unknown argument: %s", __FILE__, __LINE__, argv[i]);
+      error("%s:%d: error: in %s: unknown argument: %s", __FILE__, __LINE__, __func__, argv[i]);
 
     strarray_push(&input_paths, argv[i]);
   }
@@ -1093,7 +1093,7 @@ static void parse_args(int argc, char **argv)
 
   if (input_paths.len == 0) {
     if (!opt_v)
-      error("%s:%d: error: in parse_args no input files", __FILE__, __LINE__);
+      error("%s:%d: error: in %s:  no input files", __FILE__, __LINE__, __func__);
     exit(0);
   }
 
@@ -1110,7 +1110,7 @@ FILE *open_file(char *path)
 
   FILE *out = fopen(path, "w");
   if (!out)
-    error("%s:%d: error: in open_file cannot open output file: %s: %s", __FILE__, __LINE__, path, strerror(errno));
+    error("%s:%d: error: in %s: cannot open output file: %s: %s", __FILE__, __LINE__, __func__, path, strerror(errno));
   return out;
 }
 
@@ -1138,7 +1138,7 @@ char * extract_path(char* tmpl)
 
         parentLen = strlen(tmpl) - strlen(last + 1);
         if (parentLen > 300)
-          error("%s:%d: error: no enough size for parent in getParent function %d expected ", __FILE__, __LINE__, parentLen);
+          error("%s:%d: error: in %s: no enough size for parent in getParent function %d expected ", __FILE__, __LINE__, __func__, parentLen);
         strncpy(parent, tmpl, parentLen);
     } 
 
@@ -1179,10 +1179,10 @@ static char *create_tmpfile(void)
 {
   char *path = strdup("/tmp/chibicc-XXXXXX");
   if (path == NULL)
-    error("%s:%d: error: in create_tmpfile path path is null", __FILE__, __LINE__);
+    error("%s:%d: error: in %s: path path is null", __FILE__, __LINE__, __func__);
   int fd = mkstemp(path);
   if (fd == -1)
-    error("%s:%d: error: in create_tmpfile mkstemp failed: %s", __FILE__, __LINE__, strerror(errno));
+    error("%s:%d: error: in %s:  mkstemp failed: %s", __FILE__, __LINE__, __func__, strerror(errno));
   close(fd);
 
   strarray_push(&tmpfiles, path);
@@ -1212,7 +1212,7 @@ static void run_subprocess(char **argv)
   {
 
     execvp(argv[0], argv);
-    fprintf(stderr, "%s:%d: error: in run_subprocess exec failed: %s: %s\n", __FILE__, __LINE__, argv[0], strerror(errno));
+    fprintf(stderr, "%s:%d: error: in %s: exec failed: %s: %s\n", __FILE__, __LINE__, __func__, argv[0], strerror(errno));
     _exit(1);
   }
 
@@ -1228,7 +1228,7 @@ static void run_cc1(int argc, char **argv, char *input, char *output)
 {
   char **args = calloc(argc + 10, sizeof(char *));
   if (args == NULL)
-    error("%s:%d: error: in run_cc1 args is null", __FILE__, __LINE__);
+    error("%s:%d: error: in %s: args is null", __FILE__, __LINE__, __func__);
   memcpy(args, argv, argc * sizeof(char *));
   args[argc++] = "-cc1";
 
@@ -1340,7 +1340,7 @@ static Token *must_tokenize_file(char *path)
 {
   Token *tok = tokenize_file(path);
   if (!tok)
-    error("%s:%d: error: in must_tokenize_file %s: %s", __FILE__, __LINE__, path, strerror(errno));
+    error("%s:%d: error: in %s: %s: %s", __FILE__, __LINE__, __func__, path, strerror(errno));
   return tok;
 }
 
@@ -1374,7 +1374,7 @@ static void cc1(void)
     {
       path = search_include_paths(incl);
       if (!path)
-        error("%s:%d: error: in cc1 -include: %s: %s", __FILE__, __LINE__, incl, strerror(errno));
+        error("%s:%d: error: in %s: -include: %s: %s", __FILE__, __LINE__, __func__, incl, strerror(errno));
     }
 
     Token *tok2 = must_tokenize_file(path);
@@ -1486,7 +1486,7 @@ static char *find_libpath(void)
     return "/usr/lib/x86_64-linux-gnu";
   if (file_exists("/usr/lib64/crti.o"))
     return "/usr/lib64";
-  error("%s:%d: error: in find_libpath library path is not found", __FILE__, __LINE__);
+  error("%s:%d: error: in %s: library path is not found", __FILE__, __LINE__, __func__);
 }
 
 static char *find_gcc_libpath(void)
@@ -1514,7 +1514,7 @@ static char *find_gcc_libpath(void)
       return dirname(path);
   }
 
-  error("%s:%d: error: in find_gcc_libpath gcc library path is not found", __FILE__, __LINE__);
+  error("%s:%d: error: in %s: gcc library path is not found", __FILE__, __LINE__, __func__);
 }
 
 static void run_linker(StringArray *inputs, char *output)
@@ -1671,7 +1671,7 @@ static FileType get_file_type(char *filename)
     return opt_x;
 
 
-  error("%s:%d: error: in get_file_type <command line>: unknown file extension: %s", __FILE__, __LINE__, filename);
+  error("%s:%d: error: in %s: <command line>: unknown file extension: %s", __FILE__, __LINE__, __func__, filename);
 }
 
 int main(int argc, char **argv)
@@ -1693,7 +1693,7 @@ int main(int argc, char **argv)
     f = fopen(logFile, "w");
     if (f == NULL)
     {
-      error("%s:%d: error: in main Issue with -debug or -printparameter, file not opened!", __FILE__, __LINE__);
+      error("%s:%d: error: in %s: Issue with -debug or -printparameter, file not opened!", __FILE__, __LINE__, __func__);
       exit(1);
     }
   }
@@ -1709,7 +1709,7 @@ int main(int argc, char **argv)
 
   if (opt_cc1 && !isCc1input)
   {
-    error("%s:%d: error: in main with -cc1 parameter -cc1-input is mandatory!", __FILE__, __LINE__);
+    error("%s:%d: error: in %s: with -cc1 parameter -cc1-input is mandatory!", __FILE__, __LINE__, __func__);
     usage(-1);
   }
 
@@ -1718,7 +1718,7 @@ int main(int argc, char **argv)
   //from @fuhsnn fix
   if (input_paths.len > 1 && opt_o && (opt_c || opt_S || opt_E))
     if (++file_count > 1)
-    error("%s:%d: error: in main cannot specify '-o' with '-c,' '-S' or '-E' with multiple files", __FILE__, __LINE__);
+    error("%s:%d: error: in %s: cannot specify '-o' with '-c,' '-S' or '-E' with multiple files", __FILE__, __LINE__, __func__);
 
   StringArray ld_args = {};
 

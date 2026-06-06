@@ -30,7 +30,7 @@ static Type *new_type(TypeKind kind, int64_t size, int align)
 {
   Type *ty = calloc(1, sizeof(Type));
   if (ty == NULL)
-    error("%s:%d: error: in new_type ty is null!", __FILE__, __LINE__);
+    error("%s:%d: error: in %s: ty is null!", __FILE__, __LINE__, __func__);
   ty->kind = kind;
   ty->size = size;
   ty->align = align;
@@ -308,7 +308,7 @@ Type *copy_type(Type *ty)
 {
   Type *ret = calloc(1, sizeof(Type));
   if (ret == NULL)
-    error("%s:%d: error: in copy_type ret is null!", __FILE__, __LINE__);
+    error("%s:%d: error: in %s: ret is null!", __FILE__, __LINE__, __func__);
   *ret = *ty;
   ret->origin = ty;
 
@@ -346,7 +346,7 @@ Type *func_type(Type *return_ty)
 Type *array_of(Type *base, int64_t len)
 {
   if (!base)
-  error("%s:%d: in array_of : base is null", __FILE__, __LINE__); 
+  error("%s:%d: in %s: base is null", __FILE__, __LINE__, __func__); 
   Type *ty = new_type(TY_ARRAY, base->size * len, base->align);
   ty->base = base;
   ty->array_len = len;  
@@ -358,7 +358,7 @@ Type *array_of(Type *base, int64_t len)
 Type *vector_of(Type *base, int64_t len)
 {
   if (!base)
-    error("%s:%d: in vector_of : base is null", __FILE__, __LINE__); 
+    error("%s:%d: in %s: base is null", __FILE__, __LINE__, __func__); 
   Type *ty = new_type(TY_VECTOR, base->size * len, base->align);
   int total_size = base->size * len;
   ty->size = total_size;
@@ -560,14 +560,14 @@ void add_type(Node *node)
   case ND_POS:
   case ND_NEG:
     if (!is_numeric(node->lhs->ty) && !is_vector(node->lhs->ty))
-      error_tok(node->lhs->tok, "%s:%d: in add_type: invalid operand", __FILE__, __LINE__);
+      error_tok(node->lhs->tok, "%s:%d: in %s: invalid operand", __FILE__, __LINE__, __func__);
     if (is_integer(node->lhs->ty))
       int_promotion(&node->lhs);
     node->ty = node->lhs->ty;
     return;  
   case ND_ASSIGN:
     if (node->lhs->ty->kind == TY_ARRAY)
-      error_tok(node->lhs->tok, "%s:%d: not an lvalue", __FILE__, __LINE__);
+      error_tok(node->lhs->tok, "%s:%d: in %s: not an lvalue", __FILE__, __LINE__, __func__);
     if (node->lhs->ty->kind != TY_STRUCT && node->lhs->ty->kind != TY_UNION)
       node->rhs = new_cast(node->rhs, node->lhs->ty);
     node->ty = node->lhs->ty;
@@ -646,12 +646,12 @@ void add_type(Node *node)
       if (node->lhs->ty)
         node->lhs->ty->base = node->lhs->ty;
       else
-        error_tok(node->tok, "%s:%d: invalid pointer dereference", __FILE__, __LINE__);
+        error_tok(node->tok, "%s:%d: in %s: invalid pointer dereference", __FILE__, __LINE__, __func__);
     }
     //======ISS-154 trying to fix deferencing pointer issue when we have a macro that can return a pointer or null  (self) ? NULL      
     //printf("======%d %d %s\n", node->lhs->ty->base->kind, node->lhs->ty->kind, node->lhs->tok->loc);
     if (node->lhs->ty->base->kind == TY_VOID && node->lhs->ty->kind == TY_VOID)
-      error_tok(node->tok, "%s:%d : dereferencing a void pointer", __FILE__, __LINE__);
+      error_tok(node->tok, "%s:%d: in %s: dereferencing a void pointer", __FILE__, __LINE__, __func__);
     if (node->lhs->ty->base->kind == TY_VOID)
       node->lhs->ty->base = node->lhs->ty;
     node->ty = node->lhs->ty->base;
@@ -918,7 +918,7 @@ void add_type(Node *node)
   case ND_FETCHNAND:
   case ND_SUBFETCH:
     if (node->lhs->ty->kind != TY_PTR)
-      error_tok(node->lhs->tok, "%s:%d:  in add_type: pointer expected", __FILE__, __LINE__);
+      error_tok(node->lhs->tok, "%s:%d:  in %s: pointer expected", __FILE__, __LINE__, __func__);
     node->rhs = new_cast(node->rhs, node->lhs->ty->base);
     node->ty = node->lhs->ty->base;
     return;
@@ -960,7 +960,7 @@ void add_type(Node *node)
     return;
   case ND_EXCH:
     if (node->lhs->ty->kind != TY_PTR)
-      error_tok(node->cas_addr->tok, "%s:%d: pointer expected", __FILE__, __LINE__);
+      error_tok(node->cas_addr->tok, "%s:%d: in %s: pointer expected", __FILE__, __LINE__, __func__);
     node->ty = node->lhs->ty->base;
     return;
   case ND_BUILTIN_NANF:  
