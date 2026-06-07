@@ -89,7 +89,7 @@ int count(void)
 
 bool is_omit_fp(Obj *fn) {
   if (!opt_omit_frame_pointer) {  return false; }
-  if (!fn) { return true;}
+  if (!fn) { return false;}
   if (fn->force_frame_pointer) {  return false; }
 
   for (Obj *var = fn->locals; var; var = var->next) {
@@ -4352,7 +4352,10 @@ static void gen_stmt(Node *node)
   case ND_NULL_EXPR:
     return;
   case ND_ASM:
-    println("  %s", node->asm_str);
+    {
+      char *s = subst_fp_placeholder(node->asm_str, lvar_ptr);
+      fprintf(output_file, "  %s\n", s);
+    }
     return;
   }
 
@@ -4658,8 +4661,12 @@ static void emit_text(Obj *prog)
       println(".L.body.%s:", sym(fn));
     
     // Save RSP for alloca/VLA support if needed
-    if (fn->alloca_bottom && fn->alloca_bottom->offset)
-      println("  mov %%rsp, %d(%s)", fn->alloca_bottom->offset, lvar_ptr);
+    if (fn->alloca_bottom && fn->alloca_bottom->offset) {
+      if (is_omit_fp(fn))
+        println("  mov %%rsp, %d(%%rsp)", fn->alloca_bottom->offset + fn->stack_size);
+      else
+        println("  mov %%rsp, %d(%s)", fn->alloca_bottom->offset, lvar_ptr);
+    }
     //issue with postgres and local variables not initialized!
     for (Obj *var = fn->locals; var; var = var->next) {     
         if (!var->init && !var->is_param &&

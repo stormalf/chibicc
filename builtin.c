@@ -13,7 +13,14 @@ void gen_builtin_alloca(Node *node)
     return;
   }
 
-  println("  mov %d(%s), %%rax", fn->alloca_bottom->offset, fn->alloca_bottom->ptr);
+  int off = fn->alloca_bottom->offset;
+  const char *ptr = fn->alloca_bottom->ptr;
+  if (is_omit_fp(fn)) {
+    off += fn->stack_size;
+    ptr = "%rsp";
+  }
+
+  println("  mov %d(%s), %%rax", off, ptr);
   println("  mov %%rax, %%rcx");
   println("  sub %%rsp, %%rcx");
   println("  mov %%rax, %%rdx");
@@ -37,7 +44,7 @@ void gen_builtin_alloca(Node *node)
   println("  jmp 1b");
   println("2:");
 
-  println("  mov %%rdx, %d(%s)", fn->alloca_bottom->offset, fn->alloca_bottom->ptr);
+  println("  mov %%rdx, %d(%s)", off, ptr);
   println("  mov %%rdx, %%rax");
 }
 

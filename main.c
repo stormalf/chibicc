@@ -65,6 +65,7 @@ static bool opt_nostdinc;
 static bool opt_nostdlib;
 static bool opt_v;
 static bool opt_fstack_protector;
+static bool no_omit_frame_pointer_arg;
 
 static StringArray ld_extra_args;
 static StringArray std_include_paths;
@@ -871,6 +872,7 @@ static void parse_args(int argc, char **argv)
 
     if (!strcmp(argv[i], "-fno-omit-frame-pointer")) {
       opt_omit_frame_pointer = false;
+      no_omit_frame_pointer_arg = true; 
       continue;
     }
 
@@ -881,30 +883,26 @@ static void parse_args(int argc, char **argv)
       continue;
     }
 
-    if (!strcmp(argv[i], "-O")) {
-      opt_omit_frame_pointer = true;
+    if (!strcmp(argv[i], "-O")) {      
       opt_optimize = true;
       opt_optimize_level1 = true;
       continue;
     }
 
-    if (!strcmp(argv[i], "-O1")) {
-      opt_omit_frame_pointer = true;
+    if (!strcmp(argv[i], "-O1")) {      
       opt_optimize = true;
       opt_optimize_level1 = true;
       continue;
     }
 
-    if (!strcmp(argv[i], "-O2")) {
-      opt_omit_frame_pointer = true;
+    if (!strcmp(argv[i], "-O2")) {      
       opt_optimize = true;
       opt_optimize_level1 = true;
       opt_optimize_level2 = true;
       continue;
     }
 
-    if (!strcmp(argv[i], "-O3")) {
-      opt_omit_frame_pointer = true;
+    if (!strcmp(argv[i], "-O3")) {      
       opt_optimize = true;
       opt_optimize_level1 = true;
       opt_optimize_level2 = true;
@@ -1090,6 +1088,9 @@ static void parse_args(int argc, char **argv)
   for (int i = 0; i < idirafter.len; i++)
     strarray_push(&include_paths, idirafter.data[i]);
 
+  //if -fno-omit-frame-pointer is not passed we assume that each optimization can omit frame pointer
+  if (opt_optimize && !no_omit_frame_pointer_arg)
+    opt_omit_frame_pointer = true;
 
   if (input_paths.len == 0) {
     if (!opt_v)

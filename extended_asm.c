@@ -157,7 +157,6 @@ static bool hasInput = false;
 static bool hasOutput = false;
 static bool isToNegate = false;
 static bool hasOperandName = false;
-static bool isOmitFp = false;
 static Obj *current_fn_asm;
 
 static char *register_lower(char *reg);
@@ -290,7 +289,6 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals, Obj *curre
     // asmExt->template->hasPercent = check_template(template);
 
     current_fn_asm = current_fn;
-    isOmitFp = is_omit_fp(current_fn);
 
     //clear the registerUsed array
     clear_register_used();
@@ -2483,22 +2481,32 @@ char *generate_output_asm(char *output_str)
 // need to test in several cases
 char *load_variable(int offset)
 {
-    //generic solution to handle all values of offset 
-    // if (offset == 0)
-    //     error("%s:%d: error: in %s: incorrect offset %d or not managed yet!", __FILE__,__LINE__, __func__, offset);
     char *targetaddr = calloc(20, sizeof(char));
-    
     int length = snprintf(targetaddr, 20, "%d", offset);
     if (length < 0)
         error("%s:%d: error: in %s: error during snprintf function! offset=%d length=%d", __FILE__, __LINE__, __func__, offset, length);
-    
-    if (isOmitFp)
-        strncat(targetaddr, "(%rsp)", 7);
-    else if (current_fn_asm && current_fn_asm->stack_align > 16)
-        strncat(targetaddr, "(%rbx)", 7);
-    else
-        strncat(targetaddr, "(%rbp)", 7);
+    strcat(targetaddr, "(__chibicc_fp)");
     return targetaddr;
+}
+
+char *subst_fp_placeholder(const char *asm_str, const char *fp)
+{
+    char *result = calloc(30000, 1);
+    const char *marker = "__chibicc_fp";
+    int mlen = strlen(marker);
+    int j = 0;
+    for (int i = 0; asm_str[i]; i++) {
+        if (strncmp(&asm_str[i], marker, mlen) == 0) {
+            int k = 0;
+            while (fp[k])
+                result[j++] = fp[k++];
+            i += mlen - 1;
+        } else {
+            result[j++] = asm_str[i];
+        }
+    }
+    result[j] = '\0';
+    return result;
 }
 
 char *opcode(int size)

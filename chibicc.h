@@ -1576,6 +1576,7 @@ int search_output_index(char c);
 char *int_to_string(int i);
 void update_offset(char *funcname, Obj *locals);
 char *load_variable(int order);
+char *subst_fp_placeholder(const char *asm_str, const char *fp);
 char *generate_output_asm(char *output_str);
 char *opcode(int size);
 char *update_register_size(char *reg, int size);
