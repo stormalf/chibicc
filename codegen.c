@@ -92,17 +92,6 @@ bool is_omit_fp(Obj *fn) {
   if (!fn) { return false;}
   if (fn->force_frame_pointer) {  return false; }
 
-  for (Obj *var = fn->locals; var; var = var->next) {
-    if (get_align(var) > 8) {      
-      return false;
-    }
-  }
-  for (Obj *var = fn->params; var; var = var->next) {
-    if (get_align(var) > 8) {      
-      return false;
-    }
-  }
-
   if (fn->stack_align > 16) { return false; }
 
   // Support for omit-fp with alignment > 8 is currently broken/incomplete.

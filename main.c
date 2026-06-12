@@ -929,10 +929,10 @@ static void parse_args(int argc, char **argv)
       exit(0);
     }      
 
-    // if (!strcmp(argv[i], "-fp-model")) {
-    //   i++; 
-    //   continue;
-    // }
+    if (!strcmp(argv[i], "-fp-model")) {
+      i++; 
+      continue;
+    }
 
     if (!strcmp(argv[i], "-isystem")) {
     char *path;

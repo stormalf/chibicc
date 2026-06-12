@@ -612,6 +612,19 @@ void gen_builtin_frame_address(Node *node) {
 
     gen_expr(node->lhs);
 
+    if (is_omit_fp(get_current_fn())) {
+        // With -fomit-frame-pointer: level 0 returns %rsp,
+        // level > 0 returns NULL (can't walk the chain).
+        println("  cmp $0, %%rax");
+        println("  jne .Lframe_address_null%d", c);
+        println("  mov %%rsp, %%rax");
+        println("  jmp .Lframe_address_return%d", c);
+        println(".Lframe_address_null%d:", c);
+        println("  mov $0, %%rax");
+        println(".Lframe_address_return%d:", c);
+        return;
+    }
+
     println("  mov $64, %%rdi");
     println("  cmp %%rax, %%rdi");
     println("  ja .Lframe_address_ok%d", c);

@@ -7401,14 +7401,19 @@ static Node *primary(Token **rest, Token *tok)
 
   if (equal(tok, "__builtin_frame_address"))
   {
-    if (current_fn)
-      current_fn->force_frame_pointer = true;
     Node *node = new_node(ND_BUILTIN_FRAME_ADDRESS, tok);
     add_type(node);
     SET_CTX(ctx); 
     tok = skip(tok->next, "(", ctx);
     node->lhs = assign(&tok, tok);
     add_type(node->lhs);
+
+    // __builtin_frame_address(0) doesn't need a frame pointer; it
+    // can be served from %rsp when frames are omitted.  Only force
+    // one when the level is non-zero or not a compile-time constant.
+    if (current_fn &&
+        (node->lhs->kind != ND_NUM || node->lhs->val != 0))
+      current_fn->force_frame_pointer = true;
 
     SET_CTX(ctx); 
     *rest = skip(tok, ")", ctx);
