@@ -3157,21 +3157,24 @@ void gen_expr(Node *node)
             }
 
             // Restore stack pointer before jumping back to function body
-            // .L.body is now before the sub instruction, so we just need to reset RSP
             if (is_omit_fp(current_fn)) {
-                // No frame pointer: just clean up stack args
+                // No frame pointer: clean up stack-passed args (if any), then
+                // jump to .L.body which is AFTER the sub $N,%rsp prologue.
+                // Jumping to the function symbol itself would re-execute the
+                // sub on every iteration, growing the stack by N bytes per
+                // call and causing a stack overflow.
                 if (stack_args > 0)
                     println("  add $%d, %%rsp", stack_args * 8);
-                    //println("  add $%d, %%rsp", current_fn->stack_size);
+                println("  jmp .L.body.%s", sym(current_fn));
             } else {
                 // Frame pointer exists: restore RSP to base pointer
                 bool use_rbx = (current_fn->stack_align > 16);
                 char *base = use_rbx ? "%rbx" : "%rbp";
                 println("  mov %s, %%rsp", base);
+                println("  jmp .L.body.%s", sym(current_fn));
             }
 
             depth -= stack_args;
-            println("  jmp .L.body.%s", sym(current_fn));
             return;
         }
 
