@@ -255,11 +255,34 @@ static void collect_debug_type(Type *ty, DebugTypeInfo **types, int *next_id,
     collect_debug_type(mem->ty, types, next_id, quals, next_qual_id);
 }
 
+static DebugTypedef *find_debug_typedef_by_type(Type *ty) {
+  for (DebugTypedef *td = debug_typedefs; td; td = td->next)
+    if (td->ty == ty)
+      return td;
+  return NULL;
+}
+
+// Flag to prevent recursive typedef self-reference when emitting
+// the underlying type reference from inside emit_typedef_dies.
+static bool debug_typedef_emit_inner = false;
+
 static void emit_unqualified_type_ref(Type *ty, DebugTypeInfo *types, int c) {
   ty = unqual_debug_type(ty);
 
   if (emit_builtin_type_ref(ty, c))
     return;
+
+  // When not emitting the inner type of a typedef DIE, prefer
+  // referencing a typedef DIE so debuggers see the typedef name
+  // (e.g. "PyObject" instead of "struct _object").
+  if (!debug_typedef_emit_inner &&
+      (ty->kind == TY_STRUCT || ty->kind == TY_UNION)) {
+    DebugTypedef *td = find_debug_typedef_by_type(ty);
+    if (td) {
+      println("  .long .L.type_typedef_%s_%d - .L.debug_info%d", td->name, c, c);
+      return;
+    }
+  }
 
   DebugTypeInfo *entry = find_debug_type(types, ty);
   if (!entry) {
@@ -335,15 +358,33 @@ static void emit_custom_type_die(DebugTypeInfo *entry, DebugTypeInfo *types, int
   }
   case TY_STRUCT:
   case TY_UNION: {
+    if (ty->size < 0) {
+      println("  .uleb128 %d", ty->kind == TY_STRUCT ? 12 : 13);
+      emit_struct_name(ty, entry->id);
+      println("  .byte 1");
+      return;
+    }
     println("  .uleb128 %d", ty->kind == TY_STRUCT ? 9 : 11);
     emit_struct_name(ty, entry->id);
     println("  .uleb128 %ld", ty->size);
     int member_idx = 0;
     for (Member *mem = ty->members; mem; mem = mem->next) {
+      if (mem->is_bitfield) {
+        println("  .uleb128 19");
+        emit_member_name(mem, member_idx++);
+        emit_unqualified_type_ref(mem->ty, types, c);
+        println("  .uleb128 %d", ty->kind == TY_UNION ? 0 : mem->offset);
+        println("  .uleb128 %d", mem->ty->size);     // DW_AT_byte_size
+        // DW_AT_bit_offset is MSB-relative per DWARF spec.
+        int dwarf_bit_offset = mem->ty->size * 8 - mem->bit_offset - mem->bit_width;
+        println("  .uleb128 %d", dwarf_bit_offset);
+        println("  .uleb128 %d", mem->bit_width);    // DW_AT_bit_size
+      } else {
       println("  .uleb128 10");
       emit_member_name(mem, member_idx++);
       emit_unqualified_type_ref(mem->ty, types, c);
       println("  .uleb128 %d", ty->kind == TY_UNION ? 0 : mem->offset);
+    }
     }
     println("  .byte 0");
     return;
@@ -387,7 +428,9 @@ static void emit_qual_type_dies(DebugQualTypeInfo *quals, DebugTypeInfo *types, 
 
 static bool is_emitted_typedef(EmittedTypedef *head, char *name, Type *ty) {
   for (EmittedTypedef *it = head; it; it = it->next) {
-    if (it->ty == ty && !strcmp(it->name, name))
+    // Dedup by name only — the same typedef name in different headers
+    // may produce different Type* pointers for the same underlying type.
+    if (!strcmp(it->name, name))
       return true;
   }
   return false;
@@ -408,12 +451,40 @@ static void emit_typedef_dies(DebugTypeInfo *types, DebugQualTypeInfo *quals, in
     entry->next = emitted;
     emitted = entry;
 
-    println("  .uleb128 12");
+    println(".L.type_typedef_%s_%d:", td->name, c);
+    println("  .uleb128 17");
     println("  .string \"%s\"", td->name);
+    debug_typedef_emit_inner = true;
     emit_type_ref(td->ty, types, quals, c);
-  }
+    debug_typedef_emit_inner = false;
+}
 }
 
+
+static bool has_float_in_range(Type *ty, int lo, int hi, int offset) {
+  if (ty->kind == TY_STRUCT || ty->kind == TY_UNION) {
+    for (Member *mem = ty->members; mem; mem = mem->next) {
+      int tmpoffset = offset + mem->offset;
+      if (tmpoffset + mem->ty->size <= lo) continue;
+      if (hi <= tmpoffset) break;
+      if (!has_float_in_range(mem->ty, lo, hi, tmpoffset))
+        return false;
+    }
+    return true;
+  }
+  if (ty->kind == TY_ARRAY) {
+    for (int i = 0; i < ty->array_len; i++) {
+      int tmpoffset = offset + ty->base->size * i;
+      if (tmpoffset + ty->base->size <= lo) continue;
+      if (hi <= tmpoffset) break;
+      if (!has_float_in_range(ty->base, lo, hi, tmpoffset))
+        return false;
+    }
+    return true;
+  }
+  if (ty->kind == TY_VECTOR) return true;
+  return ty->kind == TY_FLOAT || ty->kind == TY_DOUBLE;
+}
 
 void emit_debug_info(Obj *prog) {
   if (!opt_g)
@@ -425,17 +496,16 @@ void emit_debug_info(Obj *prog) {
   // Compute absolute source path and compilation directory
   char abs_path[PATH_MAX] = {0};
   char comp_dir[PATH_MAX] = {0};
+
   if (base_file) {
-    // Use base_file directly without realpath
-    snprintf(abs_path, sizeof(abs_path), "%s", base_file);
-    // Extract directory from path (find last '/')
-    char *last_slash = strrchr(base_file, '/');
-    if (last_slash && last_slash != base_file) {
-      size_t dir_len = last_slash - base_file;
-      if (dir_len < sizeof(comp_dir)) {
-        strncpy(comp_dir, base_file, dir_len);
+    if (!realpath(base_file, abs_path))
+      snprintf(abs_path, sizeof(abs_path), "%s", base_file); // fallback
+
+    char *last_slash = strrchr(abs_path, '/');
+    if (last_slash && last_slash != abs_path) {
+      size_t dir_len = last_slash - abs_path;
+      memcpy(comp_dir, abs_path, dir_len);
         comp_dir[dir_len] = '\0';
-      }
     } else {
       snprintf(comp_dir, sizeof(comp_dir), ".");
     }
@@ -570,6 +640,24 @@ void emit_debug_info(Obj *prog) {
   println("  .byte 0");
   println("  .byte 0");
 
+  println("  .uleb128 19");                   // Abbrev code for bitfield member
+  println("  .uleb128 0xd");                  // DW_TAG_member
+  println("  .byte 0");                       // DW_CHILDREN_no
+  println("  .uleb128 0x3");                  // DW_AT_name
+  println("  .uleb128 0x8");                  // DW_FORM_string
+  println("  .uleb128 0x49");                 // DW_AT_type
+  println("  .uleb128 0x13");                 // DW_FORM_ref4
+  println("  .uleb128 0x38");                 // DW_AT_data_member_location
+  println("  .uleb128 0xf");                  // DW_FORM_udata
+  println("  .uleb128 0xb");                  // DW_AT_byte_size
+  println("  .uleb128 0xf");                  // DW_FORM_udata
+  println("  .uleb128 0xc");                  // DW_AT_bit_offset
+  println("  .uleb128 0xf");                  // DW_FORM_udata
+  println("  .uleb128 0xd");                  // DW_AT_bit_size
+  println("  .uleb128 0xf");                  // DW_FORM_udata
+  println("  .byte 0");
+  println("  .byte 0");
+
   println("  .uleb128 11");                   // Abbrev code
   println("  .uleb128 0x17");                 // DW_TAG_union_type
   println("  .byte 1");                       // DW_CHILDREN_yes
@@ -580,7 +668,27 @@ void emit_debug_info(Obj *prog) {
   println("  .byte 0");
   println("  .byte 0");
 
-  println("  .uleb128 12");                   // Abbrev code
+  println("  .uleb128 12");                   // Abbrev code for incomplete struct decl
+  println("  .uleb128 0x13");                 // DW_TAG_structure_type
+  println("  .byte 0");                       // DW_CHILDREN_no
+  println("  .uleb128 0x3");                  // DW_AT_name
+  println("  .uleb128 0x8");                  // DW_FORM_string
+  println("  .uleb128 0x3c");                 // DW_AT_declaration
+  println("  .uleb128 0xc");                  // DW_FORM_flag
+  println("  .byte 0");
+  println("  .byte 0");
+
+  println("  .uleb128 13");                   // Abbrev code for incomplete union decl
+  println("  .uleb128 0x17");                 // DW_TAG_union_type
+  println("  .byte 0");                       // DW_CHILDREN_no
+  println("  .uleb128 0x3");                  // DW_AT_name
+  println("  .uleb128 0x8");                  // DW_FORM_string
+  println("  .uleb128 0x3c");                 // DW_AT_declaration
+  println("  .uleb128 0xc");                  // DW_FORM_flag
+  println("  .byte 0");
+  println("  .byte 0");
+
+  println("  .uleb128 17");                   // Abbrev code
   println("  .uleb128 0x16");                 // DW_TAG_typedef
   println("  .byte 0");                       // DW_CHILDREN_no
   println("  .uleb128 0x3");                  // DW_AT_name
@@ -590,7 +698,7 @@ void emit_debug_info(Obj *prog) {
   println("  .byte 0");
   println("  .byte 0");
 
-  println("  .uleb128 13");                   // Abbrev code
+  println("  .uleb128 18");                   // Abbrev code
   println("  .uleb128 0x34");                 // DW_TAG_variable
   println("  .byte 0");                       // DW_CHILDREN_no
   println("  .uleb128 0x3");                  // DW_AT_name
@@ -647,7 +755,7 @@ void emit_debug_info(Obj *prog) {
   println("  .byte 0xc");                     // DW_AT_language (DW_LANG_C99)
   println("  .string \"%s\"", comp_dir);       // DW_AT_comp_dir (new)
   println("  .string \"%s\"", abs_path);       // DW_AT_name (absolute path)
-  println("  .long .L.line_table_start0");     // DW_AT_stmt_list
+  println("  .long .L.debug_line0");           // DW_AT_stmt_list
   println("  .quad .L.text_start");           // DW_AT_low_pc
   println("  .quad .L.text_end");             // DW_AT_high_pc
 
@@ -726,16 +834,70 @@ void emit_debug_info(Obj *prog) {
         println("  .byte 0x77"); // DW_OP_breg7 (rsp)
         println("  .sleb128 %d", fn->stack_size);
     } else if (fn->stack_align > 16) {
-        println("  .byte 0x53"); // DW_OP_reg3 (rbx)
+        println("  .byte 0x73"); // DW_OP_breg3 (rbx)
+        println("  .sleb128 0");
     } else {
-        println("  .byte 0x56"); // DW_OP_reg6 (rbp)
+        println("  .byte 0x76"); // DW_OP_breg6 (rbp)
+        println("  .sleb128 0");
     }
     println(".L.loc_end_%d:", lbl_fb);
     
     println("  .byte %d", !fn->is_static);
 
+    /* DWARF register numbers for System V AMD64 ABI argument registers:
+     *   Integer: rdi=5, rsi=4, rdx=1, rcx=2, r8=8, r9=9
+     *   SSE:     xmm0=17, xmm1=18, ..., xmm7=24
+     * DW_OP_regN (0x50+N) is valid at any program point, including
+     * function-entry breakpoints before the prologue saves registers
+     * to the stack.  Register-passed parameters use DW_OP_regN;
+     * stack-passed parameters fall back to DW_OP_fbreg. */
+    static const int gp_dwarf_regs[6] = {5, 4, 1, 2, 8, 9};
+    int gp = 0, fp = 0;
     for (Obj *var = fn->params; var; var = var->next) {
+        Type *ty = var->ty;
+        int reg_idx = -1;
+
+        if (!var->pass_by_stack) {
+            switch (ty->kind) {
+            case TY_FLOAT:
+            case TY_DOUBLE:
+                if (fp < 8)
+                    reg_idx = 17 + fp;
+                fp++;
+                break;
+            case TY_VECTOR:
+                if (fp < 8)
+                    reg_idx = 17 + fp;
+                fp++;
+                break;
+            case TY_INT128:
+                gp += 2;
+                break;
+            case TY_STRUCT:
+            case TY_UNION: {
+                int sz = ty->size;
+                if (sz > 0 && sz <= 16) {
+                    int f1 = has_float_in_range(ty, 0, 8, 0);
+                    gp += f1 ? 0 : 1;
+                    fp += f1 ? 1 : 0;
+                    if (sz > 8) {
+                        int f2 = has_float_in_range(ty, 8, 16, 0);
+                        gp += f2 ? 0 : 1;
+                        fp += f2 ? 1 : 0;
+                    }
+                }
+                break;
+            }
+            default:
+                if (gp < 6)
+                    reg_idx = gp_dwarf_regs[gp];
+                gp++;
+                break;
+            }
+        }
+
         if (!var->name) continue;
+
         println("  .uleb128 3");
         println("  .string \"%s\"", var->name);
         
@@ -744,8 +906,14 @@ void emit_debug_info(Obj *prog) {
         int lbl = label_count++;
         println("  .uleb128 .L.loc_end_%d - .L.loc_start_%d", lbl, lbl);
         println(".L.loc_start_%d:", lbl);
+
+        if (reg_idx >= 0) {
+            println("  .byte %d", 0x50 + reg_idx);
+        } else {
         println("  .byte 0x91"); // DW_OP_fbreg
         println("  .sleb128 %d", var->offset);
+        }
+
         println(".L.loc_end_%d:", lbl);
     }
 
@@ -771,7 +939,7 @@ void emit_debug_info(Obj *prog) {
     if (var->is_function || !var->is_definition || !var->name)
       continue;
 
-    println("  .uleb128 13");
+    println("  .uleb128 18");
     println("  .string \"%s\"", var->name);
     emit_type_ref(var->ty, types, quals, c);
     println("  .uleb128 %d", var->file_no);
@@ -786,7 +954,4 @@ void emit_debug_info(Obj *prog) {
 
   println("  .byte 0");
   println(".L.debug_info_end%d:", c);
-
-  println("  .section .debug_line,\"\",@progbits");
-  println(".L.line_table_start0:");
 }

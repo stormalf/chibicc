@@ -146,7 +146,7 @@ static Obj *eval_lval_obj(Node *node, int64_t *offset);
 static Node *assign(Token **rest, Token *tok);
 static Node *logor(Token **rest, Token *tok);
 static long double eval_double(Node *node);
-static Node *conditional(Token **rest, Token *tok);
+Node *conditional(Token **rest, Token *tok);
 static Node *logand(Token **rest, Token *tok);
 static Node * bitor (Token * *rest, Token *tok);
 static Node *bitxor(Token **rest, Token *tok);
@@ -237,7 +237,7 @@ static void enter_scope(void)
 
   Scope *sc = calloc(1, sizeof(Scope));
   if (sc == NULL)
-    error("%s:%d: in enter_scope : sc pointer is null!", __FILE__, __LINE__ );
+    error("%s:%d: in %s: sc pointer is null!", __FILE__, __LINE__, __func__);
   sc->next = scope;
   scope = sc;
 }
@@ -282,7 +282,7 @@ static Node *new_node(NodeKind kind, Token *tok)
   static int count = 0;
   Node *node = calloc(1, sizeof(Node));
   if (node == NULL)
-    error("%s:%d: error: in new_node : node is null", __FILE__, __LINE__);
+    error("%s:%d: error: in %s: node is null", __FILE__, __LINE__, __func__);
   node->kind = kind;
   node->unique_number = count++;
   node->tok = tok;
@@ -294,8 +294,8 @@ static Node *new_binary(NodeKind kind, Node *lhs, Node *rhs, Token *tok)
   Node *node = new_node(kind, tok);
   if (isDotfile && dotf != NULL)
   {
-    fprintf(dotf, "%s%d -> %s%d\n", nodekind2str(node->kind), node->unique_number, nodekind2str(rhs->kind), rhs->unique_number);
-    fprintf(dotf, "%s%d -> %s%d\n", nodekind2str(node->kind), node->unique_number, nodekind2str(lhs->kind), lhs->unique_number);
+    fprintf(dotf, "%s%d -> %s%d\n", kNodeKindStr[node->kind], node->unique_number, kNodeKindStr[rhs->kind], rhs->unique_number);
+    fprintf(dotf, "%s%d -> %s%d\n", kNodeKindStr[node->kind], node->unique_number, kNodeKindStr[lhs->kind], lhs->unique_number);
   }
 
   node->lhs = lhs;
@@ -303,7 +303,7 @@ static Node *new_binary(NodeKind kind, Node *lhs, Node *rhs, Token *tok)
   add_type(node->rhs);
   if (kind == ND_ASSIGN && node->rhs->ty->kind == TY_VOID  )
   {
-    error_tok(node->rhs->tok, "%s:%d: in new_binary : Cannot assign void type expression", __FILE__, __LINE__);
+    error_tok(node->rhs->tok, "%s:%d: in %s: Cannot assign void type expression", __FILE__, __LINE__, __func__);
   }
 
   // TODO type check other binary expressions, e.g., ND_ADD
@@ -315,7 +315,7 @@ static Node *new_unary(NodeKind kind, Node *expr, Token *tok)
   Node *node = new_node(kind, tok);
 
   if (isDotfile && dotf != NULL)
-    fprintf(dotf, "%s%d -> %s%d\n", nodekind2str(node->kind), node->unique_number, nodekind2str(expr->kind), expr->unique_number);
+    fprintf(dotf, "%s%d -> %s%d\n", kNodeKindStr[node->kind], node->unique_number, kNodeKindStr[expr->kind], expr->unique_number);
   node->lhs = expr;
   add_type(node->lhs);
   return node;
@@ -382,12 +382,12 @@ Node *new_cast(Node *expr, Type *ty)
 
   Node *node = calloc(1, sizeof(Node));
   if (node == NULL)
-    error("%s:%d: error: in new_cast : node is null", __FILE__, __LINE__);
+    error("%s:%d: error: in %s: node is null", __FILE__, __LINE__, __func__);
   node->kind = ND_CAST;
   node->tok = expr->tok;
   node->lhs = expr;
   if (!ty)
-    error("%s:%d: error: in new_cast : type is null", __FILE__, __LINE__);
+    error("%s:%d: error: in %s: type is null", __FILE__, __LINE__, __func__);
   node->ty = copy_type(ty);
   return node;
 }
@@ -411,7 +411,7 @@ static VarScope *push_scope(char *name)
 {
   VarScope *sc = calloc(1, sizeof(VarScope));
   if (sc == NULL)
-    error("%s:%d: error: in push_scope : sc is null!", __FILE__, __LINE__);
+    error("%s:%d: error: in %s: sc is null!", __FILE__, __LINE__, __func__);
 
   hashmap_put(&scope->vars, name, sc);
   return sc;
@@ -421,7 +421,7 @@ static Initializer *new_initializer(Type *ty, bool is_flexible)
 {
   Initializer *init = calloc(1, sizeof(Initializer));
   if (init == NULL)
-    error("%s:%d: error: in new_initializer : init is null", __FILE__, __LINE__);
+    error("%s:%d: error: in %s: init is null", __FILE__, __LINE__, __func__);
   init->ty = ty;
 
   if (ty->kind == TY_ARRAY)
@@ -434,7 +434,7 @@ static Initializer *new_initializer(Type *ty, bool is_flexible)
 
     init->children = calloc(ty->array_len, sizeof(Initializer *));
     if (init->children == NULL)
-      error("%s:%d: error: in new_initializer : init->children is null %ld %ld", __FILE__, __LINE__, ty->array_len, ty->size);
+      error("%s:%d: error: in %s: init->children is null %ld %ld", __FILE__, __LINE__, __func__, ty->array_len, ty->size);
     for (int i = 0; i < ty->array_len; i++)
       init->children[i] = new_initializer(ty->base, false);
     return init;
@@ -446,7 +446,7 @@ static Initializer *new_initializer(Type *ty, bool is_flexible)
 
     init->children = calloc(ty->array_len, sizeof(Initializer *));
     if (init->children == NULL)
-      error("%s:%d: error: in new_initializer : init->children is null %ld %ld", __FILE__, __LINE__, ty->array_len, ty->size);
+      error("%s:%d: error: in %s: init->children is null %ld %ld", __FILE__, __LINE__, __func__, ty->array_len, ty->size);
     for (int i = 0; i < ty->array_len; i++)
       init->children[i] = new_initializer(ty->base, false);
     return init;
@@ -462,14 +462,14 @@ static Initializer *new_initializer(Type *ty, bool is_flexible)
 
     init->children = calloc(len, sizeof(Initializer *));
     if (init->children == NULL)
-      error("%s:%d: error: in new_initializer : init->children is null (bis)", __FILE__, __LINE__);
+      error("%s:%d: error: in %s: init->children is null (bis)", __FILE__, __LINE__, __func__);
     for (Member *mem = ty->members; mem; mem = mem->next)
     {
       if (is_flexible && ty->is_flexible && !mem->next)
       {
         Initializer *child = calloc(1, sizeof(Initializer));
         if (child == NULL)
-          error("%s:%d: error: in new_initializer : child is null", __FILE__, __LINE__);
+          error("%s:%d: error: in %s: child is null", __FILE__, __LINE__, __func__);
         child->ty = mem->ty;
         child->is_flexible = true;
         init->children[mem->idx] = child;
@@ -491,7 +491,7 @@ static Obj *new_var(char *name, Type *ty)
 
   Obj *var = calloc(1, sizeof(Obj));
   if (var == NULL)
-    error("%s:%d: error: in new_var : var is null", __FILE__, __LINE__);
+    error("%s:%d: error: in %s: var is null", __FILE__, __LINE__, __func__);
   var->name = name;
   var->ty = ty;
   var->align = ty->align;
@@ -551,7 +551,7 @@ static Obj *new_string_literal(char *p, Type *ty)
 static char *get_ident(Token *tok)
 {
   if (tok->kind != TK_IDENT)
-    error_tok(tok, "%s:%d: in get_ident : expected an identifier", __FILE__, __LINE__);
+    error_tok(tok, "%s:%d: in %s: expected an identifier", __FILE__, __LINE__, __func__);
   return strndup(tok->loc, tok->len);
 }
 
@@ -653,7 +653,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     {
       
       if (!attr) 
-        error_tok(tok, "%s:%d: in declspec : storage class specifier is not allowed in this context", __FILE__, __LINE__);
+        error_tok(tok, "%s:%d: in %s: storage class specifier is not allowed in this context", __FILE__, __LINE__, __func__);
 
       if (equal(tok, "typedef"))
         attr->is_typedef = true;
@@ -666,14 +666,14 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
       else if (equal(tok, "_Thread_local") || equal(tok, "__thread"))
         attr->is_tls = true;
       else        
-        error_tok(tok, "%s:%d: in declspec : unknown storage class specifier", __FILE__, __LINE__);
+        error_tok(tok, "%s:%d: in %s: unknown storage class specifier", __FILE__, __LINE__, __func__);
 
       //fixing  check for typedef specifier/attribute not strict enough #142 suggested by @samkho
       if (attr->is_typedef &&
           attr->is_static + attr->is_extern + attr->is_inline + attr->is_tls >= 1)
-        error_tok(tok, "%s:%d: in declspec : typedef may not be used together with static,"
+        error_tok(tok, "%s:%d: in %s: typedef may not be used together with static,"
                        " extern, inline, __thread or _Thread_local",
-                  __FILE__, __LINE__);
+                  __FILE__, __LINE__, __func__);
 
       tok = tok->next;
         //from COSMOPOLITAN adding other GNUC attributes
@@ -723,7 +723,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     if (equal(tok, "_Alignas"))
     {
       if (!attr)
-        error_tok(tok, "%s:%d: in declspec : _Alignas is not allowed in this context", __FILE__, __LINE__);
+        error_tok(tok, "%s:%d: in %s: _Alignas is not allowed in this context", __FILE__, __LINE__, __func__);
       SET_CTX(ctx); 
       tok = skip(tok->next, "(", ctx);
       int align;
@@ -883,7 +883,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
       ty = copy_type(ty_ldouble);
       break;
     default:
-      error_tok(tok, "%s:%d: in declspec : invalid type", __FILE__, __LINE__);
+      error_tok(tok, "%s:%d: in %s: invalid type", __FILE__, __LINE__, __func__);
     }
 
     tok = tok->next;
@@ -893,7 +893,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
 
   *rest = tok;
   if (!ty)
-    error_tok(tok, "%s:%d: in declspec : ty is null!", __FILE__, __LINE__);
+    error_tok(tok, "%s:%d: in %s: ty is null!", __FILE__, __LINE__, __func__);
 
   if (is_atomic || is_const || is_volatile || is_restrict) {
     Type *ty3 = new_qualified_type(ty);
@@ -977,7 +977,7 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
       if (equal(tok, "{"))
         break;
       if (tok->kind != TK_IDENT)
-        error_tok(tok, "%s:%d: in func_params : expected identifier old source code not managed yet", __FILE__, __LINE__);
+        error_tok(tok, "%s:%d: in %s: expected identifier old source code not managed yet", __FILE__, __LINE__, __func__);
       ArrayToken[nbFunc][nbparms] = tok;
       tok = backup;
     }
@@ -986,7 +986,7 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
     tok = attribute_list(tok, ty2, type_attributes);
 
     if (!ty2)
-      error_tok(tok, "%s:%d: in func_params : ty2 is null", __FILE__, __LINE__);
+      error_tok(tok, "%s:%d: in %s: ty2 is null", __FILE__, __LINE__, __func__);
 
     Token *name = ty2->name;
 
@@ -1046,7 +1046,7 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
   else
     *rest = tok->next;
   if (!ty)
-    error_tok(tok, "%s:%d: in func_params : ty is null!", __FILE__, __LINE__);
+    error_tok(tok, "%s:%d: in %s: ty is null!", __FILE__, __LINE__, __func__);
   return ty;
 }
 
@@ -1129,7 +1129,7 @@ static Type *type_suffix(Token **rest, Token *tok, Type *ty)
 
   *rest = tok;
   if (!ty)
-    error_tok(tok, "%s:%d: in type_suffix : ty is null!", __FILE__, __LINE__);
+    error_tok(tok, "%s:%d: in %s: ty is null!", __FILE__, __LINE__, __func__);
   return ty;
 }
 
@@ -1153,7 +1153,7 @@ static Type *pointers(Token **rest, Token *tok, Type *ty)
   tok = attribute_list(tok, ty, type_attributes);
   *rest = tok;
   if (!ty)
-    error_tok(tok, "%s:%d: in pointers : ty is null!", __FILE__, __LINE__);
+    error_tok(tok, "%s:%d: in %s: ty is null!", __FILE__, __LINE__, __func__);
   return ty;
 }
 
@@ -1175,7 +1175,7 @@ static Type *declarator(Token **rest, Token *tok, Type *ty)
     }
     ty = type_suffix(rest, tok, ty);
     if (!ty)
-      error_tok(tok, "%s:%d: in declarator : ty is null", __FILE__, __LINE__);
+      error_tok(tok, "%s:%d: in %s: ty is null", __FILE__, __LINE__, __func__);
     return declarator(&tok, start->next, ty);
   }
   tok = attribute_list(tok, ty, type_attributes);  
@@ -1190,7 +1190,7 @@ static Type *declarator(Token **rest, Token *tok, Type *ty)
 
   ty = type_suffix(rest, tok, ty);
   if (!ty)
-    error_tok(tok, "%s:%d: in declarator : ty is null", __FILE__, __LINE__);  
+    error_tok(tok, "%s:%d: in %s: ty is null", __FILE__, __LINE__, __func__);  
   ty->name = name;
   ty->name_pos = name_pos;
   return ty;
@@ -1211,7 +1211,7 @@ static Type *abstract_declarator(Token **rest, Token *tok, Type *ty)
     tok = skip(tok, ")", ctx);
     ty = type_suffix(rest, tok, ty);
     if (!ty)
-      error_tok(tok, "%s:%d: in declarator : ty is null", __FILE__, __LINE__);
+      error_tok(tok, "%s:%d: in %s: ty is null", __FILE__, __LINE__, __func__);
     return abstract_declarator(&tok, start->next, ty);
   }
   tok = attribute_list(tok, ty, type_attributes);
@@ -1270,15 +1270,15 @@ static Type *enum_specifier(Token **rest, Token *tok)
   {
     Type *ty2 = find_tag(tag);
     if (!ty2)
-      warn_tok(tag, "%s:%d: in enum_specifier : unknown enum type", __FILE__, __LINE__);
+      warn_tok(tag, "%s:%d: in %s: unknown enum type", __FILE__, __LINE__, __func__);
     if (ty2 && ty2->kind != TY_ENUM)
-      error_tok(tag, "%s:%d: in enum_specifier : not an enum tag", __FILE__, __LINE__);
+      error_tok(tag, "%s:%d: in %s: not an enum tag", __FILE__, __LINE__, __func__);
     *rest = tok;
     if (ty2)
       return ty2;
 
     if (!ty)
-      error_tok(tok, "%s:%d: in enum_specifier : ty is null!", __FILE__, __LINE__);  
+      error_tok(tok, "%s:%d: in %s: ty is null!", __FILE__, __LINE__, __func__);  
     return ty;
   }
   SET_CTX(ctx); 
@@ -1310,7 +1310,7 @@ static Type *enum_specifier(Token **rest, Token *tok)
   if (tag)
     push_tag_scope(tag, ty);
   if (!ty)
-    error_tok(tok, "%s:%d: in enum_specifier : ty is null!", __FILE__, __LINE__);    
+    error_tok(tok, "%s:%d: in %s: ty is null!", __FILE__, __LINE__, __func__);    
   return ty;
 }
 
@@ -1334,7 +1334,7 @@ static Type *typeof_specifier(Token **rest, Token *tok)
   SET_CTX(ctx); 
   *rest = skip(tok, ")", ctx);
   if (!ty)
-    error_tok(tok, "%s:%d: in typeof_specifier : ty is null!", __FILE__, __LINE__);
+    error_tok(tok, "%s:%d: in %s: ty is null!", __FILE__, __LINE__, __func__);
   return ty;
 }
 
@@ -1415,8 +1415,8 @@ static Node *compute_vla_size(Type *ty, Token *tok)
     Node *n = compute_vla_size(ty->vla_param_ty, tok);
     ty->vla_size = ty->vla_param_ty->vla_size;
     if (!ty->vla_size)
-      error_tok(tok, "%s:%d: compute_vla_size: vla_size null after computation",
-                __FILE__, __LINE__);
+      error_tok(tok, "%s:%d:  in %s: vla_size null after computation",
+                __FILE__, __LINE__, __func__);
     return new_binary(ND_COMMA, node, n, tok);
   }
 
@@ -1499,7 +1499,7 @@ static Node *compute_vla_size(Type *ty, Token *tok)
     return new_var_node(ty->vla_size, tok);
 
   if (!ty->vla_len)
-    error_tok(tok, "%s:%d: in compute_vla_size : vla_len is null!", __FILE__, __LINE__);
+    error_tok(tok, "%s:%d: in %s: vla_len is null!", __FILE__, __LINE__, __func__);
 
   Node *expr = new_binary(ND_ASSIGN, new_var_node(ty->vla_size, tok),
                           new_binary(ND_MUL, ty->vla_len, base_sz, tok),
@@ -1575,11 +1575,11 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
     Type *ty = declarator(&tok, tok, basety);
     current_attr = NULL;
     if (!ty)
-      error_tok(tok, "%s:%d: in declaration : ty is null", __FILE__, __LINE__);
+      error_tok(tok, "%s:%d: in %s: ty is null", __FILE__, __LINE__, __func__);
     if (ty->kind == TY_VOID)
-      error_tok(tok, "%s:%d: in declaration : variable declared void", __FILE__, __LINE__);
+      error_tok(tok, "%s:%d: in %s: variable declared void", __FILE__, __LINE__, __func__);
     if (!ty->name)
-      error_tok(ty->name_pos, "%s:%d: in declaration : variable name omitted", __FILE__, __LINE__);    
+      error_tok(ty->name_pos, "%s:%d: in %s: variable name omitted", __FILE__, __LINE__, __func__);    
     tok = attribute_list(tok, &decl_attr, thing_attributes);
     int alt_align = decl_attr.align;
     if (decl_attr.is_static)
@@ -1587,7 +1587,7 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
       // static local variable
 
       if (ty->kind == TY_VLA)
-        error_tok(tok, "%s:%d: in declaration: variable length arrays cannot be 'static'", __FILE__, __LINE__);
+        error_tok(tok, "%s:%d: in %s: variable length arrays cannot be 'static'", __FILE__, __LINE__, __func__);
 
       Obj *var = new_anon_gvar(ty);
       //from @fuhsnn fix Handle local static _Thread_local
@@ -1611,7 +1611,7 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
     if (ty->kind == TY_VLA)
     {
       if (equal(tok, "="))
-        error_tok(tok, "%s:%d: in declaration: variable-sized object may not be initialized", __FILE__, __LINE__);
+        error_tok(tok, "%s:%d: in %s: variable-sized object may not be initialized", __FILE__, __LINE__, __func__);
 
       // Variable length arrays (VLAs) are translated to alloca() calls.
       // For example, `int x[n+2]` is translated to `tmp = n + 2,
@@ -1648,10 +1648,10 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
     }
     //ISS-146
     if (var->ty->size < 0)
-      error_tok(ty->name, "%s:%d: in declaration : variable has incomplete type", __FILE__, __LINE__);
+      error_tok(ty->name, "%s:%d: in %s: variable has incomplete type", __FILE__, __LINE__, __func__);
 
     if (var->ty->kind == TY_VOID)
-      error_tok(ty->name, "%s:%d: in declaration : variable declared void", __FILE__, __LINE__);
+      error_tok(ty->name, "%s:%d: in %s: variable declared void", __FILE__, __LINE__, __func__);
   }
 
   Node *node = new_node(ND_BLOCK, tok);
@@ -1735,7 +1735,7 @@ static void string_initializer(Token **rest, Token *tok, Initializer *init)
     break;
   }
   default:
-    error_tok(tok, "%s:%d: in string_initializer : array of inappropriate type initialized from string constant", __FILE__, __LINE__);
+    error_tok(tok, "%s:%d: in %s: array of inappropriate type initialized from string constant", __FILE__, __LINE__, __func__);
     // unreachable();
   }
 
@@ -1772,15 +1772,15 @@ static void array_designator(Token **rest, Token *tok, Type *ty, int *begin, int
 
   *begin = const_expr(&tok, tok->next);
   if (*begin >= ty->array_len)
-    error_tok(tok, "%s:%d: in array_designator : array designator index exceeds array bounds", __FILE__, __LINE__);
+    error_tok(tok, "%s:%d: in %s: array designator index exceeds array bounds", __FILE__, __LINE__, __func__);
 
   if (equal(tok, "..."))
   {
     *end = const_expr(&tok, tok->next);
     if (*end >= ty->array_len)
-      error_tok(tok, "%s:%d: in array designator : index exceeds array bounds", __FILE__, __LINE__);
+      error_tok(tok, "%s:%d: in %s: index exceeds array bounds", __FILE__, __LINE__, __func__);
     if (*end < *begin)
-      error_tok(tok, "%s:%d: in array designator : range [%d, %d] is empty", __FILE__, __LINE__, *begin, *end);
+      error_tok(tok, "%s:%d: in %s: range [%d, %d] is empty", __FILE__, __LINE__, __func__, *begin, *end);
   }
   else
   {
@@ -1800,7 +1800,7 @@ static Member *struct_designator(Token **rest, Token *tok, Type *ty)
     tok = skip(tok, ".", ctx);
   }
   if (tok->kind != TK_IDENT)
-    error_tok(tok, "%s:%d: in struct_designator : expected a field designator", __FILE__, __LINE__);
+    error_tok(tok, "%s:%d: in %s: expected a field designator", __FILE__, __LINE__, __func__);
 
   for (Member *mem = ty->members; mem; mem = mem->next)
   {
@@ -1828,7 +1828,7 @@ static Member *struct_designator(Token **rest, Token *tok, Type *ty)
     }
   }
 
-  error_tok(tok, "%s:%d: in struct_designator : struct has no such member", __FILE__, __LINE__);
+  error_tok(tok, "%s:%d: in %s: struct has no such member", __FILE__, __LINE__, __func__);
 }
 
 // designation = ("[" const-expr "]" | "." ident)* "="? initializer
@@ -1838,7 +1838,7 @@ static void designation(Token **rest, Token *tok, Initializer *init)
   if (equal(tok, "["))
   {
     if (init->ty->kind != TY_ARRAY)
-      error_tok(tok, "%s:%d: in designation : array index in non-array initializer", __FILE__, __LINE__);
+      error_tok(tok, "%s:%d: in %s: array index in non-array initializer", __FILE__, __LINE__, __func__);
 
     int begin, end;
     array_designator(&tok, tok, init->ty, &begin, &end);
@@ -1874,7 +1874,7 @@ static void designation(Token **rest, Token *tok, Initializer *init)
   }
 
   if (equal(tok, "."))
-    error_tok(tok, "%s:%d: in designation: field name not in struct or union initializer", __FILE__, __LINE__);
+    error_tok(tok, "%s:%d: in %s: field name not in struct or union initializer", __FILE__, __LINE__, __func__);
 
   if (equal(tok, "=")) {
     SET_CTX(ctx); 
@@ -2124,7 +2124,7 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
   if (equal(tok, ","))
     return;
   if (!init)
-    error("%s:%d: error: in initializer2 :  init is null %s", __FILE__, __LINE__, tok->loc);
+    error("%s:%d: error: in %s:  init is null %s", __FILE__, __LINE__, __func__, tok->loc);
 
   if (init->ty->kind == TY_ARRAY && is_integer(init->ty->base)) {
     Token *start = tok;
@@ -2153,7 +2153,7 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
     if (equal(tok, "{"))
       array_initializer1(rest, tok, init);
     else
-    array_initializer2(rest, tok, init, 0);
+      array_initializer2(rest, tok, init, 0);
     return;
   }
 
@@ -2174,7 +2174,7 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
     }
 
     if (!init->ty->members)
-      error_tok(tok, "%s:%d: error: in initializer2 :  initializer for empty aggregate requires explicit braces", __FILE__, __LINE__);
+      error_tok(tok, "%s:%d: error: in %s:  initializer for empty aggregate requires explicit braces", __FILE__, __LINE__, __func__);
 
     struct_initializer2(rest, tok, init, init->ty->members, false);
     return;
@@ -2193,7 +2193,7 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
       return;
     }
     if (!init->ty->members)
-      error_tok(tok, "%s:%d: error: in initializer2 :  initializer for empty aggregate requires explicit braces", __FILE__, __LINE__);
+      error_tok(tok, "%s:%d: error: in %s:  initializer for empty aggregate requires explicit braces", __FILE__, __LINE__, __func__);
 
     init->mem = init->ty->members;
     initializer2(rest, tok, init->children[0]);
@@ -2227,14 +2227,14 @@ static Type *copy_struct_type(Type *ty)
   {
     Member *m = calloc(1, sizeof(Member));
     if (m == NULL)
-      error("%s:%d: error: in copy_struct_type :  m is null", __FILE__, __LINE__);
+      error("%s:%d: error: in %s:  m is null", __FILE__, __LINE__, __func__);
     *m = *mem;
     cur = cur->next = m;
   }
 
   ty->members = head.next;
   if (!ty)
-    error("%s:%d: in copy_struct_type : ty is null!", __FILE__, __LINE__);
+    error("%s:%d: in %s: ty is null!", __FILE__, __LINE__, __func__);
   return ty;
 }
 
@@ -2408,7 +2408,7 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
     int elem_size = ty->base->size;
     memset(buf + offset, 0, elem_size * ty->array_len);
     if (init->expr)
-      error_tok(init->expr->tok, "%s:%d: in write_gvar_data : array initializer must be an initializer list", __FILE__, __LINE__);
+      error_tok(init->expr->tok, "%s:%d: in %s: array initializer must be an initializer list", __FILE__, __LINE__, __func__);
     int sz = ty->base->size;
     for (int i = 0; i < ty->array_len; i++)
       cur = write_gvar_data(cur, init->children[i], ty->base, buf, offset + sz * i);
@@ -2572,7 +2572,7 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
 
   Relocation *rel = calloc(1, sizeof(Relocation));
   if (rel == NULL)
-    error("%s:%d: error: in write_gvar_data : rel is null", __FILE__, __LINE__);
+    error("%s:%d: error: in %s: rel is null", __FILE__, __LINE__, __func__);
 
   rel->offset = offset;
   rel->label = label;
@@ -2593,7 +2593,7 @@ static void gvar_initializer(Token **rest, Token *tok, Obj *var)
   Relocation head = {};
   char *buf = calloc(1, var->ty->size);
   if (buf == NULL)
-    error("%s:%d: error: in gvar_initializer : buf is null!", __FILE__, __LINE__);
+    error("%s:%d: error: in %s: buf is null!", __FILE__, __LINE__, __func__);
   write_gvar_data(&head, init, var->ty, buf, 0);
   var->init_data = buf;
   var->rel = head.next;
@@ -2622,9 +2622,7 @@ static bool is_typename(Token *tok)
 // asm-stmt = "asm" ("volatile" | "inline")* "(" string-literal ")"
 static Node *asm_stmt(Token **rest, Token *tok)
 {
-  if (current_fn) {
-    current_fn->force_frame_pointer = true;
-  }
+
   Node *node = new_node(ND_ASM, tok);
   tok = tok->next;
 
@@ -2634,16 +2632,18 @@ static Node *asm_stmt(Token **rest, Token *tok)
   SET_CTX(ctx);   
   tok = skip(tok, "(", ctx);
   if (tok->kind != TK_STR || tok->ty->base->kind != TY_CHAR)
-    error_tok(tok, "%s:%d: in asm_stmt : expected string literal", __FILE__, __LINE__);
+    error_tok(tok, "%s:%d: in %s: expected string literal", __FILE__, __LINE__, __func__);
 
   // extended assembly like asm ( assembler_template: output operands (optional) : input operands (optional) : list of clobbered registers (optional))
   if (equal(tok->next, ":"))
   {
     //need_alloca_bottom();
-    opt_omit_frame_pointer = false;
-    node->asm_str = extended_asm(node, rest, tok, locals);
+    if (current_fn)
+      current_fn->force_frame_pointer = true;
+
+    node->asm_str = extended_asm(node, rest, tok, locals, current_fn);
     if (!node->asm_str)
-      error_tok(tok, "%s:%d: in asm_stmt : error during extended_asm function null returned!", __FILE__, __LINE__);
+      error_tok(tok, "%s:%d: in %s: error during extended_asm function null returned!", __FILE__, __LINE__, __func__);
     return node;
   }
   node->asm_str = tok->str;
@@ -2679,7 +2679,7 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
     {
       if (ret_ty->kind != TY_VOID)
       {
-        error_tok(tok, "%s:%d: in stmt : Non-void function must return something", __FILE__, __LINE__);
+        error_tok(tok, "%s:%d: in %s: Non-void function must return something", __FILE__, __LINE__, __func__);
       }
       return node;
     }
@@ -2694,16 +2694,16 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
     //   exp = new_cast(exp, current_fn->ty->return_ty);
 
     if (!exp->ty)
-      error_tok(exp->tok, "%s:%d: in stmt : exp->ty is null", __FILE__, __LINE__);
+      error_tok(exp->tok, "%s:%d: in %s: exp->ty is null", __FILE__, __LINE__, __func__);
       
     if (ret_ty->kind == TY_VOID && exp->ty->kind != TY_VOID)
     {
-      error_tok(exp->tok, "%s:%d: in stmt : Void function must return void type expression", __FILE__, __LINE__);
+      error_tok(exp->tok, "%s:%d: in %s: Void function must return void type expression", __FILE__, __LINE__, __func__);
     }
     if (ret_ty->kind != TY_VOID && exp->ty->kind == TY_VOID)
     {
       error_tok(exp->tok,
-                "%s:%d: in stmt : Non-void function cannot return void type expression", __FILE__, __LINE__);
+                "%s:%d: in %s: Non-void function cannot return void type expression", __FILE__, __LINE__, __func__);
     }
 
     if (ret_ty->kind != TY_STRUCT && ret_ty->kind != TY_UNION)
@@ -2720,19 +2720,19 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
     node->cond = to_bool(expr(&tok, tok));
 
     if (isDotfile && dotf != NULL)
-      fprintf(dotf, "%s%d -> %s%d\n", nodekind2str(node->kind), node->unique_number, nodekind2str(node->cond->kind), node->cond->unique_number);
+      fprintf(dotf, "%s%d -> %s%d\n", kNodeKindStr[node->kind], node->unique_number, kNodeKindStr[node->cond->kind], node->cond->unique_number);
 
     SET_CTX(ctx);        
     tok = skip(tok, ")", ctx);
     node->then = stmt(&tok, tok, true);
 
     if (isDotfile && dotf != NULL)
-      fprintf(dotf, "%s%d -> %s%d\n", nodekind2str(node->kind), node->unique_number, nodekind2str(node->then->kind), node->then->unique_number);
+      fprintf(dotf, "%s%d -> %s%d\n", kNodeKindStr[node->kind], node->unique_number, kNodeKindStr[node->then->kind], node->then->unique_number);
     if (equal(tok, "else"))
     {
       node->els = stmt(&tok, tok->next, true);
       if (isDotfile && dotf != NULL)
-        fprintf(dotf, "%s%d -> %s%d\n", nodekind2str(node->kind), node->unique_number, nodekind2str(node->els->kind), node->els->unique_number);
+        fprintf(dotf, "%s%d -> %s%d\n", kNodeKindStr[node->kind], node->unique_number, kNodeKindStr[node->els->kind], node->els->unique_number);
     }
 
     if (is_const_expr(node->cond)) {
@@ -2768,7 +2768,7 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
     node->cond = expr(&tok, tok);
     add_type(node->cond);
     if (!is_integer(node->cond->ty))
-      error_tok(node->cond->tok, "%s:%d: in stmt : switch expression must have integer type", __FILE__, __LINE__);
+      error_tok(node->cond->tok, "%s:%d: in %s: switch expression must have integer type", __FILE__, __LINE__, __func__);
 
     SET_CTX(ctx);      
     tok = skip(tok, ")", ctx);
@@ -2790,7 +2790,7 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
   if (equal(tok, "case"))
   {
     if (!current_switch)
-      error_tok(tok, "%s:%d: in stmt : stray case", __FILE__, __LINE__);
+      error_tok(tok, "%s:%d: in %s: stray case", __FILE__, __LINE__, __func__);
 
     Node *node = new_node(ND_CASE, tok);
 
@@ -2804,7 +2804,7 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
       // [GNU] Case ranges, e.g. "case 1 ... 5:"
       end = const_expr(&tok, tok->next);
       // if (end < begin)
-      //   error_tok(tok, "%s:%d: in stmt : empty case range specified", __FILE__, __LINE__);
+      //   error_tok(tok, "%s:%d: in %s: empty case range specified", __FILE__, __LINE__, __func__);
     }
     else
     {
@@ -2823,7 +2823,7 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
 
     if ((!current_switch->cond->ty->is_unsigned && (end < begin)) ||
       ((current_switch->cond->ty->is_unsigned && ((uint64_t)end < begin))))
-      error_tok(tok, "%s:%d: in stmt : empty case range specified", __FILE__, __LINE__);
+      error_tok(tok, "%s:%d: in %s: empty case range specified", __FILE__, __LINE__, __func__);
 
     SET_CTX(ctx); 
     tok = skip(tok, ":", ctx);
@@ -2842,7 +2842,7 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
     for (Node *c = current_switch->case_next; c; c = c->case_next)
     {
       if (!(end < c->begin || begin > c->end))
-        error_tok(tok, "%s:%d: in stmt : duplicated case value or overlapping range %ld", __FILE__, __LINE__, begin);
+        error_tok(tok, "%s:%d: in %s: duplicated case value or overlapping range %ld", __FILE__, __LINE__, __func__, begin);
     }
     node->begin = begin;
     node->end = end;
@@ -2854,7 +2854,7 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
   if (equal(tok, "default"))
   {
     if (!current_switch)
-      error_tok(tok, "%s:%d: in stmt : stray default", __FILE__, __LINE__);
+      error_tok(tok, "%s:%d: in %s: stray default", __FILE__, __LINE__, __func__);
 
     Node *node = new_node(ND_CASE, tok);
     SET_CTX(ctx);        
@@ -2900,7 +2900,7 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
       node->cond = expr(&tok, tok);
 
       if (isDotfile && dotf != NULL)
-        fprintf(dotf, "%s%d -> %s%d\n", nodekind2str(node->kind), node->unique_number, nodekind2str(node->cond->kind), node->cond->unique_number);
+        fprintf(dotf, "%s%d -> %s%d\n", kNodeKindStr[node->kind], node->unique_number, kNodeKindStr[node->cond->kind], node->cond->unique_number);
     }
     SET_CTX(ctx);      
     tok = skip(tok, ";", ctx);
@@ -2910,7 +2910,7 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
       node->inc = expr(&tok, tok);
 
       if (isDotfile && dotf != NULL)
-        fprintf(dotf, "%s%d -> %s%d\n", nodekind2str(node->kind), node->unique_number, nodekind2str(node->inc->kind), node->inc->unique_number);
+        fprintf(dotf, "%s%d -> %s%d\n", kNodeKindStr[node->kind], node->unique_number, kNodeKindStr[node->inc->kind], node->inc->unique_number);
     }
     SET_CTX(ctx);     
     tok = skip(tok, ")", ctx);
@@ -2918,7 +2918,7 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
     node->then = stmt(rest, tok, true);
 
     if (isDotfile && dotf != NULL)
-      fprintf(dotf, "%s%d -> %s%d\n", nodekind2str(node->kind), node->unique_number, nodekind2str(node->then->kind), node->then->unique_number);
+      fprintf(dotf, "%s%d -> %s%d\n", kNodeKindStr[node->kind], node->unique_number, kNodeKindStr[node->then->kind], node->then->unique_number);
     leave_scope();
     brk_label = brk;
     cont_label = cont;
@@ -2996,7 +2996,7 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
   if (equal(tok, "break"))
   {
     if (!brk_label)
-      error_tok(tok, "%s:%d: in stmt : stray break", __FILE__, __LINE__);
+      error_tok(tok, "%s:%d: in %s: stray break", __FILE__, __LINE__, __func__);
     Node *node = new_node(ND_GOTO, tok);
     node->unique_label = brk_label;
     SET_CTX(ctx);     
@@ -3007,7 +3007,7 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
   if (equal(tok, "continue"))
   {
     if (!cont_label)
-      error_tok(tok, "%s:%d: in stmt : stray continue", __FILE__, __LINE__);
+      error_tok(tok, "%s:%d: in %s: stray continue", __FILE__, __LINE__, __func__);
     Node *node = new_node(ND_GOTO, tok);
     node->unique_label = cont_label;
     SET_CTX(ctx);        
@@ -3099,7 +3099,7 @@ static Node *compound_stmt(Token **rest, Token *tok, Node **last)
   if (isDotfile && dotf != NULL)
   {
     if (node->body != NULL)
-      fprintf(dotf, "%s%d -> %s%d\n", nodekind2str(node->kind), node->unique_number, nodekind2str(node->body->kind), node->body->unique_number);
+      fprintf(dotf, "%s%d -> %s%d\n", kNodeKindStr[node->kind], node->unique_number, kNodeKindStr[node->body->kind], node->body->unique_number);
   }
   *rest = tok->next;
   return node;
@@ -3163,7 +3163,7 @@ static Node *compound_stmt2(Token **rest, Token *tok)
   if (isDotfile && dotf != NULL)
   {
     if (node->body != NULL)
-      fprintf(dotf, "%s%d -> %s%d\n", nodekind2str(node->kind), node->unique_number, nodekind2str(node->body->kind), node->body->unique_number);
+      fprintf(dotf, "%s%d -> %s%d\n", kNodeKindStr[node->kind], node->unique_number, kNodeKindStr[node->body->kind], node->body->unique_number);
   }
   *rest = tok;
   return node;
@@ -3183,7 +3183,7 @@ static Node *expr_stmt(Token **rest, Token *tok)
   node->lhs = expr(&tok, tok);
 
   if (isDotfile && dotf != NULL)
-    fprintf(dotf, "%s%d -> %s%d\n", nodekind2str(node->kind), node->unique_number, nodekind2str(node->lhs->kind), node->lhs->unique_number);
+    fprintf(dotf, "%s%d -> %s%d\n", kNodeKindStr[node->kind], node->unique_number, kNodeKindStr[node->lhs->kind], node->lhs->unique_number);
 
   SET_CTX(ctx);     
   *rest = skip(tok, ";", ctx);
@@ -3230,7 +3230,7 @@ static int64_t eval2(Node *node, char ***label)
       int64_t v1 = eval2(node->lhs, &l1);
       int64_t v2 = eval2(node->rhs, &l2);
       if (l1 && l2)
-        error_tok(node->tok, "%s:%d: in eval2 : invalid constant address expression", __FILE__, __LINE__);
+        error_tok(node->tok, "%s:%d: in %s: invalid constant address expression", __FILE__, __LINE__, __func__);
       if (l2) {
         *label = l2;
         return v1 + v2;
@@ -3247,7 +3247,7 @@ static int64_t eval2(Node *node, char ***label)
       int64_t v1 = eval2(node->lhs, &l1);
       int64_t v2 = eval2(node->rhs, &l2);
       if (l2)
-        error_tok(node->tok, "%s:%d: in eval2 : invalid constant address expression", __FILE__, __LINE__);
+        error_tok(node->tok, "%s:%d: in %s: invalid constant address expression", __FILE__, __LINE__, __func__);
       if (l1)
         *label = l1;
       return v1 - v2;
@@ -3258,11 +3258,11 @@ static int64_t eval2(Node *node, char ***label)
   case ND_DIV:
     // Check for division overflow
     if (eval(node->lhs) == LLONG_MIN && eval(node->rhs) == -1) {
-      warn_tok(node->tok, "in eval2: %s:%d: integer overflow!", __FILE__, __LINE__);
+      warn_tok(node->tok, "%s:%d: in %s: integer overflow!", __FILE__, __LINE__, __func__);
       return 0;  // Return 0 or any other value you think is appropriate
     }
     if (eval(node->rhs) == 0)
-          error_tok(node->tok, "%s  %d: in eval2 : eval(node->rhs) caused a division by zero!", __FILE__, __LINE__ );
+          error_tok(node->tok, "%s  %d: in %s: eval(node->rhs) caused a division by zero!", __FILE__, __LINE__, __func__);
     if (node->ty && node->ty->is_unsigned)
       return (uint64_t)eval(node->lhs) / (uint64_t)eval(node->rhs);
     return eval(node->lhs) / eval(node->rhs);
@@ -3278,11 +3278,11 @@ static int64_t eval2(Node *node, char ***label)
   case ND_MOD:
     // Check for division overflow
     if (eval(node->lhs) == LLONG_MIN && eval(node->rhs) == -1) {
-      warn_tok(node->tok, "in eval2: %s:%d: integer overflow!", __FILE__, __LINE__);
+      warn_tok(node->tok, "%s:%d: in %s: integer overflow!", __FILE__, __LINE__, __func__);
       return 0;  
     }
     if (eval(node->rhs) == 0)
-          error_tok(node->tok, "%s  %d: in eval2 : eval(node->rhs) caused a division by zero!", __FILE__, __LINE__ );    
+          error_tok(node->tok, "%s  %d: in %s: eval(node->rhs) caused a division by zero!", __FILE__, __LINE__, __func__ );    
     if (node->ty && node->ty->is_unsigned)
       return (uint64_t)eval(node->lhs) % eval(node->rhs);
     return eval(node->lhs) % eval(node->rhs);
@@ -3408,10 +3408,10 @@ static int64_t eval2(Node *node, char ***label)
   case ND_MEMBER:
     
     if (!label) {
-      error_tok(node->tok, "%s:%d: in eval2 : not a compile-time constant", __FILE__, __LINE__ );
+      error_tok(node->tok, "%s:%d: in %s: not a compile-time constant", __FILE__, __LINE__, __func__ );
     }
     // if (node->ty->kind != TY_ARRAY) {
-    //   error_tok(node->tok, "%s:%d: in eval2 : invalid initializer", __FILE__, __LINE__);
+    //   error_tok(node->tok, "%s:%d: in %s: invalid initializer", __FILE__, __LINE__, __func__);
     // }
     return eval_rval(node->lhs, label) + node->member->offset;
   case ND_VAR:
@@ -3431,13 +3431,13 @@ static int64_t eval2(Node *node, char ***label)
     
     //trying to fix ======ISS-145 compiling util-linux failed with invalid initalizer2 
     // if (node->var->ty->kind != TY_ARRAY && node->var->ty->kind != TY_FUNC && node->var->ty->kind != TY_INT) {
-    //   error_tok(node->tok, "%s:%d: in eval2 : invalid initializer2 %d", __FILE__, __LINE__, node->var->ty->kind);
+    //   error_tok(node->tok, "%s:%d: in %s: invalid initializer2 %d", __FILE__, __LINE__, __func__, node->var->ty->kind);
     // }
     //trying to fix ======ISS-145 compiling util-linux failed with invalid initalizer2 
     if (is_integer(node->var->ty))
       return 0;
     if (!label) {
-      error_tok(node->tok, "%s:%d : in eval2 : not a compile-time constant %d", __FILE__, __LINE__, node->var->ty->kind);
+      error_tok(node->tok, "%s:%d: in %s: not a compile-time constant %d", __FILE__, __LINE__, __func__, node->var->ty->kind);
     }
     *label = &node->var->name;
     return 0;
@@ -3445,7 +3445,7 @@ static int64_t eval2(Node *node, char ***label)
     return node->val;
 
   }
-  error_tok(node->tok, "%s:%d: in eval2 : not a compile-time constant3", __FILE__, __LINE__);
+  error_tok(node->tok, "%s:%d: in %s: not a compile-time constant3", __FILE__, __LINE__, __func__);
 }
 
 
@@ -3455,7 +3455,7 @@ static int64_t eval_rval(Node *node, char ***label)
   {
   case ND_VAR:
     if (node->var->is_local)
-      error_tok(node->tok, "%s:%d: in eval2 : not a compile-time constant4", __FILE__, __LINE__);
+      error_tok(node->tok, "%s:%d: in %s: not a compile-time constant4", __FILE__, __LINE__, __func__);
 
     // Use the symbol name that will be emitted for this variable.
     // For variables/functions with an `asm` label, the emitted symbol
@@ -3470,7 +3470,7 @@ static int64_t eval_rval(Node *node, char ***label)
     return 1;
   }
 
-  error_tok(node->tok, "%s:%d: in eval2 : invalid initializer3", __FILE__, __LINE__);
+  error_tok(node->tok, "%s:%d: in %s: invalid initializer3", __FILE__, __LINE__, __func__);
 }
 
 // Walk an lvalue expression and return the underlying global Obj and byte offset.
@@ -3633,7 +3633,7 @@ static long double eval_double(Node *node)
     break;
   }
 
-  error_tok(node->tok, "%s:%d: in eval_double : not a compile-time constant %d", __FILE__, __LINE__, node->kind);
+  error_tok(node->tok, "%s:%d: in %s: not a compile-time constant %d", __FILE__, __LINE__, __func__, node->kind);
 }
 
 // Check if it is safe to re-evaluate an lvalue without introducing a temp.
@@ -3835,7 +3835,7 @@ static Node *assign(Token **rest, Token *tok)
 }
 
 // conditional = logor ("?" expr? ":" conditional)?
-static Node *conditional(Token **rest, Token *tok)
+Node *conditional(Token **rest, Token *tok)
 {
   Node *cond = logor(&tok, tok);
 
@@ -4058,7 +4058,7 @@ static Node *new_add(Node *lhs, Node *rhs, Token *tok, bool is_op)
   if (is_vector(lhs->ty) && is_vector(rhs->ty)) {
     
     if (lhs->ty->array_len != rhs->ty->array_len)
-      error_tok(tok, "%s:%d: in new_add: incompatible vector types", __FILE__, __LINE__);
+      error_tok(tok, "%s:%d: in %s: incompatible vector types", __FILE__, __LINE__, __func__);
     Node *node = new_binary(ND_ADD, lhs, rhs, tok);
     node->ty =  lhs->ty;
     return node;
@@ -4074,7 +4074,7 @@ static Node *new_add(Node *lhs, Node *rhs, Token *tok, bool is_op)
   }
   
   if ((lhs->ty->base == NULL && rhs->ty->base == NULL) || (lhs->ty->base != NULL && rhs->ty->base != NULL)) {
-    error_tok(tok, "%s:%d: in new_add : invalid operands", __FILE__, __LINE__);
+    error_tok(tok, "%s:%d: in %s: invalid operands", __FILE__, __LINE__, __func__);
   }
 
   // Canonicalize `num + ptr` to `ptr + num`.
@@ -4090,7 +4090,7 @@ static Node *new_add(Node *lhs, Node *rhs, Token *tok, bool is_op)
     if (!lhs->ty->base->vla_size)
       rhs = new_binary(ND_MUL, rhs, new_long(lhs->ty->base->base->size, tok), tok);
     else
-    rhs = new_binary(ND_MUL, rhs, new_var_node(lhs->ty->base->vla_size, tok), tok);
+      rhs = new_binary(ND_MUL, rhs, new_var_node(lhs->ty->base->vla_size, tok), tok);
     return new_binary(ND_ADD, lhs, rhs, tok);
   }
 
@@ -4122,7 +4122,7 @@ static Node *new_sub(Node *lhs, Node *rhs, Token *tok, bool is_op)
   // case of vectors
   if (is_vector(lhs->ty) && is_vector(rhs->ty)) {
     if (lhs->ty->array_len != rhs->ty->array_len || lhs->ty->base->kind != rhs->ty->base->kind)
-      error_tok(tok, "%s:%d: in new_sub : incompatible vector types", __FILE__, __LINE__);
+      error_tok(tok, "%s:%d: in %s: incompatible vector types", __FILE__, __LINE__, __func__);
 
     Node *node = new_binary(ND_SUB, lhs, rhs, tok);
     node->ty = lhs->ty; 
@@ -4165,7 +4165,7 @@ static Node *new_sub(Node *lhs, Node *rhs, Token *tok, bool is_op)
     return new_binary(ND_DIV, node, new_num(lhs->ty->base->size, tok), tok);
   }
 
-  error_tok(tok, "%s:%d: in new_sub : invalid operands", __FILE__, __LINE__);
+  error_tok(tok, "%s:%d: in %s: invalid operands", __FILE__, __LINE__, __func__);
 }
 
 // add = mul ("+" mul | "-" mul)*
@@ -4323,7 +4323,7 @@ static Node *unary(Token **rest, Token *tok)
     add_type(lhs);
     //if (lhs->kind == ND_MEMBER && lhs->member->is_bitfield)
     if (is_bitfield(lhs))
-      error_tok(tok, "%s:%d: in unary : cannot take address of bitfield", __FILE__, __LINE__);
+      error_tok(tok, "%s:%d: in %s: cannot take address of bitfield", __FILE__, __LINE__, __func__);
 
     if (lhs->kind == ND_VAR && lhs->var && lhs->var->is_function) {
         lhs->var->is_address_used = true;
@@ -4402,7 +4402,7 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
     {
       Member *mem = calloc(1, sizeof(Member));
       if (mem == NULL)
-        error("%s:%d: error: in struct_members : mem is null", __FILE__, __LINE__);
+        error("%s:%d: error: in %s: mem is null", __FILE__, __LINE__, __func__);
       mem->ty = basety;
       //mem->idx = idx++;
       mem->align = mem->ty->align;
@@ -4427,7 +4427,7 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
 
       Member *mem = calloc(1, sizeof(Member));
       if (mem == NULL)
-        error("%s:%d: error: in struct_members : mem is null", __FILE__, __LINE__);
+        error("%s:%d: error: in %s: mem is null", __FILE__, __LINE__, __func__);
 
       mem->ty = declarator(&tok, tok, basety);
       tok = attribute_list(tok, &mem_attr, thing_attributes);
@@ -4439,13 +4439,13 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
       {
         if (!is_integer(mem->ty))
         {
-          error_tok(tok, "%s:%d: in struct_members : only integers can be bitfields", __FILE__, __LINE__);
+          error_tok(tok, "%s:%d: in %s: only integers can be bitfields", __FILE__, __LINE__, __func__);
         }
         mem->is_bitfield = true;
         mem->bit_width = const_expr(&tok, tok);
         if (mem->bit_width < 0)
         {
-          error_tok(tok, "%s:%d: in struct_members : bitfield width must be positive", __FILE__, __LINE__);
+          error_tok(tok, "%s:%d: in %s: bitfield width must be positive", __FILE__, __LINE__, __func__);
         }
         // Attributes can appear after the bitfield width (e.g. `int : 4 __attribute__((aligned(2)))`).
         tok = attribute_list(tok, &mem_attr, thing_attributes);
@@ -4512,7 +4512,7 @@ static Token *type_attributes(Token *tok, void *arg)
 {
   Type *ty = arg;
   if (!ty) {
-    warn_tok(tok, "in type_attributes: %s:%d: ty is null", __FILE__, __LINE__);
+    warn_tok(tok, "%s:%d: in %s: ty is null", __FILE__, __LINE__, __func__);
     return tok;
   }
 
@@ -4548,6 +4548,11 @@ static Token *type_attributes(Token *tok, void *arg)
   //from COSMOPOLITAN adding ms_abi
   if (consume(&tok, tok, "ms_abi") || consume(&tok, tok, "__ms_abi__")) {
     ty->is_ms_abi = true;
+    return tok;
+  }
+
+  if (consume(&tok, tok, "ms_struct") || consume(&tok, tok, "__ms_struct__")) {
+    ty->is_ms_struct = true;
     return tok;
   }
 
@@ -4608,7 +4613,7 @@ static Token *type_attributes(Token *tok, void *arg)
     tok = skip(tok, "(", ctx);
     int vs = const_expr(&tok, tok);
     if (vs != 2 && vs != 4 && vs != 8 && vs != 16 && vs != 32 && vs != 64) {
-        error_tok(tok, "%s:%d: unsupported vector_size %d; only 2, 4, 8, 16, 32 and 64 are supported", __FILE__, __LINE__, vs);
+        error_tok(tok, "%s:%d: in %s: unsupported vector_size %d; only 2, 4, 8, 16, 32 and 64 are supported", __FILE__, __LINE__, __func__, vs);
     }
     if (vs != ty->vector_size) {
         //ty->size = vs;
@@ -4617,7 +4622,7 @@ static Token *type_attributes(Token *tok, void *arg)
     }
     int base_size = ty->size;
     if (base_size == 0) {
-        error_tok(tok, "%s:%d: in types_attributes: incorrect base size %d;", __FILE__, __LINE__, base_size);
+        error_tok(tok, "%s:%d: in %s: incorrect base size %d;", __FILE__, __LINE__, __func__, base_size);
     }  
     int n = vs / base_size;
     
@@ -4682,7 +4687,7 @@ static Token *type_attributes(Token *tok, void *arg)
       SET_CTX(ctx); 
       tok = skip(tok, "(", ctx);  
       if (tok->kind != TK_IDENT)  
-          error_tok(tok, "%s:%d: in type_attributes: expected identifier in __cleanup__", __FILE__, __LINE__);
+          error_tok(tok, "%s:%d: in %s: expected identifier in __cleanup__", __FILE__, __LINE__, __func__);
 
       // Store the cleanup function name
       current_type = copy_type(ty); 
@@ -4710,7 +4715,7 @@ static Token *type_attributes(Token *tok, void *arg)
         tok = skip(tok, "(", ctx);
         // Parse the deallocator function name (e.g., rpl_free)
         if (tok->kind != TK_IDENT)
-            error_tok(tok, "%s:%d: expected identifier in __malloc__ attribute", __FILE__, __LINE__);
+            error_tok(tok, "%s:%d: in %s: expected identifier", __FILE__, __LINE__, __func__);
         tok = tok->next;
 
         // Optionally consume comma and size argument
@@ -4935,7 +4940,7 @@ static Token *type_attributes(Token *tok, void *arg)
           tok = skip(tok, "(",ctx);
           while (!equal(tok, ")")) {
               if (tok->kind != TK_NUM) {
-                  error_tok(tok, "%s:%d: expected parameter index in __nonnull__", __FILE__, __LINE__);
+                  error_tok(tok, "%s:%d: in %s: expected parameter index in __nonnull__", __FILE__, __LINE__, __func__);
               }
               tok = tok->next;
               if (equal(tok, ","))
@@ -4995,7 +5000,9 @@ static Token *type_attributes(Token *tok, void *arg)
       two_parent = true;
     }
 
-    ConsumeStringLiteral(&tok, tok); 
+    while (!equal(tok, ")")) {
+      tok = tok->next;
+    }
 
     if (two_parent) {   
       SET_CTX(ctx); 
@@ -5065,7 +5072,7 @@ static Token *type_attributes(Token *tok, void *arg)
 static Token *thing_attributes(Token *tok, void *arg) {
   VarAttr *attr = arg;
   if (!attr) {
-    warn_tok(tok, "in thing_attributes: %s:%d: attr is null", __FILE__, __LINE__);
+    warn_tok(tok, "%s:%d: in %s: attr is null", __FILE__, __LINE__, __func__);
     return tok;
   }
 
@@ -5210,7 +5217,7 @@ static Token *thing_attributes(Token *tok, void *arg) {
         attr->constructor_priority = tok->val;
         tok = tok->next;
       } else {
-        warn_tok(tok, "in thing_attributes: %s:%d: expected integer priority in constructor attribute", __FILE__, __LINE__);
+        warn_tok(tok, "%s:%d: in %s: expected integer priority in constructor attribute", __FILE__, __LINE__, __func__);
       }
       SET_CTX(ctx); 
       tok = skip(tok, ")", ctx);
@@ -5231,7 +5238,7 @@ static Token *thing_attributes(Token *tok, void *arg) {
         attr->destructor_priority = tok->val;
         tok = tok->next;
       } else {
-        warn_tok(tok, "in thing_attributes: %s:%d: expected integer priority in destructor attribute", __FILE__, __LINE__);
+        warn_tok(tok, "%s:%d: in %s: expected integer priority in destructor attribute", __FILE__, __LINE__, __func__);
       }
       SET_CTX(ctx); 
       tok = skip(tok, ")", ctx);
@@ -5282,7 +5289,9 @@ static Token *thing_attributes(Token *tok, void *arg) {
       tok = skip(tok, "(", ctx);
       two_parent = true;
     }
-    ConsumeStringLiteral(&tok, tok); 
+    while (!equal(tok, ")")) {
+      tok = tok->next;
+    }
     if (two_parent) {   
       SET_CTX(ctx); 
       tok = skip(tok, ")", ctx);
@@ -5329,7 +5338,7 @@ static Token *thing_attributes(Token *tok, void *arg) {
       SET_CTX(ctx); 
       tok = skip(tok, "(", ctx);  
       if (tok->kind != TK_IDENT)  
-          error_tok(tok, "%s:%d: expected identifier in __cleanup__", __FILE__, __LINE__);
+          error_tok(tok, "%s:%d: in %s: expected identifier in __cleanup__", __FILE__, __LINE__, __func__);
 
       // Store the cleanup function name
       current_attr = attr;
@@ -5346,7 +5355,7 @@ static Token *thing_attributes(Token *tok, void *arg) {
         SET_CTX(ctx); 
         tok = skip(tok, "(", ctx);        
         if (tok->kind != TK_IDENT)
-            error_tok(tok, "%s:%d: expected identifier in __malloc__ attribute", __FILE__, __LINE__);
+            error_tok(tok, "%s:%d: in %s: expected identifier in __malloc__ attribute", __FILE__, __LINE__, __func__);
         tok = tok->next;
         if (equal(tok, ",")) {
             tok = tok->next;
@@ -5480,7 +5489,7 @@ static Token *thing_attributes(Token *tok, void *arg) {
           tok = skip(tok, "(",ctx);
           while (!equal(tok, ")")) {
               if (tok->kind != TK_NUM) {
-                  error_tok(tok, "%s:%d: expected parameter index in __nonnull__", __FILE__, __LINE__);
+                  error_tok(tok, "%s:%d: in %s: expected parameter index in __nonnull__", __FILE__, __LINE__, __func__);
               }
               tok = tok->next;
               if (equal(tok, ","))
@@ -5610,7 +5619,7 @@ static Type *struct_union_decl(Token **rest, Token *tok, bool *no_list)
     ty->size = -1;
     push_tag_scope(tag, ty);
     if (!ty)
-      error_tok(tok, "%s:%d: in struct_union_decl : ty is null!", __FILE__, __LINE__);
+      error_tok(tok, "%s:%d: in %s: ty is null!", __FILE__, __LINE__, __func__);
     return ty;
   }
 
@@ -5641,7 +5650,7 @@ static Type *struct_union_decl(Token **rest, Token *tok, bool *no_list)
     push_tag_scope(tag, ty);
   }
   if (!ty)
-    error_tok(tok, "%s:%d: in struct_union_decl : ty is null!", __FILE__, __LINE__);
+    error_tok(tok, "%s:%d: in %s: ty is null!", __FILE__, __LINE__, __func__);
   return ty;
 }
 
@@ -5662,6 +5671,10 @@ static Type *struct_decl(Token **rest, Token *tok)
 
   // Assign offsets within the struct to members.
   int bits = 0;
+  int bf_unit_start = 0;
+  int bf_unit_end = 0;
+  int bf_unit_size = 0;
+  int bf_unit_ty_size = 0;
   Member head = {0};
   Member *cur = &head;
 
@@ -5678,6 +5691,9 @@ static Type *struct_decl(Token **rest, Token *tok)
       // Zero-width anonymous bitfield has a special meaning.
       // It affects only alignment.
       bits = align_to(bits, mem_align * 8);
+      bf_unit_size = 0;
+      bf_unit_ty_size = 0;
+      bf_unit_start = bf_unit_end = 0;
     }
     else if (mem->is_bitfield)
     {
@@ -5685,12 +5701,44 @@ static Type *struct_decl(Token **rest, Token *tok)
         bits = align_to(bits, mem_align * 8);
 
       int sz = mem->ty->size;
-      if (bits / (sz * 8) != (bits + mem->bit_width - 1) / (sz * 8))
-        bits = align_to(bits, sz * 8);
+      int unit_bits = sz * 8;
+
+      if (ty->is_ms_struct) {
+        if (bf_unit_size == 0) {
+          bits = align_to(bits, mem_align * 8);
+          bf_unit_start = bits;
+          bf_unit_ty_size = sz;
+          bf_unit_size = unit_bits;
+          bf_unit_end = bf_unit_start + bf_unit_size;
+        } else if (bf_unit_ty_size != sz) {
+          bits = bf_unit_end;
+          bits = align_to(bits, mem_align * 8);
+          bf_unit_start = bits;
+          bf_unit_ty_size = sz;
+          bf_unit_size = unit_bits;
+          bf_unit_end = bf_unit_start + bf_unit_size;
+        }
+
+        if (bits + mem->bit_width > bf_unit_end) {
+          bits = bf_unit_end;
+          bits = align_to(bits, mem_align * 8);
+          bf_unit_start = bits;
+          bf_unit_ty_size = sz;
+          bf_unit_size = unit_bits;
+          bf_unit_end = bf_unit_start + bf_unit_size;
+        }
+
+        mem->offset = bf_unit_start / 8;
+        mem->bit_offset = bits - bf_unit_start;
+        bits += mem->bit_width;
+      } else {
+        if (bits / unit_bits != (bits + mem->bit_width - 1) / unit_bits)
+          bits = align_to(bits, unit_bits);
 
       mem->offset = align_down(bits / 8, sz);
-      mem->bit_offset = bits % (sz * 8);
+      mem->bit_offset = bits % unit_bits;
       bits += mem->bit_width;
+      }
     }
     else
     {
@@ -5713,6 +5761,8 @@ static Type *struct_decl(Token **rest, Token *tok)
   }
 
   ty->members = head.next;
+  if (ty->is_ms_struct && bf_unit_end > bits)
+    bits = bf_unit_end;
   ty->size = align_to(bits, ty->align * 8) / 8;
 
   for (Type *t = ty->decl_next; t; t = t->decl_next) {
@@ -5722,7 +5772,7 @@ static Type *struct_decl(Token **rest, Token *tok)
     t->members = ty->members;
   }
   if (!ty)
-    error_tok(tok, "%s:%d: in struct_decl : ty is null!", __FILE__, __LINE__);
+    error_tok(tok, "%s:%d: in %s: ty is null!", __FILE__, __LINE__, __func__);
   return ty;
 }
 
@@ -5776,7 +5826,7 @@ static Type *union_decl(Token **rest, Token *tok)
     t->members = ty->members;
   }
   if (!ty)
-    error_tok(tok, "%s:%d: in union_decl : ty is null!", __FILE__, __LINE__);
+    error_tok(tok, "%s:%d: in %s: ty is null!", __FILE__, __LINE__, __func__);
   return ty;
 }
 
@@ -5822,14 +5872,14 @@ static Node *struct_ref(Node *node, Token *tok)
 {
   add_type(node);
   if (node->ty->kind != TY_STRUCT && node->ty->kind != TY_UNION) 
-    error_tok(node->tok, "%s:%d: in struct_ref : not a struct nor a union", __FILE__, __LINE__);
+    error_tok(node->tok, "%s:%d: in %s: not a struct nor a union", __FILE__, __LINE__, __func__);
 
   Type *ty = node->ty;
   for (;;)
   {
     Member *mem = get_struct_member(ty, tok);
     if (!mem)
-      error_tok(tok, "%s:%d: in struct_ref : no such member", __FILE__, __LINE__);
+      error_tok(tok, "%s:%d: in %s: no such member", __FILE__, __LINE__, __func__);
     node = new_unary(ND_MEMBER, node, tok);
     node->member = mem;
     if (mem->name)
@@ -5866,7 +5916,7 @@ static Node *new_inc_dec(Node *node, Token *tok, int addend) {
 
   // -O1+: for simple variable postfix inc/dec, avoid hidden pointer temp.
   // `_Bool` is special: `(b += 1) - 1` does not preserve old value semantics.
-  if (opt_optimize_level1 && !node->ty->is_atomic &&
+  if (false && opt_optimize_level1 && !node->ty->is_atomic &&
       node->ty->kind != TY_BOOL && is_safe_lvalue(node)) {
     return new_cast(new_add(to_assign(new_add(node, new_num(addend, tok), tok, false)),
                             new_num(-addend, tok), tok, false),
@@ -5937,7 +5987,7 @@ static Node *postfix(Token **rest, Token *tok)
     Type *ty = typename(&tok, tok->next);
     tok = attribute_list(tok, ty, type_attributes);
     if (ty->kind == TY_VLA)
-      error_tok(tok, "%s:%d: in postfix : compound literals cannot be VLA", __FILE__, __LINE__);
+      error_tok(tok, "%s:%d: in %s: compound literals cannot be VLA", __FILE__, __LINE__, __func__);
     SET_CTX(ctx);     
     tok = skip(tok, ")", ctx);
 
@@ -6059,7 +6109,7 @@ static Node *funcall(Token **rest, Token *tok, Node *fn)
 
   if (fn->ty->kind != TY_FUNC &&
       (fn->ty->kind != TY_PTR || fn->ty->base->kind != TY_FUNC))
-    error_tok(fn->tok, "%s:%d: in funcall : not a function %d %s", __FILE__, __LINE__, fn->ty->kind, tok->loc);
+    error_tok(fn->tok, "%s:%d: in %s: not a function %d %s", __FILE__, __LINE__, __func__, fn->ty->kind, tok->loc);
 
   Type *ty = (fn->ty->kind == TY_FUNC) ? fn->ty : fn->ty->base;
   Type *param_ty = ty->params;
@@ -6079,7 +6129,7 @@ static Node *funcall(Token **rest, Token *tok, Node *fn)
 
 
     if (!param_ty && !ty->is_variadic && !ty->is_oldstyle)
-      error_tok(tok, "%s:%d: in funcall : too many arguments", __FILE__, __LINE__);
+      error_tok(tok, "%s:%d: in %s: too many arguments", __FILE__, __LINE__, __func__);
 
     //can't be done later because param_ty will be set to the next value
     //if param_ty is null it means that it's a variadic argument.
@@ -6102,7 +6152,7 @@ static Node *funcall(Token **rest, Token *tok, Node *fn)
       arg = new_cast(arg, ty_double);
     } else if (is_array(arg->ty))
         arg = new_cast(arg, pointer_to(arg->ty->base));
-      else if (arg->ty->kind == TY_FUNC)
+    else if (arg->ty->kind == TY_FUNC)
         arg = new_cast(arg, pointer_to(arg->ty));
 
 
@@ -6110,7 +6160,7 @@ static Node *funcall(Token **rest, Token *tok, Node *fn)
   }
 
   if (param_ty && !ty->is_oldstyle)
-    error_tok(tok, "%s:%d: in funcall : too few arguments", __FILE__, __LINE__);
+    error_tok(tok, "%s:%d: in %s: too few arguments", __FILE__, __LINE__, __func__);
   SET_CTX(ctx);    
   *rest = skip(tok, ")", ctx);
 
@@ -6213,25 +6263,25 @@ static Token *skip_choose_expr_arg(Token *tok) {
         paren--;
         continue;
       }
-      error_tok(tok, "%s:%d: in skip_choose_expr_arg : unbalanced ')'", __FILE__, __LINE__);
+      error_tok(tok, "%s:%d: in %s: unbalanced ')'", __FILE__, __LINE__, __func__);
     }
     if (equal(tok, "]")) {
       if (bracket > 0) {
         bracket--;
         continue;
       }
-      error_tok(tok, "%s:%d: in skip_choose_expr_arg : unbalanced ']'", __FILE__, __LINE__);
+      error_tok(tok, "%s:%d: in %s: unbalanced ']'", __FILE__, __LINE__, __func__);
     }
     if (equal(tok, "}")) {
       if (brace > 0) {
         brace--;
         continue;
       }
-      error_tok(tok, "%s:%d: in skip_choose_expr_arg : unbalanced '}'", __FILE__, __LINE__);
+      error_tok(tok, "%s:%d: in %s: unbalanced '}'", __FILE__, __LINE__, __func__);
     }
   }
 
-  error_tok(tok, "%s:%d: in skip_choose_expr_arg : unexpected end of input", __FILE__, __LINE__);
+  error_tok(tok, "%s:%d: in %s: unexpected end of input", __FILE__, __LINE__, __func__);
   return tok;
 }
 
@@ -6313,7 +6363,7 @@ static Node *primary(Token **rest, Token *tok)
       }
 
       if ((ty->kind == TY_UNION || ty->kind == TY_STRUCT) && ty->size < 0)
-        error_tok(tok, "%s:%d: in primary : incomplete type for sizeof", __FILE__, __LINE__);
+        error_tok(tok, "%s:%d: in %s: incomplete type for sizeof", __FILE__, __LINE__, __func__);
 
       return new_ulong(ty->size, start);
     } else {
@@ -6324,7 +6374,7 @@ static Node *primary(Token **rest, Token *tok)
       // GCC: array in comma-expr decays (unless compound literal).
       if (node->kind == ND_COMMA && node->rhs && is_array(node->rhs->ty)
           && node->rhs->var && !node->rhs->var->is_compound_lit)
-      if (is_array(node->ty) &&
+        if (is_array(node->ty) &&
           ((node->kind == ND_COMMA && node->rhs && node->rhs->var && !node->rhs->var->is_compound_lit) ||
            (node->kind == ND_COND))) {
         node->ty = pointer_to(node->ty->base);
@@ -6336,7 +6386,7 @@ static Node *primary(Token **rest, Token *tok)
         return vla_node;
 
       if ((node->ty->kind == TY_UNION || node->ty->kind == TY_STRUCT) && node->ty->size < 0)
-        error_tok(tok, "%s:%d: in primary : incomplete type for sizeof", __FILE__, __LINE__);
+        error_tok(tok, "%s:%d: in %s: incomplete type for sizeof", __FILE__, __LINE__, __func__);
 
       if (node->ty->kind == TY_STRUCT && node->ty->is_flexible) {
         Member *mem = node->ty->members;
@@ -6347,7 +6397,7 @@ static Node *primary(Token **rest, Token *tok)
       }
 
       if (node->ty->size < 0)
-        error_tok(tok, "%s:%d: in primary : incomplete type for sizeof", __FILE__, __LINE__);
+        error_tok(tok, "%s:%d: in %s: incomplete type for sizeof", __FILE__, __LINE__, __func__);
 
       return new_ulong(node->ty->size, start);
     }
@@ -6428,7 +6478,7 @@ static Node *primary(Token **rest, Token *tok)
 
     Node *cond_node = conditional(&tok, tok);
     if (!is_const_expr(cond_node))
-      error_tok(cond_node->tok, "%s:%d: in primary : __builtin_choose_expr condition is not constant", __FILE__, __LINE__);
+      error_tok(cond_node->tok, "%s:%d: in %s: __builtin_choose_expr condition is not constant", __FILE__, __LINE__, __func__);
     int64_t cond = eval(cond_node);
     SET_CTX(ctx);
     tok = skip(tok, ",", ctx);
@@ -6622,7 +6672,8 @@ static Node *primary(Token **rest, Token *tok)
     equal(tok, "__builtin_ia32_rstorssp") || equal(tok, "__builtin_ia32_clrssbsy") || 
     equal(tok, "__builtin_ia32_rsqrtss") || equal(tok, "__builtin_ia32_tzcnt_u16") || 
     equal(tok, "__builtin_ia32_si256_si") || equal(tok, "__builtin_ia32_si_si256") ||
-    equal(tok, "__builtin_ia32_pd_pd256") || equal(tok, "__builtin_ia32_ps_ps256")) {
+    equal(tok, "__builtin_ia32_pd_pd256") || equal(tok, "__builtin_ia32_ps_ps256") ||
+    equal(tok, "__builtin_stdc_bit_ceil")) {
     int builtin = builtin_enum(tok);
     if (builtin != -1) {
       Node *node = new_node(builtin, tok);    
@@ -7057,7 +7108,7 @@ static Node *primary(Token **rest, Token *tok)
       node->fpc->node = expr(&tok, tok);
       add_type(node->fpc->node);
       if (!is_flonum(node->fpc->node->ty)) {        
-        error_tok(tok, "%s:%d: in primary : need floating point", __FILE__, __LINE__);
+        error_tok(tok, "%s:%d: in %s: need floating point", __FILE__, __LINE__, __func__);
       }
       SET_CTX(ctx);
       *rest = skip(tok, ")", ctx);
@@ -7343,10 +7394,6 @@ static Node *primary(Token **rest, Token *tok)
     node->lhs = assign(&tok, tok); 
     add_type(node->lhs);
 
-    if (opt_omit_frame_pointer && is_const_expr(node->lhs) && eval(node->lhs) > 0) {
-      opt_omit_frame_pointer = false;
-    }
-
     SET_CTX(ctx); 
     *rest = skip(tok, ")", ctx);
     return node;
@@ -7354,8 +7401,6 @@ static Node *primary(Token **rest, Token *tok)
 
   if (equal(tok, "__builtin_frame_address"))
   {
-    if (current_fn)
-      current_fn->force_frame_pointer = true;
     Node *node = new_node(ND_BUILTIN_FRAME_ADDRESS, tok);
     add_type(node);
     SET_CTX(ctx); 
@@ -7363,9 +7408,12 @@ static Node *primary(Token **rest, Token *tok)
     node->lhs = assign(&tok, tok);
     add_type(node->lhs);
 
-    if (opt_omit_frame_pointer && (!is_const_expr(node->lhs) || eval(node->lhs) > 0)) {
-      opt_omit_frame_pointer = false;
-    }
+    // __builtin_frame_address(0) doesn't need a frame pointer; it
+    // can be served from %rsp when frames are omitted.  Only force
+    // one when the level is non-zero or not a compile-time constant.
+    if (current_fn &&
+        (node->lhs->kind != ND_NUM || node->lhs->val != 0))
+      current_fn->force_frame_pointer = true;
 
     SET_CTX(ctx); 
     *rest = skip(tok, ")", ctx);
@@ -7617,7 +7665,7 @@ static Node *primary(Token **rest, Token *tok)
     else if (equal(tok, "4"))
       node = new_binary(ND_BITAND, obj, val, tok);
     else
-      error_tok(tok, "%s:%d: in primary : invalid fetch operator", __FILE__, __LINE__);
+      error_tok(tok, "%s:%d: in %s: invalid fetch operator", __FILE__, __LINE__, __func__);
 
     node->atomic_fetch = true;
     SET_CTX(ctx);     
@@ -7662,8 +7710,10 @@ static Node *primary(Token **rest, Token *tok)
      
       if (is_returned_twice(name)) {
         dont_reuse_stack = true;
-        if (current_fn)
+        if (current_fn) {
           current_fn->force_frame_pointer = true;
+          current_fn->is_returned_twice = true;
+        }
       }
     
     }
@@ -7682,11 +7732,11 @@ static Node *primary(Token **rest, Token *tok)
       Obj *fn = find_func(token_to_string(tok));
 
       if (!fn && (is_c99_or_later() || opt_implicit)) {
-        error_tok(tok, "%s:%d: in primary : implicit declaration of function", __FILE__, __LINE__);
+        error_tok(tok, "%s:%d: in %s: implicit declaration of function", __FILE__, __LINE__, __func__);
       }    
 
       if (!fn) {
-        warn_tok(tok, "%s:%d: in primary : implicit declaration of function", __FILE__, __LINE__);
+        warn_tok(tok, "%s:%d: in %s: implicit declaration of function", __FILE__, __LINE__, __func__);
         Type *ty = func_type(ty_int);        
         ty->is_variadic = true;
         fn = new_gvar(token_to_string(tok), ty);
@@ -7704,7 +7754,7 @@ static Node *primary(Token **rest, Token *tok)
     }
 
     //printf("=======%s:%d\n", tok->loc, __LINE__);
-    error_tok(tok, "%s:%d: in primary : error: undefined variable %.*s", __FILE__, __LINE__, tok->len, tok->loc);
+    error_tok(tok, "%s:%d: in %s: error: undefined variable %.*s", __FILE__, __LINE__, __func__, tok->len, tok->loc);
   }
 
   if (tok->kind == TK_STR)
@@ -7744,7 +7794,7 @@ static Node *primary(Token **rest, Token *tok)
     return node;
   }
 
-  error_tok(tok, "%s:%d: in primary : expected an expression %s", __FILE__, __LINE__, tok->loc);
+  error_tok(tok, "%s:%d: in %s: expected an expression %s", __FILE__, __LINE__, __func__, tok->loc);
 }
 
 static Node *parse_typedef(Token **rest, Token *tok, Type *basety, VarAttr *attr) 
@@ -7761,9 +7811,9 @@ static Node *parse_typedef(Token **rest, Token *tok, Type *basety, VarAttr *attr
 
     Type *ty = declarator(&tok, tok, basety);
     if (!ty)
-      error_tok(tok, "%s:%d: in parse_typedef : ty is null", __FILE__, __LINE__);
+      error_tok(tok, "%s:%d: in %s: ty is null", __FILE__, __LINE__, __func__);
     if (!ty->name)
-      error_tok(ty->name_pos, "%s:%d: in parse_typedef : typedef name omitted", __FILE__, __LINE__);
+      error_tok(ty->name_pos, "%s:%d: in %s: typedef name omitted", __FILE__, __LINE__, __func__);
     //from COSMOPOLITAN adding other GNUC attributes
     tok = attribute_list(tok, ty, type_attributes);      
     if (attr && attr->align) {
@@ -7830,7 +7880,7 @@ static void resolve_goto_labels(void)
     }
 
     if (x->unique_label == NULL)
-      error_tok(x->tok->next, "%s:%d: in resolve_goto_labels : use of undeclared label", __FILE__, __LINE__);
+      error_tok(x->tok->next, "%s:%d: in %s: use of undeclared label", __FILE__, __LINE__, __func__);
   }
 
   gotos = labels = NULL;
@@ -7864,7 +7914,7 @@ static void mark_live(Obj *var)
 }
 
 //implementing tail call optimization. Marking tails calls.
-static void mark_tail_calls(Node *node) {
+static void mark_tail_calls(Node *node, Obj *fn) {
   if (!node)
     return;
 
@@ -7875,23 +7925,29 @@ static void mark_tail_calls(Node *node) {
     Node *last = node->body;
     while (last->next)
       last = last->next;
-    mark_tail_calls(last);
+    mark_tail_calls(last, fn);
     break;
   case ND_IF:
-    mark_tail_calls(node->then);
-    mark_tail_calls(node->els);
+    mark_tail_calls(node->then, fn);
+    mark_tail_calls(node->els, fn);
     break;
   case ND_RETURN:
-    mark_tail_calls(node->lhs);
+    mark_tail_calls(node->lhs, fn);
     break;
   case ND_EXPR_STMT:
-    mark_tail_calls(node->lhs);
+    // Allow sibling-call optimization only when reaching the end of a
+    // non-main void function (so that main's implicit return 0 is preserved).
+    if (!fn || strcmp(fn->name, "main") == 0)
+      break;
+    if (!fn->ty || !fn->ty->return_ty || fn->ty->return_ty->kind != TY_VOID)
+      break;
+    mark_tail_calls(node->lhs, fn);
     break;
   case ND_CAST:
-    mark_tail_calls(node->lhs);
+    mark_tail_calls(node->lhs, fn);
     break;
   case ND_COMMA:
-    mark_tail_calls(node->rhs);
+    mark_tail_calls(node->rhs, fn);
     break;
   case ND_FUNCALL:
     node->is_tail = true;
@@ -7906,9 +7962,9 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   
   tok = attribute_list(tok, attr, thing_attributes); 
   if (!ty)
-    error_tok(tok, "%s:%d: in function : ty is null", __FILE__, __LINE__);
+    error_tok(tok, "%s:%d: in %s: ty is null", __FILE__, __LINE__, __func__);
   if (!ty->name)
-    error_tok(ty->name_pos, "%s:%d: in function : function name omitted", __FILE__, __LINE__);  
+    error_tok(ty->name_pos, "%s:%d: in %s: function name omitted", __FILE__, __LINE__, __func__);  
 
   char *name_str = get_ident(ty->name);
 
@@ -7917,11 +7973,11 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   {
     // Redeclaration
     if (!fn->is_function)
-      error_tok(tok, "%s:%d: in function : redeclared as a different kind of symbol", __FILE__, __LINE__);
+      error_tok(tok, "%s:%d: in %s: redeclared as a different kind of symbol", __FILE__, __LINE__, __func__);
     if (fn->is_definition && equal(tok, "{"))
-      error_tok(tok, "%s:%d: in function : redefinition of %s", __FILE__, __LINE__, name_str);
+      error_tok(tok, "%s:%d: in %s: redefinition of %s", __FILE__, __LINE__, __func__, name_str);
     if (!fn->is_static && attr->is_static)
-      error_tok(tok, "%s:%d: in function : static declaration follows a non-static declaration", __FILE__, __LINE__);
+      error_tok(tok, "%s:%d: in %s: static declaration follows a non-static declaration", __FILE__, __LINE__, __func__);
     fn->is_definition = fn->is_definition || equal(tok, "{");
   }
   else
@@ -8048,7 +8104,7 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   }
 
   //implementing tail call optimization.
-  mark_tail_calls(fn->body);
+  mark_tail_calls(fn->body, fn);
   fn->locals = locals;  
   order = 0;
   leave_scope();
@@ -8072,14 +8128,14 @@ static Token *global_declaration(Token *tok, Type *basety, VarAttr *attr)
     first = false;
     Type *ty = declarator(&tok, tok, basety);
     if (!ty)
-      error_tok(tok, "%s:%d: in global_declaration : ty is null", __FILE__, __LINE__);    
+      error_tok(tok, "%s:%d: in %s: ty is null", __FILE__, __LINE__, __func__);    
     if (!ty->name)
-      error_tok(ty->name_pos, "%s:%d: in global_declaration : variable name omitted", __FILE__, __LINE__);
+      error_tok(ty->name_pos, "%s:%d: in %s: variable name omitted", __FILE__, __LINE__, __func__);
     if (ty->name) {
       VarScope *sc = find_var(ty->name);
       if (sc && sc->var) {
         if (sc->var->is_definition && !sc->var->is_tentative && !sc->var->is_extern && equal(tok, "=") )
-          error_tok(ty->name, "%s:%d: in global_declaration : redefinition of the variable %s", __FILE__, __LINE__, token_to_string(ty->name));        
+          error_tok(ty->name, "%s:%d: in %s: redefinition of the variable %s", __FILE__, __LINE__, __func__, token_to_string(ty->name));        
       }
     
   }
@@ -8339,568 +8395,12 @@ Obj *parse(Token *tok)
   return globals;
 }
 
-// for dot diagram
-char *nodekind2str(NodeKind kind)
-{
-  switch (kind)
-  {
-  case ND_NULL_EXPR: return "NULL_EXPR";
-  case ND_ADD: return "ADD";
-  case ND_SUB: return "SUB";
-  case ND_MUL: return "MUL";
-  case ND_DIV: return "DIV";
-  case ND_POS: return "POS";
-  case ND_NEG: return "NEG";
-  case ND_MOD: return "MOD";
-  case ND_BITAND: return "BITAND";
-  case ND_BITOR: return "BITOR";
-  case ND_BITXOR: return "BITXOR";
-  case ND_SHL: return "SHL";
-  case ND_SHR: return "SHR";
-  case ND_EQ: return "EQ";
-  case ND_NE: return "NE";
-  case ND_LT: return "LT";
-  case ND_LE: return "LE";
-  case ND_ASSIGN: return "ASSIGN";
-  case ND_COND: return "COND"; 
-  case ND_COMMA: return "COMMA";
-  case ND_MEMBER: return "MEMBER"; 
-  case ND_ADDR: return "ADDR";
-  case ND_DEREF: return "DEREF";
-  case ND_NOT: return "NOT";
-  case ND_BITNOT: return "BITNOT"; 
-  case ND_LOGAND: return "LOGAND"; 
-  case ND_LOGOR: return "LOGOR"; 
-  case ND_RETURN: return "RETURN";
-  case ND_IF: return "IF";
-  case ND_FOR: return "FOR"; 
-  case ND_DO: return "DO"; 
-  case ND_SWITCH: return "SWITCH"; 
-  case ND_CASE: return "CASE"; 
-  case ND_BLOCK: return "BLOCK"; 
-  case ND_GOTO: return "GOTO"; 
-  case ND_GOTO_EXPR: return "GOTO_EXPR"; 
-  case ND_LABEL: return "LABEL"; 
-  case ND_LABEL_VAL: return "LABEL_VAL";
-  case ND_FUNCALL: return "FUNCALL";
-  case ND_EXPR_STMT: return "EXPRSTMR";
-  case ND_STMT_EXPR: return "STMTEXPR"; 
-  case ND_VAR: return "VAR"; 
-  case ND_VLA_PTR: return "VLAPTR"; 
-  case ND_NUM: return "NUM";
-  case ND_CAST: return "CAST";
-  case ND_MEMZERO: return "MEMZERO"; 
-  case ND_ASM: return "ASM";
-  case ND_CAS: return "CAS";
-  case ND_CAS_N: return "CAS_N";
-  case ND_EXCH: return "EXCHANGE";
-  case ND_EXCH_N: return "EXCHANGE_N";
-  case ND_CMPEXCH: return "COMPARE_EXCHANGE";
-  case ND_CMPEXCH_N: return "COMPARE_EXCHANGE_N";
-  case ND_LOAD: return "LOAD";
-  case ND_LOAD_N: return "LOAD_N";
-  case ND_STORE: return "STORE"; 
-  case ND_STORE_N: return "STORE_N"; 
-  case ND_TESTANDSET: return "TESTANDSET";
-  case ND_TESTANDSETA: return "TESTANDSETA";
-  case ND_CLEAR: return "CLEAR"; 
-  case ND_RELEASE: return "RELEASE"; 
-  case ND_FETCHADD: return "FETCHADD";
-  case ND_FETCHSUB: return "FETCHSUB";
-  case ND_FETCHXOR: return "FETCHXOR";
-  case ND_FETCHAND: return "FETCHAND";    
-  case ND_FETCHOR: return "FETCHOR";
-  case ND_SUBFETCH: return "SUBFETCH";
-  case ND_SYNC: return "SYNC";   
-  case ND_MEMBARRIER: return "MEMBARRIER"; 
-  case ND_BUILTIN_MEMCPY: return "MEMCPY";  
-  case ND_BUILTIN_MEMSET: return "MEMSET";  
-  case ND_BUILTIN_CLZ: return "CLZ";   
-  case ND_BUILTIN_CLZL: return "CLZL";   
-  case ND_BUILTIN_CLZLL: return "CLZLL";  
-  case ND_BUILTIN_CTZ: return "CTZ";   
-  case ND_BUILTIN_CTZL: return "CTZL";  
-  case ND_BUILTIN_CTZLL: return "CTZLL";  
-  case ND_BUILTIN_INFF: return "INFF";   
-  case ND_BUILTIN_INF: return "INFF";  
-  case ND_BUILTIN_NAN: return "NAN";   
-  case ND_BUILTIN_NANF: return "NANF";   
-  case ND_BUILTIN_NANL: return "NANL";   
-  case ND_BUILTIN_ISNAN: return "ISNAN"; 
-  case ND_BUILTIN_HUGE_VAL: return "ISNAN"; 
-  case ND_BUILTIN_HUGE_VALF: return "ISNAN"; 
-  case ND_BUILTIN_HUGE_VALL: return "ISNAN";
-  case ND_POPCOUNT: return "POPCOUNT";
-  case ND_POPCOUNTL: return "POPCOUNTL";
-  case ND_POPCOUNTLL: return "POPCOUNTLL";
-  case ND_RETURN_ADDR: return "RETURN_ADDRESS";  
-  case ND_BUILTIN_FRAME_ADDRESS: return "FRAME_ADDRESS"; 
-  case ND_BUILTIN_ADD_OVERFLOW: return "ADD_OVERFLOW";    
-  case ND_BUILTIN_SUB_OVERFLOW: return "SUB_OVERFLOW";    
-  case ND_BUILTIN_MUL_OVERFLOW: return "MUL_OVERFLOW"; 
-  case ND_UADD_OVERFLOW: return "UADD_OVERFLOW";  
-  case ND_UADDL_OVERFLOW: return "UADDL_OVERFLOW";    
-  case ND_UADDLL_OVERFLOW: return "UADDLL_OVERFLOW";    
-  case ND_UMUL_OVERFLOW: return "UMUL_OVERFLOW";  
-  case ND_UMULL_OVERFLOW: return "UMULL_OVERFLOW";    
-  case ND_UMULLL_OVERFLOW: return "UMULLL_OVERFLOW";      
-  case ND_BUILTIN_BSWAP16:  return "BSWAP16";   
-  case ND_BUILTIN_BSWAP32: return "BSWAP32";    
-  case ND_BUILTIN_BSWAP64: return "BSWAP64"; 
-  case ND_ALLOC: return "ALLOCA";
-  case ND_ABORT: return "ABORT";
-  case ND_EXPECT: return "EXPECT";
-  case ND_EMMS: return "EMMS";
-  case ND_LFENCE: return "LFENCE";
-  case ND_MFENCE: return "MFENCE";
-  case ND_SFENCE: return "SFENCE";
-  case ND_PAUSE: return "PAUSE";
-  case ND_STMXCSR: return "STMXCSR";
-  case ND_LDMXCSR: return "LDMXCSR";    
-  case ND_CVTPI2PS: return "CVTPI2PS";    
-  case ND_CVTPS2PI: return "CVTPS2PI";
-  case ND_CLFLUSH: return "CLFLUSH"; 
-  case ND_VECINITV2SI: return "VEC_INIT_V2SI";
-  case ND_VECEXTV2SI: return "VEC_EXT_V2SI";
-  case ND_VECEXTV4SI: return "VEC_EXT_V4SI";  
-  case ND_VECINITV8QI: return "VEC_INIT_V8QI";   
-  case ND_VECINITV4HI: return "VEC_INIT_V4HI";        
-  case ND_PACKSSWB: return "PACKSSWB";
-  case ND_PACKSSDW: return "PACKSSDW";
-  case ND_PACKUSWB: return "PACKUSWB";
-  case ND_PUNPCKHBW: return "PUNPCKHBW";
-  case ND_PUNPCKHWD: return "PUNPCKHWD";   
-  case ND_PUNPCKHDQ: return "PUNPCKHDQ";   
-  case ND_PUNPCKLBW: return "PUNPCKLBW";  
-  case ND_PUNPCKLWD: return "PUNPCKLWD";   
-  case ND_PUNPCKLDQ: return "PUNPCKLDQ";   
-  case ND_PADDB: return "PADDB";   
-  case ND_PADDW: return "PADDW";  
-  case ND_PADDD: return "PADDD";
-  case ND_PADDQ: return "PADDQ";   
-  case ND_PADDSB: return "PADDSB";  
-  case ND_PADDSW: return "PADDSW";   
-  case ND_PADDUSB: return "PADDUSB"; 
-  case ND_PADDUSW: return "PADDUSW";   
-  case ND_PSUBB: return "PSUBB";    
-  case ND_PSUBW: return "PSUBW";   
-  case ND_PSUBD: return "PSUBD";     
-  case ND_PSUBQ: return "PSUBQ";  
-  case ND_PSUBSB: return "PSUBSB";   
-  case ND_PSUBSW: return "PSUBSW"; 
-  case ND_PSUBUSB: return "PSUBUSB"; 
-  case ND_PSUBUSW: return "PSUBUSW";     
-  case ND_PMADDWD: return "PMADDWD";    
-  case ND_PMULHW: return "PMULHW";   
-  case ND_PMULLW: return "PMULLW";  
-  case ND_PSLLW: return "PSLLW";   
-  case ND_PSLLWI: return "PSLLWI"; 
-  case ND_PSLLD: return "PSLLD";      
-  case ND_PSLLDI: return "PSLLDI";   
-  case ND_PSLLQ: return "PSLLQ";
-  case ND_PSLLQI: return "PSLLQI";  
-  case ND_PSRAW: return "PSRAW";   
-  case ND_PSRAWI: return "PSRAWI";
-  case ND_PSRAD: return "PSRAD";  
-  case ND_PSRADI: return "PSRADI";
-  case ND_PSRLW: return "PSRLW";      
-  case ND_PSRLWI: return "PSRLWI";   
-  case ND_PSRLD: return "PSRLD";      
-  case ND_PSRLDI: return "PSRLDI";  
-  case ND_PSRLQ: return "PSRLQ";      
-  case ND_PSRLQI: return "PSRLQI"; 
-  case ND_PAND: return "PAND";  
-  case ND_PANDN: return "PANDN";    
-  case ND_POR: return "POR";
-  case ND_PXOR: return "PXOR";    
-  case ND_PCMPEQB: return "PCMPEQB";     
-  case ND_PCMPGTB: return "PCMPGTB";  
-  case ND_PCMPEQW: return "PCMPEQW";  
-  case ND_PCMPEQD: return "PCMPEQD";        
-  case ND_PCMPGTW: return "PCMPGTW";  
-  case ND_PCMPGTD: return "PCMPGTD";  
-  case ND_ADDSS: return "ADDSS";  
-  case ND_SUBSS: return "SUBSS";   
-  case ND_MULSS: return "MULSS";  
-  case ND_DIVSS: return "DIVSS";  
-  case ND_SQRTSS: return "SQRTSS"; 
-  case ND_SQRTPS: return "SQRTPS";     
-  case ND_RSQRTSS: return "RSQRTSS";  
-  case ND_RSQRTPS: return "RSQRTPS";         
-  case ND_RCPSS: return "RCPSS"; 
-  case ND_RCPPS: return "RCPPS";      
-  case ND_MINSS: return "MINSS";
-  case ND_MINPS: return "MINPS"; 
-  case ND_MAXPS: return "MAXPS";        
-  case ND_MAXSS: return "MAXSS"; 
-  case ND_ANDPS: return "ANDPS";       
-  case ND_ANDNPS: return "ANDNPS";   
-  case ND_ORPS: return "ORPS";  
-  case ND_XORPS: return "XORPS";   
-  case ND_CMPEQSS: return "CMPEQSS";    
-  case ND_CMPLTSS: return "CMPLTSS";  
-  case ND_CMPLESS: return "CMPLESS";    
-  case ND_MOVSS: return "MOVSS";   
-  case ND_CMPNEQSS: return "CMPNEQSS"; 
-  case ND_CMPNLTSS: return "CMPNLTSS"; 
-  case ND_CMPNLESS: return "CMPNLESS"; 
-  case ND_CMPORDSS: return "CMPORDSS"; 
-  case ND_CMPUNORDSS: return "CMPUNORDSS";    
-  case ND_CMPEQPS: return "CMPEQPS";  
-  case ND_CMPLTPS: return "CMPLTPS";     
-  case ND_CMPLEPS: return "CMPLEPS";  
-  case ND_CMPGTPS: return "CMPGTPS";     
-  case ND_CMPGEPS: return "CMPGEPS"; 
-  case ND_CMPNEQPS: return "CMPNEQPS";  
-  case ND_CMPNLTPS: return "CMPNLTPS";         
-  case ND_CMPNLEPS: return "CMPNLEPS"; 
-  case ND_CMPNGTPS: return "CMPNGTPS";     
-  case ND_CMPNGEPS: return "CMPNGEPS"; 
-  case ND_CMPORDPS: return "CMPORDPS";   
-  case ND_CMPUNORDPS: return "CMPUNORDPS";  
-  case ND_COMIEQ: return "COMIEQ";  
-  case ND_COMILT: return "COMILT";     
-  case ND_COMILE: return "COMILE"; 
-  case ND_COMIGT: return "COMIGT"; 
-  case ND_COMIGE: return "COMIGE";     
-  case ND_COMINEQ: return "COMINEQ";                                                                                                                                                                                                                                                                                                                             
-  case ND_UCOMIEQ: return "UCOMIEQ";  
-  case ND_UCOMILT: return "UCOMILT";     
-  case ND_UCOMILE: return "UCOMILE"; 
-  case ND_UCOMIGT: return "UCOMIGT"; 
-  case ND_UCOMIGE: return "UCOMIGE";     
-  case ND_UCOMINEQ: return "UCOMINEQ";
-  case ND_CVTSS2SI: return "CVTSS2SI";    
-  case ND_CVTSS2SI64: return "CVTSS2SI64";   
-  case ND_CVTTSS2SI: return "CVTTSS2SI";  
-  case ND_CVTTSS2SI64: return "CVTTSS2SI64";
-  case ND_CVTTPS2PI: return "CVTTPS2PI";   
-  case ND_CVTSI2SS: return "CVTSI2SS";   
-  case ND_CVTSI642SS: return "CVTSI642SS";  
-  case ND_MOVLHPS: return "MOVLHPS";    
-  case ND_MOVHLPS: return "MOVHLPS"; 
-  case ND_UNPCKHPS: return "UNPCKHPS";  
-  case ND_UNPCKLPS: return "UNPCKLPS";  
-  case ND_LOADHPS: return "LOADHPS";        
-  case ND_STOREHPS: return "STOREHPS"; 
-  case ND_LOADLPS: return "LOADLPS";        
-  case ND_STORELPS: return "STORELPS"; 
-  case ND_MOVMSKPS: return "MOVMSKPS";    
-  case ND_SHUFPS: return "SHUFPS";       
-  case ND_SHUFFLE: return "SHUFFLE";     
-  case ND_PMAXSW: return "PMAXSW";     
-  case ND_PMAXUB: return "PMAXUB";   
-  case ND_PMINSW: return "PMINSW"; 
-  case ND_PMINUB: return "PMINUB";        
-  case ND_PMOVMSKB: return "PMOVMSKB";
-  case ND_PMULHUW: return "PMULHUW";   
-  case ND_MASKMOVQ: return "MASKMOVQ";   
-  case ND_PAVGB: return "PAVGB";            
-  case ND_PAVGW: return "PAVGW"; 
-  case ND_PSADBW: return "PSADBW";    
-  case ND_MOVNTQ: return "MOVNTQ";    
-  case ND_MOVNTPS: return "MOVNTPS";         
-  case ND_SHUFPD: return "SHUFPD";       
-  case ND_ADDSD: return "ADDSD";   
-  case ND_SUBSD: return "SUBSD";       
-  case ND_MULSD: return "MULSD";   
-  case ND_DIVSD: return "DIVSD";    
-  case ND_SQRTPD: return "SQRTPD"; 
-  case ND_SQRTSD: return "SQRTSD"; 
-  case ND_MOVSD: return "MOVSD";        
-  case ND_MINPD: return "MINPD";            
-  case ND_MINSD: return "MINSD";        
-  case ND_MAXPD: return "MAXPD";  
-  case ND_MAXSD: return "MAXSD";  
-  case ND_ANDPD: return "ANDPD";    
-  case ND_ANDNPD: return "ANDNPD";  
-  case ND_ORPD: return "ORPD";         
-  case ND_XORPD: return "XORPD";      
-  case ND_CMPEQPD: return "CMPEQPD";    
-  case ND_CMPLTPD: return "CMPLTPD"; 
-  case ND_CMPLEPD: return "CMPLEPD"; 
-  case ND_CMPGTPD: return "CMPGTPD"; 
-  case ND_CMPGEPD: return "CMPGEPD";  
-  case ND_CMPNEQPD: return "CMPNEQPD"; 
-  case ND_CMPNLTPD: return "CMPNLTPD";  
-  case ND_CMPNLEPD: return "CMPNLEPD";  
-  case ND_CMPNGTPD: return "CMPNGTPD";   
-  case ND_CMPNGEPD: return "CMPNGEPD";   
-  case ND_CMPORDPD: return "CMPORDPD";   
-  case ND_CMPUNORDPD: return "CMPUNORDPD";
-  case ND_CMPEQSD: return "CMPEQSD";   
-  case ND_CMPLTSD: return "CMPLTSD";    
-  case ND_CMPLESD: return "CMPLESD";    
-  case ND_CMPNEQSD: return "CMPNEQSD";   
-  case ND_CMPNLTSD: return "CMPNLTSD";     
-  case ND_CMPNLESD: return "CMPNLESD";  
-  case ND_CMPORDSD: return "CMPORDSD";    
-  case ND_CMPUNORDSD: return "CMPUNORDSD"; 
-  case ND_COMISDEQ: return "COMISDEQ"; 
-  case ND_COMISDLT: return "COMISDLT"; 
-  case ND_COMISDLE: return "COMISDLE"; 
-  case ND_COMISDGT: return "COMISDGT"; 
-  case ND_COMISDGE: return "COMISDGE"; 
-  case ND_COMISDNEQ: return "COMISDNEQ"; 
-  case ND_UCOMISDEQ: return "UCOMISDEQ"; 
-  case ND_UCOMISDLT: return "UCOMISDLT"; 
-  case ND_UCOMISDLE: return "UCOMISDLE"; 
-  case ND_UCOMISDGT: return "UCOMISDGT"; 
-  case ND_UCOMISDGE: return "UCOMISDGE"; 
-  case ND_UCOMISDNEQ: return "UCOMISDNEQ"; 
-  case ND_MOVQ128: return "MOVQ128"; 
-  case ND_CVTDQ2PD: return "CVTDQ2PD"; 
-  case ND_CVTDQ2PS: return "CVTDQ2PS"; 
-  case ND_CVTPD2DQ: return "CVTPD2DQ"; 
-  case ND_CVTPD2PI: return "CVTPD2PI"; 
-  case ND_CVTPD2PS: return "CVTPD2PS"; 
-  case ND_CVTTPD2DQ: return "CVTTPD2DQ";
-  case ND_CVTTPD2PI: return "CVTTPD2PI";  
-  case ND_CVTPI2PD: return "CVTPI2PD"; 
-  case ND_CVTPS2DQ: return "CVTPS2DQ";  
-  case ND_CVTTPS2DQ: return "CVTTPS2DQ";
-  case ND_CVTPS2PD: return "CVTPS2PD"; 
-  case ND_CVTSD2SI: return "CVTSD2SI"; 
-  case ND_CVTSD2SI64: return "CVTSD2SI64";
-  case ND_CVTTSD2SI: return "CVTTSD2SI";  
-  case ND_CVTTSD2SI64: return "CVTTSD2SI64";
-  case ND_CVTSD2SS: return "CVTSD2SS"; 
-  case ND_CVTSI2SD: return "CVTSI2SD"; 
-  case ND_CVTSI642SD: return "CVTSI642SD";
-  case ND_CVTSS2SD: return "CVTSS2SD";  
-  case ND_UNPCKHPD: return "UNPCKHPD";  
-  case ND_UNPCKLPD: return "UNPCKLPD";  
-  case ND_LOADHPD: return "LOADHPD";       
-  case ND_LOADLPD: return "LOADLPD";  
-  case ND_MOVMSKPD: return "MOVMSKPD";    
-  case ND_PACKSSWB128: return "PACKSSWB128";   
-  case ND_PACKSSDW128: return "PACKSSDW128";   
-  case ND_PACKUSWB128: return "PACKUSWB128";     
-  case ND_PUNPCKHBW128: return "PUNPCKHB128";   
-  case ND_PUNPCKHWD128: return "PUNPCKHWD128";  
-  case ND_PUNPCKHDQ128: return "PUNPCKHDQ128";   
-  case ND_PUNPCKHQDQ128: return "PUNPCKHQDQ128"; 
-  case ND_PUNPCKLBW128: return "PUNPCKLBW128";   
-  case ND_PUNPCKLWD128: return "PUNPCKLWD128";   
-  case ND_PUNPCKLDQ128: return "PUNPCKLDQ128";      
-  case ND_PUNPCKLQDQ128: return "PUNPCKLQDQ128";      
-  case ND_PADDSB128: return "PADDSB128";     
-  case ND_PADDSW128: return "PADDSW128";   
-  case ND_PADDUSB128: return "PADDUSB128";      
-  case ND_PADDUSW128: return "PADDUSW128";   
-  case ND_PSUBSB128: return "PSUBSB128";      
-  case ND_PSUBSW128: return "PSUBSW128";  
-  case ND_PSUBUSB128: return "PSUBUSB128";   
-  case ND_PSUBUSW128: return "PSUBUSW128";    
-  case ND_PMADDWD128: return "PMADDWD128";         
-  case ND_PMULHW128: return "PMULHW128";  
-  case ND_PMULUDQ: return "PMULUDQ";    
-  case ND_PMULUDQ128: return "PMULUDQ128";      
-  case ND_PSLLWI128: return "PSLLWI128";           
-  case ND_PSLLDI128: return "PSLLDI128";   
-  case ND_PSLLQI128: return "PSLLQI128"; 
-  case ND_PSRAWI128: return "PSRAWI128";     
-  case ND_PSRADI128: return "PSRADI128";   
-  case ND_PSRLWI128: return "PSRLWI128";     
-  case ND_PSRLDI128: return "PSRLDI128"; 
-  case ND_PSRLQI128: return "PSRLQI128";   
-  case ND_PSLLW128: return "PSLLW128";      
-  case ND_PSLLD128: return "PSLLD128";   
-  case ND_PSLLQ128: return "PSLLQ128";     
-  case ND_PSRAW128: return "PSRAW128";   
-  case ND_PSRAD128: return "PSRAD128";         
-  case ND_PSRLW128: return "PSRLW128";   
-  case ND_PSRLD128: return "PSRLD128";   
-  case ND_PSRLQ128: return "PSRLQ128";  
-  case ND_PANDN128: return "PANDN128";     
-  case ND_PMAXSW128: return "PMAXSW128";         
-  case ND_PMAXUB128: return "PMAXUB128";         
-  case ND_PMINSW128: return "PMINSW128"; 
-  case ND_PMINUB128: return "PMINUB128";      
-  case ND_PMOVMSKB128: return "PMOVMSKB128";   
-  case ND_PMULHUW128: return "PMULHUW128";        
-  case ND_MASKMOVDQU: return "MASKMOVDQU";   
-  case ND_PAVGB128: return "PAVGB128";        
-  case ND_PAVGW128: return "PAVGW128";        
-  case ND_PSADBW128: return "PSADBW128";       
-  case ND_MOVNTI: return "MOVNTI";  
-  case ND_MOVNTI64: return "MOVNTI64";  
-  case ND_MOVNTDQ: return "MOVNTDQ";  
-  case ND_MOVNTPD: return "MOVNTPD";     
-  case ND_PARITY: return "PARITY";    
-  case ND_PARITYL: return "PARITYL";  
-  case ND_PARITYLL: return "PARITYLL";    
-  case ND_MWAIT: return "MWAIT";
-  case ND_MONITOR: return "MONITOR";
-  case ND_ADDSUBPS: return "ADDSUBPS";
-  case ND_HADDPS: return "HADDPS";
-  case ND_HSUBPS: return "HSUBPS";
-  case ND_MOVSHDUP: return "MOVSHDUP";
-  case ND_MOVSLDUP: return "MOVSLDUP";
-  case ND_ADDSUBPD: return "ADDSUBPD";
-  case ND_HADDPD: return "HADDPD";
-  case ND_HSUBPD: return "HSUBPD";
-  case ND_PHADDW128: return "PHADDW128";
-  case ND_PHADDD128: return "PHADDD128";
-  case ND_PHADDSW128: return "PHADDSW128";
-  case ND_PHADDW: return "PHADDW";
-  case ND_PHADDD: return "PHADDD";
-  case ND_PHADDSW: return "PHADDSW";
-  case ND_PHSUBW128: return "PHSUBW128";
-  case ND_PHSUBD128: return "PHSUBD128";
-  case ND_PHSUBSW128: return "PHSUBSW128";
-  case ND_PHSUBW: return "PHSUBW";
-  case ND_PHSUBD: return "PHSUBD";
-  case ND_PHSUBSW: return "PHSUBSW";
-  case ND_PMADDUBSW128: return "PMADDUBSW128";
-  case ND_PMADDUBSW: return "PMADDUBSW";
-  case ND_PMULHRSW128: return "PMULHRSW128";
-  case ND_PMULHRSW: return "PMULHRSW";
-  case ND_PSHUFB128: return "PSHUFB128";
-  case ND_PSHUFB: return "PSHUFB";
-  case ND_PSIGNB128: return "PSIGNB128";
-  case ND_PSIGNW128: return "PSIGNW128";
-  case ND_PSIGND128: return "PSIGND128";
-  case ND_PSIGNB: return "PSIGNB";
-  case ND_PSIGNW: return "PSIGNW";
-  case ND_PSIGND: return "PSIGND";
-  case ND_PABSB128: return "PABSB128";
-  case ND_PABSW128: return "PABSW128";
-  case ND_PABSD128: return "PABSD128";
-  case ND_PABSB: return "PABSB";
-  case ND_PABSW: return "PABSW";
-  case ND_PABSD: return "PABSD";
-  case ND_PTESTZ128: return "PTESTZ128";
-  case ND_PTESTC128: return "PTESTC128";
-  case ND_PTESTNZC128: return "PTESTNZC128";
-  case ND_PBLENDVB128: return "PBLENDVB128";
-  case ND_BLENDVPS: return "BLENDVPS";
-  case ND_BLENDVPD: return "BLENDVPD";
-  case ND_PMINSB128: return "PMINSB128";
-  case ND_PMAXSB128: return "PMAXSB128";
-  case ND_PMINUW128: return "PMINUW128";
-  case ND_PMAXUW128: return "PMAXUW128";
-  case ND_PMINSD128: return "PMINSD128";
-  case ND_PMAXSD128: return "PMAXSD128";  
-  case ND_PMINUD128: return "PMINUD128";
-  case ND_PMAXUD128: return "PMAXUD128";
-  case ND_PMULDQ128: return "PMULDQ128";
-  case ND_PHMINPOSUW128: return "PHMINPOSUW128";
-  case ND_PMOVSXBD128: return "PMOVSXBD128";
-  case ND_PMOVSXWD128: return "PMOVSXWD128";
-  case ND_PMOVSXBQ128: return "PMOVSXBQ128";
-  case ND_PMOVSXDQ128: return "PMOVSXDQ128";
-  case ND_PMOVSXWQ128: return "PMOVSXWQ128";
-  case ND_PMOVSXBW128: return "PMOVSXBW128";
-  case ND_PMOVZXBD128: return "PMOVZXBD128";
-  case ND_PMOVZXWD128: return "PMOVZXWD128";
-  case ND_PMOVZXBQ128: return "PMOVZXBQ128";
-  case ND_PMOVZXDQ128: return "PMOVZXDQ128";
-  case ND_PMOVZXWQ128: return "PMOVZXWQ128";
-  case ND_PMOVZXBW128: return "PMOVZXBW128";
-  case ND_PACKUSDW128: return "PACKUSDW128";
-  case ND_MOVNTDQA: return "MOVNTDQA";
-  case ND_CRC32QI: return "CRC32QI";
-  case ND_CRC32HI: return "CRC32HI";
-  case ND_CRC32SI: return "CRC32SI";
-  case ND_CRC32DI: return "CRC32DI";
-  case ND_PSHUFD: return "PSHUFD";
-  case ND_FETCHNAND: return "FETCHNAND";
-  case ND_ADD_AND_FETCH: return "ADD_AND_FETCH";
-  case ND_SUB_AND_FETCH: return "SUB_AND_FETCH";
-  case ND_BOOL_CAS: return "BOOL_CAS";
-  case ND_PREFETCH: return "PREFETCH";
-  case ND_RDTSC: return "RDTSC";
-  case ND_READEFLAGS_U64: return "READEFLAGS_U64";
-  case ND_RDSSPQ: return "RDSSPQ";
-  case ND_SAVEPREVSSP: return "SAVEPREVSSP";
-  case ND_SETSSBSY: return "SETSSBSY";
-  case ND_SLWPCB: return "SLWPCB";
-  case ND_RDPKRU: return "RDPKRU";
-  case ND_XBEGIN: return "XBEGIN";
-  case ND_XEND: return "XEND";
-  case ND_SERIALIZE: return "SERIALIZE";
-  case ND_XSUSLDTRK: return "XSUSLDTRK";
-  case ND_XRESLDTRK: return "XRESLDTRK";
-  case ND_CLUI: return "CLUI";
-  case ND_STUI: return "STUI";
-  case ND_TESTUI: return "TESTUI";
-  case ND_WBNOINVD: return "WBNOINVD";
-  case ND_XTEST: return "XTEST";
-  case ND_WBINVD: return "WBINVD";
-  case ND_RDPID: return "RDPID";
-  case ND_RDFSBASE32: return "RDFSBASE32";
-  case ND_RDFSBASE64: return "RDFSBASE64";
-  case ND_RDGSBASE32: return "RDGSBASE32";
-  case ND_RDGSBASE64: return "RDGSBASE64";
-  case ND_VZEROALL: return "VZEROALL";
-  case ND_VZEROUPPER: return "VZEROUPPER";
-  case ND_FEMMS: return "FEMMS";
-  case ND_BSRSI: return "BSRSI";
-  case ND_RDPMC: return "RDPMC";
-  case ND_RDTSCP: return "RDTSCP";
-  case ND_ROLQI: return "ROLQI";
-  case ND_ROLHI: return "ROLHI";
-  case ND_RORQI: return "RORQI";
-  case ND_RORHI: return "RORHI";
-  case ND_BSRDI: return "BSRDI";  
-  case ND_WRITEEFLAGS_U64: return "WRITEEFLAGS_U64";
-  case ND_INCSSPQ: return "INCSSPQ";
-  case ND_RSTORSSP: return "RSTORSSP";
-  case ND_WRSSD: return "WRSSD";
-  case ND_WRSSQ: return "WRSSQ";
-  case ND_WRUSSD: return "WRUSSD";
-  case ND_WRUSSQ: return "WRUSSQ";
-  case ND_CLRSSBSY: return "CLRSSBSY";
-  case ND_SBB_U32: return "SBB_U32";
-  case ND_ADDCARRYX_U32: return "ADDCARRYX_U32";
-  case ND_SBB_U64: return "SBB_U64";
-  case ND_ADDCARRYX_U64: return "ADDCARRYX_U64";  
-  case ND_TZCNT_U16: return "TZCNT_U16";
-  case ND_BEXTR_U32: return "BEXTR_U32";
-  case ND_ADDFETCH: return "ADDFETCH";
-  case ND_FPCLASSIFY: return "FPCLASSIFY";
-  case ND_ISUNORDERED: return "ISUNORDERED";
-  case ND_SIGNBIT: return "SIGNBIT";
-  case ND_SIGNBITF: return "SIGNBITF";
-  case ND_SIGNBITL: return "SIGNBITL";
-  case ND_ATOMIC_IS_LOCK_FREE: return "ATOMIC_IS_LOCK_FREE";
-  case ND_PSUBUSB256: return "PSUBUSB256";
-  case ND_PCMPGTB256_MASK: return "PCMPGTB256_MASK";
-  case ND_PSHUFB256: return "PSHUFB256";  
-  case ND_PBLENDVB256: return "PBLENDVB256";
-  case ND_PSRLDQI256: return "PSRLDQI256";
-  case ND_PSLLDQI256: return "PSLLDQI256";
-  case ND_VINSERTF128_SI256: return "VINSERTF128_SI256";    
-  case ND_SI256_SI: return "SI256_SI";
-  case ND_SI_SI256: return "SI_SI256";
-  case ND_PALIGNR256: return "PALIGNR256";
-  case ND_VPERM2I128_SI256: return "VPERM2I128_SI256";
-  case ND_PBLENDD256: return "PBLENDD256";
-  case ND_VEXTRACTF128_SI256: return "VEXTRACTF128_SI256";
-  case ND_VECEXTV16QI: return "VEC_EXT_V16QI";
-  case ND_VECEXTV8HI: return "VEC_EXT_V8HI";
-  case ND_ANDNOTSI256: return "ANDNOTSI256";
-  case ND_VECEXTV2DI: return "VEC_EXT_V2DI";
-  case ND_PMULHUW256: return "PMULHUW256";
-  case ND_PD256_PD: return "PD256_PD";
-  case ND_PS256_PS: return "PS256_PS";
-  case ND_PSRLQI256: return "PSRLQI256";
-  case ND_PSLLQI256: return "PSLLQI256";
-  case ND_PERMDI256: return "PERMDI256";
-  case ND_PSLLDI256: return "PSLLDI256";
-  case ND_PSRLDI256: return "PSRLDI256";
-  case ND_PSRADI256: return "PSRADI256";
-  default: return "UNREACHABLE"; 
-  }
-}
-
 //from COSMOPOLITAN adding function ConsumeStringLiteral
 char *ConsumeStringLiteral(Token **rest, Token *tok) {
   char *s;
   if (tok->kind != TK_STR || tok->ty->base->kind != TY_CHAR) {
    
-    error_tok(tok, "%s:%d: in ConsumeStringLiteral : expected string literal but got tok->kind %d", __FILE__, __LINE__, tok->kind);
+    error_tok(tok, "%s:%d: in %s: expected string literal but got tok->kind %d", __FILE__, __LINE__, __func__, tok->kind);
   }
   s = tok->str;
   *rest = tok->next;
@@ -8928,7 +8428,7 @@ static Token *static_assertion(Token *tok) {
   SET_CTX(ctx);  
   tok = skip(tok, ";", ctx);
   if (!cond) {
-    error_tok(start, "%s:%d: in static_assertion : %s %s", __FILE__, __LINE__, msg, errmsg->loc);
+    error_tok(start, "%s:%d: in %s: %s %s", __FILE__, __LINE__, __func__, msg, errmsg->loc);
 
   }
   return tok;
@@ -9076,7 +8576,7 @@ static Node *ParseAtomicFetch(NodeKind kind, Token *tok, Token **rest) {
     else if (!strncmp("xor", loc, len))
       binary = new_binary(ND_BITXOR, obj, val, start);
     else      
-      error_tok(start, "%s:%d: in ParseAtomicFetch: unsupported atomic fetch op!", __FILE__, __LINE__);
+      error_tok(start, "%s:%d: in %s: unsupported atomic fetch op!", __FILE__, __LINE__, __func__);
     binary->memorder = memorder;
     add_type(binary->lhs);
     add_type(binary->rhs);
@@ -9448,6 +8948,8 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_movlhps", ND_MOVLHPS },         
     { "__builtin_ia32_movhlps", ND_MOVHLPS },         
     { "__builtin_ia32_unpckhps", ND_UNPCKHPS },    
+    { "__builtin_stdc_bit_ceil", ND_STDC_BIT_CEIL },
+
     { "__builtin_ia32_unpcklps", ND_UNPCKLPS },         
     { "__builtin_ia32_loadhps", ND_LOADHPS },   
     { "__builtin_ia32_storehps", ND_STOREHPS },        

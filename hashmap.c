@@ -43,7 +43,7 @@ static void rehash(HashMap *map)
   // Allocate new buckets
   HashEntry *buckets2 = calloc(cap, sizeof(HashEntry));
   if (buckets2 == NULL)
-    error("%s:%d: error: in rehash buckets2 is null!", __FILE__, __LINE__);
+    error("%s:%d: error: in %s: buckets2 is null!", __FILE__, __LINE__, __func__);
   
   // Rehash all valid entries
   int nkeys2 = 0;
@@ -112,7 +112,7 @@ static HashEntry *get_or_insert_entry(HashMap *map, char *key, int keylen)
   {
     map->buckets = calloc(INIT_SIZE, sizeof(HashEntry));
     if (map->buckets == NULL)
-      error("%s:%d: error: in get_or_insert_entry map->buckets is null!", __FILE__, __LINE__);
+      error("%s:%d: error: in %s: map->buckets is null!", __FILE__, __LINE__, __func__);
     map->capacity = INIT_SIZE;
   }
   else if ((map->used * 100) / map->capacity >= HIGH_WATERMARK)

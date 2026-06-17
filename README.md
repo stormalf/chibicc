@@ -16,7 +16,7 @@ or
 
     chibicc is a C compiler based on chibicc created by Rui Ueyama.
      See original project https://github.com/rui314/chibicc for more information
-     this chibicc contains only some differences for now like new parameters
+     this chibicc supports vector, some extended assembly and int128 
     chibicc usage :
      --help or -h print the help
      --version or -v print the version of chibicc
@@ -388,6 +388,11 @@ git: https://github.com/git/git.git
     CC=chibicc CFLAGS=-fPIC ./configure
     make
     make test
+    fixed   0
+    success 31942
+    failed  0
+    broken  393
+    total   32787
 
 
 util-linux : https://github.com/util-linux/util-linux.git
@@ -533,24 +538,19 @@ Some C projects doesn't compile for now or crash after being compiled with chibi
 
 cpython: git clone https://github.com/python/cpython.git 
         
-        CC=chibicc CFLAGS="-std=c11"  ./configure  --host=x86_64-pc-linux-gnu 
-        make && make test
-        some tests failed 
-        test_recursion_limit (test.test_marshal.BugsTestCase.test_recursion_limit) ... Fatal Python error: Segmentation fault
-        test_repr_deep (test.test_userlist.UserListTest.test_repr_deep) ... Fatal Python error: Segmentation fault
-
-        25 tests skipped
-        3 tests skipped (resource denied)
-        6 re-run tests
-        5 tests failed:
-            test.test_gdb.test_pretty_print test_call test_ctypes
-            test_faulthandler test_frame_pointer_unwind
-
-        467 tests OK.
-
-        Total duration: 32 min 1 sec
-        Total tests: run=47,875 failures=3,170 skipped=2,621
-        Total test files: run=503/500 failed=5 skipped=25 resource_denied=3 rerun=6
+    CC=chibicc CFLAGS="-std=c11"  ./configure  --host=x86_64-pc-linux-gnu 
+    make && make test
+    
+    3 tests failed:
+    test_call test_faulthandler test_frame_pointer_unwind
+    
+    469 tests OK.
+    
+    Total duration: 35 min 47 sec
+    Total tests: run=47,851 failures=5 skipped=2,621
+    Total test files: run=501/500 failed=3 skipped=25 resource_denied=3 rerun=4
+    Result: FAILURE then FAILURE
+    
 
 
 
@@ -580,11 +580,9 @@ cpython: git clone https://github.com/python/cpython.git
 
 
 ## known issues
-
-    git 2 tests failed    
+    
     vim: compile OK, tests OK except 1.
-    cpython : compile OK, some tests KO      
-    sqlite: compile OK, tests OK (except 1)   
+    cpython : compile OK, some tests KO     
            
 
 ## projects compiled successfully with chibicc
@@ -599,6 +597,8 @@ cpython: git clone https://github.com/python/cpython.git
     php-src : compile OK, tests OK    
     openssl: compile OK, tests OK
     postgres execution : compile OK, tests OK    
+    sqlite: compile OK, tests OK
+    git : compile OK, tests OK
     
 
 ## debug
@@ -629,8 +629,8 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.24  Passing GNUC from 3 to 4. Adding const, volatile, restrict support from slimcc/fuhsnn. Fixing issue ISS-195 prockill due to leakage attributes. Managing pragma pack. Fixing issue with attributes and alignment. Fixing issue with some edge cases initializer. Fixing some float comparisons issues with NaN. Fixing alignof issue and managing asm name. Fixing issue with string char array members initialization. Fixing issue with unicode characters. Managing anonymous enums. Fixing issue with extended assembly and &x in input. Fixing issue with extended assembly and macro expansion. Fixing issue with builtin_prefetch found during openssl compile. Managing \__atomic_is_lock_free. Adding \__builtin_offsetof and __has_builtin. Adding \__builtin_rotateleftxx. Fixing issue with attribute after typenames. Fixing issue with attribute hiding. Fixing issue with vlc compile undefined functions (ISS-206). Reversing changes on is_function that causes side effect on cpython compile. Fixing issue with unicode x\u0000y. Fixing warning sent wrongly during tokenization. Reversing openssl changed that caused side effects on cpython. Deleting preprocess3 that caused side effect in openssl parsing. Fixing issue with openssl and undefined reference. Adding some builtin xxx256.
-Fixing issue with __m256 not managed correctly (sometimes dealt as __int128) found during openssl tests that fixed also lots of postgres tests. Fixing remaining postgres tests and openssl tests.
+1.0.24.1    Managing ms_struct attribute. Fixing 2 issues with cpython tests. Fixing remaining issue with dwarf info not correct for struct, typedef and bitfields. Fixing ISS-208 regression caused by b4f8d21dad78c7a3a0fecdb42818e5d389237e0b. Fixing issue with omit frame pointer and return buffer. Fixing issue with extended assembly and struct. Fixing missing math functions and builtin_stdc_bit_ceil found during vlc compile. Refactoring and moving builtin to builtin.c. After updating cpython, fixing some assembly {&att|intel} keeping only the &att part. Fixing issue with git tests due to bitwise evaluation order by chibicc right-to-left instead of left-to-right.
+
 
 
 ## old release notes

@@ -358,7 +358,7 @@ static int read_escaped_char(char **new_pos, char *p)
     // Read a hexadecimal number.
     p++;
     if (!isxdigit(*p))
-      error_at(p, "%s:%d: in read_escaped_char : invalid hex escape sequence", __FILE__, __LINE__);
+      error_at(p, "%s:%d: in %s: invalid hex escape sequence", __FILE__, __LINE__, __func__);
 
     int c = 0;
     for (; isxdigit(*p); p++)
@@ -372,7 +372,7 @@ static int read_escaped_char(char **new_pos, char *p)
     int len = (*p == 'u' ? 4 : 8);
     uint32_t c = read_universal_char(p + 1, len);
     if (c == (uint32_t)-1)
-      error_at(p, "%s:%d: in read_escaped_char : invalid universal character name", __FILE__, __LINE__);
+      error_at(p, "%s:%d: in %s: invalid universal character name", __FILE__, __LINE__, __func__);
     *new_pos = p + 1 + len;
     return c;
   }
@@ -411,7 +411,7 @@ static char *string_literal_end(char *p)
   {
     
     if (*p == '\n' || *p == '\0')
-      error_at(start, "%s:%d: in string_literal_end : unclosed string literal", __FILE__, __LINE__);
+      error_at(start, "%s:%d: in %s: unclosed string literal", __FILE__, __LINE__, __func__);
     if (*p == '\\')
       p++;
   }
@@ -423,7 +423,7 @@ static Token *read_string_literal(char *start, char *quote)
   char *end = string_literal_end(quote + 1);
   char *buf = calloc(1, end - quote);
   if (buf == NULL)
-    error("%s:%d: error: in read_string_literal buf is null!", __FILE__, __LINE__);
+    error("%s:%d: error: in %s: buf is null!", __FILE__, __LINE__, __func__);
   int len = 0;
 
   for (char *p = quote + 1; p < end;)
@@ -454,7 +454,7 @@ static Token *read_utf16_string_literal(char *start, char *quote)
   char *end = string_literal_end(quote + 1);
   uint16_t *buf = calloc(2, end - start);
   if (buf == NULL)
-    error("%s:%d: error: in read_utf16_string_literal buf is null!", __FILE__, __LINE__);
+    error("%s:%d: error: in %s: buf is null!", __FILE__, __LINE__, __func__);
   int len = 0;
 
   for (char *p = quote + 1; p < end;)
@@ -494,7 +494,7 @@ static Token *read_utf32_string_literal(char *start, char *quote, Type *ty)
   char *end = string_literal_end(quote + 1);
   uint32_t *buf = calloc(4, end - quote);
   if (buf == NULL)
-    error("%s:%d: error: in read_utf32_string_literal buf is null!", __FILE__, __LINE__);
+    error("%s:%d: error: in %s: buf is null!", __FILE__, __LINE__, __func__);
   int len = 0;
 
   for (char *p = quote + 1; p < end;)
@@ -514,7 +514,7 @@ static Token *read_utf32_string_literal(char *start, char *quote, Type *ty)
 static Token *read_char_literal(char *start, char *quote, Type *ty) {
   char *p = quote + 1;
   if (*p == '\0')
-    error_at(start, "%s:%d: in read_char_literal : unclosed char literal", __FILE__, __LINE__);
+    error_at(start, "%s:%d: in %s: unclosed char literal", __FILE__, __LINE__, __func__);
 
   int64_t c = 0;
   int n = 0;
@@ -671,7 +671,7 @@ static void convert_pp_number(Token *tok)
   }
 
   if (tok->loc + tok->len != end)
-    error_tok(tok, "%s:%d: in convert_pp_number : invalid numeric constant", __FILE__, __LINE__);  
+    error_tok(tok, "%s:%d: in %s: invalid numeric constant", __FILE__, __LINE__, __func__);  
   tok->kind = TK_NUM;
   tok->fval = val;
   tok->ty = ty;
@@ -749,7 +749,7 @@ Token *tokenize(File *file)
     {
       char *q = strstr(p + 2, "*/");
       if (!q)
-        error_at(p, "%s:%d: in tokenize : unclosed block comment", __FILE__, __LINE__);
+        error_at(p, "%s:%d: in %s: unclosed block comment", __FILE__, __LINE__, __func__);
       p = q + 2;
       has_space = true;
       continue;
@@ -896,7 +896,7 @@ Token *tokenize(File *file)
       continue;
     }
 
-    error_at(p, "%s:%d: in tokenize : invalid token", __FILE__, __LINE__);
+    error_at(p, "%s:%d: in %s: invalid token", __FILE__, __LINE__, __func__);
   }
 
   cur = cur->next = new_token(TK_EOF, p, p);
@@ -960,12 +960,21 @@ File *new_file(char *name, unsigned int file_no, char *contents)
 {
   File *file = calloc(1, sizeof(File));
   if (file == NULL)
-    error("%s:%d: error: in new_file file is null!", __FILE__, __LINE__);
+    error("%s:%d: error: in %s: file is null!", __FILE__, __LINE__, __func__);
   file->name = name;
   file->display_name = name;
   file->file_no = file_no;
   file->contents = contents;
   return file;
+}
+
+char *get_abs_path(char *path) {
+  if (!strcmp(path, "-"))
+    return path;
+
+  char *abs = realpath(path, NULL);
+  if (!abs) return path;
+  return abs;
 }
 
 // Replaces \r or \r\n with \n.
@@ -1101,7 +1110,8 @@ void convert_universal_chars(char *p)
 
 Token *tokenize_file(char *path)
 {
-  char *p = read_file(path);
+  char *abs_path = get_abs_path(path);
+  char *p = read_file(abs_path);
   if (!p)
     return NULL;
 
@@ -1118,12 +1128,18 @@ Token *tokenize_file(char *path)
 
   // Save the filename for assembler .file directive.
   static unsigned int file_no;
+
+  // Keep the original path for __FILE__ and .file directives to satisfy tests,
+  // while using the absolute path internally for file reading and identity.
+  // Using 'path' (the provided relative path) here fixes test/macro.exe and 
+  // ensures DWARF info in test/bitfield_dwarf.exe remains relative.
   File *file = new_file(path, file_no + 1, p);
+  file->display_name = path;
 
   // Save the filename for assembler .file directive.
   input_files = realloc(input_files, sizeof(char *) * (file_no + 2));
   if (input_files == NULL)
-    error("%s:%d: error: in tokenize_file input_files is null!", __FILE__, __LINE__);
+    error("%s:%d: error: in %s: input_files is null!", __FILE__, __LINE__, __func__);
   input_files[file_no] = file;
   input_files[file_no + 1] = NULL;
   file_no++;

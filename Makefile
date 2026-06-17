@@ -5,7 +5,7 @@ GCC_VERSION!=gcc -dumpversion
 CC=gcc
 CFLAGS =-std=c11 -g -fno-common -Wall -Wno-switch -DPREFIX=\"$(PREFIX)\" -DGCC_VERSION=\"$(GCC_VERSION)\"
 CFLAGS_DIAG= -std=c11 -g -mavx2
-CFLAGS_SPE = -g -fomit-frame-pointer -O3 -mavx2
+CFLAGS_SPE = -g -fomit-frame-pointer -O3 -mavx2 -DOMIT_FRAME_POINTER
 LDFLAGS = -lcrypto
 TEST_JOBS ?=
 TEST_TIMEOUT ?= 30
@@ -110,14 +110,14 @@ vlc:
 
 cpython:
 	cd ../cpython &&  CC=chibicc CFLAGS="-std=c11 -O3 -g" ./configure  \
-	 --build=x86_64-pc-linux-gnu && make clean && make -j2 && make test
+	 --build=x86_64-pc-linux-gnu && make clean && make -j4 && make test
 
 
 git: 
 	cd ../git && CC=chibicc CFLAGS="-fPIC -std=c11 -g" ./configure && make && make test
 
 memcached:
-	cd ../memcached && make clean && CC=chibicc CFLAGS="-fPIC -std=c11 -g" ./configure && make -j4 && make test
+	cd ../memcached && make clean && CC=chibicc CFLAGS="-fPIC -std=c11 -g" ./configure && make -j2 && make test
 
 openssh-portable:
 	cd ../openssh-portable && make clean && CC=chibicc CFLAGS="-std=c11 -g" ./configure && make -j4 && make tests

@@ -1367,17 +1367,17 @@ _mm256_setr_epi32 (int __A, int __B, int __C, int __D,
   return _mm256_set_epi32 (__H, __G, __F, __E, __D, __C, __B, __A);
 }
 
-// extern __inline __m256i __attribute__((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_setr_epi16 (short __q15, short __q14, short __q13, short __q12,
-// 		   short __q11, short __q10, short __q09, short __q08,
-// 		   short __q07, short __q06, short __q05, short __q04,
-// 		   short __q03, short __q02, short __q01, short __q00)
-// {
-//   return _mm256_set_epi16 (__q00, __q01, __q02, __q03,
-// 			   __q04, __q05, __q06, __q07,
-// 			   __q08, __q09, __q10, __q11,
-// 			   __q12, __q13, __q14, __q15);
-// }
+extern __inline __m256i __attribute__((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_setr_epi16 (short __q15, short __q14, short __q13, short __q12,
+		   short __q11, short __q10, short __q09, short __q08,
+		   short __q07, short __q06, short __q05, short __q04,
+		   short __q03, short __q02, short __q01, short __q00)
+{
+  return _mm256_set_epi16 (__q00, __q01, __q02, __q03,
+			   __q04, __q05, __q06, __q07,
+			   __q08, __q09, __q10, __q11,
+			   __q12, __q13, __q14, __q15);
+}
 
 extern __inline __m256i __attribute__((__gnu_inline__, __always_inline__, __artificial__))
 _mm256_setr_epi8  (char __q31, char __q30, char __q29, char __q28,

@@ -1,7 +1,7 @@
 #include <alloca.h>
 #include <setjmp.h>
 #include <stdint.h>
-#include <stdio.h>
+#include "test.h"
 int myglobal = 18;
 /*
  * Stronger CPython-like repro for -O3 + -fomit-frame-pointer + extended asm.

@@ -1,17 +1,15 @@
 #include "test.h"
 
-char *asm_fn1(void) {
-  asm("mov $50, %rax\n\t"
-      "mov %rbp, %rsp\n\t"
-      "pop %rbp\n\t"
-      "ret");
+long asm_fn1(void) {
+  long r;
+  asm("mov $50, %0" : "=r"(r));
+  return r;
 }
 
-char *asm_fn2(void) {
-  asm inline volatile("mov $55, %rax\n\t"
-                      "mov %rbp, %rsp\n\t"
-                      "pop %rbp\n\t"
-                      "ret");
+long asm_fn2(void) {
+  long r;
+  asm volatile("mov $55, %0" : "=r"(r));
+  return r;
 }
 
 int main() {
