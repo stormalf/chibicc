@@ -4040,10 +4040,18 @@ switch (node->lhs->ty->kind)
   }
 
   if (!is_int128(node->rhs->ty)) {
-    gen_expr(node->rhs);
-    push_tmp();
-    gen_expr(node->lhs);
-    pop_tmp("%rdi");
+    if (node->kind == ND_BITOR || node->kind == ND_BITAND || node->kind == ND_BITXOR
+        || node->kind == ND_SHL || node->kind == ND_SHR) {
+      gen_expr(node->lhs);
+      push_tmp();
+      gen_expr(node->rhs);
+      pop_tmp("%rdi");
+    } else {
+      gen_expr(node->rhs);
+      push_tmp();
+      gen_expr(node->lhs);
+      pop_tmp("%rdi");
+    }
   }
 
   char *ax, *di, *dx;
@@ -4143,14 +4151,16 @@ switch (node->lhs->ty->kind)
     println("  movzb %%al, %%rax");
     return;
   case ND_SHL:
-    println("  mov %%rdi, %%rcx");
+    println("  mov %%rax, %%rcx");
+    println("  mov %%rdi, %%rax");
     println("  shl %%cl, %s", ax);
     println("  xor %%r11, %%r11");
     println("  cmp $%d, %%ecx", (int)node->ty->size * 8);
     println("  cmovge %s, %s", (node->ty->size == 8) ? "%r11" : "%r11d", ax);
     return;
   case ND_SHR:
-    println("  mov %%rdi, %%rcx");
+    println("  mov %%rax, %%rcx");
+    println("  mov %%rdi, %%rax");
     if (node->ty->is_unsigned) {
       println("  shr %%cl, %s", ax);
       println("  xor %%r11, %%r11");
