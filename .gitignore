@@ -37,3 +37,4 @@ vgcore.*
 **/*.S
 .codegraph
 check_constant_folding.sh
+.mcp.json
