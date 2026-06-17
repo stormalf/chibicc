@@ -629,7 +629,8 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.24.1    Managing ms_struct attribute. Fixing 2 issues with cpython tests. Fixing remaining issue with dwarf info not correct for struct, typedef and bitfields. Fixing ISS-208 regression caused by b4f8d21dad78c7a3a0fecdb42818e5d389237e0b. Fixing issue with omit frame pointer and return buffer. Fixing issue with extended assembly and struct. Fixing missing math functions and builtin_stdc_bit_ceil found during vlc compile. Refactoring and moving builtin to builtin.c. After updating cpython, fixing some assembly {&att|intel} keeping only the &att part. Fixing issue with git tests due to bitwise evaluation order by chibicc right-to-left instead of left-to-right.
+
+1.0.25    
 
 
 

@@ -1024,7 +1024,7 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
 
   leave_scope();
 
-  if (cur == &head)
+  if (cur == &head && has_ellipsis)
     is_variadic = true;
   ty = func_type(ty);
   tok = attribute_list(tok, ty, type_attributes);
@@ -6150,6 +6150,11 @@ static Node *funcall(Token **rest, Token *tok, Node *fn)
       // If parameter type is omitted (e.g. in "..."), float
       // arguments are promoted to double.
       arg = new_cast(arg, ty_double);
+    } else if (arg->ty->kind == TY_BOOL || arg->ty->kind == TY_CHAR || arg->ty->kind == TY_SHORT)
+    {
+      // Integer promotions for variadic arguments:
+      // char, short, _Bool are promoted to int
+      arg = new_cast(arg, ty_int);
     } else if (is_array(arg->ty))
         arg = new_cast(arg, pointer_to(arg->ty->base));
     else if (arg->ty->kind == TY_FUNC)

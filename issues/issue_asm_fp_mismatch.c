@@ -33,5 +33,7 @@ int main() {
     if (result == 0) {
         return 1;
     }
+    printf("result = %p\n", result);
+    printf("Ok\n");
     return 0;
 }

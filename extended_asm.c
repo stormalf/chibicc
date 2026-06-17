@@ -431,8 +431,10 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals, Obj *curre
                 tmp_asm = subst_asm(template, tmp, asmExt->output[i]->variableNumber);
                 free(tmp);
             }else {
-                  tmp_asm = subst_asm(template, asmExt->output[i]->reg, asmExt->output[i]->variableNumber);                         
-                }
+                if (!asmExt->output[i]->variableNumber)
+                  error("%s:%d: error: in %s: variableNumber is null! template=%s i=%d", __FILE__, __LINE__, __func__, template, i);
+                tmp_asm = subst_asm(template, asmExt->output[i]->reg, asmExt->output[i]->variableNumber);                         
+            }
         }
             
         //special case %b0 %h0
@@ -2129,6 +2131,12 @@ char *subst_asm(char *template, char *output_str, char *input_str)
 // generic string replace function
 char *string_replace(char *str, char *oldstr, char *newstr)
 {
+    if (!oldstr)
+        error("%s:%d: error: in %s: oldstr is null ", __FILE__, __LINE__, __func__);
+    if (!newstr )
+        return oldstr;
+    if (!str)
+        error("%s:%d: error: in %s: str is null ", __FILE__, __LINE__, __func__);
     size_t cap = 10000;
     char bstr[10000];
     memset(bstr, 0, sizeof(bstr));
