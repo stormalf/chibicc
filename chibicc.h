@@ -135,7 +135,7 @@ this " PRODUCT " supports vector, some extended assembly and int128 \n"
 -mavx2 enabling avx2 instructions \n \
 -print-search-dirs prints minimal information on install dir. \n \
 -Werror any warning is sent as an error and stops the compile \n \
--f-omit-frame-pointer omits frame pointer and uses rsp-relative addressing. Minimal stack usage \n \
+-fomit-frame-pointer omits frame pointer and uses rsp-relative addressing. Minimal stack usage \n \
 -f-no-omit-frame-pointer always keeps frame pointer (default) \n \
 -g enabling debug symbols \n \
 -O0 disabling optimization \n \

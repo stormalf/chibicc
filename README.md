@@ -90,7 +90,7 @@ or
      -mavx2 enabling avx2 instructions 
      -print-search-dirs prints minimal information on install dir. 
      -Werror any warning is sent as an error and stops the compile 
-     -f-omit-frame-pointer omits frame pointer and uses rsp-relative addressing. Minimal stack usage 
+     -fomit-frame-pointer omits frame pointer and uses rsp-relative addressing. Minimal stack usage 
      -f-no-omit-frame-pointer always keeps frame pointer (default) 
      -g enabling debug symbols 
      -O0 disabling optimization 

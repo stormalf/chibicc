@@ -4979,7 +4979,6 @@ void assign_lvar_offsets(Obj *prog) {
     for (Obj *var = fn->params; var; var = var->next) {      
       var->is_param = true;
       var->nbparm = param_idx++;
-      if (var->offset) continue;
 
       Type *ty = var->ty;
       if (!ty) error("%s:%d: in %s: type is null!", __FILE__, __LINE__, __func__);
@@ -5000,22 +4999,28 @@ void assign_lvar_offsets(Obj *prog) {
       }
 
       // Passed on stack
-      var->pass_by_stack = true;
       int align = (ty->kind == TY_STRUCT || ty->kind == TY_UNION) ? MAX(ty->align, 8) :
                   (ty->kind == TY_LDOUBLE || ty->kind == TY_INT128 || ty->kind == TY_VECTOR) ? 16 : 8;
       max_align = MAX(max_align, align);
-      
       stack = align_to(stack, align);
-      if (omit_fp) {
-        var->offset = stack + 8;
-        var->ptr = "%rsp";
-      } else {
-      var->offset = stack + 16;
-      var->ptr = "%rbp";
-      }
 
       int size = (ty->kind == TY_STRUCT || ty->kind == TY_UNION) ? align_to(ty->size, align) :
                  (ty->kind == TY_LDOUBLE || ty->kind == TY_INT128 || ty->kind == TY_VECTOR) ? 16 : 8;
+
+      // Only assign offset/ptr if not already set (may have been set by a prior
+      // call from extended_asm.c). We must still accumulate 'stack' so that
+      // overflow_arg_area is computed correctly for variadic functions.
+      if (!var->offset) {
+        var->pass_by_stack = true;
+        if (omit_fp) {
+          var->offset = stack + 8;
+          var->ptr = "%rsp";
+        } else {
+          var->offset = stack + 16;
+          var->ptr = "%rbp";
+        }
+      }
+
       stack += size;
     }
 
