@@ -485,10 +485,8 @@ sqlite : https://github.com/sqlite/sqlite.git
     CC=chibicc CFLAGS="-std=c11" ./configure
     make all
     make test
-    FAILED: All-Debug test/walsetlk.test (0)
-    14:13 bld(10/10) fuzz(54/54) tcl(2470/2470) f1 ETC 00:00
-    1 failures:
-    FAILED: All-Debug test/walsetlk.test
+    10:39 bld(10/10) fuzz(54/54) tcl(2470/2470) ETC 00:00
+    0 errors out of 977914 tests in 10:39
     
 
 
@@ -539,17 +537,15 @@ Some C projects doesn't compile for now or crash after being compiled with chibi
 cpython: git clone https://github.com/python/cpython.git 
         
     CC=chibicc CFLAGS="-std=c11"  ./configure  --host=x86_64-pc-linux-gnu 
-    make && make test
+    make && make test   
     
-    3 tests failed:
-    test_call test_faulthandler test_frame_pointer_unwind
+    2 tests failed:
+        test_call test_faulthandler
     
-    469 tests OK.
+    475 tests OK.
     
-    Total duration: 35 min 47 sec
-    Total tests: run=47,851 failures=5 skipped=2,621
-    Total test files: run=501/500 failed=3 skipped=25 resource_denied=3 rerun=4
-    Result: FAILURE then FAILURE
+    Total duration: 32 min 3 sec
+    Total tests: run=49,898 failures=2 skipped=2,817
     
 
 
@@ -580,8 +576,9 @@ cpython: git clone https://github.com/python/cpython.git
 
 
 ## known issues
+
+    on WSL all tests that use udp > 1500 failed. Need to change the value to 1500 or less to pass. It seems a known issue on WSL environment.
     
-    vim: compile OK, tests OK except 1.
     cpython : compile OK, some tests KO     
            
 
@@ -599,6 +596,7 @@ cpython: git clone https://github.com/python/cpython.git
     postgres execution : compile OK, tests OK    
     sqlite: compile OK, tests OK
     git : compile OK, tests OK
+    vim : compile OK, tests OK 
     
 
 ## debug
@@ -630,7 +628,7 @@ Example of diagram generated with -dotfile parameter :
 ## release notes
 
 
-1.0.25    
+1.0.25    Adding promotion to int on variadic argument. Fixing issue with mistake on help on -fomit-frame-pointer. Fixing issue with assign_lvar_offsets that skipped some offsets already assigned by extended assembly and caused failure on some cpython tests. Adding --eh-frame-hdr needed by glibc's backtrace.
 
 
 
