@@ -7918,6 +7918,32 @@ static void mark_live(Obj *var)
   }
 }
 
+// Recursively check if a type or any of its members (for structs/unions)
+// or base type (for arrays) is volatile.
+static bool is_volatile(Type *ty) {
+  if (!ty) return false;
+  if (ty->is_volatile) return true;
+  if (ty->kind == TY_ARRAY || ty->kind == TY_VLA)
+    return is_volatile(ty->base);
+  if (ty->kind == TY_STRUCT || ty->kind == TY_UNION) {
+    for (Member *mem = ty->members; mem; mem = mem->next) {
+      if (is_volatile(mem->ty))
+        return true;
+    }
+  }
+  return false;
+}
+
+// Check if Tail Call Optimization can be applied to the function.
+// TCO is disabled if any local variable has its address taken or is volatile.
+static bool can_apply_tco(Obj *locals) {
+  for (Obj *var = locals; var; var = var->next) {
+    if (var->is_address_used || is_volatile(var->ty))
+      return false;
+  }
+  return true;
+}
+
 //implementing tail call optimization. Marking tails calls.
 static void mark_tail_calls(Node *node, Obj *fn) {
   if (!node)
@@ -8109,7 +8135,8 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   }
 
   //implementing tail call optimization.
-  mark_tail_calls(fn->body, fn);
+  if (can_apply_tco(locals))
+    mark_tail_calls(fn->body, fn);
   fn->locals = locals;  
   order = 0;
   leave_scope();

@@ -539,14 +539,10 @@ cpython: git clone https://github.com/python/cpython.git
     CC=chibicc CFLAGS="-std=c11"  ./configure  --host=x86_64-pc-linux-gnu 
     make && make test   
     
-    2 tests failed:
-        test_call test_faulthandler
+    1 test failed:
+        test_call
     
-    475 tests OK.
-    
-    Total duration: 32 min 3 sec
-    Total tests: run=49,898 failures=2 skipped=2,817
-    
+    476 tests OK.
 
 
 
@@ -628,7 +624,7 @@ Example of diagram generated with -dotfile parameter :
 ## release notes
 
 
-1.0.25    Adding promotion to int on variadic argument. Fixing issue with mistake on help on -fomit-frame-pointer. Fixing issue with assign_lvar_offsets that skipped some offsets already assigned by extended assembly and caused failure on some cpython tests. Adding --eh-frame-hdr needed by glibc's backtrace.
+1.0.25    Adding promotion to int on variadic argument. Fixing issue with mistake on help on -fomit-frame-pointer. Fixing issue with assign_lvar_offsets that skipped some offsets already assigned by extended assembly and caused failure on some cpython tests. Adding --eh-frame-hdr needed by glibc's backtrace. Disabling tail call optimization when volatile local variable is found.
 
 
 
