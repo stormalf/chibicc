@@ -100,11 +100,6 @@ bool is_omit_fp(Obj *fn) {
 
   if (fn->stack_align > 16) { return false; }
 
-  for (Obj *var = fn->params; var; var = var->next) {
-    if (get_align(var) > 8)
-      return false;
-  }
-
   return true;
 }
 
