@@ -4887,8 +4887,7 @@ void codegen(Obj *prog, FILE *out)
 }
 
 
-
-// Print offset.
+//printing offset for each variable in a scope
 static void print_offset_scope(Scope *sc, Obj *fn) {
   for (Scope *child = sc->children; child; child = child->sibling_next)
     print_offset_scope(child, fn);
@@ -4899,6 +4898,7 @@ static void print_offset_scope(Scope *sc, Obj *fn) {
   }
 }
 
+//printing offset for each variable
 static void print_offset(Obj *prog)
 {
   for (Obj *fn = prog; fn; fn = fn->next)
@@ -4912,6 +4912,7 @@ static void print_offset(Obj *prog)
   }
 }
 
+//assigning offsets to local variables
 static void scope_assign_offsets(Scope *sc, int *bottom, char *ptr, int stack_align, bool omit_fp) {
   for (Scope *child = sc->children; child; child = child->sibling_next)
     scope_assign_offsets(child, bottom, ptr, stack_align, omit_fp);
@@ -4929,6 +4930,7 @@ static void scope_assign_offsets(Scope *sc, int *bottom, char *ptr, int stack_al
   }
 }
 
+//calculating the alignment of local variables
 static int scope_lvar_align(Scope *sc, int align) {
   for (Scope *child = sc->children; child; child = child->sibling_next)
     align = scope_lvar_align(child, align);
@@ -4937,6 +4939,7 @@ static int scope_lvar_align(Scope *sc, int align) {
   return align;
 }
 
+//calculating the maximum offset of local variables
 static int scope_max_offset(Scope *sc, int bottom) {
   for (Scope *child = sc->children; child; child = child->sibling_next)
     bottom = scope_max_offset(child, bottom);
@@ -4949,7 +4952,7 @@ static int scope_max_offset(Scope *sc, int bottom) {
   return bottom;
 }
 
-
+//initializing local variables
 static void scope_zero_init(Scope *sc, Obj *fn) {
   for (Scope *child = sc->children; child; child = child->sibling_next)
     scope_zero_init(child, fn);

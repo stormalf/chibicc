@@ -70,11 +70,11 @@ test-stage2: $(TESTS:test/%=stage2/test/%)
 	TEST_JOBS="$(TEST_JOBS)" TEST_TIMEOUT="$(TEST_TIMEOUT)" ./test/run_tests.sh $(addprefix ./,$^)
 	test/driver.sh ./stage2/$(OBJECT)
 
-projects-all: projects projects-oth lxc vlc git memcached cpython openssl
+projects-all: projects projects-oth lxc cpython openssl php-src
 
-projects-oth: sqlite vim nmap curl 
+projects-oth: openssh-portable sqlite vim nmap memcached git curl 
 
-projects: zlib util-linux nginx
+projects: zlib util-linux nginx vlc 
 
 
 curl:
