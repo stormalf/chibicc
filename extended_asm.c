@@ -2560,16 +2560,8 @@ static char *arith_opcode(char op, int size)
 // TODO we can have an issue here if several functions with same name. Probably need to find in a better way to avoid this issue.
 void update_offset(char *funcname, Obj *locals)
 {
-    //printf(" function %s \n", funcname);
     Obj *fn = find_func(funcname);
     if (fn) {
-        //fixing ====ISS-161 issue with some locals missing in fn->locals
-        //if (!fn->locals)
-        fn->locals = locals;
-
-        // During parsing we may call this before the function is fully marked as
-        // a definition. Force offset assignment so inline asm can use (%rbp)-relative
-        // slots for locals/params.
         bool saved_def = fn->is_definition;
         fn->is_definition = true;
         fn->is_function = true;
@@ -2588,7 +2580,6 @@ void update_offset(char *funcname, Obj *locals)
     Type dummy_ty = {0};
     dummy_fn.is_function = true;
     dummy_fn.is_definition = true;
-    dummy_fn.locals = locals;
     dummy_fn.ty = &dummy_ty;
     assign_lvar_offsets(&dummy_fn);
 }

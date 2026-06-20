@@ -150,6 +150,7 @@ typedef struct Member Member;
 typedef struct DebugTypedef DebugTypedef;
 typedef struct Relocation Relocation;
 typedef struct Hideset Hideset;
+typedef struct Scope Scope;
 
 
 typedef struct
@@ -1162,6 +1163,8 @@ struct Type
   bool is_vector;
   Token *tag_name; // struct/union/enum tag name
 
+  // Scope tree for function-local variables
+  struct Scope *scopes;
 };
 
 struct DebugTypedef
@@ -1497,6 +1500,20 @@ void hashmap_put2(HashMap *map, char *key, int keylen, void *val);
 void hashmap_delete(HashMap *map, char *key);
 void hashmap_delete2(HashMap *map, char *key, int keylen);
 void hashmap_test(void);
+
+// Scope tree - represents nested block scopes for variables/tags.
+// `parent` points to the enclosing scope (outer scope).
+// `children`/`sibling_next` links child scopes at the same nesting level.
+// `locals` is the linked list of Obj variables declared in this scope.
+struct Scope
+{
+  Scope *parent;
+  Scope *children;
+  Scope *sibling_next;
+  Obj *locals;
+  HashMap vars;
+  HashMap tags;
+};
 
 //
 // main.c

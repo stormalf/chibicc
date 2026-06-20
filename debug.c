@@ -486,6 +486,31 @@ static bool has_float_in_range(Type *ty, int lo, int hi, int offset) {
   return ty->kind == TY_FLOAT || ty->kind == TY_DOUBLE;
 }
 
+static void collect_scope_debug_types(Scope *sc, DebugTypeInfo **types, int *next_type_id, DebugQualTypeInfo **quals, int *next_qual_id) {
+  for (Scope *child = sc->children; child; child = child->sibling_next)
+    collect_scope_debug_types(child, types, next_type_id, quals, next_qual_id);
+  for (Obj *var = sc->locals; var; var = var->next)
+    if (!var->is_param)
+      collect_debug_type(var->ty, types, next_type_id, quals, next_qual_id);
+}
+
+static void emit_scope_locals(Scope *sc, DebugTypeInfo *types, DebugQualTypeInfo *quals, int c, int *label_count) {
+  for (Scope *child = sc->children; child; child = child->sibling_next)
+    emit_scope_locals(child, types, quals, c, label_count);
+  for (Obj *var = sc->locals; var; var = var->next) {
+    if (var->is_param || !var->name) continue;
+    println("  .uleb128 4");
+    println("  .string \"%s\"", var->name);
+    emit_type_ref(var->ty, types, quals, c);
+    int lbl = (*label_count)++;
+    println("  .uleb128 .L.loc_end_%d - .L.loc_start_%d", lbl, lbl);
+    println(".L.loc_start_%d:", lbl);
+    println("  .byte 0x91");
+    println("  .sleb128 %d", var->offset);
+    println(".L.loc_end_%d:", lbl);
+  }
+}
+
 void emit_debug_info(Obj *prog) {
   if (!opt_g)
     return;
@@ -789,9 +814,8 @@ void emit_debug_info(Obj *prog) {
     for (Obj *var = fn->params; var; var = var->next)
       collect_debug_type(var->ty, &types, &next_type_id, &quals, &next_qual_id);
 
-    for (Obj *var = fn->locals; var; var = var->next)
-      if (!var->is_param)
-        collect_debug_type(var->ty, &types, &next_type_id, &quals, &next_qual_id);
+    if (fn->ty && fn->ty->scopes)
+      collect_scope_debug_types(fn->ty->scopes, &types, &next_type_id, &quals, &next_qual_id);
   }
 
   for (Obj *var = prog; var; var = var->next) {
@@ -917,20 +941,9 @@ void emit_debug_info(Obj *prog) {
         println(".L.loc_end_%d:", lbl);
     }
 
-    for (Obj *var = fn->locals; var; var = var->next) {
-        if (var->is_param || !var->name) continue;
-        println("  .uleb128 4");
-        println("  .string \"%s\"", var->name);
-        
-        emit_type_ref(var->ty, types, quals, c);
+    if (fn->ty && fn->ty->scopes)
+        emit_scope_locals(fn->ty->scopes, types, quals, c, &label_count);
 
-        int lbl = label_count++;
-        println("  .uleb128 .L.loc_end_%d - .L.loc_start_%d", lbl, lbl);
-        println(".L.loc_start_%d:", lbl);
-        println("  .byte 0x91"); // DW_OP_fbreg
-        println("  .sleb128 %d", var->offset);
-        println(".L.loc_end_%d:", lbl);
-    }
 
     println("  .byte 0"); // End of children
   }

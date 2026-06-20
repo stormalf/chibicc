@@ -23,17 +23,6 @@
 // Scope for local variables, global variables, typedefs
 // or enum constants
 
-// Represents a block scope.
-typedef struct Scope Scope;
-struct Scope
-{
-  Scope *next;
-
-  // C has two block scopes; one is for variables/typedefs and
-  // the other is for struct/union/enum tags.
-  HashMap vars;
-  HashMap tags;
-};
 typedef struct VarAttr VarAttr;
 // Variable attributes such as typedef or extern.
 struct VarAttr
@@ -91,9 +80,6 @@ static int order = 0;
 static bool is_old_style = false;
 static Type * current_type;
 static VarAttr * current_attr;
-// All local variable instances created during parsing are
-// accumulated to this list.
-static Obj *locals;
 static char* current_section;
 
 // Likewise, global variables are accumulated to this list.
@@ -234,41 +220,36 @@ static int align_down(int n, int align)
 
 static void enter_scope(void)
 {
-
   Scope *sc = calloc(1, sizeof(Scope));
   if (sc == NULL)
     error("%s:%d: in %s: sc pointer is null!", __FILE__, __LINE__, __func__);
-  sc->next = scope;
+  sc->parent = scope;
+  // Link as first child of parent
+  sc->sibling_next = scope->children;
+  scope->children = sc;
   scope = sc;
 }
 
 static void leave_scope(void)
 {
-  scope = scope->next;
+  scope = scope->parent;
 }
 
 // Find a variable by name.
 VarScope *find_var(Token *tok)
 {
-
-  for (Scope *sc = scope; sc; sc = sc->next)
+  for (Scope *sc = scope; sc; sc = sc->parent)
   {
-
     VarScope *sc2 = hashmap_get2(&sc->vars, tok->loc, tok->len);
-
     if (sc2)
       return sc2;
-   
   }
-  
-
-
   return NULL;
 }
 
 static Type *find_tag(Token *tok)
 {
-  for (Scope *sc = scope; sc; sc = sc->next)
+  for (Scope *sc = scope; sc; sc = sc->parent)
   {
     Type *ty = hashmap_get2(&sc->tags, tok->loc, tok->len);
     if (ty)
@@ -501,7 +482,6 @@ static Obj *new_var(char *name, Type *ty)
 
 static Obj *new_lvar(char *name, Type *ty, char *funcname)
 {
-
   Obj *var = new_var(name, ty);
   var->is_local = true;
   var->order = order;
@@ -512,11 +492,11 @@ static Obj *new_lvar(char *name, Type *ty, char *funcname)
   var->funcname = funcname;
   if (var->ty->kind == TY_PTR) {
     var->ty->is_pointer = true;
-    var->ty->pointertype = ty->base;   
-    var->ty->size = ty->size; 
+    var->ty->pointertype = ty->base;
+    var->ty->size = ty->size;
   }
-  var->next = locals;
-  locals = var;
+  var->next = scope->locals;
+  scope->locals = var;
   return var;
 }
 
@@ -1441,8 +1421,8 @@ static Node *compute_vla_size(Type *ty, Token *tok)
     // First time we see this vla_size in the current function: register it.
     if (!ty->vla_size->funcname) {
       ty->vla_size->funcname = current_fn->funcname;
-      ty->vla_size->next = locals;
-      locals = ty->vla_size;
+      ty->vla_size->next = scope->locals;
+      scope->locals = ty->vla_size;
     } else if (strcmp(ty->vla_size->funcname, current_fn->funcname)) {
       // Came from a different function – reset so we reallocate below.
       ty->vla_size = NULL;
@@ -2641,7 +2621,7 @@ static Node *asm_stmt(Token **rest, Token *tok)
     if (current_fn)
       current_fn->force_frame_pointer = true;
 
-    node->asm_str = extended_asm(node, rest, tok, locals, current_fn);
+    node->asm_str = extended_asm(node, rest, tok, scope->locals, current_fn);
     if (!node->asm_str)
       error_tok(tok, "%s:%d: in %s: error during extended_asm function null returned!", __FILE__, __LINE__, __func__);
     return node;
@@ -5991,7 +5971,7 @@ static Node *postfix(Token **rest, Token *tok)
     SET_CTX(ctx);     
     tok = skip(tok, ")", ctx);
 
-    if (scope->next == NULL)
+    if (scope->parent == NULL)
     {
       Obj *var = new_anon_gvar(ty);
       var->is_compound_lit = true;
@@ -7849,8 +7829,8 @@ static void create_param_lvars(Type *param, char *funcname)
   // error_tok(param->name_pos, "parameter name omitted");
   //new_lvar(get_ident(param->name), param, funcname);
     if (param->param_var) {
-      param->param_var->next = locals;
-      locals = param->param_var;
+      param->param_var->next = scope->locals;
+      scope->locals = param->param_var;
       param->param_var->funcname = funcname;
       param->param_var->order = order;
       if (param->name)
@@ -7894,8 +7874,8 @@ static void resolve_goto_labels(void)
 Obj *find_func(char *name)
 {
   Scope *sc = scope;
-  while (sc->next)
-    sc = sc->next;
+  while (sc->parent)
+    sc = sc->parent;
 
   VarScope *sc2 = hashmap_get(&sc->vars, name);
   if (sc2 && sc2->var && sc2->var->is_function)
@@ -7936,9 +7916,13 @@ static bool is_volatile(Type *ty) {
 
 // Check if Tail Call Optimization can be applied to the function.
 // TCO is disabled if any local variable has its address taken or is volatile.
-static bool can_apply_tco(Obj *locals) {
-  for (Obj *var = locals; var; var = var->next) {
+static bool can_apply_tco_scope(Scope *sc) {
+  for (Obj *var = sc->locals; var; var = var->next) {
     if (var->is_address_used || is_volatile(var->ty))
+      return false;
+  }
+  for (Scope *child = sc->children; child; child = child->sibling_next) {
+    if (!can_apply_tco_scope(child))
       return false;
   }
   return true;
@@ -8058,8 +8042,9 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
     return tok;
 
   current_fn = fn;
-  locals = NULL;
   enter_scope();
+  fn->ty = ty;
+  ty->scopes = scope;
 
   // if it's a pointer we don't know the size of the type of pointer int ? char ?
   create_param_lvars(ty->params, name_str);
@@ -8084,7 +8069,7 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   if ((rty->kind == TY_STRUCT || rty->kind == TY_UNION) && rty->size > 16)
     new_lvar("", pointer_to(rty), name_str);
 
-  fn->params = locals;
+  fn->params = scope->locals;
   //to fix issue with complex vla in parameters
   Node vla_head = {};
   Node *vla_cur = &vla_head;
@@ -8135,9 +8120,8 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   }
 
   //implementing tail call optimization.
-  if (can_apply_tco(locals))
+  if (can_apply_tco_scope(scope))
     mark_tail_calls(fn->body, fn);
-  fn->locals = locals;  
   order = 0;
   leave_scope();
   resolve_goto_labels();
@@ -8375,7 +8359,7 @@ Obj *parse(Token *tok)
   while (tok->kind != TK_EOF)
   {
     current_fn = NULL;
-    locals = NULL;
+
     if (equal(tok, "_Static_assert")) {
       tok = static_assertion(tok);
       continue;
