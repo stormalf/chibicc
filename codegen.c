@@ -29,10 +29,9 @@ extern bool opt_optimize_level3;
 
 // Forward declarations for scope tree walkers
 static int scope_lvar_align(Scope *sc, int align);
-static bool scope_has_align_gt(Scope *sc, int limit);
 static int scope_max_offset(Scope *sc, int bottom);
 static void scope_zero_init(Scope *sc, Obj *fn);
-static void scope_assign_offsets(Scope *sc, int *bottom, char *ptr, int stack_align);
+static void scope_assign_offsets(Scope *sc, int *bottom, char *ptr, int stack_align, bool omit_fp);
 
 void gen_expr(Node *node);
 static void gen_stmt(Node *node);
@@ -101,10 +100,6 @@ bool is_omit_fp(Obj *fn) {
 
   if (fn->stack_align > 16) { return false; }
 
-  // Support for omit-fp with alignment > 8 is currently broken/incomplete.
-  // Fall back to frame pointer if any local/param needs more than 8-byte alignment.
-  if (fn->ty && fn->ty->scopes && scope_has_align_gt(fn->ty->scopes, 8))
-    return false;
   for (Obj *var = fn->params; var; var = var->next) {
     if (get_align(var) > 8)
       return false;
@@ -4922,11 +4917,9 @@ static void print_offset(Obj *prog)
   }
 }
 
-static void scope_assign_offsets(Scope *sc, int *bottom, char *ptr, int stack_align) {
-  // Process children (inner scopes) first so that small-alignment variables
-  // from inner scopes are packed before higher-alignment outer scope variables.
+static void scope_assign_offsets(Scope *sc, int *bottom, char *ptr, int stack_align, bool omit_fp) {
   for (Scope *child = sc->children; child; child = child->sibling_next)
-    scope_assign_offsets(child, bottom, ptr, stack_align);
+    scope_assign_offsets(child, bottom, ptr, stack_align, omit_fp);
   for (Obj *var = sc->locals; var; var = var->next) {
     int align = get_align(var);
     if (var->offset) continue;
@@ -4935,6 +4928,8 @@ static void scope_assign_offsets(Scope *sc, int *bottom, char *ptr, int stack_al
       size = align_to(size, stack_align);
     *bottom = align_to(*bottom, align) + size;
     var->offset = -*bottom;
+    if (omit_fp)
+      var->offset -= 8;
     var->ptr = ptr;
   }
 }
@@ -4959,17 +4954,6 @@ static int scope_max_offset(Scope *sc, int bottom) {
   return bottom;
 }
 
-static bool scope_has_align_gt(Scope *sc, int limit) {
-  for (Scope *child = sc->children; child; child = child->sibling_next) {
-    if (scope_has_align_gt(child, limit))
-      return true;
-  }
-  for (Obj *var = sc->locals; var; var = var->next) {
-    if (get_align(var) > limit)
-      return true;
-  }
-  return false;
-}
 
 static void scope_zero_init(Scope *sc, Obj *fn) {
   for (Scope *child = sc->children; child; child = child->sibling_next)
@@ -4997,7 +4981,6 @@ void assign_lvar_offsets(Obj *prog) {
     bool omit_fp = is_omit_fp(fn);
 
     int bottom = fn->stack_size;
-    if (omit_fp) bottom -= 8;
     if (bottom < 0) bottom = 0;
 
     int gp = 0, fp = 0;
@@ -5061,7 +5044,7 @@ void assign_lvar_offsets(Obj *prog) {
 
     char *base = omit_fp ? "%rsp" : (fn->stack_align > 16) ? "%rbx" : "%rbp";
     if (fn->ty && fn->ty->scopes)
-      scope_assign_offsets(fn->ty->scopes, &bottom, base, fn->stack_align);
+      scope_assign_offsets(fn->ty->scopes, &bottom, base, fn->stack_align, omit_fp);
 
     fn->stack_size = align_to(bottom, 16);
     if (omit_fp)
