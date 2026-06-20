@@ -27,6 +27,12 @@ extern bool opt_omit_frame_pointer;
 extern bool opt_fbuiltin;
 extern bool opt_optimize_level3;
 
+// Forward declarations for scope tree walkers
+static int scope_lvar_align(Scope *sc, int align);
+static int scope_max_offset(Scope *sc, int bottom);
+static void scope_zero_init(Scope *sc, Obj *fn);
+static void scope_assign_offsets(Scope *sc, int *bottom, char *ptr, int stack_align, bool omit_fp);
+
 void gen_expr(Node *node);
 static void gen_stmt(Node *node);
 static void print_offset(Obj *prog);
@@ -93,17 +99,6 @@ bool is_omit_fp(Obj *fn) {
   if (fn->force_frame_pointer) {  return false; }
 
   if (fn->stack_align > 16) { return false; }
-
-  // Support for omit-fp with alignment > 8 is currently broken/incomplete.
-  // Fall back to frame pointer if any local/param needs more than 8-byte alignment.
-  for (Obj *var = fn->locals; var; var = var->next) {
-    if (get_align(var) > 8)
-      return false;
-  }
-  for (Obj *var = fn->params; var; var = var->next) {
-    if (get_align(var) > 8)
-      return false;
-  }
 
   return true;
 }
@@ -4669,16 +4664,8 @@ static void emit_text(Obj *prog)
       else
         println("  mov %%rsp, %d(%s)", fn->alloca_bottom->offset, lvar_ptr);
     }
-    //issue with postgres and local variables not initialized!
-    for (Obj *var = fn->locals; var; var = var->next) {     
-        if (!var->init && !var->is_param &&
-            (var->ty->kind == TY_STRUCT ||
-            var->ty->kind == TY_UNION ||
-            var->ty->kind == TY_ARRAY ||
-            is_vector(var->ty))) {
-            gen_mem_zero(var->offset, var->ty->size);
-        }
-    }
+    if (fn->ty && fn->ty->scopes)
+        scope_zero_init(fn->ty->scopes, fn);
 
 
     // Save arg registers if function is variadic
@@ -4900,54 +4887,87 @@ void codegen(Obj *prog, FILE *out)
 }
 
 
+//printing offset for each variable in a scope
+static void print_offset_scope(Scope *sc, Obj *fn) {
+  for (Scope *child = sc->children; child; child = child->sibling_next)
+    print_offset_scope(child, fn);
+  for (Obj *var = sc->locals; var; var = var->next) {
+    printf("=====fn_name=%s var_name=%s offset=%d stack_size=%d var_alignment=%d\n", sym(fn), sym(var), var->offset, fn->stack_size, var->align );
+    if (!var->funcname)
+      var->funcname = sym(fn);
+  }
+}
 
-// Print offset.
+//printing offset for each variable
 static void print_offset(Obj *prog)
 {
   for (Obj *fn = prog; fn; fn = fn->next)
   {
-
-      
     for (Obj *var = fn->params; var; var = var->next)
     {
     printf("=====fn_name=%s var_name=%s offset=%d stack_size=%d var_alignment=%d\n", sym(fn), sym(var), var->offset, fn->stack_size, var->stack_align );
     }
-    for (Obj *var = fn->locals; var; var = var->next)
-    {
-      printf("=====fn_name=%s var_name=%s offset=%d stack_size=%d var_alignment=%d\n", sym(fn), sym(var), var->offset, fn->stack_size, var->align );
-      //update the function name if it's missing
-      if (!var->funcname)
-        var->funcname = sym(fn);
-    }
-
+    if (fn->ty && fn->ty->scopes)
+      print_offset_scope(fn->ty->scopes, fn);
   }
 }
 
-static int get_lvar_align(Obj *fn, int align) {
-  for (Obj *var = fn->locals; var; var = var->next)
+//assigning offsets to local variables
+static void scope_assign_offsets(Scope *sc, int *bottom, char *ptr, int stack_align, bool omit_fp) {
+  for (Scope *child = sc->children; child; child = child->sibling_next)
+    scope_assign_offsets(child, bottom, ptr, stack_align, omit_fp);
+  for (Obj *var = sc->locals; var; var = var->next) {
+    int align = get_align(var);
+    if (var->offset) continue;
+    int size = var->ty->size;
+    if (stack_align > 16)
+      size = align_to(size, stack_align);
+    *bottom = align_to(*bottom, align) + size;
+    var->offset = -*bottom;
+    if (omit_fp)
+      var->offset -= 8;
+    var->ptr = ptr;
+  }
+}
+
+//calculating the alignment of local variables
+static int scope_lvar_align(Scope *sc, int align) {
+  for (Scope *child = sc->children; child; child = child->sibling_next)
+    align = scope_lvar_align(child, align);
+  for (Obj *var = sc->locals; var; var = var->next)
     align = MAX(align, get_align(var));
   return align;
 }
 
-static int assign_lvar_offsets2(Obj *fn, int bottom, char *ptr) {
-  for (Obj *var = fn->locals; var; var = var->next) {
-    int align = get_align(var);
-
-    if (var->offset) {
-      // Skip variables that already have an offset
-      continue;
+//calculating the maximum offset of local variables
+static int scope_max_offset(Scope *sc, int bottom) {
+  for (Scope *child = sc->children; child; child = child->sibling_next)
+    bottom = scope_max_offset(child, bottom);
+  for (Obj *var = sc->locals; var; var = var->next) {
+    if (var->offset && !var->is_param) {
+      int limit = -var->offset;
+      if (limit > bottom) bottom = limit;
     }
-
-    int size = var->ty->size;
-    if (fn->stack_align > 16)
-      size = align_to(size, fn->stack_align);
-
-    bottom = align_to(bottom, align) + size;
-    var->offset = -bottom;
-    var->ptr = ptr;
   }
-  return align_to(bottom, 16);
+  return bottom;
 }
+
+//initializing local variables
+static void scope_zero_init(Scope *sc, Obj *fn) {
+  for (Scope *child = sc->children; child; child = child->sibling_next)
+    scope_zero_init(child, fn);
+  for (Obj *var = sc->locals; var; var = var->next) {
+    if (!var->init && !var->is_param &&
+        (var->ty->kind == TY_STRUCT ||
+         var->ty->kind == TY_UNION ||
+         var->ty->kind == TY_ARRAY ||
+         is_vector(var->ty))) {
+      gen_mem_zero(var->offset, var->ty->size);
+    }
+  }
+}
+
+
 
 
 void assign_lvar_offsets(Obj *prog) {
@@ -4955,11 +4975,10 @@ void assign_lvar_offsets(Obj *prog) {
     if (!fn->is_function || !fn->is_definition)
       continue;
 
-    fn->stack_align = get_lvar_align(fn, 16);
+    fn->stack_align = scope_lvar_align(fn->ty ? fn->ty->scopes : NULL, 16);
     bool omit_fp = is_omit_fp(fn);
 
     int bottom = fn->stack_size;
-    if (omit_fp) bottom -= 8;
     if (bottom < 0) bottom = 0;
 
     int gp = 0, fp = 0;
@@ -4967,19 +4986,12 @@ void assign_lvar_offsets(Obj *prog) {
     int stack = 0;
     int param_idx = 0;
 
-    // If variables already have offsets (assigned during parsing for inline asm),
-    // ensure 'bottom' reflects the space they occupy.
-    for (Obj *var = fn->locals; var; var = var->next) {
-      if (var->offset && !var->is_param) {
-        int limit = -var->offset; // offsets are negative
-        if (limit > bottom) bottom = limit;
-      }
-    }
+    if (fn->ty && fn->ty->scopes)
+      bottom = scope_max_offset(fn->ty->scopes, bottom);
 
     for (Obj *var = fn->params; var; var = var->next) {      
       var->is_param = true;
       var->nbparm = param_idx++;
-      if (var->offset) continue;
 
       Type *ty = var->ty;
       if (!ty) error("%s:%d: in %s: type is null!", __FILE__, __LINE__, __func__);
@@ -5000,22 +5012,28 @@ void assign_lvar_offsets(Obj *prog) {
       }
 
       // Passed on stack
-      var->pass_by_stack = true;
       int align = (ty->kind == TY_STRUCT || ty->kind == TY_UNION) ? MAX(ty->align, 8) :
                   (ty->kind == TY_LDOUBLE || ty->kind == TY_INT128 || ty->kind == TY_VECTOR) ? 16 : 8;
       max_align = MAX(max_align, align);
-      
       stack = align_to(stack, align);
-      if (omit_fp) {
-        var->offset = stack + 8;
-        var->ptr = "%rsp";
-      } else {
-      var->offset = stack + 16;
-      var->ptr = "%rbp";
-      }
 
       int size = (ty->kind == TY_STRUCT || ty->kind == TY_UNION) ? align_to(ty->size, align) :
                  (ty->kind == TY_LDOUBLE || ty->kind == TY_INT128 || ty->kind == TY_VECTOR) ? 16 : 8;
+
+      // Only assign offset/ptr if not already set (may have been set by a prior
+      // call from extended_asm.c). We must still accumulate 'stack' so that
+      // overflow_arg_area is computed correctly for variadic functions.
+      if (!var->offset) {
+        var->pass_by_stack = true;
+        if (omit_fp) {
+          var->offset = stack + 8;
+          var->ptr = "%rsp";
+        } else {
+          var->offset = stack + 16;
+          var->ptr = "%rbp";
+        }
+      }
+
       stack += size;
     }
 
@@ -5023,7 +5041,10 @@ void assign_lvar_offsets(Obj *prog) {
       fn->overflow_arg_area = stack + 16;
 
     char *base = omit_fp ? "%rsp" : (fn->stack_align > 16) ? "%rbx" : "%rbp";
-    fn->stack_size = assign_lvar_offsets2(fn, bottom, base);
+    if (fn->ty && fn->ty->scopes)
+      scope_assign_offsets(fn->ty->scopes, &bottom, base, fn->stack_align, omit_fp);
+
+    fn->stack_size = align_to(bottom, 16);
     if (omit_fp)
       fn->stack_size += 8;
   }

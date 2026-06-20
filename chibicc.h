@@ -48,7 +48,7 @@
 #endif
 
 #define PRODUCT "chibicc"
-#define VERSION "1.0.24.1"
+#define VERSION "1.0.25"
 #define MAXLEN 1001
 #define DEFAULT_TARGET_MACHINE "x86_64-linux-gnu"
 #define MAX_BUILTIN_ARGS 8
@@ -135,7 +135,7 @@ this " PRODUCT " supports vector, some extended assembly and int128 \n"
 -mavx2 enabling avx2 instructions \n \
 -print-search-dirs prints minimal information on install dir. \n \
 -Werror any warning is sent as an error and stops the compile \n \
--f-omit-frame-pointer omits frame pointer and uses rsp-relative addressing. Minimal stack usage \n \
+-fomit-frame-pointer omits frame pointer and uses rsp-relative addressing. Minimal stack usage \n \
 -f-no-omit-frame-pointer always keeps frame pointer (default) \n \
 -g enabling debug symbols \n \
 -O0 disabling optimization \n \
@@ -150,6 +150,7 @@ typedef struct Member Member;
 typedef struct DebugTypedef DebugTypedef;
 typedef struct Relocation Relocation;
 typedef struct Hideset Hideset;
+typedef struct Scope Scope;
 
 
 typedef struct
@@ -1162,6 +1163,8 @@ struct Type
   bool is_vector;
   Token *tag_name; // struct/union/enum tag name
 
+  // Scope tree for function-local variables
+  struct Scope *scopes;
 };
 
 struct DebugTypedef
@@ -1497,6 +1500,20 @@ void hashmap_put2(HashMap *map, char *key, int keylen, void *val);
 void hashmap_delete(HashMap *map, char *key);
 void hashmap_delete2(HashMap *map, char *key, int keylen);
 void hashmap_test(void);
+
+// Scope tree - represents nested block scopes for variables/tags.
+// `parent` points to the enclosing scope (outer scope).
+// `children`/`sibling_next` links child scopes at the same nesting level.
+// `locals` is the linked list of Obj variables declared in this scope.
+struct Scope
+{
+  Scope *parent;
+  Scope *children;
+  Scope *sibling_next;
+  Obj *locals;
+  HashMap vars;
+  HashMap tags;
+};
 
 //
 // main.c

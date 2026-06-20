@@ -1,4 +1,5 @@
 #include "test.h"
+#include <stdlib.h>
 
 // Force stack alignment > 16 to trigger use_rbx in chibicc
 void *get_parent_frame(void) __attribute__((noinline));
