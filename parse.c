@@ -1275,6 +1275,7 @@ static Type *enum_specifier(Token **rest, Token *tok)
       tok = skip(tok, ",", ctx);
     }
 
+    Token *name_tok = tok;
     char *name = get_ident(tok);
     tok = tok->next;
     tok = attribute_list(tok, ty, type_attributes);
@@ -1282,13 +1283,23 @@ static Type *enum_specifier(Token **rest, Token *tok)
       val = const_expr(&tok, tok->next);
     tok = attribute_list(tok, ty, type_attributes);
 
+    Member *mem = calloc(1, sizeof(Member));
+    mem->name = name_tok;
+    mem->offset = val;
+    mem->ty = ty_int;
+    mem->next = ty->members;
+    ty->members = mem;
+
     VarScope *sc = push_scope(name);
     sc->enum_ty = ty;
     sc->enum_val = val++;
   }
 
-  if (tag)
+  if (tag) {
     push_tag_scope(tag, ty);
+    ty->tag_name = tag;
+    ty->name = tag;
+  }
   if (!ty)
     error_tok(tok, "%s:%d: in %s: ty is null!", __FILE__, __LINE__, __func__);    
   return ty;

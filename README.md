@@ -436,6 +436,11 @@ vim: https://github.com/vim/vim.git
     CC=chibicc CFLAGS="-fPIC" ./configure
     make
     make test    
+    == SUMMARY SYNTAX TESTS ==
+    Test run on 2026 Jun 20 13:33:07
+    OK: 219
+    FAILED: 0: []
+    skipped: 0
 
 
 

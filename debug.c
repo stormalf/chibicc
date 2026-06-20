@@ -118,7 +118,6 @@ static bool is_builtin_debug_type(Type *ty) {
   switch (ty->kind) {
   case TY_VOID:
   case TY_BOOL:
-  case TY_ENUM:
   case TY_CHAR:
   case TY_SHORT:
   case TY_INT:
@@ -146,9 +145,6 @@ static bool emit_builtin_type_ref(Type *ty, int c) {
     return true;
   case TY_BOOL:
     println("  .long .L.type_bool%d - .L.debug_info%d", c, c);
-    return true;
-  case TY_ENUM:
-    println("  .long .L.type_int%d - .L.debug_info%d", c, c);
     return true;
   case TY_CHAR:
     if (ty->is_unsigned) {
@@ -234,7 +230,7 @@ static void collect_debug_type(Type *ty, DebugTypeInfo **types, int *next_id,
     return;
 
   if (ty->kind != TY_PTR && ty->kind != TY_ARRAY && ty->kind != TY_STRUCT &&
-      ty->kind != TY_UNION)
+      ty->kind != TY_UNION && ty->kind != TY_ENUM)
     return;
 
   if (find_debug_type(*types, ty))
@@ -276,7 +272,7 @@ static void emit_unqualified_type_ref(Type *ty, DebugTypeInfo *types, int c) {
   // referencing a typedef DIE so debuggers see the typedef name
   // (e.g. "PyObject" instead of "struct _object").
   if (!debug_typedef_emit_inner &&
-      (ty->kind == TY_STRUCT || ty->kind == TY_UNION)) {
+      (ty->kind == TY_STRUCT || ty->kind == TY_UNION || ty->kind == TY_ENUM)) {
     DebugTypedef *td = find_debug_typedef_by_type(ty);
     if (td) {
       println("  .long .L.type_typedef_%s_%d - .L.debug_info%d", td->name, c, c);
@@ -316,8 +312,6 @@ static void emit_type_ref(Type *ty, DebugTypeInfo *types, DebugQualTypeInfo *qua
 
 static void emit_struct_name(Type *ty, int id) {
   Token *tag = ty ? ty->tag_name : NULL;
-  if (!tag && ty)
-    tag = ty->name;
 
   if (tag) {
     println("  .string \"%.*s\"", tag->len, tag->loc);
@@ -385,6 +379,30 @@ static void emit_custom_type_die(DebugTypeInfo *entry, DebugTypeInfo *types, int
       emit_unqualified_type_ref(mem->ty, types, c);
       println("  .uleb128 %d", ty->kind == TY_UNION ? 0 : mem->offset);
     }
+    }
+    println("  .byte 0");
+    return;
+  }
+  case TY_ENUM: {
+    if (ty->size < 0) {
+      println("  .uleb128 23");                 // Abbrev: incomplete enum
+      emit_struct_name(ty, entry->id);
+      println("  .byte 1");                     // DW_AT_declaration
+      return;
+    }
+    if (ty->tag_name) {
+      println("  .uleb128 20");                   // Abbrev: DW_TAG_enumeration_type (named)
+      println("  .string \"%.*s\"", ty->tag_name->len, ty->tag_name->loc); // DW_AT_name
+    } else {
+      println("  .uleb128 22");                   // Abbrev: DW_TAG_enumeration_type (anonymous)
+    }
+    println("  .uleb128 %ld", ty->size);        // DW_AT_byte_size
+    println("  .uleb128 %d", ty->is_unsigned ? 7 : 5); // DW_AT_encoding: 5=signed, 7=unsigned
+    emit_unqualified_type_ref(ty_int, types, c); // DW_AT_type: underlying int type
+    for (Member *mem = ty->members; mem; mem = mem->next) {
+      println("  .uleb128 21");                 // Abbrev: DW_TAG_enumerator
+      emit_member_name(mem, 0);
+      println("  .sleb128 %d", mem->offset);    // DW_AT_const_value
     }
     println("  .byte 0");
     return;
@@ -762,6 +780,56 @@ void emit_debug_info(Obj *prog) {
   println("  .byte 0");                       // DW_CHILDREN_no
   println("  .uleb128 0x49");                 // DW_AT_type
   println("  .uleb128 0x13");                 // DW_FORM_ref4
+  println("  .byte 0");
+  println("  .byte 0");
+
+  // Abbrev 20: DW_TAG_enumeration_type (complete)
+  println("  .uleb128 20");
+  println("  .uleb128 0x04");                // DW_TAG_enumeration_type
+  println("  .byte 1");                       // DW_CHILDREN_yes
+  println("  .uleb128 0x3");                  // DW_AT_name
+  println("  .uleb128 0x8");                  // DW_FORM_string
+  println("  .uleb128 0xb");                  // DW_AT_byte_size
+  println("  .uleb128 0xf");                  // DW_FORM_udata
+  println("  .uleb128 0x3e");                 // DW_AT_encoding
+  println("  .uleb128 0xb");                  // DW_FORM_data1
+  println("  .uleb128 0x49");                 // DW_AT_type
+  println("  .uleb128 0x13");                 // DW_FORM_ref4
+  println("  .byte 0");
+  println("  .byte 0");
+
+  // Abbrev 21: DW_TAG_enumerator
+  println("  .uleb128 21");
+  println("  .uleb128 0x28");                // DW_TAG_enumerator
+  println("  .byte 0");                       // DW_CHILDREN_no
+  println("  .uleb128 0x3");                  // DW_AT_name
+  println("  .uleb128 0x8");                  // DW_FORM_string
+  println("  .uleb128 0x1c");                 // DW_AT_const_value
+  println("  .uleb128 0xd");                  // DW_FORM_sdata
+  println("  .byte 0");
+  println("  .byte 0");
+
+  // Abbrev 22: DW_TAG_enumeration_type (anonymous, no name)
+  println("  .uleb128 22");
+  println("  .uleb128 0x04");                // DW_TAG_enumeration_type
+  println("  .byte 1");                       // DW_CHILDREN_yes
+  println("  .uleb128 0xb");                  // DW_AT_byte_size
+  println("  .uleb128 0xf");                  // DW_FORM_udata
+  println("  .uleb128 0x3e");                 // DW_AT_encoding
+  println("  .uleb128 0xb");                  // DW_FORM_data1
+  println("  .uleb128 0x49");                 // DW_AT_type
+  println("  .uleb128 0x13");                 // DW_FORM_ref4
+  println("  .byte 0");
+  println("  .byte 0");
+
+  // Abbrev 23: DW_TAG_enumeration_type (incomplete/declaration)
+  println("  .uleb128 23");
+  println("  .uleb128 0x04");                // DW_TAG_enumeration_type
+  println("  .byte 0");                       // DW_CHILDREN_no
+  println("  .uleb128 0x3");                  // DW_AT_name
+  println("  .uleb128 0x8");                  // DW_FORM_string
+  println("  .uleb128 0x3c");                 // DW_AT_declaration
+  println("  .uleb128 0xc");                  // DW_FORM_flag
   println("  .byte 0");
   println("  .byte 0");
 
