@@ -8,12 +8,15 @@ Using PVS.studio to find some potential issues and fix them.
 
 Trying to work on issues and pull requests done in the original repository.
 
+This project used also AI to produce code.
+
 
 ## contributors and inspiring people
 
 Many thanks to Justin Tunney for their great cosmopolitan project that fixed some chibicc bugs and added some features (like int128 management):  https://github.com/jart/cosmopolitan 
 Many thanks to Hsiang-Ying Fu for his great project slimcc that bring some features and bugs and tests to improve this chibicc forked project:  https://github.com/fuhsnn/slimcc 
 Many thanks also to  Freddy Cubas, Arne de Bruijn and Urs Jansen for their contributions and of course of the open source community that brings lots of beautiful projects and resources that are very inspirational!
+And of course many thanks on all contributors on the original project chibicc (that I merged their pull request or suggestion in this project).
 
 
 
