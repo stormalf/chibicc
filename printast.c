@@ -57,10 +57,11 @@ bool insertType(Type *ty) {
 
 static const char kBoolStr[2][6] = {"false", "true"};
 
-static const char kTypeKindStr[17][8] = {
+static const char kTypeKindStr[19][8] = {
     "VOID",   "BOOL",  "CHAR",   "SHORT",   "INT",   "LONG",
-    "INT128", "FLOAT", "DOUBLE", "LDOUBLE", "ENUM",  "PTR",
-    "FUNC",   "ARRAY", "VLA",    "STRUCT",  "UNION",
+    "FLOAT",  "DOUBLE","LDOUBLE","ENUM",    "PTR",   "FUNC",
+    "ARRAY",  "VLA",   "STRUCT", "UNION",   "VECTOR","INT128",
+    "LLONG",
 };
 
 
@@ -225,6 +226,10 @@ static void PrintType(FILE *f, int l, const char *s, Type *t) {
       PrintMembers(f, l + 2, "members: ", t->members);
       PrintBool(f, l + 2, "is_flexible: ", t->is_flexible);
       PrintBool(f, l + 2, "is_packed: ", t->is_packed);
+      PrintBool(f, l + 2, "is_ms_struct: ", t->is_ms_struct);
+      PrintTokStr(f, l + 2, "tag_name: ", t->tag_name);
+      PrintType(f, l + 2, "vla_param_ty: ", t->vla_param_ty);
+      if (t->scopes) PrintLine(f, l + 2, "scopes: Scope # %p", t->scopes);
       PrintBool(f, l + 2, "is_aligned: ", t->is_aligned);
       PrintBool(f, l + 2, "is_const: ", t->is_const);
       PrintBool(f, l + 2, "is_restrict: ", t->is_restrict);
@@ -314,7 +319,6 @@ static void PrintNode(FILE *f, int l, const char *s, Node *n) {
 
     PrintLine(f, l, "%sNode { # %p", s, n);
     PrintLine(f, l + 2, "kind: ND_%s", kindstr);
-    PrintLine(f, l + 2, "kind: ND_%s", kNodeKindStr[n->kind]);
     PrintType(f, l + 2, "ty: ", n->ty);
     if (n->lhs) PrintNode(f, l + 2, "lhs: ", n->lhs);
     if (n->rhs) PrintNode(f, l + 2, "rhs: ", n->rhs);
@@ -331,6 +335,8 @@ static void PrintNode(FILE *f, int l, const char *s, Node *n) {
     PrintObj(f, l + 2, "ret_buffer: ", n->ret_buffer);
     PrintBool(f, l + 2, "pass_by_stack: ", n->pass_by_stack);
     PrintBool(f, l + 2, "realign_stack: ", n->realign_stack);
+    PrintInt(f, l + 2, "stack_offset: ", n->stack_offset);
+    PrintBool(f, l + 2, "clobbers_rbx: ", n->clobbers_rbx);
     if (n->label) PrintStr(f, l + 2, "label: ", n->label);
     if (n->unique_label) PrintStr(f, l + 2, "unique_label: ", n->unique_label);
     if (n->goto_next) PrintNode(f, l + 2, "goto_next: ", n->goto_next);
@@ -415,7 +421,6 @@ static void PrintObj(FILE *f, int l, const char *s, Obj *o) {
   PrintInt(f, l + 2, "destructor_priority: ", o->destructor_priority);
   PrintBool(f, l + 2, "is_constructor: ", o->is_constructor);
   PrintInt(f, l + 2, "constructor_priority: ", o->constructor_priority);
-  PrintBool(f, l + 2, "is_externally_visible: ", o->is_externally_visible);
   PrintBool(f, l + 2,
             "is_no_instrument_function: ", o->is_no_instrument_function);
   PrintBool(f, l + 2,
@@ -433,6 +438,9 @@ static void PrintObj(FILE *f, int l, const char *s, Obj *o) {
   }
   PrintInitializer(f, l + 2, "init: ", o->init);
   PrintBool(f, l + 2, "force_frame_pointer: ", o->force_frame_pointer);
+  PrintStr(f, l + 2, "cleanup_name: ", o->cleanup_name);
+  PrintType(f, l + 2, "vla_ty: ", o->vla_ty);
+  PrintBool(f, l + 2, "is_returned_twice: ", o->is_returned_twice);
   PrintInt(f, l + 2, "min_vector_width: ", o->min_vector_width);
 
   PrintInt(f, l + 2, "stack_size: ", o->stack_size);

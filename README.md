@@ -593,6 +593,7 @@ cpython: git clone https://github.com/python/cpython.git
     on WSL all tests that use udp > 1500 failed. Need to change the value to 1500 or less to pass. It seems a known issue on WSL environment.
     
     cpython : compile OK, some tests KO     
+    openssh-portable : compile KO (due to extended assembly)
            
 
 ## projects compiled successfully with chibicc
@@ -600,8 +601,7 @@ cpython: git clone https://github.com/python/cpython.git
     util-linux : compile OK, tests OK    
     nginx: compile OK
     zlib: compile OK, tests OK
-    nmap: compile OK, tests OK    
-    openssh-portable : compile OK, tests OK
+    nmap: compile OK, tests OK        
     vlc: compile OK  
     memcached : compile OK, tests OK      
     php-src : compile OK, tests OK    
