@@ -120,6 +120,7 @@ this " PRODUCT " supports vector, some extended assembly and int128 \n"
 -msse2 enabling sse2 support \n \
 -mno-sse2 disabling sse2 support \n \
 -msse3 enabling sse3 support \n\
+-msse3 enabling supplemental sse3 support (but chibicc managed it as -msse3) \n \
 -mno-sse3 disabling sse3 support \n \
 -msse4 enabling sse4 support \n \
 -mno-sse4 disabling sse4 support \n \
@@ -856,6 +857,8 @@ typedef enum
   ND_CRC32SI,
   ND_CRC32DI,
   ND_PSHUFD,
+  ND_PSHUFHW,
+  ND_PSHUFLW,
   ND_PSHUFW,
   ND_FETCHNAND,       
   ND_ADD_AND_FETCH,   
@@ -932,6 +935,7 @@ typedef enum
   ND_VINSERTF128_SI256,    
   ND_SI256_SI,
   ND_SI_SI256,
+  ND_PALIGNR128,
   ND_PALIGNR256,
   ND_VPERM2I128_SI256,
   ND_PBLENDD256,
@@ -1439,6 +1443,8 @@ void gen_vec_set_v8hi(Node *node);
 void gen_psubusb256(Node *node);
 void gen_vec_init_binop(Node *node, const char *insn);
 void gen_pshufd(Node *node);
+void gen_pshufhw(Node *node);
+void gen_pshuflw(Node *node);
 void gen_pshufw(Node *node);
 void gen_shuf_binop(Node *node, const char *insn);
 void gen_psll_binop(Node *node, const char *insn);
@@ -1458,6 +1464,7 @@ void gen_sse2_dqshift(Node *node, const char *insn);
 void gen_vinsertf128_si256(Node *node);
 void gen_avx2_permdi256(Node *node);
 void gen_avx2_psll_binop(Node *node, const char *insn);
+void gen_palignr128(Node *node);
 void gen_avx2_palignr256(Node *node);
 void gen_vperm2i128_si256(Node *node);
 void gen_pblendd256(Node *node);

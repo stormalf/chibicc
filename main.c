@@ -375,7 +375,7 @@ static void parse_args(int argc, char **argv)
     }
 
 
-    if (!strcmp(argv[i], "-msse3")) {
+    if (!strcmp(argv[i], "-msse3") || !strcmp(argv[i], "-mssse3")) {
       opt_sse3 = true;
       continue;
     }

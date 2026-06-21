@@ -1089,6 +1089,8 @@ void add_type(Node *node)
   case ND_PMOVZXBW128:  
   case ND_PACKUSDW128:
   case ND_VECSETV8HI:
+  case ND_PSHUFHW:
+  case ND_PSHUFLW:
     node->ty = vector_of(ty_short, 8);
     return;
   case ND_PUNPCKHDQ128:
@@ -1294,6 +1296,9 @@ void add_type(Node *node)
   case ND_PBLENDVB256:
   case ND_PSRLDQI256:
   case ND_PSLLDQI256:
+  case ND_PALIGNR128:
+    node->ty = vector_of(ty_uchar, 16);
+    return;
   case ND_PALIGNR256:
   case ND_VPERM2I128_SI256:
   case ND_VINSERTF128_SI256:  

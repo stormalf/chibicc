@@ -87,6 +87,7 @@ or
      -msse2 enabling sse2 support 
      -mno-sse2 disabling sse2 support 
      -msse3 enabling sse3 support 
+     -msse3 enabling supplemental sse3 support (but chibicc managed it as -msse3)
      -mno-sse3 disabling sse3 support 
      -msse4 enabling sse4 support 
      -mno-sse4 disabling sse4 support 

@@ -3833,6 +3833,8 @@ void gen_expr(Node *node)
   case ND_CRC32SI: gen_crc32si(node); return;
   case ND_CRC32DI: gen_crc32di(node); return;
   case ND_PSHUFD: gen_pshufd(node); return;
+  case ND_PSHUFHW: gen_pshufhw(node); return;
+  case ND_PSHUFLW: gen_pshuflw(node); return;
   case ND_PSHUFW: gen_pshufw(node); return;
   case ND_PREFETCH: gen_prefetch(node); return;
   case ND_RDTSC: gen_rdtsc(node); return;
@@ -3900,6 +3902,7 @@ void gen_expr(Node *node)
   case ND_SI_SI256: gen_si256(node); return;  
   case ND_PD256_PD: gen_si256(node); return;
   case ND_PS256_PS: gen_si256(node); return;
+  case ND_PALIGNR128: gen_palignr128(node); return;
   case ND_PALIGNR256: gen_avx2_palignr256(node); return;
   case ND_VPERM2I128_SI256: gen_vperm2i128_si256(node); return;
   case ND_PSRLQI256: gen_avx2_psll_binop(node, "vpsrlq"); return;
