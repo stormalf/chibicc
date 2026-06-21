@@ -387,6 +387,10 @@ openssh-portable : https://github.com/openssh/openssh-portable.git
     autoreconf -fi
     CC=chibicc ./configure
     make
+    make tests
+    unit tests passed
+    echo all tests passed
+    all tests passed
 
 
 luajit: https://github.com/LuaJIT/LuaJIT.git 
