@@ -3503,6 +3503,7 @@ void gen_expr(Node *node)
   case ND_VECINITV2SI: gen_vec_init_v2si(node); return;
   case ND_VECEXTV16QI:
   case ND_VECEXTV8HI: 
+  case ND_VECEXTV4HI:
   case ND_VECEXTV2SI:
    case ND_VECEXTV2DI: 
   case ND_VECEXTV4SI: gen_vec_ext(node); return;
@@ -3561,6 +3562,8 @@ void gen_expr(Node *node)
   case ND_PCMPEQD:    gen_mmx_binop(node, "pcmpeqd", false);  return;     
   case ND_PCMPGTD:    gen_mmx_binop(node, "pcmpgtd", false);  return;           
   case ND_VECINITV4HI: gen_vec_init_binop(node, "pinsrw"); return;
+  case ND_VECSETV4HI: gen_vec_set_v4hi(node); return;
+  case ND_VECSETV8HI: gen_vec_set_v8hi(node); return;
   case ND_VECINITV8QI: gen_vec_init_binop(node, "pinsrb"); return;
   case ND_ADDSS: gen_sse_binop1(node, "addss", false);  return;    
   case ND_SUBSS: gen_sse_binop1(node, "subss", false);  return;    
@@ -3830,6 +3833,7 @@ void gen_expr(Node *node)
   case ND_CRC32SI: gen_crc32si(node); return;
   case ND_CRC32DI: gen_crc32di(node); return;
   case ND_PSHUFD: gen_pshufd(node); return;
+  case ND_PSHUFW: gen_pshufw(node); return;
   case ND_PREFETCH: gen_prefetch(node); return;
   case ND_RDTSC: gen_rdtsc(node); return;
   case ND_READEFLAGS_U64: gen_readeflags_u64(node); return;
@@ -3887,6 +3891,8 @@ void gen_expr(Node *node)
   case ND_PSUBUSB256: gen_psubusb256(node); return;
   case ND_PCMPGTB256_MASK: gen_pcmpgtb256_mask(node); return;
   case ND_PSHUFB256: gen_pshufb256(node); return;
+  case ND_PSRLDQI128: gen_sse2_dqshift(node, "psrldq"); return;
+  case ND_PSLLDQI128: gen_sse2_dqshift(node, "pslldq"); return;
   case ND_PSRLDQI256: gen_avx2_256(node, "vpsrldq"); return;
   case ND_PSLLDQI256: gen_avx2_256(node, "vpslldq"); return;
   case ND_VINSERTF128_SI256: gen_vinsertf128_si256(node); return;

@@ -178,7 +178,6 @@ static Node *parse_memcpy(Token *tok, Token **rest);
 static Node *parse_memset(Token *tok, Token **rest);
 static Node *ParseBuiltin(NodeKind kind, Token *tok, Token **rest);
 static Node *parse_overflow(NodeKind kind, Token *tok, Token **rest);
-static Node *parse_huge_val(double fval, Token *tok, Token **rest);
 
 static Token * old_style_params(Token **rest, Token *tok, Type *ty);
 static Type *old_params(Type *ty, int nbparms);
@@ -6692,7 +6691,9 @@ static Node *primary(Token **rest, Token *tok)
       equal(tok, "__builtin_ia32_vinsertf128_si256") ||
       equal(tok, "__builtin_ia32_palignr256") ||
       equal(tok, "__builtin_ia32_permti256") ||
-      equal(tok, "__builtin_ia32_pblendd256"))
+      equal(tok, "__builtin_ia32_pblendd256") ||
+      equal(tok, "__builtin_ia32_vec_set_v4hi") ||
+      equal(tok, "__builtin_ia32_vec_set_v8hi"))
   {
     int builtin = builtin_enum(tok);
     if (builtin != -1) {
@@ -7668,20 +7669,6 @@ static Node *primary(Token **rest, Token *tok)
     *rest = skip(tok->next, ")", ctx);
     return to_assign(node);
   }
-
-  // Handle __builtin_huge_valf
-  if (equal(tok, "__builtin_huge_valf")) {
-    return parse_huge_val(HUGE_VALF, tok, rest);
-  }
-  // Handle __builtin_huge_vall
-  if (equal(tok, "__builtin_huge_vall")) {
-    return parse_huge_val(HUGE_VALL, tok, rest);
-  }
-  // Handle __builtin_huge_val
-  if (equal(tok, "__builtin_huge_val")) {
-    return parse_huge_val(HUGE_VAL, tok, rest);
-  }
-
 
   if (tok->kind == TK_IDENT)
   {
@@ -8777,16 +8764,6 @@ static Type *old_params(Type *ty, int nbparms) {
   return head.next;
 }
 
-static Node *parse_huge_val(double fval, Token *tok, Token **rest) {
-  Node *node = new_double(fval, tok);
-  SET_CTX(ctx);    
-  tok = skip(tok->next, "(", ctx);
-  SET_CTX(ctx); 
-  tok = skip(tok, ")", ctx);
-  *rest = tok;
-  return node;
-}
-
 static int64_t eval_sign_extend(Type *ty, uint64_t val) {
   switch (ty->size) {
   case 1: return ty->is_unsigned ? (uint8_t)val : (int64_t)(int8_t)val;
@@ -9205,6 +9182,7 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_crc32si", ND_CRC32SI },    
     { "__builtin_ia32_crc32di", ND_CRC32DI },
     { "__builtin_ia32_pshufd", ND_PSHUFD },
+    { "__builtin_ia32_pshufw", ND_PSHUFW },
     { "__builtin_prefetch", ND_PREFETCH },
     { "__builtin_ia32_rdtsc", ND_RDTSC },
     { "__builtin_ia32_readeflags_u64", ND_READEFLAGS_U64 },
@@ -9258,6 +9236,8 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_pcmpgtb256_mask", ND_PCMPGTB256_MASK },
     { "__builtin_ia32_pshufb256", ND_PSHUFB256 },
     { "__builtin_ia32_pblendvb256", ND_PBLENDVB256 },
+    { "__builtin_ia32_psrldqi128", ND_PSRLDQI128 },
+    { "__builtin_ia32_pslldqi128", ND_PSLLDQI128 },
     { "__builtin_ia32_psrldqi256", ND_PSRLDQI256 },
     { "__builtin_ia32_pslldqi256", ND_PSLLDQI256 },
     { "__builtin_ia32_vinsertf128_si256", ND_VINSERTF128_SI256 },        
@@ -9280,6 +9260,9 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_pslldi256", ND_PSLLDI256 }, 
     { "__builtin_ia32_psrldi256", ND_PSRLDI256 },
     { "__builtin_ia32_psradi256", ND_PSRADI256 },
+    { "__builtin_ia32_vec_ext_v4hi", ND_VECEXTV4HI },
+    { "__builtin_ia32_vec_set_v4hi", ND_VECSETV4HI },
+    { "__builtin_ia32_vec_set_v8hi", ND_VECSETV8HI },
 };
 
 

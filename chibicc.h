@@ -856,6 +856,7 @@ typedef enum
   ND_CRC32SI,
   ND_CRC32DI,
   ND_PSHUFD,
+  ND_PSHUFW,
   ND_FETCHNAND,       
   ND_ADD_AND_FETCH,   
   ND_SUB_AND_FETCH,   
@@ -924,6 +925,8 @@ typedef enum
   ND_PCMPGTB256_MASK,
   ND_PSHUFB256,
   ND_PBLENDVB256,
+  ND_PSRLDQI128,
+  ND_PSLLDQI128,
   ND_PSRLDQI256,
   ND_PSLLDQI256,
   ND_VINSERTF128_SI256,    
@@ -946,6 +949,9 @@ typedef enum
   ND_PSLLDI256,
   ND_PSRLDI256,
   ND_PSRADI256,
+  ND_VECEXTV4HI,
+  ND_VECSETV4HI,
+  ND_VECSETV8HI,
 } NodeKind;
 
 // AST node type
@@ -1428,9 +1434,12 @@ void gen_signbit(Node *node);
 void gen_isunordered(Node *node);
 void gen_vec_init_v2si(Node *node);
 void gen_vec_ext(Node *node);
+void gen_vec_set_v4hi(Node *node);
+void gen_vec_set_v8hi(Node *node);
 void gen_psubusb256(Node *node);
 void gen_vec_init_binop(Node *node, const char *insn);
 void gen_pshufd(Node *node);
+void gen_pshufw(Node *node);
 void gen_shuf_binop(Node *node, const char *insn);
 void gen_psll_binop(Node *node, const char *insn);
 void gen_shuffle(Node *node, const char *insn);
@@ -1445,6 +1454,7 @@ void gen_sse_blendvpx(Node *node, const char *insn);
 void gen_pcmpgtb256_mask(Node *node);
 void gen_pshufb256(Node *node);
 void gen_avx2_256(Node *node, const char *insn);
+void gen_sse2_dqshift(Node *node, const char *insn);
 void gen_vinsertf128_si256(Node *node);
 void gen_avx2_permdi256(Node *node);
 void gen_avx2_psll_binop(Node *node, const char *insn);

@@ -1821,6 +1821,9 @@ void gen_vec_ext(Node *node) {
   } else if (node->kind == ND_VECEXTV8HI) {
     println("  and $7, %%ecx");
     println("  movswl (%%rsp,%%rcx,2), %%eax");
+  } else if (node->kind == ND_VECEXTV4HI) {
+    println("  and $3, %%ecx");
+    println("  movswl (%%rsp,%%rcx,2), %%eax");
   } else if (node->kind == ND_VECEXTV2DI) {
     println("  and $1, %%ecx");
     println("  movq (%%rsp,%%rcx,8), %%rax");
@@ -1828,6 +1831,36 @@ void gen_vec_ext(Node *node) {
     println("  and $%d, %%ecx", node->kind == ND_VECEXTV2SI ? 1 : 3);
     println("  movl (%%rsp,%%rcx,4), %%eax");
   }
+  pop_xmm(0);
+}
+
+void gen_vec_set_v4hi(Node *node) {
+  gen_expr(node->builtin_args[0]);
+  push_xmm(0);
+  gen_expr(node->builtin_args[1]);
+  println("  movl %%eax, 8(%%rsp)");
+  gen_expr(node->builtin_args[2]);
+  println("  and $3, %%eax");
+  println("  movzwl 8(%%rsp), %%ecx");
+  println("  movw %%cx, (%%rsp,%%rax,2)");
+  println("  movq (%%rsp), %%mm0");
+  pop_xmm(0);
+}
+
+void gen_vec_set_v8hi(Node *node) {
+  gen_expr(node->builtin_args[0]);
+  push_xmm(0);
+  println("  sub $16, %%rsp");
+  depth += 2;
+  gen_expr(node->builtin_args[1]);
+  println("  movl %%eax, (%%rsp)");
+  gen_expr(node->builtin_args[2]);
+  println("  and $7, %%eax");
+  println("  movzwl (%%rsp), %%ecx");
+  println("  movw %%cx, 16(%%rsp,%%rax,2)");
+  println("  movdqu 16(%%rsp), %%xmm0");
+  println("  add $16, %%rsp");
+  depth -= 2;
   pop_xmm(0);
 }
 
@@ -1858,6 +1891,16 @@ void gen_pshufd(Node *node) {
   gen_expr(node->lhs);
   int imm = node->rhs->val;
   println("  pshufd $%d, %%xmm0, %%xmm0", imm);
+}
+
+void gen_pshufw(Node *node) {
+  gen_expr(node->lhs);
+  println("  movq (%%rax), %%mm0");
+  int imm = node->rhs->val;
+  println("  pshufw $%d, %%mm0, %%mm0", imm);
+  println("  movq %%mm0, %%rax");
+  println("  movq %%rax, %%xmm0");
+  println("  emms");
 }
 
 void gen_shuf_binop(Node *node, const char *insn) {
@@ -2114,6 +2157,17 @@ void gen_avx2_256(Node *node, const char *insn) {
 
   int64_t imm_bytes = imm_bits / 8;
   println("  %s $%ld, %%ymm0, %%ymm0", insn, imm_bytes);
+}
+
+void gen_sse2_dqshift(Node *node, const char *insn) {
+  gen_expr(node->lhs);
+  int64_t imm_bits = eval(node->rhs);
+  if (imm_bits < 0 || imm_bits > 255 * 8)
+    error_tok(node->tok, "%s:%d: in %s: immediate out of range", __FILE__, __LINE__, __func__);
+  if (imm_bits % 8 != 0)
+    error_tok(node->tok, "%s:%d: in %s: immediate must be multiple of 8", __FILE__, __LINE__, __func__);
+  int64_t imm_bytes = imm_bits / 8;
+  println("  %s $%ld, %%xmm0", insn, imm_bytes);
 }
 
 void gen_vinsertf128_si256(Node *node) {
