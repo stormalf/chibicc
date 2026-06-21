@@ -3480,6 +3480,10 @@ void gen_expr(Node *node)
   case ND_LDMXCSR: gen_single_addr_binop(node, "ldmxcsr"); return;
   case ND_SHUFPS: gen_shuf_binop(node, "shufps"); return;
   case ND_SHUFPD: gen_shuf_binop(node, "shufpd"); return;
+  case ND_ROUNDPD: gen_shuf_binop(node, "roundpd"); return;
+  case ND_ROUNDSD: gen_round(node, "roundsd"); return;
+  case ND_ROUNDSS: gen_round(node, "roundss"); return;
+  case ND_ROUNDPS: gen_shuf_binop(node, "roundps"); return;
   case ND_SHUFFLE: gen_shuffle(node, "shufps"); return;
   case ND_CVTPI2PS: gen_cvtpi2ps(node); return;   
   case ND_CVTPS2PI:  gen_cvt_mmx_binop3(node, "cvtps2pi"); return;
@@ -3904,6 +3908,7 @@ void gen_expr(Node *node)
   case ND_PS256_PS: gen_si256(node); return;
   case ND_PALIGNR128: gen_palignr128(node); return;
   case ND_PALIGNR256: gen_avx2_palignr256(node); return;
+  case ND_PALIGNR: gen_palignr(node); return;
   case ND_VPERM2I128_SI256: gen_vperm2i128_si256(node); return;
   case ND_PSRLQI256: gen_avx2_psll_binop(node, "vpsrlq"); return;
   case ND_PSLLQI256: gen_avx2_psll_binop(node, "vpsllq"); return;

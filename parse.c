@@ -6691,8 +6691,11 @@ static Node *primary(Token **rest, Token *tok)
       equal(tok, "__builtin_ia32_vinsertf128_si256") ||
       equal(tok, "__builtin_ia32_palignr256") ||
       equal(tok, "__builtin_ia32_palignr128") ||
+      equal(tok, "__builtin_ia32_palignr") ||
       equal(tok, "__builtin_ia32_permti256") ||
       equal(tok, "__builtin_ia32_pblendd256") ||
+      equal(tok, "__builtin_ia32_roundsd") ||
+      equal(tok, "__builtin_ia32_roundss") ||
       equal(tok, "__builtin_ia32_vec_set_v4hi") ||
       equal(tok, "__builtin_ia32_vec_set_v8hi"))
   {
@@ -6886,6 +6889,7 @@ static Node *primary(Token **rest, Token *tok)
     return node;
     }
   }
+
 
   if (equal(tok, "__builtin_ia32_vec_init_v8qi"))
   {
@@ -8976,8 +8980,12 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_pavgw", ND_PAVGW },
     { "__builtin_ia32_psadbw", ND_PSADBW },
     { "__builtin_ia32_movntq", ND_MOVNTQ },
-    { "__builtin_ia32_movntps", ND_MOVNTPS },
+    { "__builtin_ia32_movntps", ND_MOVNTPS },    
     { "__builtin_ia32_shufpd", ND_SHUFPD },    
+    { "__builtin_ia32_roundpd", ND_ROUNDPD },    
+    { "__builtin_ia32_roundsd", ND_ROUNDSD },  
+    { "__builtin_ia32_roundss", ND_ROUNDSS },    
+    { "__builtin_ia32_roundps", ND_ROUNDPS },    
     { "__builtin_ia32_addsd", ND_ADDSD },  
     { "__builtin_ia32_subsd", ND_SUBSD },  
     { "__builtin_ia32_mulsd", ND_MULSD },  
@@ -9248,6 +9256,7 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_si_si256", ND_SI_SI256 },
     { "__builtin_ia32_palignr256", ND_PALIGNR256 },
     { "__builtin_ia32_palignr128", ND_PALIGNR128 },
+    { "__builtin_ia32_palignr", ND_PALIGNR },
     { "__builtin_ia32_permti256", ND_VPERM2I128_SI256 },
     { "__builtin_ia32_pblendd256", ND_PBLENDD256 },
     { "__builtin_ia32_vextractf128_si256", ND_VEXTRACTF128_SI256 },

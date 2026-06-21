@@ -642,6 +642,10 @@ typedef enum
   ND_MOVNTQ,
   ND_MOVNTPS,
   ND_SHUFPD,
+  ND_ROUNDPD,
+  ND_ROUNDSD,
+  ND_ROUNDSS,
+  ND_ROUNDPS,
   ND_VECEXTV4SI,
   ND_ADDSD,
   ND_SUBSD,
@@ -937,6 +941,7 @@ typedef enum
   ND_SI_SI256,
   ND_PALIGNR128,
   ND_PALIGNR256,
+  ND_PALIGNR,
   ND_VPERM2I128_SI256,
   ND_PBLENDD256,
   ND_VEXTRACTF128_SI256,
@@ -1447,6 +1452,7 @@ void gen_pshufhw(Node *node);
 void gen_pshuflw(Node *node);
 void gen_pshufw(Node *node);
 void gen_shuf_binop(Node *node, const char *insn);
+void gen_round(Node *node, const char *insn);
 void gen_psll_binop(Node *node, const char *insn);
 void gen_shuffle(Node *node, const char *insn);
 void gen_maskmovq(Node *node);
@@ -1466,6 +1472,7 @@ void gen_avx2_permdi256(Node *node);
 void gen_avx2_psll_binop(Node *node, const char *insn);
 void gen_palignr128(Node *node);
 void gen_avx2_palignr256(Node *node);
+void gen_palignr(Node *node);
 void gen_vperm2i128_si256(Node *node);
 void gen_pblendd256(Node *node);
 void gen_pmulhuw256(Node *node);

@@ -1923,6 +1923,15 @@ void gen_shuf_binop(Node *node, const char *insn) {
   println("  %s $%ld, %%xmm1, %%xmm0", insn, (int64_t)node->rhs->val);
 }
 
+void gen_round(Node *node, const char *insn) {
+  assert(node->builtin_nargs == 3);
+  gen_expr(node->builtin_args[1]);
+  push_xmm(0);
+  gen_expr(node->builtin_args[0]);
+  pop_xmm(1);
+  println("  %s $%ld, %%xmm1, %%xmm0", insn, eval(node->builtin_args[2]));
+}
+
 void gen_psll_binop(Node *node, const char *insn) {
   gen_expr(node->lhs);
   push_xmm(0);
@@ -2226,6 +2235,19 @@ void gen_palignr128(Node *node) {
   // xmm0 = A, xmm1 = B; result = concat(A,B) >> imm
   int64_t imm_bytes = eval(node->builtin_args[2]) / 8;
   println("  palignr $%ld, %%xmm1, %%xmm0", imm_bytes);
+}
+
+void gen_palignr(Node *node) {
+  assert(node->builtin_nargs == 3);
+  gen_expr(node->builtin_args[1]); // B -> xmm0 (stored to memory, addr in rax)
+  println("  movq (%%rax), %%mm1");
+  gen_expr(node->builtin_args[0]); // A -> xmm0 (stored to memory, addr in rax)
+  println("  movq (%%rax), %%mm0");
+  int64_t imm_bytes = eval(node->builtin_args[2]) / 8;
+  println("  palignr $%ld, %%mm1, %%mm0", imm_bytes);
+  println("  movq %%mm0, %%rax");
+  println("  movq %%rax, %%xmm0");
+  println("  emms");
 }
 
 void gen_avx2_palignr256(Node *node) {

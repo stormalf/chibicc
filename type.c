@@ -814,6 +814,8 @@ void add_type(Node *node)
   case ND_MOVSHDUP:
   case ND_MOVSLDUP:
   case ND_BLENDVPS:
+  case ND_ROUNDPS:
+  case ND_ROUNDSS:
     node->ty = vector_of(ty_float, 4);
     return;  
   case ND_EXPECT:
@@ -1174,6 +1176,8 @@ void add_type(Node *node)
   case ND_HADDPD:
   case ND_HSUBPD:
   case ND_BLENDVPD:
+  case ND_ROUNDPD:
+  case ND_ROUNDSD:
     node->ty = vector_of(ty_double, 2);
     return;
   case ND_PACKUSWB128:
@@ -1298,6 +1302,9 @@ void add_type(Node *node)
   case ND_PSLLDQI256:
   case ND_PALIGNR128:
     node->ty = vector_of(ty_uchar, 16);
+    return;
+  case ND_PALIGNR:
+    node->ty = vector_of(ty_uchar, 8);
     return;
   case ND_PALIGNR256:
   case ND_VPERM2I128_SI256:
