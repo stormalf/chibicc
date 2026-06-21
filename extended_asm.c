@@ -763,6 +763,20 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 asmExt->output[nbOutput]->letter = 'r';       
                 asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);       
             }
+            else if (!strncmp(tok->str, "+&r", tok->len) )
+            {
+                asmExt->output[nbOutput]->isRegister = true;
+                asmExt->output[nbOutput]->prefix = "+";
+                asmExt->output[nbOutput]->reg = specific_register_available("%r9");
+                if (!asmExt->output[nbOutput]->reg)
+                    error("%s:%d: error: in %s: reg is null!", __FILE__,  __LINE__, __func__);
+                asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg;
+                asmExt->output[nbOutput]->regh = register_higher(asmExt->output[nbOutput]->reg64);
+                asmExt->output[nbOutput]->regl = register_lower(asmExt->output[nbOutput]->reg64);
+                asmExt->output[nbOutput]->regw = register_word(asmExt->output[nbOutput]->reg64);
+                asmExt->output[nbOutput]->letter = 'r';
+                asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
+            }
 
             else if (!strncmp(tok->str, "=m", tok->len) || !strncmp(tok->str, "+m", tok->len))
             {

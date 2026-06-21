@@ -592,8 +592,7 @@ cpython: git clone https://github.com/python/cpython.git
 
     on WSL all tests that use udp > 1500 failed. Need to change the value to 1500 or less to pass. It seems a known issue on WSL environment.
     
-    cpython : compile OK, some tests KO     
-    openssh-portable : compile KO (due to extended assembly)
+    cpython : compile OK, some tests KO        
            
 
 ## projects compiled successfully with chibicc
@@ -610,6 +609,7 @@ cpython: git clone https://github.com/python/cpython.git
     sqlite: compile OK, tests OK
     git : compile OK, tests OK
     vim : compile OK, tests OK 
+    openssh-portable : compile OK, tests OK
     
 
 ## debug
@@ -641,7 +641,7 @@ Example of diagram generated with -dotfile parameter :
 ## release notes
 
 
-1.0.25    Adding promotion to int on variadic argument. Fixing issue with mistake on help on -fomit-frame-pointer. Fixing issue with assign_lvar_offsets that skipped some offsets already assigned by extended assembly and caused failure on some cpython tests. Adding --eh-frame-hdr needed by glibc's backtrace. Disabling tail call optimization when volatile local variable is found. Reporting commit 4f4c864c3f6872d3c7c53c66fe2db1bf8143bb02 from slimcc (about variable scope instead of flat list). 
+1.0.25    Adding promotion to int on variadic argument. Fixing issue with mistake on help on -fomit-frame-pointer. Fixing issue with assign_lvar_offsets that skipped some offsets already assigned by extended assembly and caused failure on some cpython tests. Adding --eh-frame-hdr needed by glibc's backtrace. Disabling tail call optimization when volatile local variable is found. Reporting commit 4f4c864c3f6872d3c7c53c66fe2db1bf8143bb02 from slimcc (about variable scope instead of flat list). Fixing ISS-209 extended assembly issue found during openssh-portable compile.
 
 
 
