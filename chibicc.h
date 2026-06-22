@@ -988,6 +988,27 @@ typedef enum
   ND_PCMPESTRIO128,
   ND_PCMPESTRIS128,
   ND_PCMPESTRIZ128,
+  ND_PCLMULQDQ128,
+  ND_DPPS256,
+  ND_SHUFPD256,
+  ND_SHUFPS256,
+  ND_CMPPD,
+  ND_CMPPS,
+  ND_CMPPD256,
+  ND_CMPPS256,
+  ND_CMPSD,
+  ND_CMPSS,
+  ND_VEXTRACTF128_PD256,
+  ND_VEXTRACTF128_PS256,
+  ND_VINSERTF128_PD256,
+  ND_VINSERTF128_PS256,
+  ND_VPERM2F128_PD256,
+  ND_VPERM2F128_PS256,
+  ND_VPERM2F128_SI256,
+  ND_VPERMILPD,
+  ND_VPERMILPS,
+  ND_VPERMILPD256,
+  ND_VPERMILPS256,
 } NodeKind;
 
 // AST node type
@@ -1529,7 +1550,23 @@ void gen_pcmpistrm128(Node *node);
 void gen_pcmpistri128(Node *node);
 void gen_pcmpestrm128(Node *node);
 void gen_pcmpestri128(Node *node);
+void gen_pclmulqdq128(Node *node);
 void gen_pcmpi_flag(Node *node, const char *flag_insn, bool is_explicit);
+void gen_dpps256(Node *node);
+void gen_shufpd256(Node *node);
+void gen_shufps256(Node *node);
+void gen_avx_cmp(Node *node, const char *insn, bool is256);
+void gen_vextractf128_pd256(Node *node);
+void gen_vextractf128_ps256(Node *node);
+void gen_vinsertf128_pd256(Node *node);
+void gen_vinsertf128_ps256(Node *node);
+void gen_vperm2f128_si256(Node *node);
+void gen_vperm2f128_pd256(Node *node);
+void gen_vperm2f128_ps256(Node *node);
+void gen_vpermilpd(Node *node);
+void gen_vpermilps(Node *node);
+void gen_vpermilpd256(Node *node);
+void gen_vpermilps256(Node *node);
 void gen_pblendw128(Node *node);
 
 //

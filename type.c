@@ -1287,6 +1287,7 @@ void add_type(Node *node)
   case ND_PMOVZXWQ128:
   case ND_MOVNTDQA:
   case ND_VECSETV2DI:
+  case ND_PCLMULQDQ128:
     node->ty = vector_of(ty_llong, 2);
     return;
   case ND_READEFLAGS_U64:
@@ -1365,6 +1366,36 @@ void add_type(Node *node)
   case ND_PCMPESTRIS128:
   case ND_PCMPESTRIZ128:
     node->ty = ty_int;
+    return;
+  case ND_DPPS256:
+  case ND_SHUFPS256:
+  case ND_CMPPS256:
+  case ND_VINSERTF128_PS256:
+  case ND_VPERM2F128_PS256:
+  case ND_VPERMILPS256:
+    node->ty = vector_of(ty_float, 8);
+    return;
+  case ND_SHUFPD256:
+  case ND_CMPPD256:
+  case ND_VINSERTF128_PD256:
+  case ND_VPERM2F128_PD256:
+  case ND_VPERMILPD256:
+    node->ty = vector_of(ty_double, 4);
+    return;
+  case ND_CMPPS:
+  case ND_CMPSS:
+  case ND_VEXTRACTF128_PS256:
+  case ND_VPERMILPS:
+    node->ty = vector_of(ty_float, 4);
+    return;
+  case ND_CMPPD:
+  case ND_CMPSD:
+  case ND_VEXTRACTF128_PD256:
+  case ND_VPERMILPD:
+    node->ty = vector_of(ty_double, 2);
+    return;
+  case ND_VPERM2F128_SI256:
+    node->ty = vector_of(ty_int, 8);
     return;
   default:
     node->ty = ty_void_ptr;

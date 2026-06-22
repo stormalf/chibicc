@@ -6716,7 +6716,22 @@ static Node *primary(Token **rest, Token *tok)
       equal(tok, "__builtin_ia32_pcmpistric128") ||
       equal(tok, "__builtin_ia32_pcmpistrio128") ||
       equal(tok, "__builtin_ia32_pcmpistris128") ||
-      equal(tok, "__builtin_ia32_pcmpistriz128"))
+      equal(tok, "__builtin_ia32_pcmpistriz128") ||
+      equal(tok, "__builtin_ia32_pclmulqdq128") ||
+      equal(tok, "__builtin_ia32_dpps256") ||
+      equal(tok, "__builtin_ia32_shufpd256") ||
+      equal(tok, "__builtin_ia32_shufps256") ||
+      equal(tok, "__builtin_ia32_cmppd") ||
+      equal(tok, "__builtin_ia32_cmpps") ||
+      equal(tok, "__builtin_ia32_cmppd256") ||
+      equal(tok, "__builtin_ia32_cmpps256") ||
+      equal(tok, "__builtin_ia32_cmpsd") ||
+      equal(tok, "__builtin_ia32_cmpss") ||
+      equal(tok, "__builtin_ia32_vinsertf128_pd256") ||
+      equal(tok, "__builtin_ia32_vinsertf128_ps256") ||
+      equal(tok, "__builtin_ia32_vperm2f128_pd256") ||
+      equal(tok, "__builtin_ia32_vperm2f128_ps256") ||
+      equal(tok, "__builtin_ia32_vperm2f128_si256"))
   {
     int builtin = builtin_enum(tok);
     if (builtin != -1) {
@@ -9360,6 +9375,27 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_pcmpestrio128", ND_PCMPESTRIO128 },
     { "__builtin_ia32_pcmpestris128", ND_PCMPESTRIS128 },
     { "__builtin_ia32_pcmpestriz128", ND_PCMPESTRIZ128 },
+    { "__builtin_ia32_pclmulqdq128", ND_PCLMULQDQ128 },
+    { "__builtin_ia32_dpps256", ND_DPPS256 },
+    { "__builtin_ia32_shufpd256", ND_SHUFPD256 },
+    { "__builtin_ia32_shufps256", ND_SHUFPS256 },
+    { "__builtin_ia32_cmppd", ND_CMPPD },
+    { "__builtin_ia32_cmpps", ND_CMPPS },
+    { "__builtin_ia32_cmppd256", ND_CMPPD256 },
+    { "__builtin_ia32_cmpps256", ND_CMPPS256 },
+    { "__builtin_ia32_cmpsd", ND_CMPSD },
+    { "__builtin_ia32_cmpss", ND_CMPSS },
+    { "__builtin_ia32_vextractf128_pd256", ND_VEXTRACTF128_PD256 },
+    { "__builtin_ia32_vextractf128_ps256", ND_VEXTRACTF128_PS256 },
+    { "__builtin_ia32_vinsertf128_pd256", ND_VINSERTF128_PD256 },
+    { "__builtin_ia32_vinsertf128_ps256", ND_VINSERTF128_PS256 },
+    { "__builtin_ia32_vperm2f128_pd256", ND_VPERM2F128_PD256 },
+    { "__builtin_ia32_vperm2f128_ps256", ND_VPERM2F128_PS256 },
+    { "__builtin_ia32_vperm2f128_si256", ND_VPERM2F128_SI256 },
+    { "__builtin_ia32_vpermilpd", ND_VPERMILPD },
+    { "__builtin_ia32_vpermilps", ND_VPERMILPS },
+    { "__builtin_ia32_vpermilpd256", ND_VPERMILPD256 },
+    { "__builtin_ia32_vpermilps256", ND_VPERMILPS256 },
 };
 
 
