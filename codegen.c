@@ -3511,6 +3511,7 @@ void gen_expr(Node *node)
   case ND_VECEXTV2SI:
    case ND_VECEXTV2DI: 
   case ND_VECEXTV4SI: gen_vec_ext(node); return;
+  case ND_VECEXTV4SF: gen_vec_ext_v4sf(node); return;
   case ND_PACKSSWB:   gen_mmx_binop(node, "packsswb", false); return;
   case ND_PACKSSDW:   gen_mmx_binop(node, "packssdw", false); return;
   case ND_PACKUSWB:   gen_mmx_binop(node, "packuswb", false); return;
@@ -3568,6 +3569,23 @@ void gen_expr(Node *node)
   case ND_VECINITV4HI: gen_vec_init_binop(node, "pinsrw"); return;
   case ND_VECSETV4HI: gen_vec_set_v4hi(node); return;
   case ND_VECSETV8HI: gen_vec_set_v8hi(node); return;
+  case ND_VECSETV16QI: gen_vec_set_v16qi(node); return;
+  case ND_VECSETV4SI: gen_vec_set_v4si(node); return;
+  case ND_VECSETV2DI: gen_vec_set_v2di(node); return;
+  case ND_PCMPISTRM128: gen_pcmpistrm128(node); return;
+  case ND_PCMPISTRI128: gen_pcmpistri128(node); return;
+  case ND_PCMPISTRIA128: gen_pcmpi_flag(node, "seta", false); return;
+  case ND_PCMPISTRIC128: gen_pcmpi_flag(node, "setc", false); return;
+  case ND_PCMPISTRIO128: gen_pcmpi_flag(node, "seto", false); return;
+  case ND_PCMPISTRIS128: gen_pcmpi_flag(node, "sets", false); return;
+  case ND_PCMPISTRIZ128: gen_pcmpi_flag(node, "sete", false); return;
+  case ND_PCMPESTRM128: gen_pcmpestrm128(node); return;
+  case ND_PCMPESTRI128: gen_pcmpestri128(node); return;
+  case ND_PCMPESTRIA128: gen_pcmpi_flag(node, "seta", true); return;
+  case ND_PCMPESTRIC128: gen_pcmpi_flag(node, "setc", true); return;
+  case ND_PCMPESTRIO128: gen_pcmpi_flag(node, "seto", true); return;
+  case ND_PCMPESTRIS128: gen_pcmpi_flag(node, "sets", true); return;
+  case ND_PCMPESTRIZ128: gen_pcmpi_flag(node, "sete", true); return;
   case ND_VECINITV8QI: gen_vec_init_binop(node, "pinsrb"); return;
   case ND_ADDSS: gen_sse_binop1(node, "addss", false);  return;    
   case ND_SUBSS: gen_sse_binop1(node, "subss", false);  return;    
@@ -3806,8 +3824,17 @@ void gen_expr(Node *node)
   case ND_PTESTNZC128: gen_sse_testnzc(node); return;  
   case ND_PBLENDVB128: gen_sse_pblendvb128(node); return;
   case ND_PBLENDVB256: gen_pblendvb256(node); return;
+  case ND_PBLENDW128: gen_pblendw128(node); return;
   case ND_BLENDVPS: gen_sse_blendvpx(node, "blendvps"); return;
   case ND_BLENDVPD: gen_sse_blendvpx(node, "blendvpd"); return;
+  case ND_BLENDPS: gen_blendps(node, false); return;
+  case ND_BLENDPD: gen_blendpd(node, false); return;
+  case ND_BLENDPS256: gen_blendps(node, true); return;
+  case ND_BLENDPD256: gen_blendpd(node, true); return;
+  case ND_DPPS: gen_dpps(node); return;
+  case ND_DPPD: gen_dppd(node); return;
+  case ND_INSERTPS128: gen_insertps128(node); return;
+  case ND_MPSADBW128: gen_mpsadbw128(node); return;
   case ND_PMINSB128: gen_sse_binop3(node, "pminsb", false); return; 
   case ND_PMAXSB128: gen_sse_binop3(node, "pmaxsb", false); return; 
   case ND_PMINUW128: gen_sse_binop3(node, "pminuw", false); return; 
@@ -3927,11 +3954,12 @@ if (node->lhs && (is_vector(node->lhs->ty) || (node->rhs && is_vector(node->rhs-
   gen_vector_op(node);
   return;
 }
-  //managing INT128
-  if (is_int128(node->lhs->ty)) {
-    gen_int128_op(node);
-    return;
-  } 
+
+//managing INT128
+if (is_int128(node->lhs->ty)) {
+  gen_int128_op(node);
+  return;
+} 
 
 switch (node->lhs->ty->kind)
 {

@@ -1700,9 +1700,9 @@ void init_macros(void)
   if (opt_avx) {
     define_macro("__AVX__", "1");
   }
-  // if (opt_optimize) {
-  //   define_macro("__OPTIMIZE__", "1");    
-  // }
+  if (opt_optimize) {
+    define_macro("__OPTIMIZE__", "1");    
+  }
 
   // Define predefined macros
   define_macro("__VERSION__", "\"" VERSION "\"");

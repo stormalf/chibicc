@@ -6686,6 +6686,14 @@ static Node *primary(Token **rest, Token *tok)
   if (equal(tok, "__builtin_ia32_pblendvb128") || 
       equal(tok, "__builtin_ia32_blendvpd") ||
       equal(tok, "__builtin_ia32_blendvps") ||
+      equal(tok, "__builtin_ia32_blendps") ||
+      equal(tok, "__builtin_ia32_blendpd") ||
+      equal(tok, "__builtin_ia32_blendps256") ||
+      equal(tok, "__builtin_ia32_blendpd256") ||
+      equal(tok, "__builtin_ia32_dpps") ||
+      equal(tok, "__builtin_ia32_dppd") ||
+      equal(tok, "__builtin_ia32_insertps128") ||
+      equal(tok, "__builtin_ia32_mpsadbw128") ||
       equal(tok, "__builtin_ia32_pcmpgtb256_mask") ||
       equal(tok, "__builtin_ia32_pblendvb256") ||
       equal(tok, "__builtin_ia32_vinsertf128_si256") ||
@@ -6696,8 +6704,19 @@ static Node *primary(Token **rest, Token *tok)
       equal(tok, "__builtin_ia32_pblendd256") ||
       equal(tok, "__builtin_ia32_roundsd") ||
       equal(tok, "__builtin_ia32_roundss") ||
+      equal(tok, "__builtin_ia32_pblendw128") ||
       equal(tok, "__builtin_ia32_vec_set_v4hi") ||
-      equal(tok, "__builtin_ia32_vec_set_v8hi"))
+      equal(tok, "__builtin_ia32_vec_set_v8hi") ||
+      equal(tok, "__builtin_ia32_vec_set_v16qi") ||
+      equal(tok, "__builtin_ia32_vec_set_v4si") ||
+      equal(tok, "__builtin_ia32_vec_set_v2di") ||
+      equal(tok, "__builtin_ia32_pcmpistrm128") ||
+      equal(tok, "__builtin_ia32_pcmpistri128") ||
+      equal(tok, "__builtin_ia32_pcmpistria128") ||
+      equal(tok, "__builtin_ia32_pcmpistric128") ||
+      equal(tok, "__builtin_ia32_pcmpistrio128") ||
+      equal(tok, "__builtin_ia32_pcmpistris128") ||
+      equal(tok, "__builtin_ia32_pcmpistriz128"))
   {
     int builtin = builtin_enum(tok);
     if (builtin != -1) {
@@ -6718,6 +6737,44 @@ static Node *primary(Token **rest, Token *tok)
       SET_CTX(ctx);       
       *rest = skip(tok, ")", ctx);
     return node;
+    }
+  }
+
+  if (equal(tok, "__builtin_ia32_pcmpestrm128") ||
+      equal(tok, "__builtin_ia32_pcmpestri128") ||
+      equal(tok, "__builtin_ia32_pcmpestria128") ||
+      equal(tok, "__builtin_ia32_pcmpestric128") ||
+      equal(tok, "__builtin_ia32_pcmpestrio128") ||
+      equal(tok, "__builtin_ia32_pcmpestris128") ||
+      equal(tok, "__builtin_ia32_pcmpestriz128"))
+  {
+    int builtin = builtin_enum(tok);
+    if (builtin != -1) {
+      Node *node = new_node(builtin, tok);
+      SET_CTX(ctx);
+      tok = skip(tok->next, "(", ctx);
+      node->builtin_args[0] = assign(&tok, tok);
+      add_type(node->builtin_args[0]);
+      SET_CTX(ctx);
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[1] = assign(&tok, tok);
+      add_type(node->builtin_args[1]);
+      SET_CTX(ctx);
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[2] = assign(&tok, tok);
+      add_type(node->builtin_args[2]);
+      SET_CTX(ctx);
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[3] = assign(&tok, tok);
+      add_type(node->builtin_args[3]);
+      SET_CTX(ctx);
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[4] = assign(&tok, tok);
+      add_type(node->builtin_args[4]);
+      node->builtin_nargs = 5;
+      SET_CTX(ctx);
+      *rest = skip(tok, ")", ctx);
+      return node;
     }
   }
 
@@ -8886,7 +8943,8 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_vec_init_v8qi", ND_VECINITV8QI },    
     { "__builtin_ia32_vec_init_v2si", ND_VECINITV2SI },       
     { "__builtin_ia32_vec_ext_v2si", ND_VECEXTV2SI },       
-    { "__builtin_ia32_vec_ext_v4si", ND_VECEXTV4SI },       
+    { "__builtin_ia32_vec_ext_v4si", ND_VECEXTV4SI },
+    { "__builtin_ia32_vec_ext_v4sf", ND_VECEXTV4SF },       
     { "__builtin_ia32_emms", ND_EMMS },       
     { "__builtin_ia32_sfence", ND_SFENCE },       
     { "__builtin_ia32_lfence", ND_LFENCE },     
@@ -9160,8 +9218,17 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_ptestc128", ND_PTESTC128 },
     { "__builtin_ia32_ptestnzc128", ND_PTESTNZC128 },
     { "__builtin_ia32_pblendvb128", ND_PBLENDVB128 },
+    { "__builtin_ia32_pblendw128", ND_PBLENDW128 },
     { "__builtin_ia32_blendvps", ND_BLENDVPS },
     { "__builtin_ia32_blendvpd", ND_BLENDVPD },
+    { "__builtin_ia32_blendps", ND_BLENDPS },
+    { "__builtin_ia32_blendpd", ND_BLENDPD },
+    { "__builtin_ia32_blendps256", ND_BLENDPS256 },
+    { "__builtin_ia32_blendpd256", ND_BLENDPD256 },
+    { "__builtin_ia32_dpps", ND_DPPS },
+    { "__builtin_ia32_dppd", ND_DPPD },
+    { "__builtin_ia32_insertps128", ND_INSERTPS128 },
+    { "__builtin_ia32_mpsadbw128", ND_MPSADBW128 },
     { "__builtin_ia32_pminsb128", ND_PMINSB128 },
     { "__builtin_ia32_pmaxsb128", ND_PMAXSB128 },
     { "__builtin_ia32_pminuw128", ND_PMINUW128 },
@@ -9276,6 +9343,23 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_vec_ext_v4hi", ND_VECEXTV4HI },
     { "__builtin_ia32_vec_set_v4hi", ND_VECSETV4HI },
     { "__builtin_ia32_vec_set_v8hi", ND_VECSETV8HI },
+    { "__builtin_ia32_vec_set_v16qi", ND_VECSETV16QI },
+    { "__builtin_ia32_vec_set_v4si", ND_VECSETV4SI },
+    { "__builtin_ia32_vec_set_v2di", ND_VECSETV2DI },
+    { "__builtin_ia32_pcmpistrm128", ND_PCMPISTRM128 },
+    { "__builtin_ia32_pcmpistri128", ND_PCMPISTRI128 },
+    { "__builtin_ia32_pcmpistria128", ND_PCMPISTRIA128 },
+    { "__builtin_ia32_pcmpistric128", ND_PCMPISTRIC128 },
+    { "__builtin_ia32_pcmpistrio128", ND_PCMPISTRIO128 },
+    { "__builtin_ia32_pcmpistris128", ND_PCMPISTRIS128 },
+    { "__builtin_ia32_pcmpistriz128", ND_PCMPISTRIZ128 },
+    { "__builtin_ia32_pcmpestrm128", ND_PCMPESTRM128 },
+    { "__builtin_ia32_pcmpestri128", ND_PCMPESTRI128 },
+    { "__builtin_ia32_pcmpestria128", ND_PCMPESTRIA128 },
+    { "__builtin_ia32_pcmpestric128", ND_PCMPESTRIC128 },
+    { "__builtin_ia32_pcmpestrio128", ND_PCMPESTRIO128 },
+    { "__builtin_ia32_pcmpestris128", ND_PCMPESTRIS128 },
+    { "__builtin_ia32_pcmpestriz128", ND_PCMPESTRIZ128 },
 };
 
 

@@ -647,6 +647,7 @@ typedef enum
   ND_ROUNDSS,
   ND_ROUNDPS,
   ND_VECEXTV4SI,
+  ND_VECEXTV4SF,
   ND_ADDSD,
   ND_SUBSD,
   ND_MULSD,
@@ -830,8 +831,17 @@ typedef enum
   ND_PTESTC128,
   ND_PTESTNZC128,
   ND_PBLENDVB128,
+  ND_PBLENDW128,
   ND_BLENDVPS,
   ND_BLENDVPD,
+  ND_BLENDPS,
+  ND_BLENDPD,
+  ND_BLENDPS256,
+  ND_BLENDPD256,
+  ND_DPPS,
+  ND_DPPD,
+  ND_INSERTPS128,
+  ND_MPSADBW128,
   ND_PMINSB128,
   ND_PMAXSB128,
   ND_PMINUW128,
@@ -961,6 +971,23 @@ typedef enum
   ND_VECEXTV4HI,
   ND_VECSETV4HI,
   ND_VECSETV8HI,
+  ND_VECSETV16QI,
+  ND_VECSETV4SI,
+  ND_VECSETV2DI,
+  ND_PCMPISTRM128,
+  ND_PCMPISTRI128,
+  ND_PCMPISTRIA128,
+  ND_PCMPISTRIC128,
+  ND_PCMPISTRIO128,
+  ND_PCMPISTRIS128,
+  ND_PCMPISTRIZ128,
+  ND_PCMPESTRM128,
+  ND_PCMPESTRI128,
+  ND_PCMPESTRIA128,
+  ND_PCMPESTRIC128,
+  ND_PCMPESTRIO128,
+  ND_PCMPESTRIS128,
+  ND_PCMPESTRIZ128,
 } NodeKind;
 
 // AST node type
@@ -1443,8 +1470,12 @@ void gen_signbit(Node *node);
 void gen_isunordered(Node *node);
 void gen_vec_init_v2si(Node *node);
 void gen_vec_ext(Node *node);
+void gen_vec_ext_v4sf(Node *node);
 void gen_vec_set_v4hi(Node *node);
 void gen_vec_set_v8hi(Node *node);
+void gen_vec_set_v16qi(Node *node);
+void gen_vec_set_v4si(Node *node);
+void gen_vec_set_v2di(Node *node);
 void gen_psubusb256(Node *node);
 void gen_vec_init_binop(Node *node, const char *insn);
 void gen_pshufd(Node *node);
@@ -1488,6 +1519,18 @@ void gen_mmx_binop1(Node *node, const char *insn);
 void gen_sse_testz(Node *node);
 void gen_sse_testc(Node *node);
 void gen_sse_testnzc(Node *node);
+void gen_blendps(Node *node, bool is256);
+void gen_blendpd(Node *node, bool is256);
+void gen_dpps(Node *node);
+void gen_dppd(Node *node);
+void gen_insertps128(Node *node);
+void gen_mpsadbw128(Node *node);
+void gen_pcmpistrm128(Node *node);
+void gen_pcmpistri128(Node *node);
+void gen_pcmpestrm128(Node *node);
+void gen_pcmpestri128(Node *node);
+void gen_pcmpi_flag(Node *node, const char *flag_insn, bool is_explicit);
+void gen_pblendw128(Node *node);
 
 //
 // unicode.c
