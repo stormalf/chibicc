@@ -17,5 +17,6 @@ int main(void) {
         printf("%02x ", p[i]);
     puts("");
 
-    _mm_empty();
+    
+    return 0;
 }
