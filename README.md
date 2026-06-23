@@ -87,11 +87,12 @@ or
      -msse2 enabling sse2 support 
      -mno-sse2 disabling sse2 support 
      -msse3 enabling sse3 support 
-     -msse3 enabling supplemental sse3 support (but chibicc managed it as -msse3)
+     -mssse3 enabling supplemental sse3 support (but chibicc managed it as -msse3)
      -mno-sse3 disabling sse3 support 
      -msse4 enabling sse4 support 
      -mno-sse4 disabling sse4 support 
      -msse4.1 enabling sse4.1 support 
+     -msse4.2 enabling sse4.2 support
      -mcrc32 enabling crc32 instruction support 
      -nostdlib  Do not use the standard system startup files or libraries when linking 
      -nostdinc Do not use the standard system header files when compiling 
@@ -105,6 +106,7 @@ or
      -Werror any warning is sent as an error and stops the compile 
      -fomit-frame-pointer omits frame pointer and uses rsp-relative addressing. Minimal stack usage 
      -f-no-omit-frame-pointer always keeps frame pointer (default) 
+     -fcf-protection enable control flow protection (CET IBT + SHSTK) 
      -g enabling debug symbols 
      -O0 disabling optimization 
      -O or -O1 enabling optimization level 1 

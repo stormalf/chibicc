@@ -66,6 +66,7 @@ static bool opt_nostdinc;
 static bool opt_nostdlib;
 static bool opt_v;
 static bool opt_fstack_protector;
+bool opt_cf_protection;
 static bool no_omit_frame_pointer_arg;
 
 static StringArray ld_extra_args;
@@ -925,6 +926,11 @@ static void parse_args(int argc, char **argv)
 
     if (!strcmp(argv[i], "-fstack-protector") || !strcmp(argv[i], "-fstack-protector-strong") || !strcmp(argv[i], "-fstack-clash-protection") ) {
       opt_fstack_protector = true;
+      continue;
+    }
+
+    if (!strcmp(argv[i], "-fcf-protection")) {
+      opt_cf_protection = true;
       continue;
     }
 

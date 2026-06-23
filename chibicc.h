@@ -119,12 +119,13 @@ this " PRODUCT " supports vector, some extended assembly and int128 \n"
 -mno-sse disabling sse support \n \
 -msse2 enabling sse2 support \n \
 -mno-sse2 disabling sse2 support \n \
--msse3 enabling sse3 support \n\
--msse3 enabling supplemental sse3 support (but chibicc managed it as -msse3) \n \
+-msse3 enabling sse3 support \n \
+-mssse3 enabling supplemental sse3 support (but chibicc managed it as -msse3) \n \
 -mno-sse3 disabling sse3 support \n \
 -msse4 enabling sse4 support \n \
 -mno-sse4 disabling sse4 support \n \
 -msse4.1 enabling sse4.1 support \n \
+-msse4.2 enabling sse4.2 support \n \
 -mcrc32 enabling crc32 instruction support \n \
 -nostdlib  Do not use the standard system startup files or libraries when linking \n \
 -nostdinc Do not use the standard system header files when compiling \n \
@@ -138,6 +139,7 @@ this " PRODUCT " supports vector, some extended assembly and int128 \n"
 -Werror any warning is sent as an error and stops the compile \n \
 -fomit-frame-pointer omits frame pointer and uses rsp-relative addressing. Minimal stack usage \n \
 -f-no-omit-frame-pointer always keeps frame pointer (default) \n \
+-fcf-protection enable control flow protection (CET IBT + SHSTK) \n \
 -g enabling debug symbols \n \
 -O0 disabling optimization \n \
 -O or -O1 enabling optimization level 1 \n \

@@ -26,6 +26,7 @@ bool dont_reuse_stack = false;
 extern bool opt_omit_frame_pointer;
 extern bool opt_fbuiltin;
 extern bool opt_optimize_level3;
+extern bool opt_cf_protection;
 
 // Forward declarations for scope tree walkers
 static int scope_lvar_align(Scope *sc, int align);
@@ -49,6 +50,7 @@ int get_align(Obj *var) {
 static int cmp_ctor(const void *a, const void *b);
 static void emit_constructors(void);
 static void emit_destructors(void); 
+static void emit_gnu_property_note(void);
 
 
 static int last_loc_line = -1;
@@ -4750,6 +4752,9 @@ static void emit_text(Obj *prog)
     bool use_rbx = (fn->stack_align > 16);
     lvar_ptr = use_rbx ? "%rbx" : "%rbp";
     
+    // CET IBT: endbr64 must be first instruction
+    if (opt_cf_protection)
+      println("  endbr64");
 
     // Prologue
     long reserved_pos = ftell(output_file);
@@ -4759,19 +4764,19 @@ static void emit_text(Obj *prog)
     if (!is_omit_fp(fn)) {
       println("  push %%rbp");
       println("  .cfi_def_cfa_offset 16");
-      println("  .cfi_offset %%rbp, -16");    
+      println("  .cfi_offset 6, -16");    
       println("  mov %%rsp, %%rbp");
       println("  .cfi_def_cfa_register %%rbp");  
     }
-  
+   
     if (use_rbx) {
       println("  push %%rbx");
 
       if (is_omit_fp(fn)) {
         println("  .cfi_def_cfa_offset 16");
-        println("  .cfi_offset %%rbx, -16");
+        println("  .cfi_offset 3, -16");
       } else {
-        println("  .cfi_offset %%rbx, -24");
+        println("  .cfi_offset 3, -24");
       }
 
       println("  mov %%rsp, %%rbx");
@@ -5016,11 +5021,35 @@ void codegen(Obj *prog, FILE *out)
     println(".L.debug_line0:");
   }
   println("  .section  .note.GNU-stack,\"\",@progbits");
+  emit_gnu_property_note();
+  println("  .ident \"chibicc %s\"", VERSION);
   //print offset for each variable
   if (isDebug)
     print_offset(prog);
 }
 
+
+// Emit .note.gnu.property for CET (IBT + SHSTK)
+static void emit_gnu_property_note(void) {
+  if (!opt_cf_protection)
+    return;
+  println("  .section .note.gnu.property,\"a\"");
+  println("  .align 8");
+  println("  .long 1f - 0f");
+  println("  .long 4f - 1f");
+  println("  .long 5");
+  println("0:");
+  println("  .string \"GNU\"");
+  println("1:");
+  println("  .align 8");
+  println("  .long 0xc0000002");
+  println("  .long 3f - 2f");
+  println("2:");
+  println("  .long 0x3");
+  println("3:");
+  println("  .align 8");
+  println("4:");
+}
 
 //printing offset for each variable in a scope
 static void print_offset_scope(Scope *sc, Obj *fn) {
