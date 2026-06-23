@@ -1705,7 +1705,7 @@ void init_macros(void)
   }
 
   // if (opt_optimize) {
-  //   define_macro("__OPTIMIZE__", "1");    
+  //  define_macro("__OPTIMIZE__", "1");    
   // }
 
   // Define predefined macros
