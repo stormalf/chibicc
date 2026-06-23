@@ -748,10 +748,10 @@ void gen_tzcnt_u16(Node *node) {
 
 void gen_bextr_u32(Node *node) {
   gen_expr(node->lhs);
-  println("  push %%rax");
+  push_tmp();
   gen_expr(node->rhs);
   println("  movl %%eax, %%ecx");
-  println("  pop %%rax");
+  pop_tmp("%rax");
 
   println("  movl %%ecx, %%edx");
   println("  shrl $8, %%edx");
@@ -789,10 +789,10 @@ void gen_bextr_u32(Node *node) {
 
 void gen_bextr_u64(Node *node) {
   gen_expr(node->lhs);
-  println("  push %%rax");
+  push_tmp();
   gen_expr(node->rhs);
   println("  movl %%eax, %%ecx");
-  println("  pop %%rax");
+  pop_tmp("%rax");
 
   println("  movl %%ecx, %%edx");
   println("  shrl $8, %%edx");
@@ -2681,14 +2681,14 @@ void gen_pcmpistri128(Node *node) {
 void gen_pcmpestrm128(Node *node) {
   assert(node->builtin_nargs == 5);
   gen_expr(node->builtin_args[1]);
-  println("  push %%rax");
+  push_tmp();
   gen_expr(node->builtin_args[3]);
   println("  mov %%eax, %%edx");
   gen_expr(node->builtin_args[0]);
   println("  movaps %%xmm0, %%xmm2");
   gen_expr(node->builtin_args[2]);
   println("  movaps %%xmm0, %%xmm1");
-  println("  pop %%rax");
+  pop_tmp("%rax");
   int imm = eval(node->builtin_args[4]);
   if (imm < 0 || imm > 255)
     error_tok(node->builtin_args[4]->tok, "immediate out of range");
@@ -2698,14 +2698,14 @@ void gen_pcmpestrm128(Node *node) {
 void gen_pcmpestri128(Node *node) {
   assert(node->builtin_nargs == 5);
   gen_expr(node->builtin_args[1]);
-  println("  push %%rax");
+  push_tmp();
   gen_expr(node->builtin_args[3]);
   println("  mov %%eax, %%edx");
   gen_expr(node->builtin_args[0]);
   println("  movaps %%xmm0, %%xmm2");
   gen_expr(node->builtin_args[2]);
   println("  movaps %%xmm0, %%xmm1");
-  println("  pop %%rax");
+  pop_tmp("%rax");
   int imm = eval(node->builtin_args[4]);
   if (imm < 0 || imm > 255)
     error_tok(node->builtin_args[4]->tok, "immediate out of range");
@@ -2717,14 +2717,14 @@ void gen_pcmpi_flag(Node *node, const char *flag_insn, bool is_explicit) {
   if (is_explicit) {
     assert(node->builtin_nargs == 5);
     gen_expr(node->builtin_args[1]);
-    println("  push %%rax");
+    push_tmp();
     gen_expr(node->builtin_args[3]);
     println("  mov %%eax, %%edx");
     gen_expr(node->builtin_args[0]);
     println("  movaps %%xmm0, %%xmm2");
     gen_expr(node->builtin_args[2]);
     println("  movaps %%xmm0, %%xmm1");
-    println("  pop %%rax");
+    pop_tmp("%rax");
     int imm = eval(node->builtin_args[4]);
     if (imm < 0 || imm > 255)
       error_tok(node->builtin_args[4]->tok, "immediate out of range");
