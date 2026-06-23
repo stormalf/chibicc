@@ -6664,7 +6664,7 @@ static Node *primary(Token **rest, Token *tok)
     equal(tok, "__builtin_ia32_bsrsi") || equal(tok, "__builtin_ia32_rdpmc") ||
     equal(tok, "__builtin_ia32_bsrdi") || equal(tok, "__builtin_ia32_rdtscp") ||
     equal(tok, "__builtin_ia32_writeeflags_u64") || equal(tok, "__builtin_ia32_incsspq") ||
-    equal(tok, "__builtin_ia32_rstorssp") || equal(tok, "__builtin_ia32_clrssbsy") || 
+    equal(tok, "__builtin_ia32_xabort") || equal(tok, "__builtin_ia32_rstorssp") || equal(tok, "__builtin_ia32_clrssbsy") || 
     equal(tok, "__builtin_ia32_rsqrtss") || equal(tok, "__builtin_ia32_tzcnt_u16") || 
     equal(tok, "__builtin_ia32_si256_si") || equal(tok, "__builtin_ia32_si_si256") ||
     equal(tok, "__builtin_ia32_pd_pd256") || equal(tok, "__builtin_ia32_ps_ps256") ||
@@ -6694,6 +6694,7 @@ static Node *primary(Token **rest, Token *tok)
       equal(tok, "__builtin_ia32_dppd") ||
       equal(tok, "__builtin_ia32_insertps128") ||
       equal(tok, "__builtin_ia32_mpsadbw128") ||
+      equal(tok, "__builtin_ia32_mpsadbw256") ||
       equal(tok, "__builtin_ia32_pcmpgtb256_mask") ||
       equal(tok, "__builtin_ia32_pblendvb256") ||
       equal(tok, "__builtin_ia32_vinsertf128_si256") ||
@@ -6731,7 +6732,19 @@ static Node *primary(Token **rest, Token *tok)
       equal(tok, "__builtin_ia32_vinsertf128_ps256") ||
       equal(tok, "__builtin_ia32_vperm2f128_pd256") ||
       equal(tok, "__builtin_ia32_vperm2f128_ps256") ||
-      equal(tok, "__builtin_ia32_vperm2f128_si256"))
+      equal(tok, "__builtin_ia32_vperm2f128_si256") ||
+      equal(tok, "__builtin_ia32_vpclmulqdq_v4di") ||
+      equal(tok, "__builtin_ia32_vpclmulqdq_v8di") ||
+      equal(tok, "__builtin_ia32_rcp28sd_round") ||
+      equal(tok, "__builtin_ia32_rcp28ss_round") ||
+      equal(tok, "__builtin_ia32_rsqrt28sd_round") ||
+      equal(tok, "__builtin_ia32_rsqrt28ss_round") ||
+      equal(tok, "__builtin_ia32_vpshrd_v32hi") ||
+      equal(tok, "__builtin_ia32_vpshrd_v16si") ||
+      equal(tok, "__builtin_ia32_vpshrd_v8di") ||
+      equal(tok, "__builtin_ia32_vpshld_v32hi") ||
+      equal(tok, "__builtin_ia32_vpshld_v16si") ||
+      equal(tok, "__builtin_ia32_vpshld_v8di"))
   {
     int builtin = builtin_enum(tok);
     if (builtin != -1) {
@@ -6755,13 +6768,58 @@ static Node *primary(Token **rest, Token *tok)
     }
   }
 
+  if (equal(tok, "__builtin_ia32_exp2pd_mask") ||
+      equal(tok, "__builtin_ia32_exp2ps_mask") ||
+      equal(tok, "__builtin_ia32_rcp28pd_mask") ||
+      equal(tok, "__builtin_ia32_rcp28ps_mask") ||
+      equal(tok, "__builtin_ia32_rsqrt28pd_mask") ||
+      equal(tok, "__builtin_ia32_rsqrt28ps_mask"))
+  {
+    int builtin = builtin_enum(tok);
+    if (builtin != -1) {
+      Node *node = new_node(builtin, tok);
+      SET_CTX(ctx);
+      tok = skip(tok->next, "(", ctx);
+      node->builtin_args[0] = assign(&tok, tok);
+      add_type(node->builtin_args[0]);
+      SET_CTX(ctx);
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[1] = assign(&tok, tok);
+      add_type(node->builtin_args[1]);
+      SET_CTX(ctx);
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[2] = assign(&tok, tok);
+      add_type(node->builtin_args[2]);
+      SET_CTX(ctx);
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[3] = assign(&tok, tok);
+      add_type(node->builtin_args[3]);
+      node->builtin_nargs = 4;
+      SET_CTX(ctx);
+      *rest = skip(tok, ")", ctx);
+      return node;
+    }
+  }
+
   if (equal(tok, "__builtin_ia32_pcmpestrm128") ||
       equal(tok, "__builtin_ia32_pcmpestri128") ||
       equal(tok, "__builtin_ia32_pcmpestria128") ||
       equal(tok, "__builtin_ia32_pcmpestric128") ||
       equal(tok, "__builtin_ia32_pcmpestrio128") ||
       equal(tok, "__builtin_ia32_pcmpestris128") ||
-      equal(tok, "__builtin_ia32_pcmpestriz128"))
+      equal(tok, "__builtin_ia32_pcmpestriz128") ||
+      equal(tok, "__builtin_ia32_gatherpfdpd") ||
+      equal(tok, "__builtin_ia32_gatherpfdps") ||
+      equal(tok, "__builtin_ia32_gatherpfqpd") ||
+      equal(tok, "__builtin_ia32_gatherpfqps") ||
+      equal(tok, "__builtin_ia32_scatterpfdpd") ||
+      equal(tok, "__builtin_ia32_scatterpfdps") ||
+      equal(tok, "__builtin_ia32_scatterpfqpd") ||
+      equal(tok, "__builtin_ia32_scatterpfqps") ||
+      equal(tok, "__builtin_ia32_vpshrd_v16si_mask") ||
+      equal(tok, "__builtin_ia32_vpshrd_v8di_mask") ||
+      equal(tok, "__builtin_ia32_vpshld_v16si_mask") ||
+      equal(tok, "__builtin_ia32_vpshld_v8di_mask"))
   {
     int builtin = builtin_enum(tok);
     if (builtin != -1) {
@@ -9244,6 +9302,7 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_dppd", ND_DPPD },
     { "__builtin_ia32_insertps128", ND_INSERTPS128 },
     { "__builtin_ia32_mpsadbw128", ND_MPSADBW128 },
+    { "__builtin_ia32_mpsadbw256", ND_MPSADBW256 },
     { "__builtin_ia32_pminsb128", ND_PMINSB128 },
     { "__builtin_ia32_pmaxsb128", ND_PMAXSB128 },
     { "__builtin_ia32_pminuw128", ND_PMINUW128 },
@@ -9396,6 +9455,37 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_vpermilps", ND_VPERMILPS },
     { "__builtin_ia32_vpermilpd256", ND_VPERMILPD256 },
     { "__builtin_ia32_vpermilps256", ND_VPERMILPS256 },
+    { "__builtin_ia32_exp2pd_mask", ND_EXP2PD_MASK },
+    { "__builtin_ia32_exp2ps_mask", ND_EXP2PS_MASK },
+    { "__builtin_ia32_rcp28pd_mask", ND_RCP28PD_MASK },
+    { "__builtin_ia32_rcp28ps_mask", ND_RCP28PS_MASK },
+    { "__builtin_ia32_rcp28sd_round", ND_RCP28SD_ROUND },
+    { "__builtin_ia32_rcp28ss_round", ND_RCP28SS_ROUND },
+    { "__builtin_ia32_rsqrt28pd_mask", ND_RSQRT28PD_MASK },
+    { "__builtin_ia32_rsqrt28ps_mask", ND_RSQRT28PS_MASK },
+    { "__builtin_ia32_rsqrt28sd_round", ND_RSQRT28SD_ROUND },
+    { "__builtin_ia32_rsqrt28ss_round", ND_RSQRT28SS_ROUND },
+    { "__builtin_ia32_vpshrd_v32hi", ND_VPSHRD_V32HI },
+    { "__builtin_ia32_vpshrd_v16si", ND_VPSHRD_V16SI },
+    { "__builtin_ia32_vpshrd_v8di", ND_VPSHRD_V8DI },
+    { "__builtin_ia32_vpshrd_v16si_mask", ND_VPSHRD_V16SI_MASK },
+    { "__builtin_ia32_vpshrd_v8di_mask", ND_VPSHRD_V8DI_MASK },
+    { "__builtin_ia32_vpshld_v32hi", ND_VPSHLD_V32HI },
+    { "__builtin_ia32_vpshld_v16si", ND_VPSHLD_V16SI },
+    { "__builtin_ia32_vpshld_v8di", ND_VPSHLD_V8DI },
+    { "__builtin_ia32_vpshld_v16si_mask", ND_VPSHLD_V16SI_MASK },
+    { "__builtin_ia32_vpshld_v8di_mask", ND_VPSHLD_V8DI_MASK },
+    { "__builtin_ia32_xabort", ND_XABORT },
+    { "__builtin_ia32_vpclmulqdq_v4di", ND_VPCLMULQDQ_V4DI },
+    { "__builtin_ia32_vpclmulqdq_v8di", ND_VPCLMULQDQ_V8DI },
+    { "__builtin_ia32_gatherpfdpd", ND_GATHERPFDPD },
+    { "__builtin_ia32_gatherpfdps", ND_GATHERPFDPS },
+    { "__builtin_ia32_gatherpfqpd", ND_GATHERPFQPD },
+    { "__builtin_ia32_gatherpfqps", ND_GATHERPFQPS },
+    { "__builtin_ia32_scatterpfdpd", ND_SCATTERPFDPD },
+    { "__builtin_ia32_scatterpfdps", ND_SCATTERPFDPS },
+    { "__builtin_ia32_scatterpfqpd", ND_SCATTERPFQPD },
+    { "__builtin_ia32_scatterpfqps", ND_SCATTERPFQPS },
 };
 
 

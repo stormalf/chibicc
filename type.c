@@ -1102,6 +1102,9 @@ void add_type(Node *node)
   case ND_PSHUFLW:
     node->ty = vector_of(ty_short, 8);
     return;
+  case ND_MPSADBW256:
+    node->ty = vector_of(ty_short, 16);
+    return;
   case ND_PUNPCKHDQ128:
   case ND_PUNPCKHQDQ128:
   case ND_PUNPCKLDQ128:
@@ -1353,6 +1356,15 @@ void add_type(Node *node)
   case ND_PCMPESTRM128:
     node->ty = vector_of(ty_char, 16);
     return;
+  case ND_XABORT:
+    node->ty = ty_void;
+    return;
+  case ND_VPCLMULQDQ_V4DI:
+    node->ty = vector_of(ty_long, 4);
+    return;
+  case ND_VPCLMULQDQ_V8DI:
+    node->ty = vector_of(ty_long, 8);
+    return;
   case ND_PCMPISTRI128:
   case ND_PCMPESTRI128:
   case ND_PCMPISTRIA128:
@@ -1383,7 +1395,6 @@ void add_type(Node *node)
     node->ty = vector_of(ty_double, 4);
     return;
   case ND_CMPPS:
-  case ND_CMPSS:
   case ND_VEXTRACTF128_PS256:
   case ND_VPERMILPS:
     node->ty = vector_of(ty_float, 4);
@@ -1392,7 +1403,50 @@ void add_type(Node *node)
   case ND_CMPSD:
   case ND_VEXTRACTF128_PD256:
   case ND_VPERMILPD:
+  case ND_RCP28SD_ROUND:
+  case ND_RSQRT28SD_ROUND:
     node->ty = vector_of(ty_double, 2);
+    return;
+  case ND_CMPSS:
+  case ND_RCP28SS_ROUND:
+  case ND_RSQRT28SS_ROUND:
+    node->ty = vector_of(ty_float, 4);
+    return;
+  case ND_EXP2PD_MASK:
+  case ND_RCP28PD_MASK:
+  case ND_RSQRT28PD_MASK:
+    node->ty = vector_of(ty_double, 8);
+    return;
+  case ND_EXP2PS_MASK:
+  case ND_RCP28PS_MASK:
+  case ND_RSQRT28PS_MASK:
+    node->ty = vector_of(ty_float, 16);
+    return;
+  case ND_VPSHRD_V32HI:
+  case ND_VPSHLD_V32HI:
+    node->ty = vector_of(ty_short, 32);
+    return;
+  case ND_VPSHRD_V16SI:
+  case ND_VPSHLD_V16SI:
+  case ND_VPSHRD_V16SI_MASK:
+  case ND_VPSHLD_V16SI_MASK:
+    node->ty = vector_of(ty_int, 16);
+    return;
+  case ND_VPSHRD_V8DI:
+  case ND_VPSHLD_V8DI:
+  case ND_VPSHRD_V8DI_MASK:
+  case ND_VPSHLD_V8DI_MASK:
+    node->ty = vector_of(ty_long, 8);
+    return;
+  case ND_GATHERPFDPD:
+  case ND_GATHERPFDPS:
+  case ND_GATHERPFQPD:
+  case ND_GATHERPFQPS:
+  case ND_SCATTERPFDPD:
+  case ND_SCATTERPFDPS:
+  case ND_SCATTERPFQPD:
+  case ND_SCATTERPFQPS:
+    node->ty = ty_void;
     return;
   case ND_VPERM2F128_SI256:
     node->ty = vector_of(ty_int, 8);

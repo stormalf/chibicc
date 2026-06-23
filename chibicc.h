@@ -842,6 +842,7 @@ typedef enum
   ND_DPPD,
   ND_INSERTPS128,
   ND_MPSADBW128,
+  ND_MPSADBW256,
   ND_PMINSB128,
   ND_PMAXSB128,
   ND_PMINUW128,
@@ -1009,6 +1010,37 @@ typedef enum
   ND_VPERMILPS,
   ND_VPERMILPD256,
   ND_VPERMILPS256,
+  ND_EXP2PD_MASK,
+  ND_EXP2PS_MASK,
+  ND_RCP28PD_MASK,
+  ND_RCP28PS_MASK,
+  ND_RCP28SD_ROUND,
+  ND_RCP28SS_ROUND,
+  ND_RSQRT28PD_MASK,
+  ND_RSQRT28PS_MASK,
+  ND_RSQRT28SD_ROUND,
+  ND_RSQRT28SS_ROUND,
+  ND_GATHERPFDPD,
+  ND_GATHERPFDPS,
+  ND_GATHERPFQPD,
+  ND_GATHERPFQPS,
+  ND_SCATTERPFDPD,
+  ND_SCATTERPFDPS,
+  ND_SCATTERPFQPD,
+  ND_SCATTERPFQPS,
+  ND_VPSHLD_V32HI,
+  ND_VPSHLD_V16SI,
+  ND_VPSHLD_V8DI,
+  ND_VPSHLD_V16SI_MASK,
+  ND_VPSHLD_V8DI_MASK,
+  ND_VPSHRD_V32HI,
+  ND_VPSHRD_V16SI,
+  ND_VPSHRD_V8DI,
+  ND_VPSHRD_V16SI_MASK,
+  ND_VPSHRD_V8DI_MASK,
+  ND_XABORT,
+  ND_VPCLMULQDQ_V4DI,
+  ND_VPCLMULQDQ_V8DI,
 } NodeKind;
 
 // AST node type
@@ -1546,6 +1578,7 @@ void gen_dpps(Node *node);
 void gen_dppd(Node *node);
 void gen_insertps128(Node *node);
 void gen_mpsadbw128(Node *node);
+void gen_mpsadbw256(Node *node);
 void gen_pcmpistrm128(Node *node);
 void gen_pcmpistri128(Node *node);
 void gen_pcmpestrm128(Node *node);
@@ -1567,6 +1600,12 @@ void gen_vpermilpd(Node *node);
 void gen_vpermilps(Node *node);
 void gen_vpermilpd256(Node *node);
 void gen_vpermilps256(Node *node);
+void gen_xabort(Node *node);
+void gen_vpclmulqdq_v4di(Node *node);
+void gen_avx512er_first(Node *node);
+void gen_avx512pf_void(Node *node);
+void gen_vbmi2_3(Node *node);
+void gen_vbmi2_5(Node *node);
 void gen_pblendw128(Node *node);
 
 //

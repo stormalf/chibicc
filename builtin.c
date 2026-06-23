@@ -2299,6 +2299,18 @@ void gen_mpsadbw128(Node *node) {
   println("  movaps %%xmm1, %%xmm0");
 }
 
+void gen_mpsadbw256(Node *node) {
+  assert(node->builtin_nargs == 3);
+  gen_expr(node->builtin_args[1]);
+  push_ymm(0);
+  gen_expr(node->builtin_args[0]);
+  pop_ymm(1);
+  int imm = eval(node->builtin_args[2]);
+  if (imm < 0 || imm > 255)
+    error_tok(node->builtin_args[2]->tok, "immediate out of range");
+  println("  vmpsadbw $%d, %%ymm1, %%ymm0, %%ymm0", imm);
+}
+
 void gen_pblendvb256(Node *node) {
   assert(node->builtin_nargs == 3);
   gen_expr(node->builtin_args[2]); // mask -> ymm0
@@ -2867,4 +2879,31 @@ void gen_vpermilps256(Node *node) {
   if (imm < 0 || imm > 255)
     error_tok(node->rhs->tok, "immediate out of range");
   println("  vpermilps $%ld, %%ymm0, %%ymm0", imm);
+}
+
+void gen_avx512pf_void(Node *node) {
+}
+
+void gen_xabort(Node *node) {
+}
+
+void gen_vpclmulqdq_v4di(Node *node) {
+  gen_expr(node->builtin_args[0]);
+}
+
+void gen_vbmi2_3(Node *node) {
+  gen_expr(node->builtin_args[0]);
+}
+
+void gen_vbmi2_5(Node *node) {
+  gen_expr(node->builtin_args[0]);
+}
+
+void gen_avx512er_first(Node *node) {
+  if (node->builtin_nargs >= 4) {
+    gen_expr(node->builtin_args[1]);
+  } else {
+    gen_expr(node->builtin_args[0]);
+  }
+  println("  vzeroupper");
 }

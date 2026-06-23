@@ -3607,6 +3607,41 @@ void gen_expr(Node *node)
   case ND_VPERMILPS: gen_vpermilps(node); return;
   case ND_VPERMILPD256: gen_vpermilpd256(node); return;
   case ND_VPERMILPS256: gen_vpermilps256(node); return;
+  case ND_GATHERPFDPD:
+  case ND_GATHERPFDPS:
+  case ND_GATHERPFQPD:
+  case ND_GATHERPFQPS:
+  case ND_SCATTERPFDPD:
+  case ND_SCATTERPFDPS:
+  case ND_SCATTERPFQPD:
+  case ND_SCATTERPFQPS:
+    gen_avx512pf_void(node); return;
+  case ND_EXP2PD_MASK:
+  case ND_EXP2PS_MASK:
+  case ND_RCP28PD_MASK:
+  case ND_RCP28PS_MASK:
+  case ND_RCP28SD_ROUND:
+  case ND_RCP28SS_ROUND:
+  case ND_RSQRT28PD_MASK:
+  case ND_RSQRT28PS_MASK:
+  case ND_RSQRT28SD_ROUND:
+  case ND_RSQRT28SS_ROUND:
+    gen_avx512er_first(node); return;
+  case ND_XABORT: gen_xabort(node); return;
+  case ND_VPCLMULQDQ_V4DI: gen_vpclmulqdq_v4di(node); return;
+  case ND_VPCLMULQDQ_V8DI: gen_vpclmulqdq_v4di(node); return;
+  case ND_VPSHRD_V32HI:
+  case ND_VPSHRD_V16SI:
+  case ND_VPSHRD_V8DI:
+  case ND_VPSHLD_V32HI:
+  case ND_VPSHLD_V16SI:
+  case ND_VPSHLD_V8DI:
+    gen_vbmi2_3(node); return;
+  case ND_VPSHRD_V16SI_MASK:
+  case ND_VPSHRD_V8DI_MASK:
+  case ND_VPSHLD_V16SI_MASK:
+  case ND_VPSHLD_V8DI_MASK:
+    gen_vbmi2_5(node); return;
   case ND_VECINITV8QI: gen_vec_init_binop(node, "pinsrb"); return;
   case ND_ADDSS: gen_sse_binop1(node, "addss", false);  return;    
   case ND_SUBSS: gen_sse_binop1(node, "subss", false);  return;    
@@ -3856,6 +3891,7 @@ void gen_expr(Node *node)
   case ND_DPPD: gen_dppd(node); return;
   case ND_INSERTPS128: gen_insertps128(node); return;
   case ND_MPSADBW128: gen_mpsadbw128(node); return;
+  case ND_MPSADBW256: gen_mpsadbw256(node); return;
   case ND_PMINSB128: gen_sse_binop3(node, "pminsb", false); return; 
   case ND_PMAXSB128: gen_sse_binop3(node, "pmaxsb", false); return; 
   case ND_PMINUW128: gen_sse_binop3(node, "pminuw", false); return; 
