@@ -754,28 +754,73 @@ void gen_bextr_u32(Node *node) {
   println("  pop %%rax");
 
   println("  movl %%ecx, %%edx");
+  println("  shrl $8, %%edx");
   println("  andl $0xff, %%edx");
-
-  println("  shrl $8, %%ecx");
   println("  andl $0xff, %%ecx");
 
-  println("  testl %%ecx, %%ecx");
+  println("  testl %%edx, %%edx");
   println("  je 1f");
 
-  println("  cmpl $32, %%edx");
+  println("  cmpl $32, %%ecx");
   println("  jae 1f");
 
   println("  movl $32, %%esi");
-  println("  subl %%edx, %%esi");
-  println("  cmpl %%esi, %%ecx");
-  println("  cmova %%esi, %%ecx");
+  println("  subl %%ecx, %%esi");
+  println("  cmpl %%esi, %%edx");
+  println("  cmova %%esi, %%edx");
 
   println("  shrl %%cl, %%eax");
 
+  println("  movl %%edx, %%ecx");
+  println("  cmpl $32, %%ecx");
+  println("  jae 3f");
   println("  movl $1, %%esi");
   println("  shll %%cl, %%esi");
   println("  decl %%esi");
   println("  andl %%esi, %%eax");
+  println("  jmp 2f");
+  println("3:");
+  println("  jmp 2f");
+
+  println("1:");
+  println("  xorl %%eax, %%eax");
+  println("2:");
+}
+
+void gen_bextr_u64(Node *node) {
+  gen_expr(node->lhs);
+  println("  push %%rax");
+  gen_expr(node->rhs);
+  println("  movl %%eax, %%ecx");
+  println("  pop %%rax");
+
+  println("  movl %%ecx, %%edx");
+  println("  shrl $8, %%edx");
+  println("  andl $0xff, %%edx");
+  println("  andl $0xff, %%ecx");
+
+  println("  testl %%edx, %%edx");
+  println("  je 1f");
+
+  println("  cmpq $64, %%rcx");
+  println("  jae 1f");
+
+  println("  movq $64, %%rsi");
+  println("  subq %%rcx, %%rsi");
+  println("  cmpq %%rsi, %%rdx");
+  println("  cmova %%rsi, %%rdx");
+
+  println("  shrq %%cl, %%rax");
+
+  println("  movq %%rdx, %%rcx");
+  println("  cmpq $64, %%rcx");
+  println("  jae 3f");
+  println("  movq $1, %%rsi");
+  println("  shlq %%cl, %%rsi");
+  println("  decq %%rsi");
+  println("  andq %%rsi, %%rax");
+  println("  jmp 2f");
+  println("3:");
   println("  jmp 2f");
 
   println("1:");
@@ -2891,12 +2936,76 @@ void gen_vpclmulqdq_v4di(Node *node) {
   gen_expr(node->builtin_args[0]);
 }
 
+static const char *vbmi2_insn(Node *node) {
+  switch (node->kind) {
+    case ND_VPSHRD_V32HI: return "vpshrdw";
+    case ND_VPSHRD_V16SI: return "vpshrdd";
+    case ND_VPSHRD_V8DI:  return "vpshrdq";
+    case ND_VPSHLD_V32HI: return "vpshldw";
+    case ND_VPSHLD_V16SI: return "vpshldd";
+    case ND_VPSHLD_V8DI:  return "vpshldq";
+    case ND_VPSHRD_V16SI_MASK: return "vpshrdd";
+    case ND_VPSHRD_V8DI_MASK:  return "vpshrdq";
+    case ND_VPSHLD_V16SI_MASK: return "vpshldd";
+    case ND_VPSHLD_V8DI_MASK:  return "vpshldq";
+    default: error("not a VBMI2 node kind");
+  }
+}
+
 void gen_vbmi2_3(Node *node) {
+  assert(node->builtin_nargs == 3);
+  Type *ty = node->builtin_args[0]->ty;
+
+  gen_expr(node->builtin_args[1]);
+  push_vec(ty);
   gen_expr(node->builtin_args[0]);
+  pop_vec(ty, 1);
+
+  int64_t imm = eval(node->builtin_args[2]);
+  if (imm < 0 || imm > 255)
+    error_tok(node->builtin_args[2]->tok, "immediate out of range");
+
+  if (ty->size > 32)
+    println("  %s $%ld, %%zmm1, %%zmm0, %%zmm0", vbmi2_insn(node), imm);
+  else
+    println("  %s $%ld, %%ymm1, %%ymm0, %%ymm0", vbmi2_insn(node), imm);
 }
 
 void gen_vbmi2_5(Node *node) {
+  assert(node->builtin_nargs == 5);
+  Type *ty = node->builtin_args[0]->ty;
+
+  // args: [0]=a, [1]=b, [2]=imm, [3]=src(merge), [4]=k(mask)
+  // We need: a in zmm0, b in zmm1, src in zmm2, k in k1
+  gen_expr(node->builtin_args[3]);
+  push_vec(ty);
+
+  gen_expr(node->builtin_args[1]);
+  push_vec(ty);
+
   gen_expr(node->builtin_args[0]);
+
+  pop_vec(ty, 1);
+  pop_vec(ty, 2);
+
+  gen_expr(node->builtin_args[4]);
+  println("  kmovw %%eax, %%k1");
+
+  int64_t imm = eval(node->builtin_args[2]);
+  if (imm < 0 || imm > 255)
+    error_tok(node->builtin_args[2]->tok, "immediate out of range");
+
+  if (ty->size > 32)
+    println("  %s $%ld, %%zmm1, %%zmm0, %%zmm2{%k1}", vbmi2_insn(node), imm);
+  else
+    println("  %s $%ld, %%ymm1, %%ymm0, %%ymm2{%k1}", vbmi2_insn(node), imm);
+
+  if (ty->size > 32)
+    println("  vmovdqa64 %%zmm2, %%zmm0");
+  else if (ty->size > 16)
+    println("  vmovdqa %%ymm2, %%ymm0");
+  else
+    println("  movdqa %%xmm2, %%xmm0");
 }
 
 void gen_avx512er_first(Node *node) {

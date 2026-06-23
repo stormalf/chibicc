@@ -39,6 +39,7 @@ bool opt_optimize_level2 = false;
 bool opt_optimize_level3 = false;
 bool opt_avx2;
 bool opt_avx;
+bool opt_tbm;
 
 static FileType opt_x;
 static StringArray opt_include;
@@ -402,6 +403,11 @@ static void parse_args(int argc, char **argv)
 
     if (!strcmp(argv[i], "-mavx")) {
       opt_avx = true;
+      continue;
+    }
+
+    if (!strcmp(argv[i], "-mtbm")) {
+      opt_tbm = true;
       continue;
     }
 

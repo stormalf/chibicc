@@ -1356,6 +1356,9 @@ void add_type(Node *node)
   case ND_PCMPESTRM128:
     node->ty = vector_of(ty_char, 16);
     return;
+  case ND_BEXTR_U64:
+    node->ty = ty_ulong;
+    return;
   case ND_XABORT:
     node->ty = ty_void;
     return;

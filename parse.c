@@ -9475,6 +9475,8 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_vpshld_v8di", ND_VPSHLD_V8DI },
     { "__builtin_ia32_vpshld_v16si_mask", ND_VPSHLD_V16SI_MASK },
     { "__builtin_ia32_vpshld_v8di_mask", ND_VPSHLD_V8DI_MASK },
+    { "__builtin_ia32_bextri_u32", ND_BEXTR_U32 },
+    { "__builtin_ia32_bextri_u64", ND_BEXTR_U64 },
     { "__builtin_ia32_xabort", ND_XABORT },
     { "__builtin_ia32_vpclmulqdq_v4di", ND_VPCLMULQDQ_V4DI },
     { "__builtin_ia32_vpclmulqdq_v8di", ND_VPCLMULQDQ_V8DI },

@@ -227,7 +227,23 @@ void popv(int reg) {
 }
 
 
+void push_zmm(void) {
+  println("  sub $64, %%rsp");
+  println("  vmovdqu64 %%zmm0, (%%rsp)");
+  depth += 8;
+}
+
+void pop_zmm(int reg) {
+  println("  vmovdqu64 (%%rsp), %%zmm%d", reg);
+  println("  add $64, %%rsp");
+  depth -= 8;
+}
+
 void push_vec(Type *ty) {
+  if (ty->size > 32) {
+    push_zmm();
+    return;
+  }
   if (vec_use_ymm(ty)) {
     println("  sub $32, %%rsp");
     println("  vmovdqu %%ymm0, (%%rsp)");
@@ -238,6 +254,10 @@ void push_vec(Type *ty) {
 }
 
 void pop_vec(Type *ty, int reg) {
+  if (ty->size > 32) {
+    pop_zmm(reg);
+    return;
+  }
   if (vec_use_ymm(ty)) {
     println("  vmovdqu (%%rsp), %%ymm%d", reg);
     println("  add $32, %%rsp");
@@ -846,7 +866,12 @@ void load(Type *ty)
   switch (ty->kind)
   {
   case TY_VECTOR: {
-    if (vec_use_ymm(ty)) {
+    if (ty->size > 32) {
+      if (ty->align < 64)
+        println("  vmovdqu64 (%%rax), %%zmm0");
+      else
+        println("  vmovdqa64 (%%rax), %%zmm0");
+    } else if (vec_use_ymm(ty)) {
       if (ty->align < 32) {
         if (ty->base->kind == TY_FLOAT || ty->base->kind == TY_DOUBLE)
           println("  vmovups (%%rax), %%ymm0");
@@ -932,7 +957,12 @@ static void store(Type *ty)
   switch (ty->kind)
   {
   case TY_VECTOR:
-    if (vec_use_ymm(ty)) {
+    if (ty->size > 32) {
+      if (ty->align < 64)
+        println("  vmovdqu64 %%zmm0, (%%rdi)");
+      else
+        println("  vmovdqa64 %%zmm0, (%%rdi)");
+    } else if (vec_use_ymm(ty)) {
       if (ty->align < 32) {
         if (ty->base->kind == TY_FLOAT || ty->base->kind == TY_DOUBLE)
           println("  vmovups %%ymm0, (%%rdi)");
@@ -1391,7 +1421,9 @@ static void place_stack_args(Node *args)
     println("  movsd %%xmm0, %d(%%rsp)", args->stack_offset);
     break;
   case TY_VECTOR:
-    if (vec_use_ymm(args->ty))
+    if (args->ty->size > 32)
+      println("  vmovdqu64 %%zmm0, %d(%%rsp)", args->stack_offset);
+    else if (vec_use_ymm(args->ty))
       println("  vmovdqu %%ymm0, %d(%%rsp)", args->stack_offset);
     else
       println("  movdqu %%xmm0, %d(%%rsp)", args->stack_offset);
@@ -3973,6 +4005,7 @@ void gen_expr(Node *node)
   case ND_ADDCARRYX_U64: gen_addcarryx_u64(node); return;
   case ND_TZCNT_U16: gen_tzcnt_u16(node); return;
   case ND_BEXTR_U32: gen_bextr_u32(node); return;
+  case ND_BEXTR_U64: gen_bextr_u64(node); return;
   case ND_FPCLASSIFY: gen_fpclassify(node->fpc); return;
   case ND_ISUNORDERED: gen_isunordered(node); return;
   case ND_SIGNBIT:
@@ -4597,6 +4630,9 @@ static void store_fp(int r, int offset, int sz, char *ptr)
   case 32:
     // 256-bit vector arguments/returns use YMM registers in the SysV ABI.
     println("  vmovdqu %%ymm%d, %d(%s)", r, offset, ptr);
+    return;
+  case 64:
+    println("  vmovdqu64 %%zmm%d, %d(%s)", r, offset, ptr);
     return;
   }
   

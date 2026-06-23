@@ -928,6 +928,7 @@ typedef enum
   ND_ADDCARRYX_U64,
   ND_TZCNT_U16,
   ND_BEXTR_U32,
+  ND_BEXTR_U64,
   ND_ADDFETCH,  
   ND_ORFETCH,
   ND_ANDFETCH,
@@ -1449,6 +1450,7 @@ void gen_builtin_nan(Node *node);
 void gen_builtin_nanl(Node *node);
 void gen_tzcnt_u16(Node *node);
 void gen_bextr_u32(Node *node);
+void gen_bextr_u64(Node *node);
 void gen_binop1(Node *node, const char *insn);
 void gen_binop2(Node *node, const char *insn);
 void gen_nothing(Node *node);
@@ -1720,6 +1722,7 @@ extern bool opt_optimize_level3;
 extern bool opt_omit_frame_pointer;
 extern bool opt_avx2;
 extern bool opt_avx;
+extern bool opt_tbm;
 
 //
 // extended_asm.c
