@@ -575,19 +575,18 @@ cpython: git clone https://github.com/python/cpython.git
     - some extended assembly syntax taken in account (only when on macro body they are failing)
     - adding basic support on int128 (probably some operations are still not supported)
     - adding vector management and scalar promotion to vector    
-    - alignment attributes supported (like GNUC level 4)
+    - alignment attributes supported (like GNUC level 5)
     - some basic optimization
     - some basic debug information (dwarf information)
     - adding support on __m256 avx2
+    - adding support __Float32
 
  
 ## TODO
 
-- trying to pass GNUC from 4 to higher compatibility level
+- trying to pass GNUC from 5 to higher compatibility level
 - trying to compile other C projects from source to see what is missing or which bug we have with chibicc.
-- trying to fix issue with postgres tests
 - trying to rewrite extended assembly to be more robust
-- trying to improve chibicc by reporting tests from slimcc to see what is missing/need to be fixed.
 
 
 ## issues and pull requests fixed
