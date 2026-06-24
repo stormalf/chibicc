@@ -4741,6 +4741,7 @@ static void emit_text(Obj *prog)
       println("  .section .text,\"ax\",@progbits");
     println("  .type %s, @function", sym(fn));
 
+    println("  .p2align 4");
     println("  .loc %d %d", fn->file_no, fn->line_no);
     println("%s:", sym(fn));
 

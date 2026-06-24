@@ -1,8 +1,7 @@
-#include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include "test.h"
-
+//this test only pass with gcc when -O3 but still fail with ./chibicc probably we need to add a condition and only if -DOMIT_FRAME_POINTER is passed due the test on alignment!
 __attribute__((noinline))
 static void callee(int a, int b, int c, int d, int e, int f, int g, const char *fmt, char *buf) {
     uint64_t sp;

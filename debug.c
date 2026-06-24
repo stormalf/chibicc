@@ -936,30 +936,22 @@ void emit_debug_info(Obj *prog) {
     
     println("  .byte %d", !fn->is_static);
 
-    /* DWARF register numbers for System V AMD64 ABI argument registers:
-     *   Integer: rdi=5, rsi=4, rdx=1, rcx=2, r8=8, r9=9
-     *   SSE:     xmm0=17, xmm1=18, ..., xmm7=24
-     * DW_OP_regN (0x50+N) is valid at any program point, including
-     * function-entry breakpoints before the prologue saves registers
-     * to the stack.  Register-passed parameters use DW_OP_regN;
-     * stack-passed parameters fall back to DW_OP_fbreg. */
-    static const int gp_dwarf_regs[6] = {5, 4, 1, 2, 8, 9};
+    /* All parameters use DW_OP_fbreg because register parameters are
+     * saved to the stack in the function prologue before any user code
+     * runs (see codegen.c store_gp/store_fp).  GDB's prologue skipping
+     * ensures breakpoints stop after the save, so DW_OP_fbreg is always
+     * correct. */
     int gp = 0, fp = 0;
     for (Obj *var = fn->params; var; var = var->next) {
         Type *ty = var->ty;
-        int reg_idx = -1;
 
         if (!var->pass_by_stack) {
             switch (ty->kind) {
             case TY_FLOAT:
             case TY_DOUBLE:
-                if (fp < 8)
-                    reg_idx = 17 + fp;
                 fp++;
                 break;
             case TY_VECTOR:
-                if (fp < 8)
-                    reg_idx = 17 + fp;
                 fp++;
                 break;
             case TY_INT128:
@@ -981,8 +973,6 @@ void emit_debug_info(Obj *prog) {
                 break;
             }
             default:
-                if (gp < 6)
-                    reg_idx = gp_dwarf_regs[gp];
                 gp++;
                 break;
             }
@@ -999,12 +989,10 @@ void emit_debug_info(Obj *prog) {
         println("  .uleb128 .L.loc_end_%d - .L.loc_start_%d", lbl, lbl);
         println(".L.loc_start_%d:", lbl);
 
-        if (reg_idx >= 0) {
-            println("  .byte %d", 0x50 + reg_idx);
-        } else {
+        // Parameters passed via registers are immediately saved to the
+        // stack in the function prologue, so we can always use DW_OP_fbreg.
         println("  .byte 0x91"); // DW_OP_fbreg
         println("  .sleb128 %d", var->offset);
-        }
 
         println(".L.loc_end_%d:", lbl);
     }
