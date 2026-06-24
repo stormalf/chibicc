@@ -601,6 +601,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     SIGNED = 1 << 17,
     UNSIGNED = 1 << 18,
     INT128 = 1 << 19,
+    FLOAT128 = 1 << 20,
   };
 
   Type *ty = copy_type(ty_int);  
@@ -783,7 +784,9 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     else if (equal(tok, "double"))
       counter += DOUBLE;
     else if (equal(tok, "__int128"))
-      counter += INT128;        
+      counter += INT128;
+    else if (equal(tok, "__float128"))
+      counter += FLOAT128;
     else if (equal(tok, "signed"))
       counter |= SIGNED;
     else if (equal(tok, "unsigned"))
@@ -859,6 +862,9 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
       ty = copy_type(ty_double);
       break;
     case LONG + DOUBLE:    
+      ty = copy_type(ty_ldouble);
+      break;
+    case FLOAT128:
       ty = copy_type(ty_ldouble);
       break;
     default:
@@ -2600,7 +2606,7 @@ static bool is_typename(Token *tok)
         "typedef", "enum", "static", "extern", "_Alignas", "signed", "unsigned",
         "const", "volatile", "auto", "register", "restrict", "__restrict",
         "__restrict__", "_Noreturn", "float", "double", "typeof", "inline", "__inline",
-        "_Thread_local", "__thread", "_Atomic", "_Complex", "__label__", "__typeof", "__int128"};
+        "_Thread_local", "__thread", "_Atomic", "_Complex", "__label__", "__typeof", "__int128", "__float128"};
 
     for (int i = 0; i < sizeof(kw) / sizeof(*kw); i++)
       hashmap_put(&map, kw[i], (void *)1);

@@ -1770,7 +1770,7 @@ void init_macros(void)
   define_macro("_DEFAULT_SOURCE", "1");
   //define_macro("__INTEL_COMPILER", "1");
   //define_macro("__GNUC__", "9");
-  define_macro("__GNUC__", "4");
+  define_macro("__GNUC__", "5");
   define_macro("__GNUC_MINOR__", "1");
   define_macro("__GNUC_PATCHLEVEL__ ", "1");
   //define_macro("HAVE_ATTRIBUTE_PACKED", "1");
