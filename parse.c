@@ -51,6 +51,9 @@ struct VarAttr
   int destructor_priority;
   int constructor_priority;
   bool is_packed;
+  bool is_noinline;
+  bool is_used;
+  bool is_returned_twice;
 };
 
 
@@ -5376,8 +5379,24 @@ static Token *thing_attributes(Token *tok, void *arg) {
 
 
   if (consume(&tok, tok, "noinline") ||
-      consume(&tok, tok, "__noinline__") ||
-      consume(&tok, tok, "noclone") ||
+      consume(&tok, tok, "__noinline__")) {
+    attr->is_noinline = true;
+    return tok;
+  }
+
+  if (consume(&tok, tok, "returns_twice") ||
+      consume(&tok, tok, "__returns_twice__")) {
+    attr->is_returned_twice = true;
+    return tok;
+  }
+
+  if (consume(&tok, tok, "used") ||
+      consume(&tok, tok, "__used__")) {
+    attr->is_used = true;
+    return tok;
+  }
+
+  if (consume(&tok, tok, "noclone") ||
       consume(&tok, tok, "__noclone__") ||
       consume(&tok, tok, "const") ||
       consume(&tok, tok, "__const__") ||
@@ -7832,7 +7851,7 @@ static Node *primary(Token **rest, Token *tok)
 
       char *name = sc->var->name;
      
-      if (is_returned_twice(name)) {
+      if (is_returned_twice(name) || (sc->var && sc->var->is_returned_twice)) {
         dont_reuse_stack = true;
         if (current_fn) {
           current_fn->force_frame_pointer = true;
@@ -8156,6 +8175,11 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
     fn->visibility = tok->pragma_visibility;
   fn->is_aligned |= attr->is_aligned;
   fn->is_noreturn |= attr->is_noreturn;
+  fn->is_noinline |= attr->is_noinline;
+  fn->is_used |= attr->is_used;
+  fn->is_returned_twice |= attr->is_returned_twice;
+  if (fn->is_used)
+    fn->is_root = true;
   fn->is_destructor |= attr->is_destructor;
   fn->is_constructor |=  attr->is_constructor;
   if (attr->destructor_priority > 0)
@@ -8331,6 +8355,9 @@ static Token *global_declaration(Token *tok, Type *basety, VarAttr *attr)
     var->visibility = decl_attr.visibility;
     if (!var->visibility)
       var->visibility = tok->pragma_visibility;
+    var->is_used |= decl_attr.is_used;
+    if (var->is_used)
+      var->is_root = true;
     var->is_aligned = var->is_aligned | decl_attr.is_aligned;
     var->is_externally_visible = decl_attr.is_externally_visible;
     var->is_definition = !decl_attr.is_extern && ty->kind != TY_FUNC;

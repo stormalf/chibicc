@@ -384,6 +384,8 @@ struct Obj
   bool force_frame_pointer;
   Type *vla_ty;
   bool is_returned_twice;
+  bool is_noinline;
+  bool is_used;
 };
 
 // Global variable can be initialized either by a constant expression
