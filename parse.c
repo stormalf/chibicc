@@ -7855,12 +7855,13 @@ static Node *primary(Token **rest, Token *tok)
     {
       Obj *fn = find_func(token_to_string(tok));
 
-      if (!fn && (is_c99_or_later() || opt_implicit)) {
+      if (!fn && !opt_no_implicit && (is_c99_or_later() || opt_implicit)) {
         error_tok(tok, "%s:%d: in %s: implicit declaration of function", __FILE__, __LINE__, __func__);
       }    
 
       if (!fn) {
-        warn_tok(tok, "%s:%d: in %s: implicit declaration of function", __FILE__, __LINE__, __func__);
+        if (!opt_no_implicit)
+          warn_tok(tok, "%s:%d: in %s: implicit declaration of function", __FILE__, __LINE__, __func__);
         Type *ty = func_type(ty_int);        
         ty->is_variadic = true;
         fn = new_gvar(token_to_string(tok), ty);

@@ -129,6 +129,10 @@ this " PRODUCT " supports vector, some extended assembly and int128 \n"
 -mcrc32 enabling crc32 instruction support \n \
 -nostdlib  Do not use the standard system startup files or libraries when linking \n \
 -nostdinc Do not use the standard system header files when compiling \n \
+-ffreestanding  Compile for a freestanding environment; implies no CRT startup files\n \
+-fvisibility=default|hidden|protected  Set default symbol visibility\n \
+-Wimplicit-function-declaration  Warn about implicit function declarations\n \
+-Wno-implicit-function-declaration  Suppress implicit function declaration diagnostics\n \
 -std=c99 generates an error on implicit function declaration (without -std only a warning is emitted) \n \
 -std=c11 generates an error on implicit function declaration (without -std only a warning is emitted) \n \
 -mmmx enabling mmx instructions \n \
@@ -1725,6 +1729,10 @@ extern bool opt_omit_frame_pointer;
 extern bool opt_avx2;
 extern bool opt_avx;
 extern bool opt_tbm;
+extern char *opt_fvisibility;
+extern bool opt_implicit_warn;
+extern bool opt_no_implicit;
+extern bool opt_ffreestanding;
 
 //
 // extended_asm.c

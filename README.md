@@ -96,6 +96,10 @@ or
      -mcrc32 enabling crc32 instruction support 
      -nostdlib  Do not use the standard system startup files or libraries when linking 
      -nostdinc Do not use the standard system header files when compiling 
+     -ffreestanding  Compile for a freestanding environment; implies no CRT startup files
+     -fvisibility=default|hidden|protected  Set default symbol visibility
+     -Wimplicit-function-declaration  Warn about implicit function declarations
+     -Wno-implicit-function-declaration  Suppress implicit function declaration diagnostics
      -std=c99 generates an error on implicit function declaration (without -std only a warning is emitted) 
      -std=c11 generates an error on implicit function declaration (without -std only a warning is emitted) 
      -mmmx enabling mmx instructions 
@@ -274,7 +278,6 @@ List of options ignored :
     "-fcx-limited-range"
     "-funsafe-math-optimizations"
     "-funroll-loops"
-    "-ffreestanding"
     "-funwind-tables"
     "-fno-stack-protector"
     "-fno-strict-aliasing"
@@ -288,8 +291,6 @@ List of options ignored :
     "-pedantic-errors"
     "-nostdinc"
     "-mno-red-zone"
-    "-fvisibility=default"
-    "-fvisibility=hidden"
     "-Wsign-compare"
     "-Wundef"
     "-Wpointer-arith"

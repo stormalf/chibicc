@@ -89,6 +89,7 @@ static int pragma_pack_depth;
 //ISS-142
 extern bool opt_E;
 extern bool opt_fbuiltin;
+extern bool opt_ffreestanding;
 
 extern Context *ctx;
 
@@ -1704,6 +1705,11 @@ void init_macros(void)
     define_macro("__TBM__", "1");
   }
 
+  if (opt_ffreestanding)
+    define_macro("__STDC_HOSTED__", "0");
+  else
+    define_macro("__STDC_HOSTED__", "1");
+
   // if (opt_optimize) {
   //  define_macro("__OPTIMIZE__", "1");    
   // }
@@ -1733,8 +1739,7 @@ void init_macros(void)
   define_macro("__WCHAR_TYPE__", "int"); 
   define_macro("__WINT_TYPE__", "unsigned int");
   define_macro("__SIZE_TYPE__", "unsigned long");
-  define_macro("__PTRDIFF_TYPE__", "long int");
-  define_macro("__STDC_HOSTED__", "1");
+  define_macro("__PTRDIFF_TYPE__", "long int");  
   define_macro("__STDC_NO_COMPLEX__", "1");
   define_macro("__STDC_UTF_16__", "1");
   define_macro("__STDC_UTF_32__", "1");

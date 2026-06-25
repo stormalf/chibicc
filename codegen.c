@@ -27,6 +27,7 @@ extern bool opt_omit_frame_pointer;
 extern bool opt_fbuiltin;
 extern bool opt_optimize_level3;
 extern bool opt_cf_protection;
+extern char *opt_fvisibility;
 
 // Forward declarations for scope tree walkers
 static int scope_lvar_align(Scope *sc, int align);
@@ -343,13 +344,14 @@ int align_to(int n, int align)
 }
 
 static void print_visibility(Obj *obj) {
-  if (obj->visibility) {
-    if (!strcmp(obj->visibility, "hidden")) {
+  char *vis = obj->visibility ? obj->visibility : opt_fvisibility;
+  if (vis) {
+    if (!strcmp(vis, "hidden")) {
       println("  .hidden\t%s", sym(obj));
-    } else if (!strcmp(obj->visibility, "protected")) {
+    } else if (!strcmp(vis, "protected")) {
       println("  .protected %s", sym(obj));
     }
-  } 
+  }
   if (obj->is_static) {
     println("  .local\t%s", sym(obj));
   } else {
@@ -4729,10 +4731,18 @@ static void emit_text(Obj *prog)
     if (!fn->is_live)
       continue;
 
-    if (fn->is_static)
+    if (fn->is_static) {
       println("  .local %s", sym(fn));
-    else 
+    } else {
+      char *vis = fn->visibility ? fn->visibility : opt_fvisibility;
+      if (vis) {
+        if (!strcmp(vis, "hidden"))
+          println("  .hidden\t%s", sym(fn));
+        else if (!strcmp(vis, "protected"))
+          println("  .protected %s", sym(fn));
+      }
       println("  .globl %s", sym(fn));
+    }
 
     // Respect section attribute if set
     if (fn->section)

@@ -31,6 +31,7 @@ bool opt_mmx;
 bool opt_crc32;
 bool opt_g;
 bool opt_implicit;
+bool opt_no_implicit;
 bool opt_werror;
 bool opt_omit_frame_pointer = false;
 bool opt_optimize = false;
@@ -40,6 +41,9 @@ bool opt_optimize_level3 = false;
 bool opt_avx2;
 bool opt_avx;
 bool opt_tbm;
+char *opt_fvisibility;
+bool opt_implicit_warn;
+bool opt_ffreestanding;
 
 static FileType opt_x;
 static StringArray opt_include;
@@ -835,6 +839,17 @@ static void parse_args(int argc, char **argv)
       continue;
     } 
 
+    if (!strcmp(argv[i], "-Wimplicit-function-declaration")) {
+      opt_implicit_warn = true;
+      continue;
+    }
+
+    if (!strcmp(argv[i], "-Wno-implicit-function-declaration")) {
+      opt_implicit_warn = false;
+      opt_no_implicit = true;
+      continue;
+    }
+
     if (!strcmp(argv[i], "-Werror")) {
       opt_werror = true;
       continue;
@@ -934,6 +949,11 @@ static void parse_args(int argc, char **argv)
       continue;
     }
 
+    if (!strncmp(argv[i], "-fvisibility=", 13)) {
+      opt_fvisibility = argv[i] + 13;
+      continue;
+    }
+
     if (!strcmp(argv[i], "-print-search-dirs")) {  
       printf("install: %s/bin\n", LIBDIR);   
       printf("programs: =%s/bin\n", LIBDIR);
@@ -957,6 +977,11 @@ static void parse_args(int argc, char **argv)
     }
     strarray_push(&include_paths, path);
     continue;
+    }
+
+    if (!strcmp(argv[i], "-ffreestanding")) {
+      opt_ffreestanding = true;
+      continue;
     }
 
     if (!strcmp(argv[i], "-Werror=invalid-command-line-argument")) {
@@ -989,7 +1014,6 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-fcx-limited-range") ||
         !strcmp(argv[i], "-funsafe-math-optimizations") ||  
         !strcmp(argv[i], "-funroll-loops") ||
-        !strcmp(argv[i], "-ffreestanding") ||
         !strcmp(argv[i], "-funwind-tables") ||   
         !strcmp(argv[i], "-fno-stack-protector") ||
         !strcmp(argv[i], "-fno-strict-aliasing") ||
@@ -1002,8 +1026,6 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-pedantic") ||
         !strcmp(argv[i], "-pedantic-errors") ||         
         !strcmp(argv[i], "-mno-red-zone") ||
-        !strcmp(argv[i], "-fvisibility=default") ||
-        !strcmp(argv[i], "-fvisibility=hidden") ||
         !strcmp(argv[i], "-Wsign-compare") ||
         !strcmp(argv[i], "-Wundef") ||
         !strcmp(argv[i], "-Wpointer-arith") ||
@@ -1570,8 +1592,8 @@ static void run_linker(StringArray *inputs, char *output)
   char *gcc_libpath = find_gcc_libpath();
   if (opt_shared && !opt_fpic)
     strarray_push(&ld_extra_args, "-fPIC");
-  // Only add startup files if not using -nostdlib
-  if (!opt_nostdlib) {
+  // Only add startup files if not using -nostdlib or -ffreestanding
+  if (!opt_nostdlib && !opt_ffreestanding) {
     if (opt_shared)
     {
       strarray_push(&arr, format("%s/crti.o", libpath));
@@ -1648,7 +1670,8 @@ static void run_linker(StringArray *inputs, char *output)
       strarray_push(&arr, format("%s/crtend.o", gcc_libpath));
   }
 
-  strarray_push(&arr, format("%s/crtn.o", libpath));
+  if (!opt_ffreestanding)
+    strarray_push(&arr, format("%s/crtn.o", libpath));
   strarray_push(&arr, NULL);
 
   // if (isDebug)
