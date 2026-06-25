@@ -758,32 +758,20 @@ static void parse_args(int argc, char **argv)
       continue;
     }
 
-    if (!strncmp(argv[i], "-L", 2))
-    {
-      //strarray_push(&ld_extra_args, "-L");
-      char *tmp = argv[i];
-      check_parms_length(tmp);
-      strarray_push(&ld_extra_args, tmp);
-      continue;
-    }
-
     if (!strcmp(argv[i], "-L"))
     {
       strarray_push(&ld_extra_args, "-L");
       char *tmp = argv[++i];
       check_parms_length(tmp);
       strarray_push(&ld_extra_args, tmp);
-      // strarray_push(&ld_extra_args, argv[++i]);
       continue;
     }
 
     if (!strncmp(argv[i], "-L", 2))
     {
-      strarray_push(&ld_extra_args, "-L");
-      char *tmp = argv[i] + 2;
+      char *tmp = argv[i];
       check_parms_length(tmp);
       strarray_push(&ld_extra_args, tmp);
-      // strarray_push(&ld_extra_args, argv[i] + 2);
       continue;
     }
 
@@ -818,7 +806,7 @@ static void parse_args(int argc, char **argv)
     }
 
 
-    if (!strcmp(argv[i], "Wl,-rpath,") || !strcmp(argv[i], "-rpath"))
+    if (!strcmp(argv[i], "-Wl,-rpath,") || !strcmp(argv[i], "-rpath"))
     {
       char *tmp = argv[++i];
       check_parms_length(tmp);
@@ -1591,8 +1579,6 @@ static void run_linker(StringArray *inputs, char *output)
 
   char *libpath = find_libpath();
   char *gcc_libpath = find_gcc_libpath();
-  if (opt_shared && !opt_fpic)
-    strarray_push(&ld_extra_args, "-fPIC");
   // Only add startup files if not using -nostdlib or -ffreestanding
   if (!opt_nostdlib && !opt_ffreestanding) {
     if (opt_shared)
