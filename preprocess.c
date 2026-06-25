@@ -84,6 +84,10 @@ static int pragma_pack_current;
 static int pragma_pack_stack[128];
 static int pragma_pack_depth;
 
+static char *pragma_visibility_current;
+static char *pragma_visibility_stack[128];
+static int pragma_visibility_depth;
+
 
 
 //ISS-142
@@ -185,6 +189,66 @@ static bool handle_pragma_pack(Token **rest, Token *tok) {
   return true;
 }
 
+// Handle #pragma GCC visibility push/pop
+static bool handle_pragma_gcc_visibility(Token **rest, Token *tok) {
+  if (!equal(tok, "GCC"))
+    return false;
+  tok = tok->next;
+  if (!equal(tok, "visibility"))
+    return false;
+  tok = tok->next;
+
+  if (equal(tok, "push")) {
+    tok = tok->next;
+    if (!equal(tok, "("))
+      return false;
+    tok = tok->next;
+    if (tok->kind != TK_IDENT)
+      return false;
+
+    char *vis = NULL;
+    if (equal(tok, "default"))
+      vis = "default";
+    else if (equal(tok, "hidden"))
+      vis = "hidden";
+    else if (equal(tok, "protected"))
+      vis = "protected";
+    else if (equal(tok, "internal"))
+      vis = "hidden";
+    else
+      return false;
+
+    tok = tok->next;
+    if (!equal(tok, ")"))
+      return false;
+    tok = tok->next;
+
+    if (pragma_visibility_depth < 128)
+      pragma_visibility_stack[pragma_visibility_depth++] = pragma_visibility_current;
+    pragma_visibility_current = vis;
+
+    *rest = tok;
+    while (!(*rest)->at_bol)
+      *rest = (*rest)->next;
+    return true;
+  }
+
+  if (equal(tok, "pop")) {
+    tok = tok->next;
+
+    if (pragma_visibility_depth > 0)
+      pragma_visibility_current = pragma_visibility_stack[--pragma_visibility_depth];
+    else
+      pragma_visibility_current = NULL;
+
+    *rest = tok;
+    while (!(*rest)->at_bol)
+      *rest = (*rest)->next;
+    return true;
+  }
+
+  return false;
+}
 
 //begin
 static bool is_hash(Token *tok)
@@ -1405,6 +1469,7 @@ static Token *preprocess2(Token *tok)
       tok->line_delta = tok->file->line_delta;
       tok->filename = tok->file->display_name;
       tok->pack_align = pragma_pack_current;
+      tok->pragma_visibility = pragma_visibility_current;
       cur = cur->next = tok;
       tok = tok->next;
       continue;
@@ -1558,6 +1623,8 @@ static Token *preprocess2(Token *tok)
     if (equal(tok, "pragma"))
     {
       if (handle_pragma_pack(&tok, tok->next))
+        continue;
+      if (handle_pragma_gcc_visibility(&tok, tok->next))
         continue;
 
       do
@@ -1967,6 +2034,8 @@ Token *preprocess(Token *tok, bool isReadLine)
   if (!isReadLine) {
     pragma_pack_current = 0;
     pragma_pack_depth = 0;
+    pragma_visibility_current = NULL;
+    pragma_visibility_depth = 0;
   }
 
   tok = preprocess2(tok);

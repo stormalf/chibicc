@@ -702,6 +702,7 @@ static void parse_args(int argc, char **argv)
     if (!strcmp(argv[i], "-fpie") || !strcmp(argv[i], "-fPIE") || !strcmp(argv[i], "-pie"))
     {
       opt_fpie = true;
+      opt_fpic = true;
       strarray_push(&ld_extra_args, "-pie");
       continue;
     }
@@ -740,7 +741,6 @@ static void parse_args(int argc, char **argv)
     if (!strcmp(argv[i], "-static"))
     {
       opt_static = true;
-      strarray_push(&ld_extra_args, "-static");
       continue;
     }
 
@@ -1559,6 +1559,8 @@ static void run_linker(StringArray *inputs, char *output)
   strarray_push(&arr, "--allow-multiple-definition");
   strarray_push(&arr, "--eh-frame-hdr");
 
+  if (opt_static)
+    strarray_push(&arr, "-static");
 
   //for some projects like POSTGRES it seems that the specific path for the project 
   //should be defined first
@@ -1567,11 +1569,7 @@ static void run_linker(StringArray *inputs, char *output)
     strarray_push(&arr, ld_extra_args.data[i]);
   }
 
-  if (opt_shared) {
-    opt_nostdlib = false;
-  } else if (opt_fstack_protector) {
-      opt_nostdlib = false;
-  }
+
 
   //enabling verbose mode for linker in case of debug
   // if (isDebug)

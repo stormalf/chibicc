@@ -8152,6 +8152,8 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   fn->section = attr->section;
   fn->is_ms_abi |= attr->is_ms_abi;
   fn->visibility = fn->visibility ?: attr->visibility;
+  if (!fn->visibility)
+    fn->visibility = tok->pragma_visibility;
   fn->is_aligned |= attr->is_aligned;
   fn->is_noreturn |= attr->is_noreturn;
   fn->is_destructor |= attr->is_destructor;
@@ -8327,6 +8329,8 @@ static Token *global_declaration(Token *tok, Type *basety, VarAttr *attr)
       var->section = current_section;
     } 
     var->visibility = decl_attr.visibility;
+    if (!var->visibility)
+      var->visibility = tok->pragma_visibility;
     var->is_aligned = var->is_aligned | decl_attr.is_aligned;
     var->is_externally_visible = decl_attr.is_externally_visible;
     var->is_definition = !decl_attr.is_extern && ty->kind != TY_FUNC;

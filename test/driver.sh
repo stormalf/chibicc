@@ -108,7 +108,7 @@ echo foo | $chibicc -Dfoo=bar -Ufoo -E -xc - | grep -q foo
 check -U
 
 # ignored options
-$chibicc -c -O -Wall -g -std=c11  -fno-builtin \
+$chibicc -c -O -Wall -g -std=c11 -fno-builtin \
          -fno-omit-frame-pointer -fno-stack-protector -fno-strict-aliasing \
          -m64 -mno-red-zone -w -o /dev/null $tmp/empty.c
 check 'ignored options'
