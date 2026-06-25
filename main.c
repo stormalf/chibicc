@@ -1165,16 +1165,17 @@ char *extract_filename(char *tmpl)
 
 char * extract_path(char* tmpl)
 {
-    char* parent = calloc(1, sizeof(char) * 300);
+    char* parent = calloc(1, MAX_PATH_LENGTH);
     int parentLen;
     char* last = strrchr(tmpl, '/');
 
     if (last != NULL) {
 
         parentLen = strlen(tmpl) - strlen(last + 1);
-        if (parentLen > 300)
+        if (parentLen >= MAX_PATH_LENGTH)
           error("%s:%d: error: in %s: no enough size for parent in getParent function %d expected ", __FILE__, __LINE__, __func__, parentLen);
-        strncpy(parent, tmpl, parentLen);
+        memcpy(parent, tmpl, parentLen);
+        parent[parentLen] = '\0';
     } 
 
 return parent;

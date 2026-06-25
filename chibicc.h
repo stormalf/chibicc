@@ -50,6 +50,7 @@
 #define PRODUCT "chibicc"
 #define VERSION "1.0.25"
 #define MAXLEN 1001
+#define MAX_PATH_LENGTH 500
 #define DEFAULT_TARGET_MACHINE "x86_64-linux-gnu"
 #define MAX_BUILTIN_ARGS 8
 #define MAX_WEAK 20

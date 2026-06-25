@@ -38,10 +38,10 @@ void print_debug_tokens(char *currentfilename, char *function, Token *tok)
     {
         if (t->len > 0)
         {
-            char tokloc[t->len + 1];
-            memset(tokloc, 0, sizeof(tokloc));
-            char *ptokloc = &tokloc[0];
-            strncpy(ptokloc, t->loc, t->len);
+    char tokloc[t->len + 1];
+    memset(tokloc, 0, sizeof(tokloc));
+    char *ptokloc = &tokloc[0];
+    strncpy(ptokloc, t->loc, t->len);
             fprintf(f, "token->kind: %s, token->len: %d, token->val: %ld, token->fval:%Lf \n", tokenkind2str(t->kind), t->len, t->val, t->fval);
             fprintf(f, "     token->str: %s, token->filename: %s, token->line_no: %d, token->at_bol:%d \n", t->str, t->filename, t->line_no, t->at_bol);
             fprintf(f, "     token->loc: %s \n", ptokloc);
