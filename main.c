@@ -46,6 +46,7 @@ bool opt_implicit_warn;
 bool opt_unused_warn = false;
 bool opt_unused_param_warn = false;
 bool opt_ffreestanding;
+bool opt_emit_ir;
 
 static FileType opt_x;
 static StringArray opt_include;
@@ -871,6 +872,11 @@ static void parse_args(int argc, char **argv)
       continue;
     }
 
+    if (!strcmp(argv[i], "--emit-ir")) {
+      opt_emit_ir = true;
+      continue;
+    }
+
     //other options -Axxx ignored
     if (startsWith(argv[i], "-A"))
     {
@@ -1468,6 +1474,13 @@ static void cc1(void)
     return;
   }
 
+  if (opt_emit_ir) {
+    FILE *out = open_file(output_file);
+    emit_ir(prog, out);
+    fclose(out);
+    return;
+  }
+
   // Open a temporary output buffer.
   char *buf;
   size_t buflen;
@@ -1797,6 +1810,8 @@ int main(int argc, char **argv)
       output = opt_o;
     else if (opt_S)
       output = replace_extn(input, ".s");
+    else if (opt_emit_ir)
+      output = replace_extn(input, ".ll");
     else
       output = replace_extn(input, ".o");
 
@@ -1849,6 +1864,13 @@ int main(int argc, char **argv)
 
     // Compile
     if (opt_S)
+    {
+      run_cc1(argc, argv, input, output);
+      continue;
+    }
+
+    // Emit LLVM IR
+    if (opt_emit_ir)
     {
       run_cc1(argc, argv, input, output);
       continue;

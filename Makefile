@@ -138,7 +138,7 @@ libchibicc.so: $(OBJS)
 	$(CC) $(CFLAGS) -o $@ $^ -shared
 
 clean:
-	rm -rf $(OBJECT) tmp* *.zend $(TESTS) issues/*.s issues/*.exe issues/*.dot test/*.s test/*.exe test_spe/*.exe stage2 diagram/*.png test/*.dot $(OBJECTLIB)
+	rm -rf $(OBJECT) tmp* *.zend $(TESTS) *.ll issues/*.s issues/*.exe issues/*.dot issues/*.ll test/*.s test/*.exe test_spe/*.exe test/*.ll test_spe/*.ll stage2 diagram/*.png test/*.dot $(OBJECTLIB)
 	find * -type f '(' -name '*~' -o -name '*.o' ')' -exec rm {} ';'
 
 install: $(OBJECT)

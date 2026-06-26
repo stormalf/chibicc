@@ -52,6 +52,8 @@
 #define MAXLEN 1001
 #define MAX_PATH_LENGTH 500
 #define DEFAULT_TARGET_MACHINE "x86_64-linux-gnu"
+#define TARGET_DATALAYOUT "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-f80:128-n8:16:32:64-S128"
+#define TARGET_TRIPLE "x86_64-pc-linux-gnu"
 #define MAX_BUILTIN_ARGS 8
 #define MAX_WEAK 20
 
@@ -1411,6 +1413,7 @@ void build_bbs(Obj *prog);
 
 void gen_expr(Node *node);
 void codegen(Obj *prog, FILE *out);
+void emit_ir(Obj *prog, FILE *out);
 int align_to(int n, int align);
 int count(void);
 int push_tmp(void);
@@ -1777,6 +1780,7 @@ extern bool opt_no_implicit;
 extern bool opt_unused_warn;
 extern bool opt_unused_param_warn;
 extern bool opt_ffreestanding;
+extern bool opt_emit_ir;
 
 //
 // extended_asm.c
