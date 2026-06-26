@@ -100,8 +100,11 @@ or
      -fvisibility=default|hidden|protected  Set default symbol visibility
      -Wimplicit-function-declaration  Warn about implicit function declarations
      -Wno-implicit-function-declaration  Suppress implicit function declaration diagnostics
-     -Wunused-variable  Warn about unused local variables (default: on)
+     -Wall  Enable all warnings (unused-variable, unused-parameter)
+     -Wunused-variable  Warn about unused local variables
      -Wno-unused-variable  Suppress unused variable diagnostics
+     -Wunused-parameter  Warn about unused function parameters
+     -Wno-unused-parameter  Suppress unused parameter diagnostics
      -std=c99 generates an error on implicit function declaration (without -std only a warning is emitted) 
      -std=c11 generates an error on implicit function declaration (without -std only a warning is emitted) 
      -mmmx enabling mmx instructions 
@@ -259,13 +262,11 @@ it means that if you don't use the ld linker or ld.lld probably some options sho
 List of options ignored :
   
     "-P"
-    "-Wall"
     "-Wextra"
     "-Wpedantic"
     "-Wno-switch"
     "-Wno-clobbered"
     "-Wduplicated-cond" 
-    "-Wno-unused-parameter"
     "-Wno-sign-compare"
     "-Wno-format-y2k"
     "-Wno-uninitialized"
@@ -649,7 +650,7 @@ Example of diagram generated with -dotfile parameter :
 ## release notes
 
 
-1.0.25    Adding promotion to int on variadic argument. Fixing issue with mistake on help on -fomit-frame-pointer. Fixing issue with assign_lvar_offsets that skipped some offsets already assigned by extended assembly and caused failure on some cpython tests. Adding --eh-frame-hdr needed by glibc's backtrace. Disabling tail call optimization when volatile local variable is found. Reporting commit 4f4c864c3f6872d3c7c53c66fe2db1bf8143bb02 from slimcc (about variable scope instead of flat list). Fixing ISS-209 extended assembly issue found during openssh-portable compile. Adding builtin missing when __OPTIMIZE__ is enabled. Updating __GNUC__ from 4 to 5 and implementing __Float32 support. Supporting -ffreestanding, -fvisibility=hidden, -Wno-implicit-function-declaration. Managing pragma visibility found during vlc compile. Managing attributes used, returns_twice, noinline. Tracking used and unused variables and managing -Wunused-variable and -Wno-unused-variable flags.
+1.0.25    Adding promotion to int on variadic argument. Fixing issue with mistake on help on -fomit-frame-pointer. Fixing issue with assign_lvar_offsets that skipped some offsets already assigned by extended assembly and caused failure on some cpython tests. Adding --eh-frame-hdr needed by glibc's backtrace. Disabling tail call optimization when volatile local variable is found. Reporting commit 4f4c864c3f6872d3c7c53c66fe2db1bf8143bb02 from slimcc (about variable scope instead of flat list). Fixing ISS-209 extended assembly issue found during openssh-portable compile. Adding builtin missing when __OPTIMIZE__ is enabled. Updating __GNUC__ from 4 to 5 and implementing __Float32 support. Supporting -ffreestanding, -fvisibility=hidden, -Wno-implicit-function-declaration. Managing pragma visibility found during vlc compile. Managing attributes used, returns_twice, noinline. Tracking used and unused variables and managing -Wunused-variable and -Wno-unused-variable flags. Tracking unused parameters and managing corresponding flag including -Wall.
 
 
 

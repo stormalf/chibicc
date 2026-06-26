@@ -149,10 +149,27 @@ static void scope_warn_unused(Scope *sc) {
       continue;
     if (!var->name || !var->name[0] || var->name[0] == '.')
       continue;
+    if (var->is_param)
+      continue;
     if (var->tok)
       warn_tok(var->tok, "unused variable '%s'", var->name);
     else
       fprintf(stderr, "warning: unused variable '%s'\n", var->name);
+  }
+}
+
+static void fn_warn_unused_params(Obj *fn) {
+  if (!opt_unused_param_warn)
+    return;
+  for (Obj *var = fn->params; var; var = var->next) {
+    if (var->first_use >= 0)
+      continue;
+    if (!var->name || !var->name[0])
+      continue;
+    if (var->tok)
+      warn_tok(var->tok, "unused parameter '%s'", var->name);
+    else
+      fprintf(stderr, "warning: unused parameter '%s'\n", var->name);
   }
 }
 
@@ -165,6 +182,7 @@ static void analyze_function(Obj *fn) {
     analyze_node(fn->body, LV_READ, &pos);
   if (opt_unused_warn)
     scope_warn_unused(fn->ty->scopes);
+  fn_warn_unused_params(fn);
 }
 
 void analyze_liveness(Obj *prog) {

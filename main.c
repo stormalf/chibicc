@@ -43,7 +43,8 @@ bool opt_avx;
 bool opt_tbm;
 char *opt_fvisibility;
 bool opt_implicit_warn;
-bool opt_unused_warn = true;
+bool opt_unused_warn = false;
+bool opt_unused_param_warn = false;
 bool opt_ffreestanding;
 
 static FileType opt_x;
@@ -844,6 +845,12 @@ static void parse_args(int argc, char **argv)
       continue;
     } 
 
+    if (!strcmp(argv[i], "-Wall")) {
+      opt_unused_warn = true;
+      opt_unused_param_warn = true;
+      continue;
+    }
+
     if (!strcmp(argv[i], "-Wunused-variable")) {
       opt_unused_warn = true;
       continue;
@@ -854,6 +861,15 @@ static void parse_args(int argc, char **argv)
       continue;
     }
 
+    if (!strcmp(argv[i], "-Wunused-parameter")) {
+      opt_unused_param_warn = true;
+      continue;
+    }
+
+    if (!strcmp(argv[i], "-Wno-unused-parameter")) {
+      opt_unused_param_warn = false;
+      continue;
+    }
 
     //other options -Axxx ignored
     if (startsWith(argv[i], "-A"))
@@ -992,12 +1008,10 @@ static void parse_args(int argc, char **argv)
 
     // These options are ignored for now.
     if (!strcmp(argv[i], "-P") || 
-        !strcmp(argv[i], "-Wall") || 
         !strcmp(argv[i], "-Wextra") || 
         !strcmp(argv[i], "-Wpedantic") || 
         !strcmp(argv[i], "-Wno-switch") || 
         !strcmp(argv[i], "-Wno-clobbered") ||
-        !strcmp(argv[i], "-Wno-unused-parameter") ||  
         !strcmp(argv[i], "-Wno-sign-compare") ||
         !strcmp(argv[i], "-Wno-format-y2k") || 
         !strcmp(argv[i], "-Wmissing-prototypes") ||

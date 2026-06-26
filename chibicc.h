@@ -134,8 +134,11 @@ this " PRODUCT " supports vector, some extended assembly and int128 \n"
 -fvisibility=default|hidden|protected  Set default symbol visibility\n \
 -Wimplicit-function-declaration  Warn about implicit function declarations\n \
 -Wno-implicit-function-declaration  Suppress implicit function declaration diagnostics\n \
--Wunused-variable  Warn about unused local variables (default: on)\n \
+-Wall  Enable all warnings (unused-variable, unused-parameter)\n \
+-Wunused-variable  Warn about unused local variables\n \
 -Wno-unused-variable  Suppress unused variable diagnostics\n \
+-Wunused-parameter  Warn about unused function parameters\n \
+-Wno-unused-parameter  Suppress unused parameter diagnostics\n \
 -std=c99 generates an error on implicit function declaration (without -std only a warning is emitted) \n \
 -std=c11 generates an error on implicit function declaration (without -std only a warning is emitted) \n \
 -mmmx enabling mmx instructions \n \
@@ -1751,6 +1754,7 @@ extern char *opt_fvisibility;
 extern bool opt_implicit_warn;
 extern bool opt_no_implicit;
 extern bool opt_unused_warn;
+extern bool opt_unused_param_warn;
 extern bool opt_ffreestanding;
 
 //

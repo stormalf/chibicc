@@ -7990,19 +7990,22 @@ static void create_param_lvars(Type *param, char *funcname)
   //  return;
   // error_tok(param->name_pos, "parameter name omitted");
   //new_lvar(get_ident(param->name), param, funcname);
+    Obj *var;
     if (param->param_var) {
-      param->param_var->next = scope->locals;
-      scope->locals = param->param_var;
-      param->param_var->funcname = funcname;
-      param->param_var->order = order;
+      var = param->param_var;
+      var->next = scope->locals;
+      scope->locals = var;
+      var->funcname = funcname;
+      var->order = order;
       if (param->name)
-        push_scope(get_ident(param->name))->var = param->param_var;
+        push_scope(get_ident(param->name))->var = var;
     } else {
     if (!param->name)
-      new_lvar("", param, funcname);
+      var = new_lvar("", param, funcname);
     else
-    new_lvar(get_ident(param->name), param, funcname);
+      var = new_lvar(get_ident(param->name), param, funcname);
     }
+    var->is_param = true;
     order++;
 
 }
