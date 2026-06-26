@@ -43,6 +43,7 @@ bool opt_avx;
 bool opt_tbm;
 char *opt_fvisibility;
 bool opt_implicit_warn;
+bool opt_unused_warn = true;
 bool opt_ffreestanding;
 
 static FileType opt_x;
@@ -843,6 +844,15 @@ static void parse_args(int argc, char **argv)
       continue;
     } 
 
+    if (!strcmp(argv[i], "-Wunused-variable")) {
+      opt_unused_warn = true;
+      continue;
+    }
+
+    if (!strcmp(argv[i], "-Wno-unused-variable")) {
+      opt_unused_warn = false;
+      continue;
+    }
 
 
     //other options -Axxx ignored
@@ -987,7 +997,6 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-Wpedantic") || 
         !strcmp(argv[i], "-Wno-switch") || 
         !strcmp(argv[i], "-Wno-clobbered") ||
-        !strcmp(argv[i], "-Wno-unused-variable") ||
         !strcmp(argv[i], "-Wno-unused-parameter") ||  
         !strcmp(argv[i], "-Wno-sign-compare") ||
         !strcmp(argv[i], "-Wno-format-y2k") || 
@@ -1437,6 +1446,9 @@ static void cc1(void)
   }
 
   Obj *prog = parse(tok);
+
+  analyze_liveness(prog);
+
   if (opt_A) {
     print_ast(f, prog);
     return;

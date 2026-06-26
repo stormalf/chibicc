@@ -480,6 +480,12 @@ static void PrintObj(FILE *f, int l, const char *s, Obj *o) {
   PrintBool(f, l + 2, "is_prototyped: ", o->is_prototyped);
   PrintBool(f, l + 2, "is_address_used: ", o->is_address_used);
   PrintBool(f, l + 2, "is_param: ", o->is_param);
+  if (o->first_use >= 0) {
+    PrintLine(f, l + 2, "first_use: %d", o->first_use);
+    PrintLine(f, l + 2, "last_use: %d", o->last_use);
+  }
+  PrintBool(f, l + 2, "is_read: ", o->is_read);
+  PrintBool(f, l + 2, "is_written: ", o->is_written);
   PrintLine(f, l, "}");
 }
 

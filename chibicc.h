@@ -134,6 +134,8 @@ this " PRODUCT " supports vector, some extended assembly and int128 \n"
 -fvisibility=default|hidden|protected  Set default symbol visibility\n \
 -Wimplicit-function-declaration  Warn about implicit function declarations\n \
 -Wno-implicit-function-declaration  Suppress implicit function declaration diagnostics\n \
+-Wunused-variable  Warn about unused local variables (default: on)\n \
+-Wno-unused-variable  Suppress unused variable diagnostics\n \
 -std=c99 generates an error on implicit function declaration (without -std only a warning is emitted) \n \
 -std=c11 generates an error on implicit function declaration (without -std only a warning is emitted) \n \
 -mmmx enabling mmx instructions \n \
@@ -386,6 +388,12 @@ struct Obj
   bool is_returned_twice;
   bool is_noinline;
   bool is_used;
+
+  // Liveness analysis (set by analyze_liveness in liveness.c)
+  int first_use;   // Traversal index of first reference, -1 if unused
+  int last_use;    // Traversal index of last reference, -1 if unused
+  bool is_read;    // Variable is read at least once
+  bool is_written; // Variable is written at least once (lhs of assignment)
 };
 
 // Global variable can be initialized either by a constant expression
@@ -1368,6 +1376,12 @@ void print_debug_tokens(char *currentfilename, char *function, Token *tok);
 void emit_debug_info(Obj *prog);
 
 //
+// liveness.c
+//
+
+void analyze_liveness(Obj *prog);
+
+//
 // codegen.c
 //
 
@@ -1736,6 +1750,7 @@ extern bool opt_tbm;
 extern char *opt_fvisibility;
 extern bool opt_implicit_warn;
 extern bool opt_no_implicit;
+extern bool opt_unused_warn;
 extern bool opt_ffreestanding;
 
 //

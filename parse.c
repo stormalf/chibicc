@@ -478,6 +478,7 @@ static Obj *new_var(char *name, Type *ty)
   var->name = name;
   var->ty = ty;
   var->align = ty->align;
+  var->first_use = -1;
   push_scope(name)->var = var;
   return var;
 }
@@ -1617,6 +1618,7 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
       // x = alloca(tmp)`.
       
       Obj *var = new_lvar(get_ident(ty->name), ty, NULL);
+      var->tok = ty->name_pos;
       Token *tok = ty->name;
       tok = attribute_list(tok, ty, type_attributes);
       int var_align = MAX(decl_attr.align, ty->align);
@@ -1632,6 +1634,7 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
     }
     
     Obj *var = new_lvar(get_ident(ty->name), ty, NULL);
+    var->tok = ty->name_pos;
     if (alt_align) {
       var->align = alt_align;
       var->ty->align = MAX(var->ty->align, alt_align);
