@@ -308,6 +308,23 @@ struct Initializer
 };
 
 
+typedef struct BasicBlock BasicBlock;
+typedef struct {
+  BasicBlock **data;
+  int len;
+  int cap;
+} BBArray;
+
+struct BasicBlock {
+  BasicBlock *chain;
+  BasicBlock *chain_prev;
+  int id;
+  char *label;
+  BBArray prev;
+  BBArray next;
+  bool has_stmt;
+};
+
 // Variable or function
 typedef struct Obj Obj;
 struct Obj
@@ -397,6 +414,9 @@ struct Obj
   int last_use;    // Traversal index of last reference, -1 if unused
   bool is_read;    // Variable is read at least once
   bool is_written; // Variable is written at least once (lhs of assignment)
+
+  // Basic blocks (built by build_bbs in liveness.c)
+  BasicBlock *bbs;
 };
 
 // Global variable can be initialized either by a constant expression
@@ -1383,6 +1403,7 @@ void emit_debug_info(Obj *prog);
 //
 
 void analyze_liveness(Obj *prog);
+void build_bbs(Obj *prog);
 
 //
 // codegen.c

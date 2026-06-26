@@ -486,6 +486,11 @@ static void PrintObj(FILE *f, int l, const char *s, Obj *o) {
   }
   PrintBool(f, l + 2, "is_read: ", o->is_read);
   PrintBool(f, l + 2, "is_written: ", o->is_written);
+  if (o->bbs) {
+    PrintLine(f, l + 2, "bbs:");
+    for (BasicBlock *bb = o->bbs; bb; bb = bb->chain)
+      PrintLine(f, l + 4, "BB%d (%s) prev:%d next:%d", bb->id, bb->label ? bb->label : "", bb->prev.len, bb->next.len);
+  }
   PrintLine(f, l, "}");
 }
 

@@ -1,5 +1,277 @@
 #include "chibicc.h"
 
+//
+// Basic block construction
+// Builds a control-flow graph (CFG) from the AST.
+//
+
+typedef struct {
+  BasicBlock *from;
+  char *label;
+} DeferredGoto;
+
+typedef struct {
+  BasicBlock *head;
+  BasicBlock *tail;
+  HashMap label_map;
+  DeferredGoto *pending;
+  int pending_len;
+  int pending_cap;
+} BBState;
+
+typedef struct {
+  BasicBlock *bb;
+  bool terminated;
+} BBWalkResult;
+
+static BasicBlock *basicblock_alloc(BBState *s) {
+  BasicBlock *bb = calloc(1, sizeof(BasicBlock));
+  bb->id = s->tail ? s->tail->id + 1 : 0;
+  if (s->tail) {
+    s->tail->chain = bb;
+    bb->chain_prev = s->tail;
+  } else {
+    s->head = bb;
+  }
+  s->tail = bb;
+  return bb;
+}
+
+static void basicblock_add_edge(BasicBlock *from, BasicBlock *to) {
+  if (from->next.len == from->next.cap) {
+    from->next.cap = from->next.cap ? from->next.cap * 2 : 4;
+    from->next.data = realloc(from->next.data, from->next.cap * sizeof(BasicBlock *));
+  }
+  from->next.data[from->next.len++] = to;
+  if (to->prev.len == to->prev.cap) {
+    to->prev.cap = to->prev.cap ? to->prev.cap * 2 : 4;
+    to->prev.data = realloc(to->prev.data, to->prev.cap * sizeof(BasicBlock *));
+  }
+  to->prev.data[to->prev.len++] = from;
+}
+
+static void add_pending_goto(BBState *s, BasicBlock *from, char *label) {
+  if (s->pending_len == s->pending_cap) {
+    s->pending_cap = s->pending_cap ? s->pending_cap * 2 : 16;
+    s->pending = realloc(s->pending, s->pending_cap * sizeof(DeferredGoto));
+  }
+  s->pending[s->pending_len++] = (DeferredGoto){from, label};
+}
+
+static BBWalkResult basicblock_walk_stmts(BBState *s, Node *node, BasicBlock *cur);
+static BBWalkResult basicblock_walk_body(BBState *s, Node *node, BasicBlock *cur);
+
+static BBWalkResult basicblock_walk_body(BBState *s, Node *node, BasicBlock *cur) {
+  if (!node)
+    return (BBWalkResult){cur, false};
+  if (node->kind == ND_BLOCK)
+    return basicblock_walk_stmts(s, node->body, cur);
+  return basicblock_walk_stmts(s, node, cur);
+}
+
+static BBWalkResult basicblock_walk_stmts(BBState *s, Node *node, BasicBlock *cur) {
+  bool terminated = false;
+  while (node) {
+    switch (node->kind) {
+    case ND_NULL_EXPR:
+      terminated = false;
+      node = node->next;
+      continue;
+
+    case ND_BLOCK: {
+      BBWalkResult r = basicblock_walk_stmts(s, node->body, cur);
+      cur = r.bb;
+      terminated = r.terminated;
+      node = node->next;
+      continue;
+    }
+
+    case ND_LABEL:
+      if (cur->has_stmt) {
+        BasicBlock *prev_bb = cur;
+        cur = basicblock_alloc(s);
+        if (prev_bb->next.len == 0)
+          basicblock_add_edge(prev_bb, cur);
+      }
+      hashmap_put(&s->label_map, node->unique_label, cur);
+      cur->label = node->unique_label;
+      terminated = false;
+      if (node->lhs) {
+        BBWalkResult r = basicblock_walk_body(s, node->lhs, cur);
+        cur = r.bb;
+        terminated = r.terminated;
+      }
+      node = node->next;
+      continue;
+
+    case ND_CASE:
+      if (cur->has_stmt) {
+        BasicBlock *prev_bb = cur;
+        cur = basicblock_alloc(s);
+        if (prev_bb->next.len == 0)
+          basicblock_add_edge(prev_bb, cur);
+      }
+      if (node->label)
+        hashmap_put(&s->label_map, node->label, cur);
+      terminated = false;
+      if (node->lhs) {
+        BBWalkResult r = basicblock_walk_body(s, node->lhs, cur);
+        cur = r.bb;
+        terminated = r.terminated;
+      }
+      node = node->next;
+      continue;
+
+    case ND_IF: {
+      cur->has_stmt = true;
+      BasicBlock *after = basicblock_alloc(s);
+      BasicBlock *then_bb = basicblock_alloc(s);
+      basicblock_add_edge(cur, then_bb);
+      BBWalkResult then_r = basicblock_walk_body(s, node->then, then_bb);
+      if (!then_r.terminated)
+        basicblock_add_edge(then_r.bb, after);
+      if (node->els) {
+        BasicBlock *else_bb = basicblock_alloc(s);
+        basicblock_add_edge(cur, else_bb);
+        BBWalkResult else_r = basicblock_walk_body(s, node->els, else_bb);
+        if (!else_r.terminated)
+          basicblock_add_edge(else_r.bb, after);
+      } else {
+        basicblock_add_edge(cur, after);
+      }
+      cur = after;
+      terminated = false;
+      node = node->next;
+      continue;
+    }
+
+    case ND_FOR: {
+      cur->has_stmt = true;
+      if (node->init) {
+        BBWalkResult r = basicblock_walk_stmts(s, node->init, cur);
+        cur = r.bb;
+      }
+      BasicBlock *cond_bb = basicblock_alloc(s);
+      BasicBlock *body_bb = basicblock_alloc(s);
+      BasicBlock *inc_bb = basicblock_alloc(s);
+      BasicBlock *after = basicblock_alloc(s);
+      basicblock_add_edge(cur, cond_bb);
+      if (node->cond)
+        basicblock_walk_stmts(s, node->cond, cond_bb);
+      basicblock_add_edge(cond_bb, body_bb);
+      basicblock_add_edge(cond_bb, after);
+      if (node->brk_label)
+        hashmap_put(&s->label_map, node->brk_label, after);
+      if (node->cont_label)
+        hashmap_put(&s->label_map, node->cont_label, inc_bb);
+      BBWalkResult body_r = basicblock_walk_body(s, node->then, body_bb);
+      if (!body_r.terminated)
+        basicblock_add_edge(body_r.bb, inc_bb);
+      if (node->inc)
+        basicblock_walk_stmts(s, node->inc, inc_bb);
+      basicblock_add_edge(inc_bb, cond_bb);
+      cur = after;
+      terminated = false;
+      node = node->next;
+      continue;
+    }
+
+    case ND_DO: {
+      cur->has_stmt = true;
+      BasicBlock *body_bb = basicblock_alloc(s);
+      BasicBlock *cond_bb = basicblock_alloc(s);
+      BasicBlock *after = basicblock_alloc(s);
+      basicblock_add_edge(cur, body_bb);
+      if (node->brk_label)
+        hashmap_put(&s->label_map, node->brk_label, after);
+      if (node->cont_label)
+        hashmap_put(&s->label_map, node->cont_label, cond_bb);
+      BBWalkResult body_r = basicblock_walk_body(s, node->then, body_bb);
+      if (!body_r.terminated)
+        basicblock_add_edge(body_r.bb, cond_bb);
+      if (node->cond)
+        basicblock_walk_stmts(s, node->cond, cond_bb);
+      basicblock_add_edge(cond_bb, body_bb);
+      basicblock_add_edge(cond_bb, after);
+      cur = after;
+      terminated = false;
+      node = node->next;
+      continue;
+    }
+
+    case ND_SWITCH: {
+      cur->has_stmt = true;
+      BasicBlock *after = basicblock_alloc(s);
+      if (node->brk_label)
+        hashmap_put(&s->label_map, node->brk_label, after);
+      basicblock_walk_body(s, node->then, cur);
+      cur = after;
+      terminated = false;
+      node = node->next;
+      continue;
+    }
+
+    case ND_GOTO:
+      cur->has_stmt = true;
+      terminated = true;
+      {
+        BasicBlock *target = hashmap_get(&s->label_map, node->unique_label);
+        if (target)
+          basicblock_add_edge(cur, target);
+        else
+          add_pending_goto(s, cur, node->unique_label);
+      }
+      cur = basicblock_alloc(s);
+      node = node->next;
+      continue;
+
+    case ND_GOTO_EXPR:
+      cur->has_stmt = true;
+      terminated = true;
+      cur = basicblock_alloc(s);
+      node = node->next;
+      continue;
+
+    case ND_RETURN:
+      cur->has_stmt = true;
+      terminated = true;
+      cur = basicblock_alloc(s);
+      node = node->next;
+      continue;
+
+    default:
+      cur->has_stmt = true;
+      terminated = false;
+      node = node->next;
+      continue;
+    }
+  }
+  return (BBWalkResult){cur, terminated};
+}
+
+void build_bbs(Obj *prog) {
+  for (Obj *fn = prog; fn; fn = fn->next) {
+    if (!fn->is_function || !fn->is_definition)
+      continue;
+    if (!fn->body)
+      continue;
+    BBState s = {0};
+    BasicBlock *entry = basicblock_alloc(&s);
+    if (fn->body->kind == ND_BLOCK)
+      basicblock_walk_stmts(&s, fn->body->body, entry);
+    else
+      basicblock_walk_stmts(&s, fn->body, entry);
+    for (int i = 0; i < s.pending_len; i++)
+      basicblock_add_edge(s.pending[i].from,
+                   hashmap_get(&s.label_map, s.pending[i].label));
+    fn->bbs = s.head;
+  }
+}
+
+//
+// Liveness analysis
+//
+
 typedef enum {
   LV_READ,
   LV_WRITE,
@@ -186,6 +458,7 @@ static void analyze_function(Obj *fn) {
 }
 
 void analyze_liveness(Obj *prog) {
+  build_bbs(prog);
   for (Obj *fn = prog; fn; fn = fn->next) {
     if (!fn->is_function || !fn->is_definition)
       continue;
