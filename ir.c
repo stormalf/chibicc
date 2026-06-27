@@ -159,8 +159,11 @@ static void emit_global(Obj *var)
 
   if (var->init_data && !var->rel)
   {
-    emit("constant [%d x i8]", var->ty->size);
-    emit(" c\"");
+    if (var->ty->is_const)
+      emit("constant ");
+    else
+      emit("global ");
+    emit("[%d x i8] c\"", var->ty->size);
     emit_escaped_string(var->init_data, var->ty->size);
     emit("\"");
   }
@@ -991,7 +994,7 @@ static const char *emit_expr(Node *node, int indent)
       const char *size = emit_expr(arg, indent);
       const char *r = new_reg();
       emit_indent(indent);
-      emit("%s = alloca i8, i64 %s\n", r, size);
+      emit("%s = alloca i8, i64 %s, align 16\n", r, size);
       return r;
     }
 
@@ -1383,7 +1386,7 @@ static void emit_scope_allocas(Scope *sc, Obj *params, int indent)
     if (is_in_param_list(var, params))
       continue;
     emit_indent(indent);
-    emit("%s = alloca i8, i64 %ld\n", var_ptr(var), var->ty->size);
+    emit("%s = alloca i8, i64 %ld, align %d\n", var_ptr(var), var->ty->size, var->align);
   }
 }
 
@@ -1399,6 +1402,9 @@ static void emit_func(Obj *fn)
 
   bool sret = is_sret(fn->ty->return_ty);
   emit("define ");
+  if (fn->is_static)
+    emit("internal ");
+
   if (sret)
     emit("void");
   else
@@ -1429,7 +1435,7 @@ static void emit_func(Obj *fn)
   {
     if (!param->name || !param->name[0])
       continue;
-    emit("  %s = alloca i8, i64 %ld\n", var_ptr(param), param->ty->size);
+    emit("  %s = alloca i8, i64 %ld, align %d\n", var_ptr(param), param->ty->size, param->ty->align);
   }
 
   for (param = fn->params; param; param = param->next)
