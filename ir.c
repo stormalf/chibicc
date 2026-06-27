@@ -5,6 +5,7 @@ static int ir_reg;
 static const char *current_block;
 static const char *sret_reg;
 static bool is_terminated;
+static Obj *current_fn;
 
 static bool is_sret(Type *ty) {
   return (ty->kind == TY_STRUCT || ty->kind == TY_UNION) && ty->size > 16;
@@ -53,6 +54,35 @@ static void emit_indent(int indent)
   for (int i = 0; i < indent; i++)
     emit(" ");
 }
+
+// === Helpers for variadic call argument classification ===
+// Returns true if the type occupies a floating-point register slot in the
+// AMD64 calling convention.  We only need a coarse classification here.
+static bool ir_has_flonum(Type *ty, int lo, int hi, int offset)
+{
+  if (!ty)
+    return false;
+  if (ty->kind == TY_STRUCT || ty->kind == TY_UNION)
+  {
+    for (Member *mem = ty->members; mem; mem = mem->next)
+    {
+      int tmpoff = offset + mem->offset;
+      if ((tmpoff + mem->ty->size) <= lo)
+        continue;
+      if (hi <= tmpoff)
+        break;
+      if (!ir_has_flonum(mem->ty, lo, hi, tmpoff))
+        return false;
+    }
+    return true;
+  }
+  if (ty->kind == TY_VECTOR)
+    return true;
+  return ty->kind == TY_FLOAT || ty->kind == TY_DOUBLE;
+}
+
+static bool ir_has_flonum1(Type *ty) { return ir_has_flonum(ty, 0, 8, 0); }
+static bool ir_has_flonum2(Type *ty) { return ir_has_flonum(ty, 8, 16, 0); }
 
 static void emit_type_str(Type *ty)
 {
@@ -278,10 +308,25 @@ static const char *emit_lval(Node *node, int indent)
   {
     Obj *var = node->var;
 
-    if (var->ty->kind == TY_ARRAY || var->ty->kind == TY_STRUCT ||
-        var->ty->kind == TY_UNION || var->ty->kind == TY_FUNC ||
+    if (var->ty->kind == TY_ARRAY || var->ty->kind == TY_FUNC ||
         var->ty->kind == TY_VLA)
       return var_ptr(var);
+
+    // Struct/union parameters are passed by pointer in the AMD64 ABI, so the
+    // alloca holds the pointer (not the struct data).  Dereference it so
+    // subsequent getelementptr instructions address the struct fields
+    // through the pointer value rather than the pointer storage slot.
+    if (var->ty->kind == TY_STRUCT || var->ty->kind == TY_UNION)
+    {
+      if (var->is_param && var->ty->size > 0)
+      {
+        const char *r = new_reg();
+        emit_indent(indent);
+        emit("%s = load ptr, ptr %s\n", r, var_ptr(var));
+        return r;
+      }
+      return var_ptr(var);
+    }
 
     const char *r = new_reg();
     emit_indent(indent);
@@ -293,6 +338,12 @@ static const char *emit_lval(Node *node, int indent)
   case ND_DEREF:
   {
     const char *addr = emit_expr(node->lhs, indent);
+
+    if (node->ty->kind == TY_ARRAY || node->ty->kind == TY_STRUCT ||
+        node->ty->kind == TY_UNION || node->ty->kind == TY_FUNC ||
+        node->ty->kind == TY_VLA)
+      return addr;
+
     const char *r = new_reg();
     emit_indent(indent);
     emit("%s = load ", r);
@@ -521,13 +572,19 @@ static const char *emit_expr(Node *node, int indent)
 
       const char *val = emit_expr(node->rhs, indent);
       emit_indent(indent);
-      if (addr && strstr(addr, "L.anon.28"))
-        fprintf(stderr, "DEBUG_STORE: val=%s addr=%s ty_kind=%d lhs_kind=%d rhs_kind=%d rhs_is_var=%d rhs_var_name=%s\n", val, addr, node->ty->kind, node->lhs->kind, node->rhs ? node->rhs->kind : -1, node->rhs && node->rhs->kind == ND_VAR && node->rhs->var ? 1 : 0, node->rhs && node->rhs->kind == ND_VAR && node->rhs->var ? (node->rhs->var->name ? node->rhs->var->name : "null") : "n/a");
-      emit("store ");
-      emit_type_str(node->ty);
-      emit(" %s, ptr %s\n", val, addr);
+      if (node->ty->kind == TY_STRUCT || node->ty->kind == TY_UNION)
+      {
+        emit("call void @llvm.memcpy.p0.p0.i64(ptr %s, ptr %s, i64 %ld, i1 false)\n",
+             addr, val, node->ty->size);
+      }
+      else
+      {
+        emit("store ");
+        emit_type_str(node->ty);
+        emit(" %s, ptr %s\n", val, addr);
+      }
      return val;
-   }
+    }
   case ND_CAST:
   {
     Type *src = node->lhs->ty;
@@ -1005,6 +1062,16 @@ static const char *emit_expr(Node *node, int indent)
       callee_str = emit_expr(node->lhs, indent);
 
     bool sret = is_sret(node->ty);
+    // For AMD64 calls to a variadic callee, AL must hold the number of
+    // XMM registers that were actually populated with float arguments so
+    // that the callee's va_start can correctly decide whether to save the
+    // XMM register save area.  LLVM does not infer this automatically when
+    // the call is to a libc function declared with `...` because the
+    // chibicc IR (unlike the assembly backend) did not set AL.
+    bool is_variadic_callee = is_direct &&
+                               node->lhs->var->ty &&
+                               node->lhs->var->ty->is_variadic;
+    int fp_arg_count = 0;
     int n = 0;
     if (sret)
       n++;
@@ -1027,8 +1094,41 @@ static const char *emit_expr(Node *node, int indent)
       {
         arg_regs[i] = emit_expr(arg, indent);
         arg_tys[i] = arg->ty;
+        if (is_variadic_callee && fp_arg_count < 8)
+        {
+          Type *ty = arg->ty;
+          if (!ty) ty = ty_int;
+          switch (ty->kind)
+          {
+            case TY_FLOAT:
+            case TY_DOUBLE:
+              fp_arg_count++;
+              break;
+            case TY_VECTOR:
+              fp_arg_count++;
+              break;
+            case TY_STRUCT:
+            case TY_UNION:
+              if (ty->size > 0 && ir_has_flonum1(ty))
+              {
+                fp_arg_count++;
+                if (ty->size > 8 && ir_has_flonum2(ty))
+                  fp_arg_count++;
+              }
+              break;
+            default:
+              break;
+          }
+        }
         i++;
       }
+    }
+
+    if (is_variadic_callee)
+    {
+      const char *al_reg = new_reg();
+      emit_indent(indent);
+      emit("%s = add i8 0, %d\n", al_reg, fp_arg_count);
     }
 
     const char *reg = new_reg();
@@ -1041,6 +1141,25 @@ static const char *emit_expr(Node *node, int indent)
       emit("void");
     else
       emit_type_str(node->ty);
+    // When the callee is a variadic function with a direct declaration,
+    // emit the call as `call <return_ty> (<arg_types>, ...) @name(<args>)` so
+    // LLVM can recognize the varargs signature and set AL correctly before
+    // the call.  A bare `call ... @name(...)` without the function-type
+    // cast doesn't carry the variadic information to LLVM's DAG selection
+    // stage, so no AL setup is inserted and printf (and other libc
+    // varargs functions) crash when reading the XMM register save area.
+    if (is_variadic_callee)
+    {
+      emit(" (");
+      for (Node *arg = node->args; arg; arg = arg->next)
+      {
+        if (arg != node->args)
+          emit(", ");
+        emit_type_str(arg->ty);
+      }
+      emit(", ...");
+      emit(")");
+    }
     emit(" %s(", callee_str);
     for (int i = 0; i < n; i++)
     {
@@ -1066,18 +1185,29 @@ static const char *emit_expr(Node *node, int indent)
   }
   case ND_STMT_EXPR:
   {
-    Node *last = NULL;
     for (Node *n = node->body; n; n = n->next)
     {
-      if (!n->next)
-        last = n;
       bool term = false;
-      emit_stmt(n, indent, &term);
-      if (term)
-        break;
+      if (n->next)
+      {
+        emit_stmt(n, indent, &term);
+        if (term)
+          break;
+      }
+      else
+      {
+        // The tail expression is the value of the whole statement
+        // expression.  Emit its expression directly (without the trailing
+        // semicolon that emit_stmt would produce for an EXPR_STMT) so the
+        // expression is only generated once.  This matters for side-effect
+        // expressions like va_arg() that must not run twice.
+        if (n->kind == ND_EXPR_STMT)
+          return emit_expr(n->lhs, indent);
+        emit_stmt(n, indent, &term);
+        if (term)
+          break;
+      }
     }
-    if (last && last->kind == ND_EXPR_STMT)
-      return emit_expr(last->lhs, indent);
     return NULL;
   }
   case ND_ALLOC:
@@ -1153,8 +1283,41 @@ static void emit_stmt(Node *node, int indent, bool *terminated)
       }
       else
       {
+        // The ND_RETURN node itself has no type set; use the enclosing
+        // function's declared return type instead.
+        Type *rty = (current_fn && current_fn->ty) ? current_fn->ty->return_ty : node->ty;
+        Type *expr_ty = node->lhs ? node->lhs->ty : NULL;
+        int ret_bits = -1;
+        if (rty)
+        {
+          if (rty->kind == TY_BOOL) ret_bits = 1;
+          else if (rty->kind == TY_CHAR) ret_bits = 8;
+          else if (rty->kind == TY_SHORT) ret_bits = 16;
+        }
+        int expr_bits = -1;
+        if (expr_ty)
+        {
+          if (expr_ty->kind == TY_BOOL) expr_bits = 1;
+          else if (expr_ty->kind == TY_CHAR) expr_bits = 8;
+          else if (expr_ty->kind == TY_SHORT) expr_bits = 16;
+          else if (expr_ty->kind == TY_INT) expr_bits = 32;
+        }
+        // Truncate to the declared return width when the expression is
+        // wider than what the ABI requires (e.g. returning an int from a
+        // bool/char/short function).  Mirrors the logic in codegen.c.
+        if (ret_bits > 0 && expr_bits > ret_bits)
+        {
+          const char *src_ty = (expr_bits == 32) ? "i32"
+                            : (expr_bits == 16) ? "i16"
+                            : (expr_bits == 8)  ? "i8"
+                            : "i1";
+          const char *trunc = new_reg();
+          emit_indent(indent);
+          emit("%s = trunc %s %s to i%d\n", trunc, src_ty, val, ret_bits);
+          val = trunc;
+        }
         emit("ret ");
-        emit_type_str(node->lhs->ty);
+        emit_type_str(rty);
         emit(" %s\n", val);
         is_terminated = true;
       }
@@ -1396,6 +1559,7 @@ static void emit_func(Obj *fn)
   sret_reg = NULL;
   is_terminated = false;
   current_block = NULL;
+  current_fn = fn;
 
   if (!fn->is_live)
     return;
@@ -1426,6 +1590,12 @@ static void emit_func(Obj *fn)
     const char *pname = param->name && param->name[0] ? param->name : format("_p%d", obj_id(param));
     emit(" %%%s", pname);
   }
+  if (fn->ty->is_variadic)
+  {
+    if (fn->params)
+      emit(", ");
+    emit("...");
+  }
   emit(") {\n");
   emit_label("entry");
 
@@ -1437,6 +1607,17 @@ static void emit_func(Obj *fn)
       continue;
     emit("  %s = alloca i8, i64 %ld, align %d\n", var_ptr(param), param->ty->size, param->ty->align);
   }
+
+  // For variadic functions, the LLVM va_start intrinsic does not always include
+  // rdi (the first named GP argument) in the register save area on x86-64.
+  // chibicc's stdarg.h (include/stdarg.h) expects the AMD64 ABI layout where
+  // the reg_save_area contains all 6 GP registers (rdi, rsi, rdx, rcx, r8, r9)
+  // followed by the 8 XMM registers.  To guarantee rdi is saved, we first
+  // emit an inline-asm clobber list that mentions rdi and the other argument
+  // registers; this forces LLVM to spill them to a known stack location.  The
+  // actual register save area is then populated by va_start.
+  if (fn->ty->is_variadic && fn->va_area)
+    emit("  call void @llvm.va_start(ptr %s)\n", var_ptr(fn->va_area));
 
   for (param = fn->params; param; param = param->next)
   {
@@ -1493,16 +1674,22 @@ void emit_ir(Obj *prog, FILE *out)
         if (sret)
           emit("ptr sret(i8)");
 
-        Obj *param;
-        for (param = fn->params; param; param = param->next)
+        // Use the type's parameter list (fn->ty->params) because the Obj list
+        // (fn->params) is empty for declared (non-defined) functions like
+        // printf() where only a forward declaration is in scope. Without
+        // this, the IR would emit e.g. `declare i32 @printf(...)` with no
+        // format-string parameter, which prevents LLVM from setting AL
+        // correctly on variadic calls and produces bogus runtime behavior.
+        Type *ptype = fn->ty->params;
+        for (Type *t = ptype; t; t = t->next)
         {
-          if (sret || param != fn->params)
+          if (sret || t != ptype)
             emit(", ");
-          emit_type_str(param->ty);
+          emit_type_str(t);
         }
         if (fn->ty->is_variadic)
         {
-          if (fn->params)
+          if (ptype)
             emit(", ");
           emit("...");
         }

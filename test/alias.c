@@ -1,3 +1,4 @@
+#include "test.h"
 void f() {}
 void g() __attribute__((alias("f")));
-int main() { return 0; }
+int main() { printf("Ok\n"); return 0; }

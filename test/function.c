@@ -97,7 +97,6 @@ typedef struct
   int gp_offset;
   int fp_offset;
   void *overflow_arg_area;
-  unsigned int remaining;
   void *reg_save_area;
 } __va_elem;
 
@@ -332,7 +331,6 @@ int main()
   }
 
   ASSERT(0, ({ char buf[100]; sprintf(buf, "%d %d %s", 1, 2, "foo"); strcmp("1 2 foo", buf); }));
-
   ASSERT(0, ({ char buf[100]; fmt(buf, "%d %d %s", 1, 2, "foo"); strcmp("1 2 foo", buf); }));
 
   ASSERT(251, uchar_fn());
