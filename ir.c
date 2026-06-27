@@ -382,10 +382,11 @@ static const char *emit_lval(Node *node, int indent)
       emit(", ptr %s\n", addr);
     }
 
-    if (mem->is_bitfield)
+if (mem->is_bitfield)
       return emit_extract_bitfield(r, mem, load_bits, indent);
     return r;
   }
+
   case ND_VLA_PTR:
   {
     const char *r = new_reg();
@@ -1033,6 +1034,17 @@ static const char *emit_expr(Node *node, int indent)
     }
     if (node->lhs->kind == ND_DEREF)
       return emit_expr(node->lhs->lhs, indent);
+    if (node->lhs->kind == ND_MEMBER)
+    {
+      const char *base = emit_expr(node->lhs->lhs, indent);
+      const char *base_i8 = new_reg();
+      emit_indent(indent);
+      emit("%s = getelementptr i8, ptr %s, i32 0\n", base_i8, base);
+      const char *r = new_reg();
+      emit_indent(indent);
+      emit("%s = getelementptr i8, ptr %s, i32 %d\n", r, base_i8, node->lhs->member->offset);
+      return r;
+    }
     const char *ptr = emit_expr(node->lhs, indent);
     const char *r = new_reg();
     emit_indent(indent);
