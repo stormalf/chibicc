@@ -124,22 +124,18 @@ static void emit_global(Obj *var)
     emit("thread_local ");
   if (var->is_static)
     emit("internal ");
-  else
-    emit("global ");
-
-  if (var->init_data && !var->rel)
-    emit("[%d x i8]", var->ty->size);
-  else
-    emit_type_str(var->ty);
 
   if (var->init_data && !var->rel)
   {
+    emit("constant [%d x i8]", var->ty->size);
     emit(" c\"");
     emit_escaped_string(var->init_data, var->ty->size);
     emit("\"");
   }
   else
   {
+    emit("global ");
+    emit_type_str(var->ty);
     emit(" zeroinitializer");
   }
 
@@ -176,6 +172,12 @@ static const char *emit_lval(Node *node, int indent)
   case ND_VAR:
   {
     Obj *var = node->var;
+
+    if (var->ty->kind == TY_ARRAY || var->ty->kind == TY_STRUCT ||
+        var->ty->kind == TY_UNION || var->ty->kind == TY_FUNC ||
+        var->ty->kind == TY_VLA)
+      return var_ptr(var);
+
     const char *r = new_reg();
     emit_indent(indent);
     emit("%s = load ", r);
@@ -389,7 +391,7 @@ case ND_DEREF:
       const char *val = emit_expr(node->lhs, indent);
       const char *r = new_reg();
       emit_indent(indent);
-      emit("%s = ptrtoint %s to i%d\n", r, val, db);
+      emit("%s = ptrtoint ptr %s to i%d\n", r, val, db);
       return r;
     }
 
@@ -415,6 +417,35 @@ case ND_DEREF:
   case ND_SHL:
   case ND_SHR:
   {
+    if ((node->kind == ND_ADD || node->kind == ND_SUB) &&
+        (node->ty->kind == TY_PTR || node->ty->kind == TY_VLA))
+    {
+      const char *l = emit_expr(node->lhs, indent);
+      const char *r = emit_expr(node->rhs, indent);
+      const char *r_int = r;
+      if (node->rhs->ty->kind == TY_PTR || node->rhs->ty->kind == TY_VLA ||
+          node->rhs->ty->kind == TY_ARRAY)
+      {
+        r_int = new_reg();
+        emit_indent(indent);
+        emit("%s = ptrtoint ptr %s to i64\n", r_int, r);
+      }
+      const char *reg = new_reg();
+      emit_indent(indent);
+      emit("%s = getelementptr i8, ptr %s, i64 %s%s\n",
+           reg, l, node->kind == ND_SUB ? "-" : "", r_int);
+      return reg;
+    }
+    if (node->kind == ND_ADD &&
+        (node->lhs->ty->kind == TY_PTR || node->lhs->ty->kind == TY_VLA))
+    {
+      const char *l = emit_expr(node->lhs, indent);
+      const char *r = emit_expr(node->rhs, indent);
+      const char *reg = new_reg();
+      emit_indent(indent);
+      emit("%s = getelementptr i8, ptr %s, i64 %s\n", reg, l, r);
+      return reg;
+    }
     const char *l = emit_expr(node->lhs, indent);
     const char *r = emit_expr(node->rhs, indent);
     const char *reg = new_reg();
@@ -487,19 +518,55 @@ case ND_DEREF:
   }
   case ND_MEMZERO:
   {
+    if (node->ty->kind == TY_VOID)
+      return NULL;
     if (node->lhs && node->lhs->kind == ND_VAR)
     {
       Obj *var = node->lhs->var;
       const char *r = new_reg();
       emit_indent(indent);
-      emit("%s = add i32 0, 0\n", r);
+      if (node->ty->kind == TY_PTR || node->ty->kind == TY_ARRAY ||
+          node->ty->kind == TY_FUNC || node->ty->kind == TY_VLA ||
+          node->ty->kind == TY_STRUCT || node->ty->kind == TY_UNION)
+      {
+        emit("%s = inttoptr i32 0 to ", r);
+        emit_type_str(node->ty);
+        emit("\n");
+      }
+      else
+      {
+        emit("%s = %s ", r, is_float_type(node->ty) ? "fadd" : "add");
+        emit_type_str(node->ty);
+        if (is_float_type(node->ty))
+          emit(" 0.0, 0.0");
+        else
+          emit(" 0, 0");
+        emit("\n");
+      }
       emit_indent(indent);
       emit("store i32 0, ptr %s\n", var_ptr(var));
       return r;
     }
     const char *r = new_reg();
     emit_indent(indent);
-    emit("%s = add i32 0, 0\n", r);
+    if (node->ty->kind == TY_PTR || node->ty->kind == TY_ARRAY ||
+        node->ty->kind == TY_FUNC || node->ty->kind == TY_VLA ||
+        node->ty->kind == TY_STRUCT || node->ty->kind == TY_UNION)
+    {
+      emit("%s = inttoptr i32 0 to ", r);
+      emit_type_str(node->ty);
+      emit("\n");
+    }
+    else
+    {
+      emit("%s = %s ", r, is_float_type(node->ty) ? "fadd" : "add");
+      emit_type_str(node->ty);
+      if (is_float_type(node->ty))
+        emit(" 0.0, 0.0");
+      else
+        emit(" 0, 0");
+      emit("\n");
+    }
     return r;
   }
   case ND_NOT:
@@ -573,20 +640,51 @@ case ND_DEREF:
   }
   case ND_FUNCALL:
   {
-    emit_indent(indent);
-    const char *reg = new_reg();
-    emit("%s = call ", reg);
-    emit_type_str(node->ty);
-    emit(" @%s(", node->func_ty->name);
+    const char *fname = NULL;
+    if (node->lhs && node->lhs->kind == ND_VAR && node->lhs->var)
+      fname = node->lhs->var->name;
+    if (!fname)
+      fname = "<unknown>";
+
+    int n = 0;
     for (Node *arg = node->args; arg; arg = arg->next)
+      n++;
+    const char **arg_regs = NULL;
+    Type **arg_tys = NULL;
+    if (n > 0)
     {
-      if (arg != node->args)
+      arg_regs = (const char **)calloc((size_t)n, sizeof(const char *));
+      arg_tys = (Type **)calloc((size_t)n, sizeof(Type *));
+      int i = 0;
+      for (Node *arg = node->args; arg; arg = arg->next)
+      {
+        arg_regs[i] = emit_expr(arg, indent);
+        arg_tys[i] = arg->ty;
+        i++;
+      }
+    }
+
+    const char *reg = new_reg();
+    emit_indent(indent);
+    if (node->ty->kind == TY_VOID)
+      emit("call ");
+    else
+      emit("%s = call ", reg);
+    emit_type_str(node->ty);
+    emit(" @%s(", fname);
+    for (int i = 0; i < n; i++)
+    {
+      if (i > 0)
         emit(", ");
-      const char *v = emit_expr(arg, indent);
-      emit_type_str(arg->ty);
-      emit(" %s", v);
+      emit_type_str(arg_tys[i]);
+      emit(" %s", arg_regs[i]);
     }
     emit(")\n");
+
+    if (arg_regs)
+      free(arg_regs);
+    if (arg_tys)
+      free(arg_tys);
     return reg;
   }
   case ND_LABEL_VAL:
@@ -598,9 +696,28 @@ case ND_DEREF:
   {
     emit_indent(indent);
     emit("; UNSUPPORTED: node kind %d\n", node->kind);
+    if (node->ty->kind == TY_VOID)
+      return NULL;
     const char *r = new_reg();
     emit_indent(indent);
-    emit("%s = add i32 0, 0\n", r);
+    if (node->ty->kind == TY_PTR || node->ty->kind == TY_ARRAY ||
+        node->ty->kind == TY_FUNC || node->ty->kind == TY_VLA ||
+        node->ty->kind == TY_STRUCT || node->ty->kind == TY_UNION)
+    {
+      emit("%s = inttoptr i32 0 to ", r);
+      emit_type_str(node->ty);
+      emit("\n");
+    }
+    else
+    {
+      emit("%s = %s ", r, is_float_type(node->ty) ? "fadd" : "add");
+      emit_type_str(node->ty);
+      if (is_float_type(node->ty))
+        emit(" 0.0, 0.0");
+      else
+        emit(" 0, 0");
+      emit("\n");
+    }
     return r;
   }
   }
@@ -646,9 +763,15 @@ static void emit_stmt(Node *node, int indent, bool *terminated)
   case ND_IF:
   {
     const char *cond_val = emit_expr(node->cond, indent);
-    const char *cond_bool = new_reg();
-    emit_indent(indent);
-    emit("%s = icmp ne i32 %s, 0\n", cond_bool, cond_val);
+    const char *cond_bool;
+    if (node->cond->ty->kind == TY_BOOL)
+      cond_bool = cond_val;
+    else
+    {
+      cond_bool = new_reg();
+      emit_indent(indent);
+      emit("%s = icmp ne i32 %s, 0\n", cond_bool, cond_val);
+    }
     const char *then_label = format(".L.then.%d", ir_reg++);
     const char *else_label = format(".L.else.%d", ir_reg++);
     const char *end_label = format(".L.end.%d", ir_reg++);
@@ -705,9 +828,15 @@ static void emit_stmt(Node *node, int indent, bool *terminated)
     if (node->cond)
     {
       const char *cond_val = emit_expr(node->cond, indent);
-      const char *cond_bool = new_reg();
-      emit_indent(indent);
-      emit("%s = icmp ne i32 %s, 0\n", cond_bool, cond_val);
+      const char *cond_bool;
+      if (node->cond->ty->kind == TY_BOOL)
+        cond_bool = cond_val;
+      else
+      {
+        cond_bool = new_reg();
+        emit_indent(indent);
+        emit("%s = icmp ne i32 %s, 0\n", cond_bool, cond_val);
+      }
       emit_indent(indent);
       emit("br i1 %s, label %%%s, label %%%s\n", cond_bool, cont_label, end_label);
     }
@@ -742,9 +871,15 @@ static void emit_stmt(Node *node, int indent, bool *terminated)
     emit("%s:\n", cont_label);
     {
       const char *cond_val = emit_expr(node->cond, indent);
-      const char *cond_bool = new_reg();
-      emit_indent(indent);
-      emit("%s = icmp ne i32 %s, 0\n", cond_bool, cond_val);
+      const char *cond_bool;
+      if (node->cond->ty->kind == TY_BOOL)
+        cond_bool = cond_val;
+      else
+      {
+        cond_bool = new_reg();
+        emit_indent(indent);
+        emit("%s = icmp ne i32 %s, 0\n", cond_bool, cond_val);
+      }
       emit_indent(indent);
       emit("br i1 %s, label %%%s, label %%%s\n", cond_bool, begin_label, end_label);
     }
@@ -867,7 +1002,30 @@ void emit_ir(Obj *prog, FILE *out)
 
   for (Obj *fn = prog; fn; fn = fn->next)
   {
-    if (fn->is_function && fn->is_definition)
-      emit_func(fn);
+    if (fn->is_function)
+    {
+      if (!fn->is_definition && fn->ty && fn->ty->kind == TY_FUNC)
+      {
+        emit("declare ");
+        emit_type_str(fn->ty->return_ty);
+        emit(" @%s(", fn->name);
+        Obj *param;
+        for (param = fn->params; param; param = param->next)
+        {
+          if (param != fn->params)
+            emit(", ");
+          emit_type_str(param->ty);
+        }
+        if (fn->ty->is_variadic)
+        {
+          if (fn->params)
+            emit(", ");
+          emit("...");
+        }
+        emit(")\n");
+      }
+      else if (fn->is_definition)
+        emit_func(fn);
+    }
   }
 }
