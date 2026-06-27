@@ -38,6 +38,17 @@ test: $(TESTS)
 	TEST_JOBS="$(TEST_JOBS)" TEST_TIMEOUT="$(TEST_TIMEOUT)" ./test/run_tests.sh $(addprefix ./,$^)
 	test/driver.sh ./$(OBJECT)
 
+# Tests that exercise the LLVM backend (--backend-llvm).
+# Built by re-compiling each .c through the IR emitter and assembling with clang.
+LLVM_TEST_SRCS=$(wildcard test/llvm_*.c)
+LLVM_TESTS=$(LLVM_TEST_SRCS:.c=.exe)
+
+test/llvm_%.exe: $(OBJECT) test/llvm_%.c
+	./$(OBJECT) --backend-llvm -Iinclude -Itest -o $@ test/llvm_$*.c -xc test/common
+
+test_llvm: $(LLVM_TESTS)
+	TEST_JOBS="$(TEST_JOBS)" TEST_TIMEOUT="$(TEST_TIMEOUT)" ./test/run_tests.sh $(addprefix ./,$^)
+
 test_spe/%.exe: $(OBJECT) test/%.c
 	mkdir -p test_spe
 	./$(OBJECT) $(CFLAGS_DIAG) $(CFLAGS_SPE) -Iinclude -Itest \
@@ -139,6 +150,7 @@ libchibicc.so: $(OBJS)
 
 clean:
 	rm -rf $(OBJECT) tmp* *.zend $(TESTS) *.ll issues/*.s issues/*.exe issues/*.dot issues/*.ll test/*.s test/*.exe test_spe/*.exe test/*.ll test_spe/*.ll stage2 diagram/*.png test/*.dot $(OBJECTLIB)
+	rm -f $(LLVM_TESTS)
 	find * -type f '(' -name '*~' -o -name '*.o' ')' -exec rm {} ';'
 
 install: $(OBJECT)

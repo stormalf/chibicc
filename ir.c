@@ -1368,9 +1368,9 @@ static void emit_func(Obj *fn)
   if (!terminated)
   {
     if (fn->ty->return_ty->kind == TY_VOID)
-      emit("  ret void\n");
+      emit("ret void\n");
     else
-      emit("  unreachable\n");
+      emit("unreachable\n");
   }
   emit("}\n\n");
 }

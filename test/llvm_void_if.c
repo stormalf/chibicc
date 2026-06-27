@@ -1,4 +1,4 @@
-// Compile: ./chibicc --backend-llvm -o issues/issue_llvm_void_if.exe issues/issue_llvm_void_if.c -xc test/common -Itest
+// Compile: ./chibicc --backend-llvm -o test/llvm_void_if.exe test/llvm_void_if.c -xc test/common -Itest
 #include "test.h"
 
 void my_assert(int expected, int actual) {
