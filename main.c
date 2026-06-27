@@ -1516,7 +1516,7 @@ static void assemble(char *input, char *output)
 
 static void assemble_llvm(char *input, char *output)
 {
-  char *cmd[] = {"clang", "-c", "-x", "ir", input, "-o", output, NULL};
+  char *cmd[] = {"llc", "-filetype=obj", input, "-o", output, NULL};
   run_subprocess(cmd);
 }
 

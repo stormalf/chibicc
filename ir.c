@@ -3,6 +3,12 @@
 static FILE *output_file;
 static int ir_reg;
 static const char *current_block;
+static const char *sret_reg;
+static bool is_terminated;
+
+static bool is_sret(Type *ty) {
+  return (ty->kind == TY_STRUCT || ty->kind == TY_UNION) && ty->size > 16;
+}
 
 static void emit_stmt(Node *node, int indent, bool *terminated);
 
@@ -30,8 +36,11 @@ static void emit(const char *fmt, ...)
 
 static void emit_label(const char *label)
 {
+  if (!is_terminated && current_block)
+    emit("  br label %%%s\n", label);
   current_block = label;
   emit("%s:\n", label);
+  is_terminated = false;
 }
 
 static const char *new_reg(void)
@@ -767,26 +776,29 @@ static const char *emit_expr(Node *node, int indent)
 
     emit_indent(indent);
     emit("br label %%%s\n", entry_label);
-    emit("%s:\n", entry_label);
+    emit_label(entry_label);
     const char *l_bool = emit_to_bool(emit_expr(node->lhs, indent), node->lhs->ty, indent);
 
     if (node->kind == ND_LOGAND)
     {
       emit_indent(indent);
       emit("br i1 %s, label %%%s, label %%%s\n", l_bool, rhs_label, end_label);
+      is_terminated = true;
     }
     else
     {
       emit_indent(indent);
       emit("br i1 %s, label %%%s, label %%%s\n", l_bool, end_label, rhs_label);
+      is_terminated = true;
     }
 
-    emit("%s:\n", rhs_label);
+    emit_label(rhs_label);
     const char *r_bool = emit_to_bool(emit_expr(node->rhs, indent), node->rhs->ty, indent);
     emit_indent(indent);
     emit("br label %%%s\n", end_label);
+    is_terminated = true;
 
-    emit("%s:\n", end_label);
+    emit_label(end_label);
     const char *result = new_reg();
     emit_indent(indent);
     const char *entry_result = (node->kind == ND_LOGAND) ? "false" : "true";
@@ -923,20 +935,21 @@ static const char *emit_expr(Node *node, int indent)
 
     emit_indent(indent);
     emit("br i1 %s, label %%%s, label %%%s\n", cond_bool, true_label, false_label);
+    is_terminated = true;
 
     emit_label(true_label);
     const char *true_val = emit_expr(node->then, indent);
     const char *true_pred = current_block ? current_block : true_label;
     emit_indent(indent);
     emit("br label %%%s\n", merge_label);
-    current_block = NULL;
+    is_terminated = true;
 
     emit_label(false_label);
     const char *false_val = emit_expr(node->els, indent);
     const char *false_pred = current_block ? current_block : false_label;
     emit_indent(indent);
     emit("br label %%%s\n", merge_label);
-    current_block = NULL;
+    is_terminated = true;
 
     if (node->ty->kind == TY_VOID)
       return NULL;
@@ -988,7 +1001,10 @@ static const char *emit_expr(Node *node, int indent)
     else
       callee_str = emit_expr(node->lhs, indent);
 
+    bool sret = is_sret(node->ty);
     int n = 0;
+    if (sret)
+      n++;
     for (Node *arg = node->args; arg; arg = arg->next)
       n++;
     const char **arg_regs = NULL;
@@ -998,6 +1014,12 @@ static const char *emit_expr(Node *node, int indent)
       arg_regs = (const char **)calloc((size_t)n, sizeof(const char *));
       arg_tys = (Type **)calloc((size_t)n, sizeof(Type *));
       int i = 0;
+      if (sret)
+      {
+        arg_regs[i] = var_ptr(node->ret_buffer);
+        arg_tys[i] = pointer_to(ty_void);
+        i++;
+      }
       for (Node *arg = node->args; arg; arg = arg->next)
       {
         arg_regs[i] = emit_expr(arg, indent);
@@ -1008,18 +1030,26 @@ static const char *emit_expr(Node *node, int indent)
 
     const char *reg = new_reg();
     emit_indent(indent);
-    if (node->ty->kind == TY_VOID)
+    if (node->ty->kind == TY_VOID || sret)
       emit("call ");
     else
       emit("%s = call ", reg);
-    emit_type_str(node->ty);
+    if (sret)
+      emit("void");
+    else
+      emit_type_str(node->ty);
     emit(" %s(", callee_str);
     for (int i = 0; i < n; i++)
     {
       if (i > 0)
         emit(", ");
-      emit_type_str(arg_tys[i]);
-      emit(" %s", arg_regs[i]);
+      if (sret && i == 0)
+        emit("ptr sret(i8) %s", arg_regs[i]);
+      else
+      {
+        emit_type_str(arg_tys[i]);
+        emit(" %s", arg_regs[i]);
+      }
     }
     emit(")\n");
 
@@ -1027,6 +1057,8 @@ static const char *emit_expr(Node *node, int indent)
       free(arg_regs);
     if (arg_tys)
       free(arg_tys);
+    if (sret)
+      return var_ptr(node->ret_buffer);
     return reg;
   }
   case ND_STMT_EXPR:
@@ -1109,14 +1141,26 @@ static void emit_stmt(Node *node, int indent, bool *terminated)
     {
       const char *val = emit_expr(node->lhs, indent);
       emit_indent(indent);
-      emit("ret ");
-      emit_type_str(node->lhs->ty);
-      emit(" %s\n", val);
+      if (sret_reg)
+      {
+        emit("call void @llvm.memcpy.p0.p0.i64(ptr %s, ptr %s, i64 %ld, i1 false)\n", sret_reg, val, node->lhs->ty->size);
+        emit_indent(indent);
+        emit("ret void\n");
+        is_terminated = true;
+      }
+      else
+      {
+        emit("ret ");
+        emit_type_str(node->lhs->ty);
+        emit(" %s\n", val);
+        is_terminated = true;
+      }
     }
     else
     {
       emit_indent(indent);
       emit("ret void\n");
+      is_terminated = true;
     }
     if (terminated)
       *terminated = true;
@@ -1143,35 +1187,38 @@ static void emit_stmt(Node *node, int indent, bool *terminated)
     const char *end_label = format(".L.end.%d", ir_reg++);
     emit_indent(indent);
     emit("br i1 %s, label %%%s, label %%%s\n", cond_bool, then_label, else_label);
-    emit("%s:\n", then_label);
-    bool then_terminated = false;
-    emit_stmt(node->then, indent, &then_terminated);
-    if (!then_terminated)
+    is_terminated = true;
+
+    emit_label(then_label);
+    emit_stmt(node->then, indent, NULL);
+    if (!is_terminated)
     {
       emit_indent(indent);
       emit("br label %%%s\n", end_label);
+      is_terminated = true;
     }
-    emit("%s:\n", else_label);
-    bool else_terminated = false;
+
+    emit_label(else_label);
     if (node->els)
-      emit_stmt(node->els, indent, &else_terminated);
-    if (!else_terminated)
+      emit_stmt(node->els, indent, NULL);
+    if (!is_terminated)
     {
       emit_indent(indent);
       emit("br label %%%s\n", end_label);
+      is_terminated = true;
     }
-    if (!then_terminated || !else_terminated)
-      emit("%s:\n", end_label);
+    emit_label(end_label);
     return;
   }
   case ND_LABEL:
-    emit("%s:\n", node->unique_label);
+    emit_label(node->unique_label);
     if (node->lhs)
       emit_stmt(node->lhs, indent, terminated);
     return;
   case ND_GOTO:
     emit_indent(indent);
     emit("br label %%%s\n", node->unique_label);
+    is_terminated = true;
     if (terminated)
       *terminated = true;
     return;
@@ -1181,16 +1228,8 @@ static void emit_stmt(Node *node, int indent, bool *terminated)
     const char *cont_label = format(".L.cont.%d", ir_reg++);
     const char *end_label = format(".L.end.%d", ir_reg++);
     if (node->init)
-    {
-      bool init_terminated = false;
-      emit_stmt(node->init, indent, &init_terminated);
-      if (!init_terminated)
-      {
-        emit_indent(indent);
-        emit("br label %%%s\n", begin_label);
-      }
-    }
-    emit("%s:\n", begin_label);
+      emit_stmt(node->init, indent, NULL);
+    emit_label(begin_label);
     if (node->cond)
     {
       const char *cond_val = emit_expr(node->cond, indent);
@@ -1205,23 +1244,25 @@ static void emit_stmt(Node *node, int indent, bool *terminated)
       }
       emit_indent(indent);
       emit("br i1 %s, label %%%s, label %%%s\n", cond_bool, cont_label, end_label);
+      is_terminated = true;
     }
     else
     {
       emit_indent(indent);
       emit("br label %%%s\n", cont_label);
+      is_terminated = true;
     }
-    emit("%s:\n", cont_label);
-    bool body_terminated = false;
-    emit_stmt(node->then, indent, &body_terminated);
+    emit_label(cont_label);
+    emit_stmt(node->then, indent, NULL);
     if (node->inc)
       emit_expr(node->inc, indent);
-    if (!body_terminated)
+    if (!is_terminated)
     {
       emit_indent(indent);
       emit("br label %%%s\n", begin_label);
+      is_terminated = true;
     }
-    emit("%s:\n", end_label);
+    emit_label(end_label);
     return;
   }
   case ND_DO:
@@ -1229,12 +1270,15 @@ static void emit_stmt(Node *node, int indent, bool *terminated)
     const char *begin_label = format(".L.begin.%d", ir_reg++);
     const char *cont_label = format(".L.cont.%d", ir_reg++);
     const char *end_label = format(".L.end.%d", ir_reg++);
-    emit("%s:\n", begin_label);
+    emit_label(begin_label);
     bool body_terminated = false;
     emit_stmt(node->then, indent, &body_terminated);
     if (body_terminated)
+    {
+      emit_label(end_label);
       return;
-    emit("%s:\n", cont_label);
+    }
+    emit_label(cont_label);
     {
       const char *cond_val = emit_expr(node->cond, indent);
       const char *cond_bool;
@@ -1248,34 +1292,59 @@ static void emit_stmt(Node *node, int indent, bool *terminated)
       }
       emit_indent(indent);
       emit("br i1 %s, label %%%s, label %%%s\n", cond_bool, begin_label, end_label);
+      is_terminated = true;
     }
-    emit("%s:\n", end_label);
+    emit_label(end_label);
     return;
   }
   case ND_SWITCH:
   {
     const char *cond_val = emit_expr(node->cond, indent);
-    emit_indent(indent);
-    if (node->default_case)
-      emit("switch i32 %s, label %%%s [\n", cond_val, node->default_case->label);
-    else
-      emit("switch i32 %s, label %%%s [\n", cond_val, node->brk_label);
+
     for (Node *n = node->case_next; n; n = n->case_next)
     {
-      emit_indent(indent + 2);
-      for (long v = n->begin; v <= n->end; v++)
-        emit("    i32 %ld, label %%%s\n", v, n->label);
+      const char *next_check = format(".L.switch.next.%d", ir_reg++);
+      if (n->begin == n->end)
+      {
+        const char *cmp = new_reg();
+        emit_indent(indent);
+        emit("%s = icmp eq ", cmp);
+        emit_type_str(node->cond->ty);
+        emit(" %s, %ld\n", cond_val, n->begin);
+        emit_indent(indent);
+        emit("br i1 %s, label %%%s, label %%%s\n", cmp, n->label, next_check);
+      }
+      else
+      {
+        // [GNU] Case ranges: (unsigned)(val - begin) <= (unsigned)(end - begin)
+        const char *off = new_reg();
+        emit_indent(indent);
+        emit("%s = sub ", off);
+        emit_type_str(node->cond->ty);
+        emit(" %s, %ld\n", cond_val, n->begin);
+
+        const char *cmp = new_reg();
+        emit_indent(indent);
+        emit("%s = icmp ule ", cmp);
+        emit_type_str(node->cond->ty);
+        emit(" %s, %ld\n", off, n->end - n->begin);
+
+        emit_indent(indent);
+        emit("br i1 %s, label %%%s, label %%%s\n", cmp, n->label, next_check);
+        is_terminated = true;
+      }
+      emit_label(next_check);
     }
+
     emit_indent(indent);
-    emit("  ]\n");
+    emit("br label %%%s\n", node->default_case ? node->default_case->label : node->brk_label);
+    is_terminated = true;
     emit_stmt(node->then, indent, NULL);
-    emit("%s:\n", node->brk_label);
-    emit_indent(indent);
-    emit("unreachable\n");
+    emit_label(node->brk_label);
     return;
   }
   case ND_CASE:
-    emit("%s:\n", node->label);
+    emit_label(node->label);
     if (node->lhs)
       emit_stmt(node->lhs, indent, terminated);
     return;
@@ -1314,33 +1383,45 @@ static void emit_scope_allocas(Scope *sc, Obj *params, int indent)
     if (is_in_param_list(var, params))
       continue;
     emit_indent(indent);
-    emit("%s = alloca ", var_ptr(var));
-    emit_type_str(var->ty);
-    emit("\n");
+    emit("%s = alloca i8, i64 %ld\n", var_ptr(var), var->ty->size);
   }
 }
 
 static void emit_func(Obj *fn)
 {
   ir_reg = 1;
+  sret_reg = NULL;
+  is_terminated = false;
+  current_block = NULL;
 
   if (!fn->is_live)
     return;
 
+  bool sret = is_sret(fn->ty->return_ty);
   emit("define ");
-  emit_type_str(fn->ty->return_ty);
+  if (sret)
+    emit("void");
+  else
+    emit_type_str(fn->ty->return_ty);
   emit(" @%s(", fn->name);
+
+  if (sret)
+  {
+    sret_reg = "%_agg_result";
+    emit("ptr sret(i8) %s", sret_reg);
+  }
 
   Obj *param;
   for (param = fn->params; param; param = param->next)
   {
-    if (param != fn->params)
+    if (sret || param != fn->params)
       emit(", ");
     emit_type_str(param->ty);
     const char *pname = param->name && param->name[0] ? param->name : format("_p%d", obj_id(param));
     emit(" %%%s", pname);
   }
   emit(") {\n");
+  emit_label("entry");
 
   emit_scope_allocas(fn->ty->scopes, fn->params, 2);
 
@@ -1348,9 +1429,7 @@ static void emit_func(Obj *fn)
   {
     if (!param->name || !param->name[0])
       continue;
-    emit("  %s = alloca ", var_ptr(param));
-    emit_type_str(param->ty);
-    emit("\n");
+    emit("  %s = alloca i8, i64 %ld\n", var_ptr(param), param->ty->size);
   }
 
   for (param = fn->params; param; param = param->next)
@@ -1368,9 +1447,11 @@ static void emit_func(Obj *fn)
   if (!terminated)
   {
     if (fn->ty->return_ty->kind == TY_VOID)
-      emit("ret void\n");
+      emit("  ret void\n");
+    else if (strcmp(fn->name, "main") == 0)
+      emit("  ret i32 0\n");
     else
-      emit("unreachable\n");
+      emit("  unreachable\n");
   }
   emit("}\n\n");
 }
@@ -1396,12 +1477,20 @@ void emit_ir(Obj *prog, FILE *out)
       if (!fn->is_definition && fn->ty && fn->ty->kind == TY_FUNC)
       {
         emit("declare ");
-        emit_type_str(fn->ty->return_ty);
+        bool sret = is_sret(fn->ty->return_ty);
+        if (sret)
+          emit("void");
+        else
+          emit_type_str(fn->ty->return_ty);
         emit(" @%s(", fn->name);
+
+        if (sret)
+          emit("ptr sret(i8)");
+
         Obj *param;
         for (param = fn->params; param; param = param->next)
         {
-          if (param != fn->params)
+          if (sret || param != fn->params)
             emit(", ");
           emit_type_str(param->ty);
         }
