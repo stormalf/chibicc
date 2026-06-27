@@ -121,6 +121,8 @@ or
      -O or -O1 enabling optimization level 1 
      -O2 enabling optimization level 2 
      -O3 enabling optimization level 3 
+     --emit-ir Emit LLVM IR to the output file instead of assembly 
+     --backend-llvm Use the LLVM backend (llc) to compile LLVM IR to assembly 
      chibicc [ -o <path> ] <file>
 
 ## compile

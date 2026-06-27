@@ -47,6 +47,7 @@ bool opt_unused_warn = false;
 bool opt_unused_param_warn = false;
 bool opt_ffreestanding;
 bool opt_emit_ir;
+bool opt_backend_llvm;
 
 static FileType opt_x;
 static StringArray opt_include;
@@ -877,6 +878,11 @@ static void parse_args(int argc, char **argv)
       continue;
     }
 
+    if (!strcmp(argv[i], "--backend-llvm")) {
+      opt_backend_llvm = true;
+      continue;
+    }
+
     //other options -Axxx ignored
     if (startsWith(argv[i], "-A"))
     {
@@ -1474,7 +1480,7 @@ static void cc1(void)
     return;
   }
 
-  if (opt_emit_ir) {
+  if (opt_emit_ir || opt_backend_llvm) {
     FILE *out = open_file(output_file);
     emit_ir(prog, out);
     fclose(out);
@@ -1506,6 +1512,12 @@ static void assemble(char *input, char *output)
     char *cmd[] = {"as", "-c", input, "-o", output, NULL};
     run_subprocess(cmd);
   }
+}
+
+static void assemble_llvm(char *input, char *output)
+{
+  char *cmd[] = {"clang", "-c", "-x", "ir", input, "-o", output, NULL};
+  run_subprocess(cmd);
 }
 
 // static void symbolic_link(char *input, char *output) {
@@ -1808,9 +1820,11 @@ int main(int argc, char **argv)
     char *output;
     if (opt_o)
       output = opt_o;
+    else if (opt_S && opt_backend_llvm)
+      output = replace_extn(input, ".ll");
     else if (opt_S)
       output = replace_extn(input, ".s");
-    else if (opt_emit_ir)
+    else if (opt_emit_ir || opt_backend_llvm)
       output = replace_extn(input, ".ll");
     else
       output = replace_extn(input, ".o");
@@ -1870,9 +1884,25 @@ int main(int argc, char **argv)
     }
 
     // Emit LLVM IR
-    if (opt_emit_ir)
+    if (opt_emit_ir || opt_backend_llvm)
     {
-      run_cc1(argc, argv, input, output);
+      if (opt_backend_llvm && !opt_S)
+      {
+        char *tmp = create_tmpfile();
+        run_cc1(argc, argv, input, tmp);
+        if (opt_c)
+          assemble_llvm(tmp, output);
+        else
+        {
+          char *tmp2 = create_tmpfile();
+          assemble_llvm(tmp, tmp2);
+          strarray_push(&ld_args, tmp2);
+        }
+      }
+      else
+      {
+        run_cc1(argc, argv, input, output);
+      }
       continue;
     }
 

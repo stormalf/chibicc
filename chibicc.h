@@ -155,8 +155,10 @@ this " PRODUCT " supports vector, some extended assembly and int128 \n"
 -g enabling debug symbols \n \
 -O0 disabling optimization \n \
 -O or -O1 enabling optimization level 1 \n \
--O2 enabling optimization level 2 \n \
--O3 enabling optimization level 3 \n \
+ -O2 enabling optimization level 2 \n \
+ -O3 enabling optimization level 3 \n \
+ --emit-ir Emit LLVM IR to the output file instead of assembly \n \
+ --backend-llvm Use the LLVM backend (llc) to compile LLVM IR to assembly \n \
 chibicc [ -o <path> ] <file>\n"
 
 typedef struct Type Type;
@@ -1781,6 +1783,7 @@ extern bool opt_unused_warn;
 extern bool opt_unused_param_warn;
 extern bool opt_ffreestanding;
 extern bool opt_emit_ir;
+extern bool opt_backend_llvm;
 
 //
 // extended_asm.c

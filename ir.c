@@ -3,6 +3,22 @@
 static FILE *output_file;
 static int ir_reg;
 
+static void emit_stmt(Node *node, int indent, bool *terminated);
+
+#define MAX_OBJ_MAP 4096
+static Obj *obj_map[MAX_OBJ_MAP];
+static int obj_map_count;
+
+static int obj_id(Obj *var)
+{
+  for (int i = 0; i < obj_map_count; i++)
+    if (obj_map[i] == var)
+      return i;
+  assert(obj_map_count < MAX_OBJ_MAP);
+  obj_map[obj_map_count++] = var;
+  return obj_map_count - 1;
+}
+
 static void emit(const char *fmt, ...)
 {
   va_list ap;
@@ -155,7 +171,7 @@ static const char *var_ptr(Obj *var)
       snprintf(buf, sizeof(buf), ".L.anon.%d", anon_id++);
       var->name = strdup(buf);
     }
-    return format("%%_%s.addr", var->name);
+    return format("%%_%s.addr_%d", var->name, obj_id(var));
   }
   else
   {
@@ -300,6 +316,13 @@ static const char *emit_lval(Node *node, int indent)
       return emit_extract_bitfield(r, mem, load_bits, indent);
     return r;
   }
+  case ND_VLA_PTR:
+  {
+    const char *r = new_reg();
+    emit_indent(indent);
+    emit("%s = load ptr, ptr %s\n", r, var_ptr(node->var));
+    return r;
+  }
   default:
     error_tok(node->tok, "emit_lval: unexpected node kind %d", node->kind);
     return NULL;
@@ -382,6 +405,8 @@ static const char *emit_expr(Node *node, int indent)
     else if (node->ty->kind == TY_INT || node->ty->kind == TY_CHAR ||
              node->ty->kind == TY_SHORT || node->ty->kind == TY_BOOL)
       emit("%s = add i32 0, %d", r, (int)node->val);
+    else if (node->ty->kind == TY_INT128)
+      emit("%s = add i128 0, %ld", r, (long)node->val);
     else
       emit("%s = add i64 0, %ld", r, node->val);
     emit("\n");
@@ -391,6 +416,7 @@ static const char *emit_expr(Node *node, int indent)
   case ND_MEMBER:
     return emit_lval(node, indent);
   case ND_DEREF:
+  case ND_VLA_PTR:
     return emit_lval(node, indent);
    case ND_ASSIGN:
    {
@@ -408,7 +434,12 @@ static const char *emit_expr(Node *node, int indent)
        addr = emit_expr(node->lhs->lhs, indent);
        break;
      }
-     case ND_MEMBER:
+      case ND_VLA_PTR:
+      {
+        addr = var_ptr(node->lhs->var);
+        break;
+      }
+      case ND_MEMBER:
       {
         Member *lhs_mem = node->lhs->member;
         const char *base_ptr = emit_expr(node->lhs->lhs, indent);
@@ -469,11 +500,13 @@ static const char *emit_expr(Node *node, int indent)
        addr = NULL;
      }
 
-     const char *val = emit_expr(node->rhs, indent);
-     emit_indent(indent);
-     emit("store ");
-     emit_type_str(node->ty);
-     emit(" %s, ptr %s\n", val, addr);
+      const char *val = emit_expr(node->rhs, indent);
+      emit_indent(indent);
+      if (addr && strstr(addr, "L.anon.28"))
+        fprintf(stderr, "DEBUG_STORE: val=%s addr=%s ty_kind=%d lhs_kind=%d rhs_kind=%d rhs_is_var=%d rhs_var_name=%s\n", val, addr, node->ty->kind, node->lhs->kind, node->rhs ? node->rhs->kind : -1, node->rhs && node->rhs->kind == ND_VAR && node->rhs->var ? 1 : 0, node->rhs && node->rhs->kind == ND_VAR && node->rhs->var ? (node->rhs->var->name ? node->rhs->var->name : "null") : "n/a");
+      emit("store ");
+      emit_type_str(node->ty);
+      emit(" %s, ptr %s\n", val, addr);
      return val;
    }
   case ND_CAST:
@@ -651,9 +684,25 @@ static const char *emit_expr(Node *node, int indent)
       case ND_SHR: op = node->ty->is_unsigned ? "lshr" : "ashr"; break;
       default: op = "???"; break;
       }
+      const char *r_op = r;
+      if (node->kind == ND_SHL || node->kind == ND_SHR)
+      {
+        int lhs_bits = int_type_bits(node->lhs->ty);
+        int rhs_bits = int_type_bits(node->rhs->ty);
+        if (lhs_bits > 0 && rhs_bits > 0 && lhs_bits != rhs_bits)
+        {
+          const char *r_ext = new_reg();
+          emit_indent(indent);
+          if (rhs_bits < lhs_bits)
+            emit("%s = zext i%d %s to i%d\n", r_ext, rhs_bits, r, lhs_bits);
+          else
+            emit("%s = trunc i%d %s to i%d\n", r_ext, rhs_bits, r, lhs_bits);
+          r_op = r_ext;
+        }
+      }
       emit("%s = %s ", reg, op);
       emit_type_str(node->ty);
-      emit(" %s, %s\n", l, r);
+      emit(" %s, %s\n", l, r_op);
     }
     return reg;
   }
@@ -826,7 +875,18 @@ static const char *emit_expr(Node *node, int indent)
     const char *val = emit_expr(node->lhs, indent);
     const char *zero = new_reg();
     emit_indent(indent);
-    emit("%s = icmp eq i32 %s, 0\n", zero, val);
+    if (is_float_type(node->lhs->ty))
+    {
+      emit("%s = fcmp oeq ", zero);
+      emit_type_str(node->lhs->ty);
+      emit(" %s, 0.0\n", val);
+    }
+    else
+    {
+      emit("%s = icmp eq ", zero);
+      emit_type_str(node->lhs->ty);
+      emit(" %s, 0\n", val);
+    }
     const char *r = new_reg();
     emit_indent(indent);
     emit("%s = zext i1 %s to i32\n", r, zero);
@@ -867,12 +927,17 @@ static const char *emit_expr(Node *node, int indent)
     emit_indent(indent);
     emit("br label %%%s\n", merge_label);
 
+    if (node->ty->kind == TY_VOID)
+      return NULL;
+
     emit("%s:\n", merge_label);
     const char *reg = new_reg();
     emit_indent(indent);
     emit("%s = phi ", reg);
     emit_type_str(node->ty);
-    emit(" [%s, %%%s], [%s, %%%s]\n", true_val, true_label, false_val, false_label);
+    emit(" [%s, %%%s], [%s, %%%s]\n",
+         true_val ? true_val : "0", true_label,
+         false_val ? false_val : "0", false_label);
     return reg;
   }
   case ND_ADDR:
@@ -892,11 +957,25 @@ static const char *emit_expr(Node *node, int indent)
   }
   case ND_FUNCALL:
   {
-    const char *fname = NULL;
-    if (node->lhs && node->lhs->kind == ND_VAR && node->lhs->var)
-      fname = node->lhs->var->name;
-    if (!fname)
-      fname = "<unknown>";
+    bool is_direct = (node->lhs && node->lhs->kind == ND_VAR && node->lhs->var &&
+                      node->lhs->var->ty->kind == TY_FUNC);
+
+    if (is_direct && (!strcmp(node->lhs->var->name, "alloca") ||
+                      !strcmp(node->lhs->var->name, "__builtin_alloca")))
+    {
+      Node *arg = node->args;
+      const char *size = emit_expr(arg, indent);
+      const char *r = new_reg();
+      emit_indent(indent);
+      emit("%s = alloca i8, i64 %s\n", r, size);
+      return r;
+    }
+
+    const char *callee_str;
+    if (is_direct)
+      callee_str = format("@%s", node->lhs->var->name);
+    else
+      callee_str = emit_expr(node->lhs, indent);
 
     int n = 0;
     for (Node *arg = node->args; arg; arg = arg->next)
@@ -923,7 +1002,7 @@ static const char *emit_expr(Node *node, int indent)
     else
       emit("%s = call ", reg);
     emit_type_str(node->ty);
-    emit(" @%s(", fname);
+    emit(" %s(", callee_str);
     for (int i = 0; i < n; i++)
     {
       if (i > 0)
@@ -938,6 +1017,30 @@ static const char *emit_expr(Node *node, int indent)
     if (arg_tys)
       free(arg_tys);
     return reg;
+  }
+  case ND_STMT_EXPR:
+  {
+    Node *last = NULL;
+    for (Node *n = node->body; n; n = n->next)
+    {
+      if (!n->next)
+        last = n;
+      bool term = false;
+      emit_stmt(n, indent, &term);
+      if (term)
+        break;
+    }
+    if (last && last->kind == ND_EXPR_STMT)
+      return emit_expr(last->lhs, indent);
+    return NULL;
+  }
+  case ND_ALLOC:
+  {
+    const char *size = emit_expr(node->lhs, indent);
+    const char *r = new_reg();
+    emit_indent(indent);
+    emit("%s = alloca i8, i64 %s\n", r, size);
+    return r;
   }
   case ND_LABEL_VAL:
   {
@@ -1140,21 +1243,24 @@ static void emit_stmt(Node *node, int indent, bool *terminated)
   }
   case ND_SWITCH:
   {
-    emit_expr(node->cond, indent);
+    const char *cond_val = emit_expr(node->cond, indent);
+    emit_indent(indent);
+    if (node->default_case)
+      emit("switch i32 %s, label %%%s [\n", cond_val, node->default_case->label);
+    else
+      emit("switch i32 %s, label %%%s [\n", cond_val, node->brk_label);
     for (Node *n = node->case_next; n; n = n->case_next)
     {
-      emit_indent(indent);
-      emit("; case %ld\n", n->begin);
-    }
-    if (node->default_case)
-    {
-      emit_indent(indent);
-      emit("; default case at %s\n", node->default_case->label);
+      emit_indent(indent + 2);
+      for (long v = n->begin; v <= n->end; v++)
+        emit("    i32 %ld, label %%%s\n", v, n->label);
     }
     emit_indent(indent);
-    emit("br label %%%s\n", node->brk_label);
+    emit("  ]\n");
     emit_stmt(node->then, indent, NULL);
     emit("%s:\n", node->brk_label);
+    emit_indent(indent);
+    emit("unreachable\n");
     return;
   }
   case ND_CASE:
@@ -1162,6 +1268,13 @@ static void emit_stmt(Node *node, int indent, bool *terminated)
     if (node->lhs)
       emit_stmt(node->lhs, indent, terminated);
     return;
+  case ND_ASM:
+  {
+    char *s = subst_fp_placeholder(node->asm_str, "%rbp");
+    emit_indent(indent);
+    emit("call void asm sideeffect \"%s\", \"\"()\n", s);
+    return;
+  }
   default:
     emit_indent(indent);
     emit("; UNSUPPORTED stmt: node kind %d\n", node->kind);
@@ -1213,7 +1326,8 @@ static void emit_func(Obj *fn)
     if (param != fn->params)
       emit(", ");
     emit_type_str(param->ty);
-    emit(" %%%s", param->name);
+    const char *pname = param->name && param->name[0] ? param->name : format("_p%d", obj_id(param));
+    emit(" %%%s", pname);
   }
   emit(") {\n");
 
@@ -1221,6 +1335,8 @@ static void emit_func(Obj *fn)
 
   for (param = fn->params; param; param = param->next)
   {
+    if (!param->name || !param->name[0])
+      continue;
     emit("  %s = alloca ", var_ptr(param));
     emit_type_str(param->ty);
     emit("\n");
@@ -1228,13 +1344,20 @@ static void emit_func(Obj *fn)
 
   for (param = fn->params; param; param = param->next)
   {
+    if (!param->name || !param->name[0])
+      continue;
     emit("  store ");
     emit_type_str(param->ty);
-    emit(" %%%s, ptr %s\n", param->name, var_ptr(param));
+    const char *pname = param->name && param->name[0] ? param->name : format("_p%d", obj_id(param));
+    emit(" %%%s, ptr %s\n", pname, var_ptr(param));
   }
 
   bool terminated = false;
   emit_stmt(fn->body, 2, &terminated);
+  if (!terminated)
+  {
+    emit("  unreachable\n");
+  }
   emit("}\n\n");
 }
 
