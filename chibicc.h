@@ -256,6 +256,7 @@ noreturn void error(char *fmt, ...) __attribute__((format(printf, 1, 2)));
 noreturn void error_at(char *loc, char *fmt, ...) __attribute__((format(printf, 2, 3)));
 noreturn void error_tok(Token *tok, char *fmt, ...) __attribute__((format(printf, 2, 3)));
 void warn_tok(Token *tok, char *fmt, ...) __attribute__((format(printf, 2, 3)));
+void warn(char *fmt, ...) __attribute__((format(printf, 1, 2)));
 bool equal(Token *tok, const char *op);
 Token *skip(Token *tok, char *op, Context *ctx);
 bool consume(Token **rest, Token *tok, char *str);

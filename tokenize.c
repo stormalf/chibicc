@@ -144,7 +144,22 @@ void warn_tok(Token *tok, char *fmt, ...)
 {
   va_list ap;
   va_start(ap, fmt);
-  vwarning_at(tok->file->name, tok->file->contents, tok->line_no, tok->loc, fmt, ap);  
+  vwarning_at(tok->file->name, tok->file->contents, tok->line_no, tok->loc, fmt, ap);
+  va_end(ap);
+  if (opt_werror)
+    exit(1);
+}
+
+void warn(char *fmt, ...)
+{
+  va_list ap;
+  va_start(ap, fmt);
+  if (!opt_werror)
+    fprintf(stderr, PURPLE "warning:" RESET " ");
+  else
+    fprintf(stderr, RED "warning:" RESET " ");
+  vfprintf(stderr, fmt, ap);
+  fprintf(stderr, "\n");
   va_end(ap);
   if (opt_werror)
     exit(1);

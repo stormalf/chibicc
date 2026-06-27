@@ -424,9 +424,9 @@ static void scope_warn_unused(Scope *sc) {
     if (var->is_param)
       continue;
     if (var->tok)
-      warn_tok(var->tok, "unused variable '%s'", var->name);
+      warn_tok(var->tok, "%s:%d: in %s: unused variable '%s'", __FILE__, __LINE__, __func__, var->name);
     else
-      fprintf(stderr, "warning: unused variable '%s'\n", var->name);
+      warn("unused variable '%s'", var->name);
   }
 }
 
@@ -439,9 +439,9 @@ static void fn_warn_unused_params(Obj *fn) {
     if (!var->name || !var->name[0])
       continue;
     if (var->tok)
-      warn_tok(var->tok, "unused parameter '%s'", var->name);
+      warn_tok(var->tok, "%s:%d: in %s: unused parameter '%s'", __FILE__, __LINE__, __func__, var->name);
     else
-      fprintf(stderr, "warning: unused parameter '%s'\n", var->name);
+      warn("unused parameter '%s'", var->name);
   }
 }
 

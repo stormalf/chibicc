@@ -394,7 +394,7 @@ static const char *emit_lval(Node *node, int indent)
     return r;
   }
   default:
-    error_tok(node->tok, "emit_lval: unexpected node kind %d", node->kind);
+    error_tok(node->tok, "%s:%d: in %s: emit_lval: unexpected node kind %d", __FILE__, __LINE__, __func__, node->kind);
     return NULL;
   }
 }
@@ -566,7 +566,7 @@ static const char *emit_expr(Node *node, int indent)
         break;
       }
      default:
-       error_tok(node->tok, "emit_expr ND_ASSIGN: unexpected lhs kind %d", node->lhs->kind);
+       error_tok(node->tok, "%s:%d: in %s: emit_expr ND_ASSIGN: unexpected lhs kind %d", __FILE__, __LINE__, __func__, node->lhs->kind);
        addr = NULL;
      }
 
@@ -1220,7 +1220,7 @@ static const char *emit_expr(Node *node, int indent)
   }
   case ND_LABEL_VAL:
   {
-    error_tok(node->tok, "emit_expr: ND_LABEL_VAL not supported");
+    error_tok(node->tok, "%s:%d: in %s: emit_expr: ND_LABEL_VAL not supported", __FILE__, __LINE__, __func__);
     return NULL;
   }
   default:
