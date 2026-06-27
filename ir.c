@@ -165,6 +165,76 @@ static const char *var_ptr(Obj *var)
   }
 }
 
+static int load_bits_for_member(Member *mem)
+{
+  if (mem->ty->kind == TY_BOOL)
+    return 8;
+  return mem->ty->size * 8;
+}
+
+static const char *emit_extract_bitfield(const char *val, Member *mem, int load_bits, int indent)
+{
+  if (mem->ty->kind == TY_BOOL)
+  {
+    const char *shifted = new_reg();
+    emit_indent(indent);
+    emit("%s = lshr i%d %s, %d\n", shifted, load_bits, val, mem->bit_offset);
+    const char *masked = new_reg();
+    emit_indent(indent);
+    emit("%s = and i%d %s, 1\n", masked, load_bits, shifted);
+    const char *trunc = new_reg();
+    emit_indent(indent);
+    emit("%s = trunc i%d %s to i1\n", trunc, load_bits, masked);
+    return trunc;
+  }
+
+  const char *shifted = new_reg();
+  emit_indent(indent);
+  emit("%s = lshr i%d %s, %d\n", shifted, load_bits, val, mem->bit_offset);
+
+  uint64_t mask = (mem->bit_width >= 64) ? ~0ULL : ((1ULL << mem->bit_width) - 1);
+  const char *masked = new_reg();
+  emit_indent(indent);
+  emit("%s = and i%d %s, %lu\n", masked, load_bits, shifted, mask);
+
+  if (mem->ty->is_unsigned)
+    return masked;
+
+  int shift_amt = load_bits - mem->bit_width;
+  const char *shifted_left = new_reg();
+  emit_indent(indent);
+  emit("%s = shl i%d %s, %d\n", shifted_left, load_bits, masked, shift_amt);
+  const char *result = new_reg();
+  emit_indent(indent);
+  emit("%s = ashr i%d %s, %d\n", result, load_bits, shifted_left, shift_amt);
+  return result;
+}
+
+static const char *emit_insert_bitfield(const char *container, const char *val, Member *mem, int load_bits, int indent)
+{
+  uint64_t all_ones = (load_bits == 64) ? ~0ULL : ((1ULL << load_bits) - 1);
+  uint64_t width_mask = (mem->bit_width >= 64) ? ~0ULL : ((1ULL << mem->bit_width) - 1);
+
+  const char *val_masked = new_reg();
+  emit_indent(indent);
+  emit("%s = and i%d %s, %lu\n", val_masked, load_bits, val, width_mask);
+
+  const char *val_shifted = new_reg();
+  emit_indent(indent);
+  emit("%s = shl i%d %s, %d\n", val_shifted, load_bits, val_masked, mem->bit_offset);
+
+  uint64_t clear_mask = width_mask << mem->bit_offset;
+  uint64_t inv_clear_mask = all_ones ^ clear_mask;
+  const char *container_cleared = new_reg();
+  emit_indent(indent);
+  emit("%s = and i%d %s, %lu\n", container_cleared, load_bits, container, inv_clear_mask);
+
+  const char *result = new_reg();
+  emit_indent(indent);
+  emit("%s = or i%d %s, %s\n", result, load_bits, container_cleared, val_shifted);
+  return result;
+}
+
 static const char *emit_lval(Node *node, int indent)
 {
   switch (node->kind)
@@ -195,6 +265,41 @@ static const char *emit_lval(Node *node, int indent)
     emit(", ptr %s\n", addr);
     return r;
   }
+  case ND_MEMBER:
+  {
+    const char *base = emit_expr(node->lhs, indent);
+    const char *base_i8 = new_reg();
+    emit_indent(indent);
+    emit("%s = getelementptr i8, ptr %s, i32 0\n", base_i8, base);
+    const char *addr = new_reg();
+    emit_indent(indent);
+    emit("%s = getelementptr i8, ptr %s, i32 %d\n", addr, base_i8, node->member->offset);
+
+    if (node->ty->kind == TY_ARRAY || node->ty->kind == TY_STRUCT ||
+        node->ty->kind == TY_UNION || node->ty->kind == TY_FUNC ||
+        node->ty->kind == TY_VLA)
+      return addr;
+
+    Member *mem = node->member;
+    int load_bits = load_bits_for_member(mem);
+    const char *r = new_reg();
+    if (mem->is_bitfield && mem->ty->kind == TY_BOOL)
+    {
+      emit_indent(indent);
+      emit("%s = load i8, ptr %s\n", r, addr);
+    }
+    else
+    {
+      emit_indent(indent);
+      emit("%s = load ", r);
+      emit_type_str(node->ty);
+      emit(", ptr %s\n", addr);
+    }
+
+    if (mem->is_bitfield)
+      return emit_extract_bitfield(r, mem, load_bits, indent);
+    return r;
+  }
   default:
     error_tok(node->tok, "emit_lval: unexpected node kind %d", node->kind);
     return NULL;
@@ -218,6 +323,27 @@ static int int_type_bits(Type *ty)
 static bool is_float_type(Type *ty)
 {
   return ty->kind == TY_FLOAT || ty->kind == TY_DOUBLE || ty->kind == TY_LDOUBLE;
+}
+
+static const char *emit_to_bool(const char *val, Type *ty, int indent)
+{
+  if (ty->kind == TY_BOOL)
+    return val;
+  const char *r = new_reg();
+  emit_indent(indent);
+  if (is_float_type(ty))
+  {
+    emit("%s = fcmp une ", r);
+    emit_type_str(ty);
+    emit(" %s, 0.0\n", val);
+  }
+  else
+  {
+    emit("%s = icmp ne ", r);
+    emit_type_str(ty);
+    emit(" %s, 0\n", val);
+  }
+  return r;
 }
 
 static void emit_float_const(const char *reg, Node *node)
@@ -262,9 +388,10 @@ static const char *emit_expr(Node *node, int indent)
     return r;
   }
   case ND_VAR:
+  case ND_MEMBER:
     return emit_lval(node, indent);
-case ND_DEREF:
-     return emit_lval(node, indent);
+  case ND_DEREF:
+    return emit_lval(node, indent);
    case ND_ASSIGN:
    {
      const char *addr;
@@ -282,19 +409,61 @@ case ND_DEREF:
        break;
      }
      case ND_MEMBER:
-     {
-       const char *base_ptr = emit_expr(node->lhs->lhs, indent);
-       // Convert base_ptr to i8* pointer
-       const char *base_ptr_i8 = new_reg();
-       emit_indent(indent);
-       emit("%s = getelementptr i8, ptr %s, i32 0\n", base_ptr_i8, base_ptr);
-       // Now compute the address of the member: base_ptr_i8 + offset
-       const char *addr_tmp = new_reg();
-       emit_indent(indent);
-       emit("%s = getelementptr i8, ptr %s, i32 %d\n", addr_tmp, base_ptr_i8, node->lhs->member->offset);
-       addr = addr_tmp;
-       break;
-     }
+      {
+        Member *lhs_mem = node->lhs->member;
+        const char *base_ptr = emit_expr(node->lhs->lhs, indent);
+        const char *base_ptr_i8 = new_reg();
+        emit_indent(indent);
+        emit("%s = getelementptr i8, ptr %s, i32 0\n", base_ptr_i8, base_ptr);
+        const char *addr_tmp = new_reg();
+        emit_indent(indent);
+        emit("%s = getelementptr i8, ptr %s, i32 %d\n", addr_tmp, base_ptr_i8, node->lhs->member->offset);
+        addr = addr_tmp;
+
+        if (lhs_mem->is_bitfield)
+        {
+          int load_bits = load_bits_for_member(lhs_mem);
+          const char *val = emit_expr(node->rhs, indent);
+          int val_bits = int_type_bits(node->rhs->ty);
+          const char *val_trunc = val;
+          if (val_bits > 0 && val_bits != load_bits)
+          {
+            val_trunc = new_reg();
+            emit_indent(indent);
+            if (val_bits > load_bits)
+              emit("%s = trunc i%d %s to i%d\n", val_trunc, val_bits, val, load_bits);
+            else
+              emit("%s = zext i%d %s to i%d\n", val_trunc, val_bits, val, load_bits);
+          }
+          const char *container;
+          if (lhs_mem->ty->kind == TY_BOOL)
+          {
+            container = new_reg();
+            emit_indent(indent);
+            emit("%s = load i8, ptr %s\n", container, addr);
+          }
+          else
+          {
+            container = new_reg();
+            emit_indent(indent);
+            emit("%s = load ", container);
+            emit_type_str(node->ty);
+            emit(", ptr %s\n", addr);
+          }
+          const char *new_container = emit_insert_bitfield(container, val_trunc, lhs_mem, load_bits, indent);
+          emit_indent(indent);
+          if (lhs_mem->ty->kind == TY_BOOL)
+            emit("store i8 %s, ptr %s\n", new_container, addr);
+          else
+          {
+            emit("store ");
+            emit_type_str(node->ty);
+            emit(" %s, ptr %s\n", new_container, addr);
+          }
+          return val;
+        }
+        break;
+      }
      default:
        error_tok(node->tok, "emit_expr ND_ASSIGN: unexpected lhs kind %d", node->lhs->kind);
        addr = NULL;
@@ -449,25 +618,43 @@ case ND_DEREF:
     const char *l = emit_expr(node->lhs, indent);
     const char *r = emit_expr(node->rhs, indent);
     const char *reg = new_reg();
-    const char *op;
-    switch (node->kind)
-    {
-    case ND_ADD: op = "add"; break;
-    case ND_SUB: op = "sub"; break;
-    case ND_MUL: op = "mul"; break;
-    case ND_DIV: op = node->ty->is_unsigned ? "udiv" : "sdiv"; break;
-    case ND_MOD: op = node->ty->is_unsigned ? "urem" : "srem"; break;
-    case ND_BITAND: op = "and"; break;
-    case ND_BITOR: op = "or"; break;
-    case ND_BITXOR: op = "xor"; break;
-    case ND_SHL: op = "shl"; break;
-    case ND_SHR: op = node->ty->is_unsigned ? "lshr" : "ashr"; break;
-    default: op = "???"; break;
-    }
     emit_indent(indent);
-    emit("%s = %s ", reg, op);
-    emit_type_str(node->ty);
-    emit(" %s, %s\n", l, r);
+    if (is_float_type(node->ty))
+    {
+      const char *op;
+      switch (node->kind)
+      {
+      case ND_ADD: op = "fadd"; break;
+      case ND_SUB: op = "fsub"; break;
+      case ND_MUL: op = "fmul"; break;
+      case ND_DIV: op = "fdiv"; break;
+      default: op = "???"; break;
+      }
+      emit("%s = %s ", reg, op);
+      emit_type_str(node->ty);
+      emit(" %s, %s\n", l, r);
+    }
+    else
+    {
+      const char *op;
+      switch (node->kind)
+      {
+      case ND_ADD: op = "add"; break;
+      case ND_SUB: op = "sub"; break;
+      case ND_MUL: op = "mul"; break;
+      case ND_DIV: op = node->ty->is_unsigned ? "udiv" : "sdiv"; break;
+      case ND_MOD: op = node->ty->is_unsigned ? "urem" : "srem"; break;
+      case ND_BITAND: op = "and"; break;
+      case ND_BITOR: op = "or"; break;
+      case ND_BITXOR: op = "xor"; break;
+      case ND_SHL: op = "shl"; break;
+      case ND_SHR: op = node->ty->is_unsigned ? "lshr" : "ashr"; break;
+      default: op = "???"; break;
+      }
+      emit("%s = %s ", reg, op);
+      emit_type_str(node->ty);
+      emit(" %s, %s\n", l, r);
+    }
     return reg;
   }
   case ND_EQ:
@@ -477,33 +664,98 @@ case ND_DEREF:
   {
     const char *l = emit_expr(node->lhs, indent);
     const char *r = emit_expr(node->rhs, indent);
-    const char *cond;
-    switch (node->kind)
-    {
-    case ND_EQ: cond = "eq"; break;
-    case ND_NE: cond = "ne"; break;
-    case ND_LT: cond = node->ty->is_unsigned ? "ult" : "slt"; break;
-    case ND_LE: cond = node->ty->is_unsigned ? "ule" : "sle"; break;
-    default: cond = "???"; break;
-    }
     const char *tmp = new_reg();
     emit_indent(indent);
-    emit("%s = icmp %s ", tmp, cond);
-    emit_type_str(node->lhs->ty);
-    emit(" %s, %s\n", l, r);
+    if (is_float_type(node->lhs->ty))
+    {
+      const char *cond;
+      switch (node->kind)
+      {
+      case ND_EQ: cond = "oeq"; break;
+      case ND_NE: cond = "une"; break;
+      case ND_LT: cond = "olt"; break;
+      case ND_LE: cond = "ole"; break;
+      default: cond = "???"; break;
+      }
+      emit("%s = fcmp %s ", tmp, cond);
+      emit_type_str(node->lhs->ty);
+      emit(" %s, %s\n", l, r);
+    }
+    else
+    {
+      const char *cond;
+      switch (node->kind)
+      {
+      case ND_EQ: cond = "eq"; break;
+      case ND_NE: cond = "ne"; break;
+      case ND_LT: cond = node->ty->is_unsigned ? "ult" : "slt"; break;
+      case ND_LE: cond = node->ty->is_unsigned ? "ule" : "sle"; break;
+      default: cond = "???"; break;
+      }
+      emit("%s = icmp %s ", tmp, cond);
+      emit_type_str(node->lhs->ty);
+      emit(" %s, %s\n", l, r);
+    }
     const char *reg = new_reg();
     emit_indent(indent);
     emit("%s = zext i1 %s to i32\n", reg, tmp);
     return reg;
+  }
+  case ND_LOGAND:
+  case ND_LOGOR:
+  {
+    int id = ir_reg++;
+    const char *entry_label = format(".L.log.entry.%d", id);
+    const char *rhs_label = format(".L.log.rhs.%d", id);
+    const char *end_label = format(".L.log.end.%d", id);
+
+    emit_indent(indent);
+    emit("br label %%%s\n", entry_label);
+    emit("%s:\n", entry_label);
+    const char *l_bool = emit_to_bool(emit_expr(node->lhs, indent), node->lhs->ty, indent);
+
+    if (node->kind == ND_LOGAND)
+    {
+      emit_indent(indent);
+      emit("br i1 %s, label %%%s, label %%%s\n", l_bool, rhs_label, end_label);
+    }
+    else
+    {
+      emit_indent(indent);
+      emit("br i1 %s, label %%%s, label %%%s\n", l_bool, end_label, rhs_label);
+    }
+
+    emit("%s:\n", rhs_label);
+    const char *r_bool = emit_to_bool(emit_expr(node->rhs, indent), node->rhs->ty, indent);
+    emit_indent(indent);
+    emit("br label %%%s\n", end_label);
+
+    emit("%s:\n", end_label);
+    const char *result = new_reg();
+    emit_indent(indent);
+    const char *entry_result = (node->kind == ND_LOGAND) ? "false" : "true";
+    emit("%s = phi i1 [ %s, %%%s ], [ %s, %%%s ]\n",
+         result, entry_result, entry_label, r_bool, rhs_label);
+
+    const char *final = new_reg();
+    emit_indent(indent);
+    emit("%s = zext i1 %s to i32\n", final, result);
+    return final;
   }
   case ND_NEG:
   {
     const char *v = emit_expr(node->lhs, indent);
     const char *reg = new_reg();
     emit_indent(indent);
-    emit("%s = sub ", reg);
+    if (is_float_type(node->ty))
+      emit("%s = fneg ", reg);
+    else
+      emit("%s = sub ", reg);
     emit_type_str(node->ty);
-    emit(" 0, %s\n", v);
+    if (is_float_type(node->ty))
+      emit(" %s\n", v);
+    else
+      emit(" 0, %s\n", v);
     return reg;
   }
   case ND_BITNOT:
