@@ -543,12 +543,35 @@ void add_type(Node *node)
     return;
   case ND_ADD:
   case ND_SUB:
+    if ((node->lhs->ty->kind == TY_PTR || node->rhs->ty->kind == TY_PTR ||
+         is_array(node->lhs->ty) || is_array(node->rhs->ty)) &&
+        !is_vector(node->lhs->ty) && !is_vector(node->rhs->ty))
+    {
+      Type *ty;
+      if (node->lhs->ty->kind == TY_PTR || is_array(node->lhs->ty))
+        ty = node->lhs->ty;
+      else
+        ty = node->rhs->ty;
+      if (ty->kind == TY_ARRAY || ty->kind == TY_VLA)
+        node->ty = pointer_to(ty->base);
+      else
+        node->ty = ty;
+      return;
+    }
+    if (is_vector(node->lhs->ty) && is_vector(node->rhs->ty)) {
+          node->ty = node->lhs->ty;
+    } else {
+
+        usual_arith_conv(&node->lhs, &node->rhs);
+        node->ty = node->lhs->ty;
+    }
+    return;
   case ND_MUL:
   case ND_DIV:
   case ND_MOD:
   case ND_BITAND:
   case ND_BITOR:
-  case ND_BITXOR:    
+  case ND_BITXOR:
     if (is_vector(node->lhs->ty) && is_vector(node->rhs->ty)) {
           node->ty = node->lhs->ty;
     } else {

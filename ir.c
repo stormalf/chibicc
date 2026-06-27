@@ -454,7 +454,15 @@ static void emit_float_const(const char *reg, Node *node)
   }
   else
   {
-    emit("%s = fadd x86_fp80 0xK3FFF8000000000000000, 0xK3FFF8000000000000000\n", reg);
+    union { long double f; uint8_t bytes[16]; } u;
+    u.f = node->fval;
+    unsigned long long mantissa = 0;
+    int i;
+    for (i = 0; i < 8; i++)
+      mantissa |= (unsigned long long)u.bytes[i] << (i * 8);
+    unsigned exponent = (u.bytes[9] << 8) | u.bytes[8];
+    emit("%s = fadd x86_fp80 0xK%04X%016llX, 0xK00000000000000000000\n",
+         reg, exponent, mantissa);
   }
 }
 
