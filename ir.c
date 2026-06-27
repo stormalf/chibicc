@@ -2,6 +2,7 @@
 
 static FILE *output_file;
 static int ir_reg;
+static const char *current_block;
 
 static void emit_stmt(Node *node, int indent, bool *terminated);
 
@@ -25,6 +26,12 @@ static void emit(const char *fmt, ...)
   va_start(ap, fmt);
   vfprintf(output_file, fmt, ap);
   va_end(ap);
+}
+
+static void emit_label(const char *label)
+{
+  current_block = label;
+  emit("%s:\n", label);
 }
 
 static const char *new_reg(void)
@@ -917,27 +924,31 @@ static const char *emit_expr(Node *node, int indent)
     emit_indent(indent);
     emit("br i1 %s, label %%%s, label %%%s\n", cond_bool, true_label, false_label);
 
-    emit("%s:\n", true_label);
+    emit_label(true_label);
     const char *true_val = emit_expr(node->then, indent);
+    const char *true_pred = current_block ? current_block : true_label;
     emit_indent(indent);
     emit("br label %%%s\n", merge_label);
+    current_block = NULL;
 
-    emit("%s:\n", false_label);
+    emit_label(false_label);
     const char *false_val = emit_expr(node->els, indent);
+    const char *false_pred = current_block ? current_block : false_label;
     emit_indent(indent);
     emit("br label %%%s\n", merge_label);
+    current_block = NULL;
 
     if (node->ty->kind == TY_VOID)
       return NULL;
 
-    emit("%s:\n", merge_label);
+    emit_label(merge_label);
     const char *reg = new_reg();
     emit_indent(indent);
     emit("%s = phi ", reg);
     emit_type_str(node->ty);
     emit(" [%s, %%%s], [%s, %%%s]\n",
-         true_val ? true_val : "0", true_label,
-         false_val ? false_val : "0", false_label);
+         true_val ? true_val : "0", true_pred,
+         false_val ? false_val : "0", false_pred);
     return reg;
   }
   case ND_ADDR:
@@ -1356,7 +1367,10 @@ static void emit_func(Obj *fn)
   emit_stmt(fn->body, 2, &terminated);
   if (!terminated)
   {
-    emit("  unreachable\n");
+    if (fn->ty->return_ty->kind == TY_VOID)
+      emit("  ret void\n");
+    else
+      emit("  unreachable\n");
   }
   emit("}\n\n");
 }
