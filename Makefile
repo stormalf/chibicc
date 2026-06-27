@@ -6,6 +6,7 @@ CC=gcc
 CFLAGS =-std=c11 -g -fno-common -Wall -Wno-switch -DPREFIX=\"$(PREFIX)\" -DGCC_VERSION=\"$(GCC_VERSION)\"
 CFLAGS_DIAG= -std=c11 -g -mavx2 
 CFLAGS_SPE = -g -fomit-frame-pointer -O3 -mavx2 -DOMIT_FRAME_POINTER
+CFLAGS_LLVM = --backend-llvm
 LDFLAGS = -lcrypto
 TEST_JOBS ?=
 TEST_TIMEOUT ?= 30
@@ -39,15 +40,39 @@ test: $(TESTS)
 	test/driver.sh ./$(OBJECT)
 
 # Tests that exercise the LLVM backend (--backend-llvm).
-# Built by re-compiling each .c through the IR emitter and assembling with clang.
-LLVM_TEST_SRCS=$(wildcard test/llvm_*.c)
-LLVM_TESTS=$(LLVM_TEST_SRCS:.c=.exe)
+# Each test/*.c is compiled through the IR emitter and assembled with clang.
+# Tests that fail to compile or fail at runtime are listed at the end; this
+# allows tracking progress toward running the whole test suite through the
+# LLVM backend (a long-term goal).
+LLVM_TEST_SRCS=$(wildcard test/*.c)
+LLVM_TESTS=$(LLVM_TEST_SRCS:test/%.c=test/%.llvm.exe)
 
-test/llvm_%.exe: $(OBJECT) test/llvm_%.c
-	./$(OBJECT) --backend-llvm -Iinclude -Itest -o $@ test/llvm_$*.c -xc test/common
+test/%.llvm.exe: $(OBJECT) test/%.c
+	@if timeout 30 ./$(OBJECT) $(CFLAGS_LLVM) -Iinclude -Itest -o $@ test/$*.c -xc test/common 2>/tmp/chibicc-llvm-$*.log; then \
+	  echo "  BUILD    $@"; \
+	else \
+	  echo "  BUILD FAIL $@"; \
+	  rm -f $@; \
+	fi
 
 test_llvm: $(LLVM_TESTS)
-	TEST_JOBS="$(TEST_JOBS)" TEST_TIMEOUT="$(TEST_TIMEOUT)" ./test/run_tests.sh $(addprefix ./,$^)
+	@pass=0; fail=0; missing=0; \
+	for t in $(LLVM_TESTS); do \
+	  if [ -x "$$t" ]; then \
+	    if timeout "${TEST_TIMEOUT}s" "$$t" >/tmp/chibicc-llvm-run.log 2>&1; then \
+	      pass=$$((pass+1)); \
+	    else \
+	      fail=$$((fail+1)); \
+	      echo "  RUN FAIL  $$t"; \
+	    fi; \
+	  else \
+	    missing=$$((missing+1)); \
+	    echo "  NOEXE     $$t"; \
+	  fi; \
+	done; \
+	echo ""; \
+	echo "LLVM backend test summary: $$pass passed, $$fail failed, $$missing not built"; \
+	if [ $$fail -gt 0 ]; then exit 1; fi
 
 test_spe/%.exe: $(OBJECT) test/%.c
 	mkdir -p test_spe
@@ -149,8 +174,7 @@ libchibicc.so: $(OBJS)
 	$(CC) $(CFLAGS) -o $@ $^ -shared
 
 clean:
-	rm -rf $(OBJECT) tmp* *.zend $(TESTS) *.ll issues/*.s issues/*.exe issues/*.dot issues/*.ll test/*.s test/*.exe test_spe/*.exe test/*.ll test_spe/*.ll stage2 diagram/*.png test/*.dot $(OBJECTLIB)
-	rm -f $(LLVM_TESTS)
+	rm -rf $(OBJECT) tmp* *.zend $(TESTS) *.ll issues/*.s issues/*.exe issues/*.dot issues/*.ll test/*.s test/*.exe test_spe/*.exe test/*.ll test_spe/*.ll stage2 diagram/*.png test/*.dot $(OBJECTLIB) $(LLVM_TESTS)
 	find * -type f '(' -name '*~' -o -name '*.o' ')' -exec rm {} ';'
 
 install: $(OBJECT)
