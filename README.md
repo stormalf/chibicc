@@ -585,6 +585,8 @@ cpython: git clone https://github.com/python/cpython.git
     - some basic debug information (dwarf information)
     - adding support on __m256 avx2
     - adding support __Float32
+    - adding --emit-ir to generate llvm IR
+    - adding --backend-llvm to use llc as backend to generate executable
 
  
 ## TODO
@@ -652,7 +654,7 @@ Example of diagram generated with -dotfile parameter :
 ## release notes
 
 
-1.0.25    Adding promotion to int on variadic argument. Fixing issue with mistake on help on -fomit-frame-pointer. Fixing issue with assign_lvar_offsets that skipped some offsets already assigned by extended assembly and caused failure on some cpython tests. Adding --eh-frame-hdr needed by glibc's backtrace. Disabling tail call optimization when volatile local variable is found. Reporting commit 4f4c864c3f6872d3c7c53c66fe2db1bf8143bb02 from slimcc (about variable scope instead of flat list). Fixing ISS-209 extended assembly issue found during openssh-portable compile. Adding builtin missing when __OPTIMIZE__ is enabled. Updating __GNUC__ from 4 to 5 and implementing __Float32 support. Supporting -ffreestanding, -fvisibility=hidden, -Wno-implicit-function-declaration. Managing pragma visibility found during vlc compile. Managing attributes used, returns_twice, noinline. Tracking used and unused variables and managing -Wunused-variable and -Wno-unused-variable flags. Tracking unused parameters and managing corresponding flag including -Wall.
+1.0.25    Adding promotion to int on variadic argument. Fixing issue with mistake on help on -fomit-frame-pointer. Fixing issue with assign_lvar_offsets that skipped some offsets already assigned by extended assembly and caused failure on some cpython tests. Adding --eh-frame-hdr needed by glibc's backtrace. Disabling tail call optimization when volatile local variable is found. Reporting commit 4f4c864c3f6872d3c7c53c66fe2db1bf8143bb02 from slimcc (about variable scope instead of flat list). Fixing ISS-209 extended assembly issue found during openssh-portable compile. Adding builtin missing when __OPTIMIZE__ is enabled. Updating __GNUC__ from 4 to 5 and implementing __Float32 support. Supporting -ffreestanding, -fvisibility=hidden, -Wno-implicit-function-declaration. Managing pragma visibility found during vlc compile. Managing attributes used, returns_twice, noinline. Tracking used and unused variables and managing -Wunused-variable and -Wno-unused-variable flags. Tracking unused parameters and managing corresponding flag including -Wall. Implementing --emit-ir and --backend-llvm in progress.
 
 
 
