@@ -548,16 +548,6 @@ static const char *ir_emit_atomic_load(const char *ptr, Type *ty, int memorder, 
   // LLVM requires atomic memory accesses to be at least one byte wide;
   // TY_BOOL (i1) must be widened to i8 for the load instruction.
   int load_bits = bits < 8 ? 8 : bits;
-  // LLVM does not support atomic load on types wider than 64 bits.
-  if (load_bits > 64)
-  {
-    emit_indent(indent);
-    emit("; UNSUPPORTED: atomic load on %d-bit type\n", load_bits);
-    const char *r = new_reg();
-    emit_indent(indent);
-    emit("%s = add i32 0, 0\n", r);
-    return r;
-  }
   const char *r = new_reg();
   emit_indent(indent);
   emit("%s = load atomic i%d, ptr %s %s, align %d\n",
@@ -582,13 +572,6 @@ static void ir_emit_atomic_store(const char *val, const char *ptr, Type *ty,
   // LLVM requires atomic memory accesses to be at least one byte wide;
   // widen i1 to i8 before storing.
   int store_bits = bits < 8 ? 8 : bits;
-  // LLVM does not support atomic store on types wider than 64 bits.
-  if (store_bits > 64)
-  {
-    emit_indent(indent);
-    emit("; UNSUPPORTED: atomic store on %d-bit type\n", store_bits);
-    return;
-  }
   const char *store_val = val;
   if (bits == 1)
   {
@@ -612,16 +595,6 @@ static const char *ir_emit_atomicrmw(const char *op, const char *ptr, const char
   // TY_BOOL (i1) must be widened to i8 for atomicrmw/load/store.
   if (bits < 8)
     bits = 8;
-  // LLVM does not support atomicrmw on types wider than 64 bits.
-  if (bits > 64)
-  {
-    emit_indent(indent);
-    emit("; UNSUPPORTED: atomicrmw on %d-bit type\n", bits);
-    const char *r = new_reg();
-    emit_indent(indent);
-    emit("%s = add i32 0, 0\n", r);
-    return r;
-  }
   const char *r = new_reg();
   emit_indent(indent);
   emit("%s = atomicrmw %s ptr %s, i%d %s %s\n",
@@ -2236,36 +2209,6 @@ static const char *gen_ir_label_val(Node *node, int indent)
 // the LLVM register that holds the result, or NULL for void operations
 // such as stores, clears, and fences.
 
-// Emit an LLVM cmpxchg with the requested type and orderings, returning
-// the {old, success} pair.  Types wider than 64 bits fall back to a
-// stub (these types are rare in real code and would require
-// platform-specific handling such as cmpxchg16b).
-static const char *ir_emit_cmpxchg(const char *ptr, const char *expected,
-                                   const char *desired, Type *ty,
-                                   int succ, int fail, int indent)
-{
-  int bits = int_type_bits(ty);
-  if (bits <= 0) bits = (ty->size > 0) ? ty->size * 8 : 32;
-  if (bits < 8)
-    bits = 8;
-  if (bits > 64)
-  {
-    emit_indent(indent);
-    emit("; UNSUPPORTED: cmpxchg on %d-bit type\n", bits);
-    const char *r = new_reg();
-    emit_indent(indent);
-    emit("%s = add i32 0, 0\n", r);
-    return r;
-  }
-  const char *pair = new_reg();
-  emit_indent(indent);
-  emit("%s = cmpxchg ptr %s, i%d %s, i%d %s %s %s\n",
-       pair, ptr, bits, expected, bits, desired,
-       ir_atomic_ordering(succ), ir_atomic_ordering(fail));
-  return pair;
-}
-
-
 static const char *gen_ir_cas(Node *node, int indent)
 {
   // For ND_CAS (legacy sync-style "compare and swap"), cas_old is a
@@ -2278,8 +2221,14 @@ static const char *gen_ir_cas(Node *node, int indent)
   const char *cold = emit_expr(node->cas_old, indent);
   int ordering = node->memorder ? node->memorder : 5;
   const char *old_val = ir_emit_atomic_load(cold, ty, 5, indent);
-  const char *pair = ir_emit_cmpxchg(addr, old_val, cnew, ty,
-                                     ordering, ordering, indent);
+  const char *pair = new_reg();
+  emit_indent(indent);
+  emit("%s = cmpxchg ptr %s, ", pair, addr);
+  emit_type_str(ty);
+  emit(" %s, ", old_val);
+  emit_type_str(ty);
+  emit(" %s %s %s\n",
+       cnew, ir_atomic_ordering(ordering), ir_atomic_ordering(ordering));
   // Return the success flag (i1); downstream ND_CAST converts to the
   // user-visible type.
   const char *r = new_reg();
@@ -2305,8 +2254,14 @@ static const char *gen_ir_cas_n(Node *node, int indent)
   const char *cnew = emit_expr(node->cas_new, indent);
   const char *old_val = emit_expr(node->cas_old, indent);
   int ordering = node->memorder ? node->memorder : 5;
-  const char *pair = ir_emit_cmpxchg(addr, old_val, cnew, ty,
-                                     ordering, ordering, indent);
+  const char *pair = new_reg();
+  emit_indent(indent);
+  emit("%s = cmpxchg ptr %s, ", pair, addr);
+  emit_type_str(ty);
+  emit(" %s, ", old_val);
+  emit_type_str(ty);
+  emit(" %s %s %s\n",
+       cnew, ir_atomic_ordering(ordering), ir_atomic_ordering(ordering));
   // Return the OLD value (extractvalue index 0).  Matches gen_cas_n
   // in codegen.c which leaves the previous value of *p in rax after
   // `lock cmpxchg`.
@@ -2351,8 +2306,14 @@ static const char *gen_ir_cmpxchg(Node *node, int indent)
   const char *expected = ir_emit_atomic_load(
       emit_expr(node->cas_expected, indent), ty, 5, indent);
   const char *desired = emit_expr(node->cas_desired, indent);
-  const char *pair = ir_emit_cmpxchg(ptr, expected, desired, ty,
-                                     succ, fail, indent);
+  const char *pair = new_reg();
+  emit_indent(indent);
+  emit("%s = cmpxchg ptr %s, ", pair, ptr);
+  emit_type_str(ty);
+  emit(" %s, ", expected);
+  emit_type_str(ty);
+  emit(" %s %s %s\n",
+       desired, ir_atomic_ordering(succ), ir_atomic_ordering(fail));
   const char *r = new_reg();
   emit_indent(indent);
   emit("%s = extractvalue {", r);
@@ -2365,9 +2326,10 @@ static const char *gen_ir_cmpxchg(Node *node, int indent)
 static const char *gen_ir_cmpxchg_n(Node *node, int indent)
 {
   // For ND_CMPEXCH_N (from __atomic_compare_exchange_n), cas_expected
-  // is a POINTER to the expected value.  chibicc's ND_CMPEXCH_N is
-  // bool-returning (see type.c line 932) and gen_cmpxchgn in codegen.c
-  // writes `sete; movzbl`; we mirror that here.
+  // is a POINTER to the expected value (matches gen_cmpxchgn in
+  // codegen.c, which dereferences it before cmpxchg).  The function
+  // returns the bool success flag (chibicc semantics; see comment in
+  // gen_ir_cas_n).
   int succ = node->cas_success ? node->cas_success->val : 5;
   int fail = node->cas_failure ? node->cas_failure->val : 5;
   Type *ty = (node->cas_ptr && node->cas_ptr->ty->base)
@@ -2376,8 +2338,14 @@ static const char *gen_ir_cmpxchg_n(Node *node, int indent)
   const char *expected = ir_emit_atomic_load(
       emit_expr(node->cas_expected, indent), ty, 5, indent);
   const char *desired = emit_expr(node->cas_desired, indent);
-  const char *pair = ir_emit_cmpxchg(ptr, expected, desired, ty,
-                                     succ, fail, indent);
+  const char *pair = new_reg();
+  emit_indent(indent);
+  emit("%s = cmpxchg ptr %s, ", pair, ptr);
+  emit_type_str(ty);
+  emit(" %s, ", expected);
+  emit_type_str(ty);
+  emit(" %s %s %s\n",
+       desired, ir_atomic_ordering(succ), ir_atomic_ordering(fail));
   const char *r = new_reg();
   emit_indent(indent);
   emit("%s = extractvalue {", r);
@@ -2397,8 +2365,13 @@ static const char *gen_ir_bool_cas(Node *node, int indent)
   const char *ptr = emit_expr(node->cas_ptr, indent);
   const char *expected = emit_expr(node->cas_expected, indent);
   const char *desired = emit_expr(node->cas_desired, indent);
-  const char *pair = ir_emit_cmpxchg(ptr, expected, desired, ty,
-                                     5, 5, indent);
+  const char *pair = new_reg();
+  emit_indent(indent);
+  emit("%s = cmpxchg ptr %s, ", pair, ptr);
+  emit_type_str(ty);
+  emit(" %s, ", expected);
+  emit_type_str(ty);
+  emit(" %s seq_cst seq_cst\n", desired);
   const char *r = new_reg();
   emit_indent(indent);
   emit("%s = extractvalue {", r);
@@ -3258,3 +3231,4 @@ void emit_ir(Obj *prog, FILE *out)
     }
   }
 }
+
