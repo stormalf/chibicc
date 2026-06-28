@@ -61,6 +61,38 @@ static const char *gen_ir_builtin_mul_overflow(Node *node, int indent);
 static const char *gen_ir_uadd_overflow(Node *node, int indent);
 static const char *gen_ir_umul_overflow(Node *node, int indent);
 static const char *gen_ir_label_val(Node *node, int indent);
+static const char *gen_ir_cas(Node *node, int indent);
+static const char *gen_ir_cas_n(Node *node, int indent);
+static const char *gen_ir_exch(Node *node, int indent);
+static const char *gen_ir_exch_n(Node *node, int indent);
+static const char *gen_ir_cmpxchg(Node *node, int indent);
+static const char *gen_ir_cmpxchg_n(Node *node, int indent);
+static const char *gen_ir_bool_cas(Node *node, int indent);
+static const char *gen_ir_load(Node *node, int indent);
+static const char *gen_ir_load_n(Node *node, int indent);
+static const char *gen_ir_store(Node *node, int indent);
+static const char *gen_ir_store_n(Node *node, int indent);
+static const char *gen_ir_clear(Node *node, int indent);
+static const char *gen_ir_release(Node *node, int indent);
+static const char *gen_ir_testandset(Node *node, int indent);
+static const char *gen_ir_testandseta(Node *node, int indent);
+static const char *gen_ir_fetchadd(Node *node, int indent);
+static const char *gen_ir_fetchsub(Node *node, int indent);
+static const char *gen_ir_addfetch(Node *node, int indent);
+static const char *gen_ir_subfetch(Node *node, int indent);
+static const char *gen_ir_orfetch(Node *node, int indent);
+static const char *gen_ir_andfetch(Node *node, int indent);
+static const char *gen_ir_xorfetch(Node *node, int indent);
+static const char *gen_ir_fetchand(Node *node, int indent);
+static const char *gen_ir_fetchor(Node *node, int indent);
+static const char *gen_ir_fetchxor(Node *node, int indent);
+static const char *gen_ir_fetchnand(Node *node, int indent);
+static const char *gen_ir_nandfetch(Node *node, int indent);
+static const char *gen_ir_add_and_fetch(Node *node, int indent);
+static const char *gen_ir_sub_and_fetch(Node *node, int indent);
+static const char *gen_ir_sync(Node *node, int indent);
+static const char *gen_ir_membarrier(Node *node, int indent);
+static const char *gen_ir_atomic_is_lock_free(Node *node, int indent);
 static const char *gen_ir_default(Node *node, int indent);
 static void gen_ir_stmt_block(Node *node, int indent, bool *terminated);
 static void gen_ir_stmt_return(Node *node, int indent, bool *terminated);
@@ -490,6 +522,122 @@ static bool is_float_type(Type *ty)
   return ty->kind == TY_FLOAT || ty->kind == TY_DOUBLE || ty->kind == TY_LDOUBLE;
 }
 
+// === Atomic helpers ===
+// Map a chibicc __ATOMIC_* memory order constant to the LLVM atomic
+// ordering keyword (monotonic/acquire/release/acq_rel/seq_cst).  chibicc
+// uses the same 0..5 numbering as the C11/_Atomic header file.
+static const char *ir_atomic_ordering(int memorder)
+{
+  switch (memorder)
+  {
+  case 0: return "monotonic";
+  case 1: return "monotonic";
+  case 2: return "acquire";
+  case 3: return "release";
+  case 4: return "acq_rel";
+  case 5: return "seq_cst";
+  default: return "seq_cst";
+  }
+}
+
+// Emit an integer atomic load with the requested ordering.
+static const char *ir_emit_atomic_load(const char *ptr, Type *ty, int memorder, int indent)
+{
+  int bits = int_type_bits(ty);
+  if (bits <= 0) bits = (ty->size > 0) ? ty->size * 8 : 32;
+  // LLVM requires atomic memory accesses to be at least one byte wide;
+  // TY_BOOL (i1) must be widened to i8 for the load instruction.
+  int load_bits = bits < 8 ? 8 : bits;
+  // LLVM does not support atomic load on types wider than 64 bits.
+  if (load_bits > 64)
+  {
+    emit_indent(indent);
+    emit("; UNSUPPORTED: atomic load on %d-bit type\n", load_bits);
+    const char *r = new_reg();
+    emit_indent(indent);
+    emit("%s = add i32 0, 0\n", r);
+    return r;
+  }
+  const char *r = new_reg();
+  emit_indent(indent);
+  emit("%s = load atomic i%d, ptr %s %s, align %d\n",
+       r, load_bits, ptr, ir_atomic_ordering(memorder), ty->align);
+  // Narrow the i8 result back to i1 for boolean types.
+  if (bits == 1)
+  {
+    const char *trunc = new_reg();
+    emit_indent(indent);
+    emit("%s = trunc i8 %s to i1\n", trunc, r);
+    return trunc;
+  }
+  return r;
+}
+
+// Emit an integer atomic store with the requested ordering.
+static void ir_emit_atomic_store(const char *val, const char *ptr, Type *ty,
+                                 int memorder, int indent)
+{
+  int bits = int_type_bits(ty);
+  if (bits <= 0) bits = (ty->size > 0) ? ty->size * 8 : 32;
+  // LLVM requires atomic memory accesses to be at least one byte wide;
+  // widen i1 to i8 before storing.
+  int store_bits = bits < 8 ? 8 : bits;
+  // LLVM does not support atomic store on types wider than 64 bits.
+  if (store_bits > 64)
+  {
+    emit_indent(indent);
+    emit("; UNSUPPORTED: atomic store on %d-bit type\n", store_bits);
+    return;
+  }
+  const char *store_val = val;
+  if (bits == 1)
+  {
+    store_val = new_reg();
+    emit_indent(indent);
+    emit("%s = zext i1 %s to i8\n", store_val, val);
+  }
+  emit_indent(indent);
+  emit("store atomic i%d %s, ptr %s %s, align %d\n",
+       store_bits, store_val, ptr, ir_atomic_ordering(memorder), ty->align);
+}
+
+// Emit an atomicrmw read-modify-write with the requested LLVM opcode and
+// return the register holding the old value.
+static const char *ir_emit_atomicrmw(const char *op, const char *ptr, const char *val,
+                                     Type *ty, int memorder, int indent)
+{
+  int bits = int_type_bits(ty);
+  if (bits <= 0) bits = (ty->size > 0) ? ty->size * 8 : 32;
+  // LLVM requires atomic memory accesses to be at least one byte wide;
+  // TY_BOOL (i1) must be widened to i8 for atomicrmw/load/store.
+  if (bits < 8)
+    bits = 8;
+  // LLVM does not support atomicrmw on types wider than 64 bits.
+  if (bits > 64)
+  {
+    emit_indent(indent);
+    emit("; UNSUPPORTED: atomicrmw on %d-bit type\n", bits);
+    const char *r = new_reg();
+    emit_indent(indent);
+    emit("%s = add i32 0, 0\n", r);
+    return r;
+  }
+  const char *r = new_reg();
+  emit_indent(indent);
+  emit("%s = atomicrmw %s ptr %s, i%d %s %s\n",
+       r, op, ptr, bits, val, ir_atomic_ordering(memorder));
+  // Narrow the i8 result back to i1 for boolean types so callers see
+  // the original width.
+  if (int_type_bits(ty) == 1)
+  {
+    const char *trunc = new_reg();
+    emit_indent(indent);
+    emit("%s = trunc i8 %s to i1\n", trunc, r);
+    return trunc;
+  }
+  return r;
+}
+
 static const char *emit_to_bool(const char *val, Type *ty, int indent)
 {
   if (ty->kind == TY_BOOL)
@@ -703,6 +851,103 @@ static const char *emit_expr(Node *node, int indent)
 
   case ND_LABEL_VAL:
     return gen_ir_label_val(node, indent);
+
+  case ND_CAS:
+    return gen_ir_cas(node, indent);
+
+  case ND_CAS_N:
+    return gen_ir_cas_n(node, indent);
+
+  case ND_EXCH:
+    return gen_ir_exch(node, indent);
+
+  case ND_EXCH_N:
+    return gen_ir_exch_n(node, indent);
+
+  case ND_CMPEXCH:
+    return gen_ir_cmpxchg(node, indent);
+
+  case ND_CMPEXCH_N:
+    return gen_ir_cmpxchg_n(node, indent);
+
+  case ND_BOOL_CAS:
+    return gen_ir_bool_cas(node, indent);
+
+  case ND_LOAD:
+    return gen_ir_load(node, indent);
+
+  case ND_LOAD_N:
+    return gen_ir_load_n(node, indent);
+
+  case ND_STORE:
+    return gen_ir_store(node, indent);
+
+  case ND_STORE_N:
+    return gen_ir_store_n(node, indent);
+
+  case ND_CLEAR:
+    return gen_ir_clear(node, indent);
+
+  case ND_RELEASE:
+    return gen_ir_release(node, indent);
+
+  case ND_TESTANDSET:
+    return gen_ir_testandset(node, indent);
+
+  case ND_TESTANDSETA:
+    return gen_ir_testandseta(node, indent);
+
+  case ND_FETCHADD:
+    return gen_ir_fetchadd(node, indent);
+
+  case ND_FETCHSUB:
+    return gen_ir_fetchsub(node, indent);
+
+  case ND_ADDFETCH:
+    return gen_ir_addfetch(node, indent);
+
+  case ND_SUBFETCH:
+    return gen_ir_subfetch(node, indent);
+
+  case ND_ORFETCH:
+    return gen_ir_orfetch(node, indent);
+
+  case ND_ANDFETCH:
+    return gen_ir_andfetch(node, indent);
+
+  case ND_XORFETCH:
+    return gen_ir_xorfetch(node, indent);
+
+  case ND_FETCHAND:
+    return gen_ir_fetchand(node, indent);
+
+  case ND_FETCHOR:
+    return gen_ir_fetchor(node, indent);
+
+  case ND_FETCHXOR:
+    return gen_ir_fetchxor(node, indent);
+
+  case ND_FETCHNAND:
+    return gen_ir_fetchnand(node, indent);
+
+  case ND_NANDFETCH:
+    return gen_ir_nandfetch(node, indent);
+
+  case ND_ADD_AND_FETCH:
+    return gen_ir_add_and_fetch(node, indent);
+
+  case ND_SUB_AND_FETCH:
+    return gen_ir_sub_and_fetch(node, indent);
+
+  case ND_SYNC:
+    return gen_ir_sync(node, indent);
+
+  case ND_MEMBARRIER:
+    return gen_ir_membarrier(node, indent);
+
+  case ND_ATOMIC_IS_LOCK_FREE:
+    return gen_ir_atomic_is_lock_free(node, indent);
+
   default:
     return gen_ir_default(node, indent);
   }
@@ -1981,6 +2226,479 @@ static const char *gen_ir_label_val(Node *node, int indent)
 
   error_tok(node->tok, "%s:%d: in %s: emit_expr: ND_LABEL_VAL not supported", __FILE__, __LINE__, __func__);
   return NULL;
+}
+
+
+// === Atomic operations ===
+//
+// All atomic node helpers below emit the corresponding LLVM IR
+// (atomicrmw, cmpxchg, load/store atomic, fence).  Each helper returns
+// the LLVM register that holds the result, or NULL for void operations
+// such as stores, clears, and fences.
+
+// Emit an LLVM cmpxchg with the requested type and orderings, returning
+// the {old, success} pair.  Types wider than 64 bits fall back to a
+// stub (these types are rare in real code and would require
+// platform-specific handling such as cmpxchg16b).
+static const char *ir_emit_cmpxchg(const char *ptr, const char *expected,
+                                   const char *desired, Type *ty,
+                                   int succ, int fail, int indent)
+{
+  int bits = int_type_bits(ty);
+  if (bits <= 0) bits = (ty->size > 0) ? ty->size * 8 : 32;
+  if (bits < 8)
+    bits = 8;
+  if (bits > 64)
+  {
+    emit_indent(indent);
+    emit("; UNSUPPORTED: cmpxchg on %d-bit type\n", bits);
+    const char *r = new_reg();
+    emit_indent(indent);
+    emit("%s = add i32 0, 0\n", r);
+    return r;
+  }
+  const char *pair = new_reg();
+  emit_indent(indent);
+  emit("%s = cmpxchg ptr %s, i%d %s, i%d %s %s %s\n",
+       pair, ptr, bits, expected, bits, desired,
+       ir_atomic_ordering(succ), ir_atomic_ordering(fail));
+  return pair;
+}
+
+
+static const char *gen_ir_cas(Node *node, int indent)
+{
+  // For ND_CAS (legacy sync-style "compare and swap"), cas_old is a
+  // POINTER to the expected value (the parser wraps it with ND_ADDR).
+  // We dereference it before passing the value to LLVM's cmpxchg.
+  Type *ty = (node->cas_addr && node->cas_addr->ty->base)
+             ? node->cas_addr->ty->base : node->ty;
+  const char *addr = emit_expr(node->cas_addr, indent);
+  const char *cnew = emit_expr(node->cas_new, indent);
+  const char *cold = emit_expr(node->cas_old, indent);
+  int ordering = node->memorder ? node->memorder : 5;
+  const char *old_val = ir_emit_atomic_load(cold, ty, 5, indent);
+  const char *pair = ir_emit_cmpxchg(addr, old_val, cnew, ty,
+                                     ordering, ordering, indent);
+  // Return the success flag (i1); downstream ND_CAST converts to the
+  // user-visible type.
+  const char *r = new_reg();
+  emit_indent(indent);
+  emit("%s = extractvalue {", r);
+  emit_type_str(ty);
+  emit(", i1} %s, 1\n", pair);
+  return r;
+}
+
+
+static const char *gen_ir_cas_n(Node *node, int indent)
+{
+  // For ND_CAS_N (the legacy "__sync_val_compare_and_swap" builtin),
+  // cas_old is the expected VALUE (not a pointer).  gen_cas_n in
+  // codegen.c likewise treats it as a value (loaded into rax and used
+  // directly by `lock cmpxchg`) and returns the OLD value in rax.
+  // The node has no usable ty of its own, so we read the memory width
+  // from cas_addr->ty->base.
+  Type *ty = (node->cas_addr && node->cas_addr->ty->base)
+             ? node->cas_addr->ty->base : node->ty;
+  const char *addr = emit_expr(node->cas_addr, indent);
+  const char *cnew = emit_expr(node->cas_new, indent);
+  const char *old_val = emit_expr(node->cas_old, indent);
+  int ordering = node->memorder ? node->memorder : 5;
+  const char *pair = ir_emit_cmpxchg(addr, old_val, cnew, ty,
+                                     ordering, ordering, indent);
+  // Return the OLD value (extractvalue index 0).  Matches gen_cas_n
+  // in codegen.c which leaves the previous value of *p in rax after
+  // `lock cmpxchg`.
+  const char *r = new_reg();
+  emit_indent(indent);
+  emit("%s = extractvalue {", r);
+  emit_type_str(ty);
+  emit(", i1} %s, 0\n", pair);
+  return r;
+}
+
+
+static const char *gen_ir_exch(Node *node, int indent)
+{
+  Type *ty = (node->lhs && node->lhs->ty->base) ? node->lhs->ty->base : node->ty;
+  const char *addr = emit_expr(node->lhs, indent);
+  const char *val = emit_expr(node->rhs, indent);
+  return ir_emit_atomicrmw("xchg", addr, val, ty,
+                           node->memorder ? node->memorder : 5, indent);
+}
+
+
+static const char *gen_ir_exch_n(Node *node, int indent)
+{
+  Type *ty = (node->lhs && node->lhs->ty->base) ? node->lhs->ty->base : node->ty;
+  const char *addr = emit_expr(node->lhs, indent);
+  const char *val = emit_expr(node->rhs, indent);
+  return ir_emit_atomicrmw("xchg", addr, val, ty,
+                           node->memorder ? node->memorder : 5, indent);
+}
+
+
+static const char *gen_ir_cmpxchg(Node *node, int indent)
+{
+  // For ND_CMPEXCH (from __atomic_compare_exchange), cas_expected is
+  // a POINTER to the expected value.  We dereference it before cmpxchg.
+  int succ = node->cas_success ? node->cas_success->val : 5;
+  int fail = node->cas_failure ? node->cas_failure->val : 5;
+  Type *ty = (node->cas_ptr && node->cas_ptr->ty->base)
+             ? node->cas_ptr->ty->base : node->ty;
+  const char *ptr = emit_expr(node->cas_ptr, indent);
+  const char *expected = ir_emit_atomic_load(
+      emit_expr(node->cas_expected, indent), ty, 5, indent);
+  const char *desired = emit_expr(node->cas_desired, indent);
+  const char *pair = ir_emit_cmpxchg(ptr, expected, desired, ty,
+                                     succ, fail, indent);
+  const char *r = new_reg();
+  emit_indent(indent);
+  emit("%s = extractvalue {", r);
+  emit_type_str(ty);
+  emit(", i1} %s, 1\n", pair);
+  return r;
+}
+
+
+static const char *gen_ir_cmpxchg_n(Node *node, int indent)
+{
+  // For ND_CMPEXCH_N (from __atomic_compare_exchange_n), cas_expected
+  // is a POINTER to the expected value.  chibicc's ND_CMPEXCH_N is
+  // bool-returning (see type.c line 932) and gen_cmpxchgn in codegen.c
+  // writes `sete; movzbl`; we mirror that here.
+  int succ = node->cas_success ? node->cas_success->val : 5;
+  int fail = node->cas_failure ? node->cas_failure->val : 5;
+  Type *ty = (node->cas_ptr && node->cas_ptr->ty->base)
+             ? node->cas_ptr->ty->base : node->ty;
+  const char *ptr = emit_expr(node->cas_ptr, indent);
+  const char *expected = ir_emit_atomic_load(
+      emit_expr(node->cas_expected, indent), ty, 5, indent);
+  const char *desired = emit_expr(node->cas_desired, indent);
+  const char *pair = ir_emit_cmpxchg(ptr, expected, desired, ty,
+                                     succ, fail, indent);
+  const char *r = new_reg();
+  emit_indent(indent);
+  emit("%s = extractvalue {", r);
+  emit_type_str(ty);
+  emit(", i1} %s, 1\n", pair);
+  return r;
+}
+
+
+static const char *gen_ir_bool_cas(Node *node, int indent)
+{
+  // For ND_BOOL_CAS (from __sync_bool_compare_and_swap), cas_expected
+  // is the expected VALUE (not a pointer).  This matches gen_bool_cas
+  // in codegen.c, which uses it directly without dereferencing.
+  Type *ty = (node->cas_ptr && node->cas_ptr->ty->base)
+             ? node->cas_ptr->ty->base : node->ty;
+  const char *ptr = emit_expr(node->cas_ptr, indent);
+  const char *expected = emit_expr(node->cas_expected, indent);
+  const char *desired = emit_expr(node->cas_desired, indent);
+  const char *pair = ir_emit_cmpxchg(ptr, expected, desired, ty,
+                                     5, 5, indent);
+  const char *r = new_reg();
+  emit_indent(indent);
+  emit("%s = extractvalue {", r);
+  emit_type_str(ty);
+  emit(", i1} %s, 1\n", pair);
+  return r;
+}
+
+
+static const char *gen_ir_load(Node *node, int indent)
+{
+  Type *ty = (node->lhs && node->lhs->ty->base) ? node->lhs->ty->base : node->ty;
+  const char *addr = emit_expr(node->lhs, indent);
+  return ir_emit_atomic_load(addr, ty, node->memorder ? node->memorder : 5, indent);
+}
+
+
+static const char *gen_ir_load_n(Node *node, int indent)
+{
+  Type *ty = (node->lhs && node->lhs->ty->base) ? node->lhs->ty->base : node->ty;
+  const char *addr = emit_expr(node->lhs, indent);
+  return ir_emit_atomic_load(addr, ty, node->memorder ? node->memorder : 5, indent);
+}
+
+
+static const char *gen_ir_store(Node *node, int indent)
+{
+  Type *ty = (node->lhs && node->lhs->ty->base) ? node->lhs->ty->base : node->ty;
+  const char *addr = emit_expr(node->lhs, indent);
+  const char *val = emit_expr(node->rhs, indent);
+  ir_emit_atomic_store(val, addr, ty,
+                       node->memorder ? node->memorder : 5, indent);
+  return NULL;
+}
+
+
+static const char *gen_ir_store_n(Node *node, int indent)
+{
+  Type *ty = (node->lhs && node->lhs->ty->base) ? node->lhs->ty->base : node->ty;
+  const char *addr = emit_expr(node->lhs, indent);
+  const char *val = emit_expr(node->rhs, indent);
+  ir_emit_atomic_store(val, addr, ty,
+                       node->memorder ? node->memorder : 5, indent);
+  return NULL;
+}
+
+
+static const char *gen_ir_clear(Node *node, int indent)
+{
+  Type *ty = (node->lhs && node->lhs->ty->base) ? node->lhs->ty->base : node->ty;
+  const char *addr = emit_expr(node->lhs, indent);
+  int bits = int_type_bits(ty);
+  if (bits <= 0) bits = (ty->size > 0) ? ty->size * 8 : 32;
+  const char *zero = new_reg();
+  emit_indent(indent);
+  emit("%s = add i%d 0, 0\n", zero, bits);
+  ir_emit_atomic_store(zero, addr, ty,
+                       node->memorder ? node->memorder : 5, indent);
+  return NULL;
+}
+
+
+static const char *gen_ir_release(Node *node, int indent)
+{
+  Type *ty = (node->lhs && node->lhs->ty->base) ? node->lhs->ty->base : node->ty;
+  const char *addr = emit_expr(node->lhs, indent);
+  int bits = int_type_bits(ty);
+  if (bits <= 0) bits = (ty->size > 0) ? ty->size * 8 : 32;
+  const char *zero = new_reg();
+  emit_indent(indent);
+  emit("%s = add i%d 0, 0\n", zero, bits);
+  ir_emit_atomic_store(zero, addr, ty, 3, indent);  // release semantics
+  return NULL;
+}
+
+
+static const char *gen_ir_testandset(Node *node, int indent)
+{
+  Type *ty = (node->lhs && node->lhs->ty->base) ? node->lhs->ty->base : node->ty;
+  const char *addr = emit_expr(node->lhs, indent);
+  int bits = int_type_bits(ty);
+  if (bits <= 0) bits = (ty->size > 0) ? ty->size * 8 : 32;
+  // For TY_BOOL atomic_flag, widen the value to i8 to satisfy LLVM's
+  // byte-sized atomic requirement.
+  const char *one = new_reg();
+  emit_indent(indent);
+  if (bits == 1)
+    emit("%s = add i8 0, 1\n", one);
+  else
+    emit("%s = add i%d 0, 1\n", one, bits);
+  return ir_emit_atomicrmw("xchg", addr, one, ty, 5, indent);
+}
+
+
+static const char *gen_ir_testandseta(Node *node, int indent)
+{
+  Type *ty = (node->lhs && node->lhs->ty->base) ? node->lhs->ty->base : node->ty;
+  const char *addr = emit_expr(node->lhs, indent);
+  int bits = int_type_bits(ty);
+  if (bits <= 0) bits = (ty->size > 0) ? ty->size * 8 : 32;
+  const char *one = new_reg();
+  emit_indent(indent);
+  if (bits == 1)
+    emit("%s = add i8 0, 1\n", one);
+  else
+    emit("%s = add i%d 0, 1\n", one, bits);
+  return ir_emit_atomicrmw("xchg", addr, one, ty,
+                           node->memorder ? node->memorder : 5, indent);
+}
+
+
+// Generic helper for atomic read-modify-write returning the old value.
+static const char *gen_ir_rmw_old(Node *node, int indent, const char *op)
+{
+  Type *ty = (node->lhs && node->lhs->ty->base) ? node->lhs->ty->base : node->ty;
+  const char *addr = emit_expr(node->lhs, indent);
+  const char *val = emit_expr(node->rhs, indent);
+  return ir_emit_atomicrmw(op, addr, val, ty,
+                           node->memorder ? node->memorder : 5, indent);
+}
+
+
+// Generic helper for atomic read-modify-write returning the new value.
+// Emits "old = atomicrmw op; new = old + val;"  (or xor/and/or/nand).
+static const char *gen_ir_rmw_new(Node *node, int indent, const char *op)
+{
+  Type *ty = (node->lhs && node->lhs->ty->base) ? node->lhs->ty->base : node->ty;
+  const char *addr = emit_expr(node->lhs, indent);
+  const char *val = emit_expr(node->rhs, indent);
+  const char *old = ir_emit_atomicrmw(op, addr, val, ty,
+                                      node->memorder ? node->memorder : 5, indent);
+  // LLVM's atomicrmw always returns the old value.  Compute the new
+  // value with the same arithmetic the C abstract machine describes.
+  const char *r = new_reg();
+  emit_indent(indent);
+  if (!strcmp(op, "add") || !strcmp(op, "sub") ||
+      !strcmp(op, "or")  || !strcmp(op, "xor") ||
+      !strcmp(op, "and") || !strcmp(op, "nand"))
+  {
+    int bits = int_type_bits(ty);
+    if (bits <= 0) bits = (ty->size > 0) ? ty->size * 8 : 32;
+    const char *val_ext = val;
+    // LLVM requires both operands of an integer binop to be the same
+    // width.  If the value has been narrowed by the parser (e.g. when
+    // storing into a smaller type), extend it back to the type of the
+    // memory location.
+    int val_bits = (node->rhs && node->rhs->ty) ? int_type_bits(node->rhs->ty) : bits;
+    if (val_bits > 0 && val_bits != bits)
+    {
+      val_ext = new_reg();
+      emit_indent(indent);
+      emit("%s = %s i%d %s to i%d\n",
+           val_ext, val_bits < bits ? "zext" : "trunc", val_bits, val, bits);
+    }
+    if (!strcmp(op, "add"))
+      emit("%s = add i%d %s, %s\n", r, bits, old, val_ext);
+    else if (!strcmp(op, "sub"))
+      emit("%s = sub i%d %s, %s\n", r, bits, old, val_ext);
+    else if (!strcmp(op, "or"))
+      emit("%s = or i%d %s, %s\n", r, bits, old, val_ext);
+    else if (!strcmp(op, "xor"))
+      emit("%s = xor i%d %s, %s\n", r, bits, old, val_ext);
+    else if (!strcmp(op, "and"))
+      emit("%s = and i%d %s, %s\n", r, bits, old, val_ext);
+    else  // nand: ~(old & val)
+    {
+      const char *and_r = new_reg();
+      emit_indent(indent);
+      emit("%s = and i%d %s, %s\n", and_r, bits, old, val_ext);
+      emit_indent(indent);
+      emit("%s = xor i%d %s, -1\n", r, bits, and_r);
+    }
+  }
+  else
+  {
+    emit("%s = %s ", r, op);
+    emit_type_str(ty);
+    emit(" %s, %s\n", old, val);
+  }
+  return r;
+}
+
+
+static const char *gen_ir_fetchadd(Node *node, int indent)
+{
+  return gen_ir_rmw_old(node, indent, "add");
+}
+
+
+static const char *gen_ir_fetchsub(Node *node, int indent)
+{
+  return gen_ir_rmw_old(node, indent, "sub");
+}
+
+
+static const char *gen_ir_addfetch(Node *node, int indent)
+{
+  return gen_ir_rmw_new(node, indent, "add");
+}
+
+
+static const char *gen_ir_subfetch(Node *node, int indent)
+{
+  return gen_ir_rmw_new(node, indent, "sub");
+}
+
+
+static const char *gen_ir_orfetch(Node *node, int indent)
+{
+  return gen_ir_rmw_new(node, indent, "or");
+}
+
+
+static const char *gen_ir_andfetch(Node *node, int indent)
+{
+  return gen_ir_rmw_new(node, indent, "and");
+}
+
+
+static const char *gen_ir_xorfetch(Node *node, int indent)
+{
+  return gen_ir_rmw_new(node, indent, "xor");
+}
+
+
+static const char *gen_ir_fetchand(Node *node, int indent)
+{
+  return gen_ir_rmw_old(node, indent, "and");
+}
+
+
+static const char *gen_ir_fetchor(Node *node, int indent)
+{
+  return gen_ir_rmw_old(node, indent, "or");
+}
+
+
+static const char *gen_ir_fetchxor(Node *node, int indent)
+{
+  return gen_ir_rmw_old(node, indent, "xor");
+}
+
+
+static const char *gen_ir_fetchnand(Node *node, int indent)
+{
+  return gen_ir_rmw_old(node, indent, "nand");
+}
+
+
+static const char *gen_ir_nandfetch(Node *node, int indent)
+{
+  return gen_ir_rmw_new(node, indent, "nand");
+}
+
+
+static const char *gen_ir_add_and_fetch(Node *node, int indent)
+{
+  return gen_ir_rmw_new(node, indent, "add");
+}
+
+
+static const char *gen_ir_sub_and_fetch(Node *node, int indent)
+{
+  return gen_ir_rmw_new(node, indent, "sub");
+}
+
+
+static const char *gen_ir_sync(Node *node, int indent)
+{
+  emit_indent(indent);
+  emit("fence seq_cst\n");
+  return NULL;
+}
+
+
+static const char *gen_ir_membarrier(Node *node, int indent)
+{
+  int ordering = (node->lhs && node->ty && node->ty->kind != TY_VOID)
+                 ? (int)node->lhs->val : 5;
+  emit_indent(indent);
+  emit("fence %s\n", ir_atomic_ordering(ordering));
+  return NULL;
+}
+
+
+static const char *gen_ir_atomic_is_lock_free(Node *node, int indent)
+{
+  // For x86-64 the lock-free limit is 8 bytes, the size of a register.
+  // We compute this dynamically by comparing the size argument against 8.
+  const char *size = emit_expr(node->lhs, indent);
+  const char *cmp = new_reg();
+  emit_indent(indent);
+  emit("%s = icmp ule i32 %s, 8\n", cmp, size);
+  // The second argument is the optional pointer argument; we ignore it
+  // because lock-freeness in chibicc depends only on the requested size.
+  if (node->rhs)
+    emit_expr(node->rhs, indent);
+  // Return the i1 comparison; downstream ND_CAST or implicit promotion
+  // converts it to the user-visible type.
+  return cmp;
 }
 
 
