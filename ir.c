@@ -673,7 +673,7 @@ static const char *emit_expr(Node *node, int indent)
       return r;
     }
 
-    if ((src->kind == TY_PTR || src->kind == TY_ARRAY || src->kind == TY_FUNC || src->kind == TY_VLA) && db)
+    if ((src->kind == TY_PTR || is_array(src) || src->kind == TY_FUNC ) && db)
     {
       const char *val = emit_expr(node->lhs, indent);
       const char *r = new_reg();
@@ -682,7 +682,7 @@ static const char *emit_expr(Node *node, int indent)
       return r;
     }
 
-    if (sb && (dst->kind == TY_PTR || dst->kind == TY_ARRAY || dst->kind == TY_FUNC))
+    if (sb && (dst->kind == TY_PTR || is_array(dst) || dst->kind == TY_FUNC))
     {
       const char *val = emit_expr(node->lhs, indent);
       const char *r = new_reg();
@@ -704,27 +704,51 @@ static const char *emit_expr(Node *node, int indent)
   case ND_SHL:
   case ND_SHR:
   {
+    bool lhs_ptr = node->lhs->ty->kind == TY_PTR || is_array(node->lhs->ty);
+
+    bool rhs_ptr =  node->rhs->ty->kind == TY_PTR || is_array(node->rhs->ty);
     if ((node->kind == ND_ADD || node->kind == ND_SUB) &&
-        (node->ty->kind == TY_PTR || node->ty->kind == TY_VLA))
+        (lhs_ptr && rhs_ptr))
     {
       const char *l = emit_expr(node->lhs, indent);
       const char *r = emit_expr(node->rhs, indent);
+
+      const char *l_int = l;
+      if (node->lhs->ty->kind == TY_PTR || is_array(node->lhs->ty)) {
+        l_int = new_reg();
+        emit_indent(indent);
+        emit("%s = ptrtoint ptr %s to i64\n", l_int, l);
+      }
+
       const char *r_int = r;
-      if (node->rhs->ty->kind == TY_PTR || node->rhs->ty->kind == TY_VLA ||
-          node->rhs->ty->kind == TY_ARRAY)
-      {
+      if (node->rhs->ty->kind == TY_PTR || is_array(node->rhs->ty)) {
         r_int = new_reg();
         emit_indent(indent);
         emit("%s = ptrtoint ptr %s to i64\n", r_int, r);
       }
-      const char *reg = new_reg();
+
+      const char *diff = new_reg();
       emit_indent(indent);
-      emit("%s = getelementptr i8, ptr %s, i64 %s%s\n",
-           reg, l, node->kind == ND_SUB ? "-" : "", r_int);
-      return reg;
+      emit("%s = sub i64 %s, %s\n", diff, l_int, r_int);
+
+      const char *scale_i32 = new_reg();
+      emit_indent(indent);
+      int sz = node->lhs->ty->base->size;
+
+      emit("%s = add i32 0, %d\n", scale_i32, sz);
+
+      const char *scale_i64 = new_reg();
+      emit_indent(indent);
+      emit("%s = sext i32 %s to i64\n", scale_i64, scale_i32);
+
+      const char *res = new_reg();
+      emit_indent(indent);
+      emit("%s = sdiv i64 %s, %s\n", res, diff, scale_i64);
+
+      return res;
     }
     if (node->kind == ND_ADD &&
-        (node->lhs->ty->kind == TY_PTR || node->lhs->ty->kind == TY_VLA))
+        (node->lhs->ty->kind == TY_PTR ||is_array(node->lhs->ty)))
     {
       const char *l = emit_expr(node->lhs, indent);
       const char *r = emit_expr(node->rhs, indent);
@@ -914,8 +938,8 @@ static const char *emit_expr(Node *node, int indent)
       Obj *var = node->lhs->var;
       const char *r = new_reg();
       emit_indent(indent);
-      if (node->ty->kind == TY_PTR || node->ty->kind == TY_ARRAY ||
-          node->ty->kind == TY_FUNC || node->ty->kind == TY_VLA ||
+      if (node->ty->kind == TY_PTR ||is_array(node->ty) ||
+          node->ty->kind == TY_FUNC || 
           node->ty->kind == TY_STRUCT || node->ty->kind == TY_UNION)
       {
         emit("%s = inttoptr i32 0 to ", r);
@@ -938,8 +962,8 @@ static const char *emit_expr(Node *node, int indent)
     }
     const char *r = new_reg();
     emit_indent(indent);
-    if (node->ty->kind == TY_PTR || node->ty->kind == TY_ARRAY ||
-        node->ty->kind == TY_FUNC || node->ty->kind == TY_VLA ||
+    if (node->ty->kind == TY_PTR || is_array(node->ty) ||
+        node->ty->kind == TY_FUNC || 
         node->ty->kind == TY_STRUCT || node->ty->kind == TY_UNION)
     {
       emit("%s = inttoptr i32 0 to ", r);
@@ -1251,8 +1275,8 @@ static const char *emit_expr(Node *node, int indent)
       return NULL;
     const char *r = new_reg();
     emit_indent(indent);
-    if (node->ty->kind == TY_PTR || node->ty->kind == TY_ARRAY ||
-        node->ty->kind == TY_FUNC || node->ty->kind == TY_VLA ||
+    if (node->ty->kind == TY_PTR || is_array(node->ty) ||
+        node->ty->kind == TY_FUNC || 
         node->ty->kind == TY_STRUCT || node->ty->kind == TY_UNION)
     {
       emit("%s = inttoptr i32 0 to ", r);

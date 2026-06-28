@@ -173,19 +173,16 @@ int main() {
          }));
 
   ASSERT(7, ({
-           int x;
-           int y;
-           char z;
-           char *a = &y;
-           char *b = &z;
+    char buf[10];
+    char *a = &buf[1];
+    char *b = &buf[8];
            b - a;
          }));
+
   ASSERT(1, ({
-           int x;
-           char y;
-           int z;
-           char *a = &y;
-           char *b = &z;
+    char buf[10];
+    char *a = &buf[4];
+    char *b = &buf[5];
            b - a;
          }));
 
