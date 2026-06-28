@@ -588,6 +588,12 @@ void add_type(Node *node)
       int_promotion(&node->lhs);
     node->ty = node->lhs->ty;
     return;  
+  case ND_MEMZERO:
+    if (node->var)
+      node->ty = node->var->ty;
+    else if (node->lhs)
+      node->ty = node->lhs->ty;
+    return;
   case ND_ASSIGN:
     if (node->lhs->ty->kind == TY_ARRAY)
       error_tok(node->lhs->tok, "%s:%d: in %s: not an lvalue", __FILE__, __LINE__, __func__);
