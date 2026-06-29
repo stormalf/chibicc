@@ -358,13 +358,20 @@ Type *array_of(Type *base, int64_t len)
 Type *vector_of(Type *base, int64_t len)
 {
   if (!base)
-    error("%s:%d: in %s: base is null", __FILE__, __LINE__, __func__); 
-  Type *ty = new_type(TY_VECTOR, base->size * len, base->align);
-  int total_size = base->size * len;
+    error("%s:%d: in %s: base is null", __FILE__, __LINE__, __func__);
+  int64_t total_size = base->size * len;
+  Type *ty = new_type(TY_VECTOR, total_size, base->align);
   ty->size = total_size;
   ty->base = base;
-  ty->array_len = len;  
-  ty->has_vla = base->has_vla; 
+  ty->array_len = len;
+  // Inherit the byte-wise vector_size from the base type when the parser
+  // already populated it (see parse.c type_attributes).  When vector_of
+  // is called from intrinsics in type.c the base->vector_size is 0, so
+  // fall back to base->size * len which yields the total byte size of
+  // the vector as well.  ir.c emit_type_str relies on this field for the
+  // "<N x ...>" element count and would otherwise emit "<0 x ...>".
+  ty->vector_size = base->vector_size ? base->vector_size : (int)total_size;
+  ty->has_vla = base->has_vla;
   ty->is_vector = true;
   return ty;
 }

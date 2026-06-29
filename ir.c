@@ -243,7 +243,18 @@ static void emit_type_str(Type *ty)
     emit("x86_fp80");
     return;
   case TY_VECTOR:
-    emit("<%d x ", ty->vector_size);
+    // ty->vector_size holds the BYTE size of the vector (per the parse
+    // convention); LLVM IR wants the element count, which is also held in
+    // array_len (set by vector_of in type.c).  Prefer array_len when it
+    // is available and fall back to vector_size / base->size for safety.
+    {
+      int count = ty->array_len;
+      if (count <= 0 && ty->vector_size > 0 && ty->base && ty->base->size > 0)
+        count = ty->vector_size / ty->base->size;
+      if (count <= 0)
+        count = 1;
+      emit("<%d x ", count);
+    }
     emit_type_str(ty->base);
     emit(">");
     return;
