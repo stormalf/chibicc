@@ -3065,8 +3065,9 @@ static bool ir_universal_fbinop_op(Node *node, const char **out_op)
   case ND_CMPPD: case ND_CMPPS: case ND_CMPPD256: case ND_CMPPS256:
     *out_op = "oeq"; return true;
   case ND_CMPLTSS: case ND_CMPLTSD: case ND_CMPLTPS: case ND_CMPLTPD:
-  case ND_CMPGTPD: case ND_CMPGTPS:
     *out_op = "olt"; return true;
+  case ND_CMPGTPD: case ND_CMPGTPS:
+    *out_op = "ugt"; return true;
   case ND_CMPLESS: case ND_CMPLESD: case ND_CMPLEPS: case ND_CMPLEPD:
     *out_op = "ole"; return true;
   case ND_CMPNEQSS: case ND_CMPNEQSD: case ND_CMPNEQPS: case ND_CMPNEQPD:
@@ -3077,8 +3078,9 @@ static bool ir_universal_fbinop_op(Node *node, const char **out_op)
   case ND_CMPNLESS: case ND_CMPNLESD: case ND_CMPNLEPS: case ND_CMPNLEPD:
     *out_op = "ugt"; return true;
   case ND_CMPNGTPD: case ND_CMPNGTPS:
+    *out_op = "ole"; return true;
   case ND_CMPNGEPD: case ND_CMPNGEPS:
-    *out_op = "ult"; return true;
+    *out_op = "olt"; return true;
   case ND_CMPORDSS: case ND_CMPORDSD: case ND_CMPORDPS: case ND_CMPORDPD:
     *out_op = "ord"; return true;
   case ND_CMPUNORDSS: case ND_CMPUNORDSD: case ND_CMPUNORDPS: case ND_CMPUNORDPD:
@@ -3098,6 +3100,25 @@ static bool ir_universal_fbinop_op(Node *node, const char **out_op)
   case ND_POR:   *out_op = "or";  return true;
   case ND_PXOR:  *out_op = "xor"; return true;
 
+  default:
+    return false;
+  }
+}
+
+// SS/SD comparisons only operate on element 0 and preserve upper elements.
+static bool is_scalar_sse_cmp(Node *node)
+{
+  switch (node->kind)
+  {
+  case ND_CMPEQSS: case ND_CMPEQSD:
+  case ND_CMPLTSS: case ND_CMPLTSD:
+  case ND_CMPLESS: case ND_CMPLESD:
+  case ND_CMPNEQSS: case ND_CMPNEQSD:
+  case ND_CMPNLTSS: case ND_CMPNLTSD:
+  case ND_CMPNLESS: case ND_CMPNLESD:
+  case ND_CMPORDSS: case ND_CMPORDSD:
+  case ND_CMPUNORDSS: case ND_CMPUNORDSD:
+    return true;
   default:
     return false;
   }
@@ -3216,8 +3237,10 @@ static const char *gen_ir_sse_binop(Node *node, int indent)
     return res;
   }
 
-  // fcmp produces i1 (or <N x i1>); then we zext to i32 (or <N x i32>)
-  // to match the chibicc convention that comparison results are i32.
+  // fcmp produces i1 (or <N x i1>).
+  // For scalar: zext to i32 (chibicc convention for scalar compare results).
+  // For vector: sext to <N x i{elem_bits}> (to get all-1s/all-0s), then
+  // bitcast back to the original float vector type (e.g. <2 x double>).
   bool is_fcmp = (op[0] == 'o' || op[0] == 'u') && op[1] != '\0';
   if (is_fcmp)
   {
@@ -3230,8 +3253,43 @@ static const char *gen_ir_sse_binop(Node *node, int indent)
     emit_indent(indent);
     if (ty->kind == TY_VECTOR)
     {
-      emit("%s = zext <%d x i1> %s to <%d x i32>\n",
-           r2, ty->array_len, cmp, ty->array_len);
+      int bits = elem_ty->size * 8;
+      if (is_scalar_sse_cmp(node))
+      {
+        // SS/SD: compare only element 0, preserve upper elements from lhs
+        const char *l0 = new_reg();
+        emit("%s = extractelement ", l0);
+        emit_type_str(ty);
+        emit(" %s, i32 0\n", l);
+        const char *r0 = new_reg();
+        emit("%s = extractelement ", r0);
+        emit_type_str(ty);
+        emit(" %s, i32 0\n", r_use);
+        const char *cmp_s = new_reg();
+        emit("%s = fcmp %s ", cmp_s, op);
+        emit_type_str(elem_ty);
+        emit(" %s, %s\n", l0, r0);
+        const char *sext_val = new_reg();
+        emit("%s = sext i1 %s to i%d\n", sext_val, cmp_s, bits);
+        const char *res_elt = new_reg();
+        emit("%s = bitcast i%d %s to ", res_elt, bits, sext_val);
+        emit_type_str(elem_ty);
+        emit("\n");
+        emit("%s = insertelement ", r2);
+        emit_type_str(ty);
+        emit(" %s, ", l);
+        emit_type_str(elem_ty);
+        emit(" %s, i32 0\n", res_elt);
+      }
+      else
+      {
+        const char *int_cmp = new_reg();
+        emit("%s = sext <%d x i1> %s to <%d x i%d>\n",
+             int_cmp, ty->array_len, cmp, ty->array_len, bits);
+        emit("%s = bitcast <%d x i%d> %s to ", r2, ty->array_len, bits, int_cmp);
+        emit_type_str(ty);
+        emit("\n");
+      }
     }
     else
     {
@@ -3343,6 +3401,7 @@ static const char *gen_ir_int_vec_unary(Node *node, int indent)
 static const char *gen_ir_comi(Node *node, int indent)
 {
   // COMIxx and UCOMIxx: comparison that produces a scalar int (0/1).
+  // Only the low element (index 0) of each vector operand is compared.
   const char *l = emit_expr(node->lhs, indent);
   const char *r = emit_expr(node->rhs, indent);
   const char *cond;
@@ -3364,11 +3423,21 @@ static const char *gen_ir_comi(Node *node, int indent)
   default: return gen_ir_default(node, indent);
   }
   (void)unordered;
+  const char *l0 = new_reg();
+  emit_indent(indent);
+  emit("%s = extractelement ", l0);
+  emit_type_str(node->lhs->ty);
+  emit(" %s, i32 0\n", l);
+  const char *r0 = new_reg();
+  emit_indent(indent);
+  emit("%s = extractelement ", r0);
+  emit_type_str(node->lhs->ty);
+  emit(" %s, i32 0\n", r);
   const char *cmp = new_reg();
   emit_indent(indent);
   emit("%s = fcmp %s ", cmp, cond);
-  emit_type_str(node->lhs->ty);
-  emit(" %s, %s\n", l, r);
+  emit_type_str(node->lhs->ty->base);
+  emit(" %s, %s\n", l0, r0);
   const char *r2 = new_reg();
   emit_indent(indent);
   emit("%s = zext i1 %s to i32\n", r2, cmp);
