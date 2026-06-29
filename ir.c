@@ -528,16 +528,19 @@ if (mem->is_bitfield)
     return r;
   }
 
-  case ND_VLA_PTR:
-  {
-    const char *r = new_reg();
-    emit_indent(indent);
-    emit("%s = load ptr, ptr %s\n", r, var_ptr(node->var));
-    return r;
-  }
-  default:
-    error_tok(node->tok, "%s:%d: in %s: emit_lval: unexpected node kind %d", __FILE__, __LINE__, __func__, node->kind);
-    return NULL;
+   case ND_VLA_PTR:
+   {
+     const char *r = new_reg();
+     emit_indent(indent);
+     emit("%s = load ptr, ptr %s\n", r, var_ptr(node->var));
+     return r;
+   }
+   case ND_CAST:
+     // A cast does not change the address of an lvalue.
+     return emit_lval(node->lhs, indent);
+   default:
+     error_tok(node->tok, "%s:%d: in %s: emit_lval: unexpected node kind %d", __FILE__, __LINE__, __func__, node->kind);
+     return NULL;
   }
 }
 
@@ -1317,12 +1320,17 @@ static const char *gen_ir_assign(Node *node, int indent)
      addr = emit_expr(node->lhs->lhs, indent);
      break;
    }
-    case ND_VLA_PTR:
-    {
-      addr = var_ptr(node->lhs->var);
-      break;
-    }
-    case ND_MEMBER:
+     case ND_VLA_PTR:
+     {
+       addr = var_ptr(node->lhs->var);
+       break;
+     }
+     case ND_CAST:
+     {
+       addr = emit_lval(node->lhs, indent);
+       break;
+     }
+     case ND_MEMBER:
     {
       Member *lhs_mem = node->lhs->member;
       const char *base_ptr = emit_expr(node->lhs->lhs, indent);
