@@ -3376,17 +3376,17 @@ static const char *gen_ir_int_vec_unary(Node *node, int indent)
   if (bits <= 0) bits = 32;
 
   // abs(x) = (x ^ (x >> (W-1))) - (x >> (W-1))
-  const char *shift_const = new_reg();
-  emit_indent(indent);
-  emit("%s = add i%d 0, %d\n", shift_const, bits, bits - 1);
+  // LLVM requires the shift amount to be a vector of the same length.
   const char *mask = new_reg();
   emit_indent(indent);
-  if (ty->base->is_unsigned)
-    emit("%s = lshr <%d x i%d> %s, %s\n",
-         mask, ty->array_len, bits, l, shift_const);
-  else
-    emit("%s = ashr <%d x i%d> %s, %s\n",
-         mask, ty->array_len, bits, l, shift_const);
+  const char *op = ty->base->is_unsigned ? "lshr" : "ashr";
+  emit("%s = %s <%d x i%d> %s, <", mask, op, ty->array_len, bits, l);
+  for (int i = 0; i < ty->array_len; i++)
+  {
+    if (i > 0) emit(", ");
+    emit("i%d %d", bits, bits - 1);
+  }
+  emit(">\n");
   const char *xor_r = new_reg();
   emit_indent(indent);
   emit("%s = xor <%d x i%d> %s, %s\n",
@@ -3472,24 +3472,24 @@ static const char *gen_ir_unary_float(Node *node, int indent)
   case ND_ROUNDSD: intrinsic = "llvm.x86.sse41.round.sd"; break;
   case ND_MOVMSKPS: intrinsic = "llvm.x86.sse.movmsk.ps"; break;
   case ND_MOVMSKPD: intrinsic = "llvm.x86.sse2.movmsk.pd"; break;
-  case ND_CVTSS2SI: intrinsic = "llvm.x86.sse.cvt.ss2si"; break;
-  case ND_CVTSS2SI64: intrinsic = "llvm.x86.sse.cvt.ss2si64"; break;
-  case ND_CVTTSS2SI: intrinsic = "llvm.x86.sse.cvtt.ss2si"; break;
-  case ND_CVTTSS2SI64: intrinsic = "llvm.x86.sse.cvtt.ss2si64"; break;
-  case ND_CVTSD2SI: intrinsic = "llvm.x86.sse2.cvt.sd2si"; break;
-  case ND_CVTSD2SI64: intrinsic = "llvm.x86.sse2.cvt.sd2si64"; break;
-  case ND_CVTTSD2SI: intrinsic = "llvm.x86.sse2.cvtt.sd2si"; break;
-  case ND_CVTTSD2SI64: intrinsic = "llvm.x86.sse2.cvtt.sd2si64"; break;
-  case ND_CVTSD2SS: intrinsic = "llvm.x86.sse2.cvt.sd2ss"; break;
-  case ND_CVTSS2SD: intrinsic = "llvm.x86.sse2.cvt.ss2sd"; break;
-  case ND_CVTPD2DQ: intrinsic = "llvm.x86.sse2.cvt.pd2dq"; break;
-  case ND_CVTTPD2DQ: intrinsic = "llvm.x86.sse2.cvtt.pd2dq"; break;
-  case ND_CVTPS2DQ: intrinsic = "llvm.x86.sse2.cvt.ps2dq"; break;
-  case ND_CVTTPS2DQ: intrinsic = "llvm.x86.sse2.cvtt.ps2dq"; break;
-  case ND_CVTDQ2PD: intrinsic = "llvm.x86.sse2.cvt.dq2pd"; break;
-  case ND_CVTDQ2PS: intrinsic = "llvm.x86.sse2.cvt.dq2ps"; break;
-  case ND_CVTPD2PS: intrinsic = "llvm.x86.sse2.cvt.pd2ps"; break;
-  case ND_CVTPS2PD: intrinsic = "llvm.x86.sse2.cvt.ps2pd"; break;
+  case ND_CVTSS2SI: intrinsic = "llvm.x86.sse.cvtss2si"; break;
+  case ND_CVTSS2SI64: intrinsic = "llvm.x86.sse.cvtss2si64"; break;
+  case ND_CVTTSS2SI: intrinsic = "llvm.x86.sse.cvttss2si"; break;
+  case ND_CVTTSS2SI64: intrinsic = "llvm.x86.sse.cvttss2si64"; break;
+  case ND_CVTSD2SI: intrinsic = "llvm.x86.sse2.cvtsd2si"; break;
+  case ND_CVTSD2SI64: intrinsic = "llvm.x86.sse2.cvtsd2si64"; break;
+  case ND_CVTTSD2SI: intrinsic = "llvm.x86.sse2.cvttsd2si"; break;
+  case ND_CVTTSD2SI64: intrinsic = "llvm.x86.sse2.cvttsd2si64"; break;
+  case ND_CVTSD2SS: intrinsic = "llvm.x86.sse2.cvtsd2ss"; break;
+  case ND_CVTSS2SD: intrinsic = "llvm.x86.sse2.cvtss2sd"; break;
+  case ND_CVTPD2DQ: intrinsic = "llvm.x86.sse2.cvtpd2dq"; break;
+  case ND_CVTTPD2DQ: intrinsic = "llvm.x86.sse2.cvttpd2dq"; break;
+  case ND_CVTPS2DQ: intrinsic = "llvm.x86.sse2.cvtps2dq"; break;
+  case ND_CVTTPS2DQ: intrinsic = "llvm.x86.sse2.cvttps2dq"; break;
+  case ND_CVTDQ2PD: intrinsic = "llvm.x86.sse2.cvtdq2pd"; break;
+  case ND_CVTDQ2PS: intrinsic = "llvm.x86.sse2.cvtdq2ps"; break;
+  case ND_CVTPD2PS: intrinsic = "llvm.x86.sse2.cvtpd2ps"; break;
+  case ND_CVTPS2PD: intrinsic = "llvm.x86.sse2.cvtps2pd"; break;
   case ND_VECEXTV2SI: case ND_VECEXTV4SI: case ND_VECEXTV4SF:
   case ND_VECEXTV16QI: case ND_VECEXTV8HI: case ND_VECEXTV2DI: case ND_VECEXTV4HI:
     // Skip; not handled here, route elsewhere.
@@ -3535,7 +3535,7 @@ static const char *gen_ir_unary_float(Node *node, int indent)
   emit_indent(indent);
   emit("%s = call ", res);
   emit_type_str(dst_ty);
-  emit(" %s(", intrinsic);
+  emit(" @%s(", intrinsic);
   // Most SSE unary intrinsics take the operand first; some take immediates.
   if (node->kind == ND_ROUNDSS || node->kind == ND_ROUNDPS ||
       node->kind == ND_ROUNDPD || node->kind == ND_ROUNDSD)
@@ -3581,10 +3581,44 @@ static const char *gen_ir_psll_imm(Node *node, int indent)
   else if (node->rhs)
   {
     const char *r = emit_expr(node->rhs, indent);
-    const char *r_ext = new_reg();
-    emit_indent(indent);
-    emit("%s = zext i32 %s to <%d x i%d>\n",
-         r_ext, r, ty->array_len, bits);
+    const char *r_use = r;
+    const char *r_ext = NULL;
+    if (node->rhs->ty && node->rhs->ty->kind == TY_VECTOR)
+    {
+      // rhs is already a vector; use it directly
+      r_use = r;
+    }
+    else
+    {
+      // rhs is scalar (i32 from C int): convert to element type, then
+      // broadcast to vector via insertelement + shufflevector.
+      const char *scaled = r;
+      if (bits != 32)
+      {
+        const char *conv = new_reg();
+        emit_indent(indent);
+        if (bits < 32)
+          emit("%s = trunc i32 %s to i%d\n", conv, r, bits);
+        else
+          emit("%s = zext i32 %s to i%d\n", conv, r, bits);
+        scaled = conv;
+      }
+      const char *ins = new_reg();
+      emit_indent(indent);
+      emit("%s = insertelement <%d x i%d> zeroinitializer, i%d %s, i32 0\n",
+           ins, ty->array_len, bits, bits, scaled);
+      r_ext = new_reg();
+      emit_indent(indent);
+      emit("%s = shufflevector <%d x i%d> %s, <%d x i%d> undef, <%d x i32> <",
+           r_ext, ty->array_len, bits, ins, ty->array_len, bits, ty->array_len);
+      for (int i = 0; i < ty->array_len; i++)
+      {
+        if (i > 0) emit(", ");
+        emit("i32 %d", 0);
+      }
+      emit(">\n");
+      r_use = r_ext;
+    }
     const char *res = new_reg();
     emit_indent(indent);
     const char *op;
@@ -3611,7 +3645,7 @@ static const char *gen_ir_psll_imm(Node *node, int indent)
       return gen_ir_sse_unsupported(node, indent);
     }
     emit("%s = %s <%d x i%d> %s, %s\n",
-         res, op, ty->array_len, bits, l, r_ext);
+         res, op, ty->array_len, bits, l, r_use);
     return res;
   }
   const char *r2 = new_reg();
@@ -3621,20 +3655,31 @@ static const char *gen_ir_psll_imm(Node *node, int indent)
   {
   case ND_PSLLW: case ND_PSLLD: case ND_PSLLQ:
   case ND_PSLLW128: case ND_PSLLD128: case ND_PSLLQ128:
+  case ND_PSLLWI: case ND_PSLLDI: case ND_PSLLQI:
+  case ND_PSLLWI128: case ND_PSLLDI128:
   case ND_PSLLQI256:
     op = "shl"; break;
   case ND_PSRAW: case ND_PSRAD:
   case ND_PSRAW128: case ND_PSRAD128:
+  case ND_PSRAWI: case ND_PSRADI:
+  case ND_PSRAWI128: case ND_PSRADI128:
     op = ty->base->is_unsigned ? "lshr" : "ashr"; break;
   case ND_PSRLW: case ND_PSRLD: case ND_PSRLQ:
   case ND_PSRLW128: case ND_PSRLD128: case ND_PSRLQ128:
+  case ND_PSRLWI: case ND_PSRLDI: case ND_PSRLQI:
+  case ND_PSRLWI128: case ND_PSRLDI128:
   case ND_PSRLQI256:
     op = "lshr"; break;
   default:
     return gen_ir_sse_unsupported(node, indent);
   }
-  emit("%s = %s <%d x i%d> %s, %d\n",
-       r2, op, ty->array_len, bits, l, amt);
+  emit("%s = %s <%d x i%d> %s, <", r2, op, ty->array_len, bits, l);
+  for (int i = 0; i < ty->array_len; i++)
+  {
+    if (i > 0) emit(", ");
+    emit("i%d %d", bits, amt);
+  }
+  emit(">\n");
   return r2;
 }
 
