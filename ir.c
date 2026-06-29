@@ -113,12 +113,12 @@ static const char *gen_ir_comi(Node *node, int indent);
 // Float unary conversions: SQRTSS, SQRTPS, SQRTPD, SQRTSD, RCPPS/SS,
 // RSQRTPS/SS, CVTxx2yy.
 static const char *gen_ir_unary_float(Node *node, int indent);
-// MOVMSKxx: extract sign bits of a packed vector into a scalar int.
-static const char *gen_ir_movmsk(Node *node, int indent);
 // Integer shift with vector argument and an immediate count encoded as
 // the node's first arg.  Maps to LLVM shl/lshr/ashr operating on the
 // bitcasted vector.
 static const char *gen_ir_psll_imm(Node *node, int indent);
+// MOVMSKxx: extract sign bits of a packed vector into a scalar int.
+static const char *gen_ir_movmsk(Node *node, int indent);
 // Default SSE unknown cases (extremes, atomics, masked, AVX-512 etc).
 static const char *gen_ir_sse_unsupported(Node *node, int indent);
 static void gen_ir_stmt_block(Node *node, int indent, bool *terminated);
@@ -1033,6 +1033,204 @@ static const char *emit_expr(Node *node, int indent)
   case ND_PHSUBW128: case ND_PHSUBD128: case ND_PHSUBSW128:
     return gen_ir_sse_binop(node, indent);
 
+  // === Integer vector arithmetic (non-saturating) ===
+  case ND_PADDB: case ND_PADDW: case ND_PADDD: case ND_PADDQ:
+  case ND_PSUBB: case ND_PSUBW: case ND_PSUBD: case ND_PSUBQ:
+  case ND_PAND: case ND_PANDN: case ND_PANDN128: case ND_POR: case ND_PXOR:
+  case ND_ANDNOTSI256:
+    return gen_ir_sse_binop(node, indent);
+
+  // === Shift immediate and variable (PSLL/PSRL/PSRA) ===
+  case ND_PSLLWI: case ND_PSLLWI128:
+  case ND_PSLLDI: case ND_PSLLDI128: case ND_PSLLDI256:
+  case ND_PSLLQI: case ND_PSLLQI128: case ND_PSLLQI256:
+  case ND_PSLLW: case ND_PSLLW128:
+  case ND_PSLLD: case ND_PSLLD128:
+  case ND_PSLLQ: case ND_PSLLQ128:
+  case ND_PSRAWI: case ND_PSRAWI128:
+  case ND_PSRADI: case ND_PSRADI128: case ND_PSRADI256:
+  case ND_PSRAW: case ND_PSRAW128:
+  case ND_PSRAD: case ND_PSRAD128:
+  case ND_PSRLWI: case ND_PSRLWI128:
+  case ND_PSRLDI: case ND_PSRLDI128: case ND_PSRLDI256:
+  case ND_PSRLQI: case ND_PSRLQI128: case ND_PSRLQI256:
+  case ND_PSRLW: case ND_PSRLW128:
+  case ND_PSRLD: case ND_PSRLD128:
+  case ND_PSRLQ: case ND_PSRLQ128:
+  case ND_PSLLDQI128: case ND_PSLLDQI256:
+  case ND_PSRLDQI128: case ND_PSRLDQI256:
+    return gen_ir_psll_imm(node, indent);
+
+  // === Packed integer absolute value ===
+  case ND_PABSB: case ND_PABSB128:
+  case ND_PABSW: case ND_PABSW128:
+  case ND_PABSD: case ND_PABSD128:
+    return gen_ir_int_vec_unary(node, indent);
+
+  // === SSE scalar float compares (COMI/UCOMI) ===
+  case ND_COMIEQ: case ND_COMILT: case ND_COMILE:
+  case ND_COMIGT: case ND_COMIGE: case ND_COMINEQ:
+  case ND_UCOMIEQ: case ND_UCOMILT: case ND_UCOMILE:
+  case ND_UCOMIGT: case ND_UCOMIGE: case ND_UCOMINEQ:
+  case ND_COMISDEQ: case ND_COMISDLT: case ND_COMISDLE:
+  case ND_COMISDGT: case ND_COMISDGE: case ND_COMISDNEQ:
+  case ND_UCOMISDEQ: case ND_UCOMISDLT: case ND_UCOMISDLE:
+  case ND_UCOMISDGT: case ND_UCOMISDGE: case ND_UCOMISDNEQ:
+    return gen_ir_comi(node, indent);
+
+  // === SSE unary float (sqrt, rcp, rsqrt, round, movmsk, cvt) ===
+  case ND_SQRTSS: case ND_SQRTPS: case ND_SQRTPD: case ND_SQRTSD:
+  case ND_RCPSS: case ND_RCPPS:
+  case ND_RSQRTSS: case ND_RSQRTPS:
+  case ND_ROUNDSS: case ND_ROUNDPS: case ND_ROUNDPD: case ND_ROUNDSD:
+  case ND_CVTSS2SI: case ND_CVTSS2SI64:
+  case ND_CVTTSS2SI: case ND_CVTTSS2SI64:
+  case ND_CVTSD2SI: case ND_CVTSD2SI64:
+  case ND_CVTTSD2SI: case ND_CVTTSD2SI64:
+  case ND_CVTPI2PS: case ND_CVTPS2PI: case ND_CVTTPS2PI:
+  case ND_CVTPD2PI: case ND_CVTTPD2PI:
+  case ND_CVTPI2PD:
+  case ND_CVTSI2SS: case ND_CVTSI642SS:
+  case ND_CVTSI2SD: case ND_CVTSI642SD:
+    return gen_ir_unary_float(node, indent);
+
+  // === MOVMSKxx: extract sign bits of a packed vector into a scalar int ===
+  case ND_MOVMSKPS: case ND_MOVMSKPD:
+    return gen_ir_movmsk(node, indent);
+
+  // === SSE scalar float min/max ===
+  case ND_MINSS: case ND_MINPS: case ND_MINSD: case ND_MINPD:
+  case ND_MAXSS: case ND_MAXPS: case ND_MAXSD: case ND_MAXPD:
+    return gen_ir_sse_binop(node, indent);
+
+  // === Packed integer multiply / misc SSE ===
+  case ND_PMADDWD:
+  case ND_PMULHUW: case ND_PMULHUW128: case ND_PMULHUW256:
+  case ND_PMULDQ128:
+  case ND_PMOVMSKB: case ND_PMOVMSKB128:
+  case ND_PSADBW:
+  case ND_PHMINPOSUW128:
+    return gen_ir_sse_binop(node, indent);
+
+  // === Shuffle, pack, blend ===
+  case ND_SHUFPS: case ND_SHUFPS256:
+  case ND_SHUFPD: case ND_SHUFPD256:
+  case ND_SHUFFLE:
+  case ND_PSHUFD: case ND_PSHUFHW: case ND_PSHUFLW: case ND_PSHUFW:
+  case ND_PSHUFB: case ND_PSHUFB128: case ND_PSHUFB256:
+  case ND_PALIGNR: case ND_PALIGNR128: case ND_PALIGNR256:
+  case ND_PERMDI256:
+  case ND_MOVSHDUP: case ND_MOVSLDUP:
+  case ND_LDDQU:
+  case ND_PBLENDVB128: case ND_PBLENDVB256:
+  case ND_PBLENDW128: case ND_PBLENDD256:
+  case ND_BLENDPS: case ND_BLENDPD:
+  case ND_BLENDPS256: case ND_BLENDPD256:
+  case ND_BLENDVPS: case ND_BLENDVPD:
+  case ND_INSERTPS128: case ND_MPSADBW128: case ND_MPSADBW256:
+  case ND_DPPS: case ND_DPPD: case ND_DPPS256:
+    return gen_ir_sse_binop(node, indent);
+
+  // === PSIGN, PMUL, PACK variants ===
+  case ND_PSIGNB: case ND_PSIGNB128:
+  case ND_PSIGNW: case ND_PSIGNW128:
+  case ND_PSIGND: case ND_PSIGND128:
+  case ND_PTESTZ128: case ND_PTESTC128: case ND_PTESTNZC128:
+  case ND_PCLMULQDQ128:
+  case ND_VPCLMULQDQ_V4DI: case ND_VPCLMULQDQ_V8DI:
+    return gen_ir_sse_binop(node, indent);
+
+  // === Non-temporal stores and special loads ===
+  case ND_MOVNTI: case ND_MOVNTI64:
+  case ND_MOVNTDQ: case ND_MOVNTDQA:
+  case ND_MOVNTPD: case ND_MOVNTPS: case ND_MOVNTQ:
+  case ND_MASKMOVDQU: case ND_MASKMOVQ:
+  case ND_STOREHPS: case ND_STORELPS:
+  case ND_LOADHPS: case ND_LOADHPD:
+  case ND_LOADLPS: case ND_LOADLPD:
+  case ND_MOVQ128:
+    return gen_ir_sse_binop(node, indent);
+
+  // === Fence/barrier/CLFLUSH ===
+  case ND_SFENCE: case ND_LFENCE: case ND_MFENCE:
+  case ND_PAUSE: case ND_CLFLUSH:
+  case ND_LDMXCSR: case ND_STMXCSR:
+    return gen_ir_sse_binop(node, indent);
+
+  // === FP classify and signbit ===
+  case ND_FPCLASSIFY:
+  case ND_ISUNORDERED:
+  case ND_SIGNBIT: case ND_SIGNBITF: case ND_SIGNBITL:
+    return gen_ir_sse_binop(node, indent);
+
+  // === System-level x86 intrinsics ===
+  case ND_EMMS: case ND_FEMMS:
+  case ND_MWAIT: case ND_MONITOR:
+  case ND_PREFETCH:
+  case ND_RDTSC: case ND_RDTSCP: case ND_RDPMC:
+  case ND_READEFLAGS_U64: case ND_WRITEEFLAGS_U64:
+  case ND_RDPKRU:
+  case ND_RDFSBASE32: case ND_RDFSBASE64:
+  case ND_RDGSBASE32: case ND_RDGSBASE64:
+  case ND_RDPID: case ND_RDSSPQ:
+  case ND_BSRSI: case ND_BSRDI:
+  case ND_CRC32QI: case ND_CRC32HI: case ND_CRC32SI: case ND_CRC32DI:
+  case ND_SBB_U32: case ND_SBB_U64:
+  case ND_ADDCARRYX_U32: case ND_ADDCARRYX_U64:
+  case ND_TZCNT_U16:
+  case ND_BEXTR_U32: case ND_BEXTR_U64:
+  case ND_ROLQI: case ND_ROLHI:
+  case ND_RORQI: case ND_RORHI:
+  case ND_XABORT:
+  case ND_XBEGIN: case ND_XEND:
+  case ND_SERIALIZE:
+  case ND_XSUSLDTRK: case ND_XRESLDTRK:
+  case ND_CLUI: case ND_STUI: case ND_TESTUI:
+  case ND_WBINVD: case ND_WBNOINVD:
+  case ND_XTEST:
+  case ND_INCSSPQ: case ND_RSTORSSP:
+  case ND_SAVEPREVSSP: case ND_SETSSBSY: case ND_SLWPCB:
+  case ND_WRSSD: case ND_WRSSQ:
+  case ND_WRUSSD: case ND_WRUSSQ: case ND_CLRSSBSY:
+  case ND_VZEROALL: case ND_VZEROUPPER:
+  case ND_PSUBUSB256:
+  case ND_PCMPGTB256_MASK:
+  case ND_SI256_SI: case ND_SI_SI256:
+  case ND_VINSERTF128_SI256: case ND_VEXTRACTF128_SI256:
+  case ND_VINSERTF128_PD256: case ND_VINSERTF128_PS256:
+  case ND_VEXTRACTF128_PD256: case ND_VEXTRACTF128_PS256:
+  case ND_VPERM2I128_SI256:
+  case ND_VPERM2F128_PD256: case ND_VPERM2F128_PS256: case ND_VPERM2F128_SI256:
+  case ND_VPERMILPD: case ND_VPERMILPS:
+  case ND_VPERMILPD256: case ND_VPERMILPS256:
+  case ND_PD256_PD: case ND_PS256_PS:
+  case ND_CMPSS: case ND_CMPSD:
+  case ND_VECINITV2SI: case ND_VECINITV4HI: case ND_VECINITV8QI:
+  case ND_VECEXTV2SI: case ND_VECEXTV4SI: case ND_VECEXTV4SF:
+  case ND_VECEXTV16QI: case ND_VECEXTV8HI: case ND_VECEXTV2DI:
+  case ND_VECEXTV4HI:
+  case ND_VECSETV4HI: case ND_VECSETV8HI: case ND_VECSETV16QI:
+  case ND_VECSETV4SI: case ND_VECSETV2DI:
+  case ND_EXP2PD_MASK: case ND_EXP2PS_MASK:
+  case ND_RCP28PD_MASK: case ND_RCP28PS_MASK:
+  case ND_RCP28SD_ROUND: case ND_RCP28SS_ROUND:
+  case ND_RSQRT28PD_MASK: case ND_RSQRT28PS_MASK:
+  case ND_RSQRT28SD_ROUND: case ND_RSQRT28SS_ROUND:
+  case ND_GATHERPFDPD: case ND_GATHERPFDPS:
+  case ND_GATHERPFQPD: case ND_GATHERPFQPS:
+  case ND_SCATTERPFDPD: case ND_SCATTERPFDPS:
+  case ND_SCATTERPFQPD: case ND_SCATTERPFQPS:
+  case ND_VPSHLD_V32HI: case ND_VPSHLD_V16SI: case ND_VPSHLD_V8DI:
+  case ND_VPSHLD_V16SI_MASK: case ND_VPSHLD_V8DI_MASK:
+  case ND_VPSHRD_V32HI: case ND_VPSHRD_V16SI: case ND_VPSHRD_V8DI:
+  case ND_VPSHRD_V16SI_MASK: case ND_VPSHRD_V8DI_MASK:
+  case ND_PCMPISTRM128: case ND_PCMPISTRI128:
+  case ND_PCMPISTRIA128: case ND_PCMPISTRIC128:
+  case ND_PCMPISTRIO128: case ND_PCMPISTRIS128: case ND_PCMPISTRIZ128:
+  case ND_PCMPESTRM128: case ND_PCMPESTRI128:
+  case ND_PCMPESTRIA128: case ND_PCMPESTRIC128:
+  case ND_PCMPESTRIO128: case ND_PCMPESTRIS128: case ND_PCMPESTRIZ128:
+    return gen_ir_default(node, indent);
   default:
     return gen_ir_default(node, indent);
   }
@@ -2885,6 +3083,21 @@ static bool ir_universal_fbinop_op(Node *node, const char **out_op)
     *out_op = "ord"; return true;
   case ND_CMPUNORDSS: case ND_CMPUNORDSD: case ND_CMPUNORDPS: case ND_CMPUNORDPD:
     *out_op = "uno"; return true;
+
+  // Basic integer vector arithmetic: PADDB/PADDW/PADDD/PADDQ and PSUBB/PSUBW/PSUBD/PSUBQ.
+  // These are simple vector adds/subs expressible in LLVM IR without intrinsics.
+  case ND_PADDB: case ND_PADDW: case ND_PADDD: case ND_PADDQ:
+    *out_op = "add"; return true;
+  case ND_PSUBB: case ND_PSUBW: case ND_PSUBD: case ND_PSUBQ:
+    *out_op = "sub"; return true;
+
+  // Integer vector bitwise ops.
+  case ND_PAND:  *out_op = "and"; return true;
+  case ND_PANDN: case ND_PANDN128:
+  case ND_ANDNOTSI256: *out_op = "andnot"; return true;
+  case ND_POR:   *out_op = "or";  return true;
+  case ND_PXOR:  *out_op = "xor"; return true;
+
   default:
     return false;
   }
@@ -2924,7 +3137,30 @@ static const char *gen_ir_sse_binop(Node *node, int indent)
     // For and/or/xor the result type is the same as the operands.
     const char *r2 = new_reg();
     emit_indent(indent);
-    if (!strcmp(op, "and") || !strcmp(op, "or") || !strcmp(op, "xor"))
+    if (!strcmp(op, "andnot"))
+    {
+      // ~a & b  implemented as  xor(a, all-ones); and(result, b)
+      int bits = int_type_bits(ty->base);
+      if (bits <= 0) bits = 32;
+      int count = ty->array_len;
+      if (count <= 0) count = 1;
+      const char *neg = new_reg();
+      emit_indent(indent);
+      emit("%s = xor ", neg);
+      emit_type_str(ty);
+      emit(" %s, <", l);
+      for (int i = 0; i < count; i++)
+      {
+        if (i > 0) emit(", ");
+        emit("i%d -1", bits);
+      }
+      emit(">\n");
+      emit("%s = and ", r2);
+      emit_type_str(ty);
+      emit(" %s, %s\n", neg, r_use);
+    }
+    else if (!strcmp(op, "and") || !strcmp(op, "or") || !strcmp(op, "xor") ||
+        !strcmp(op, "add") || !strcmp(op, "sub"))
     {
       emit("%s = %s ", r2, op);
       emit_type_str(ty);
@@ -3256,7 +3492,7 @@ static const char *gen_ir_movmsk(Node *node, int indent)
                            : "llvm.x86.sse2.movmsk.pd";
   const char *res = new_reg();
   emit_indent(indent);
-  emit("%s = call i32 %s(<%d x %s> %s)\n",
+  emit("%s = call i32 @%s(<%d x %s> %s)\n",
        res, intrinsic, ty->array_len,
        ty->base->kind == TY_FLOAT ? "float" : "double", l);
   return res;
@@ -3723,6 +3959,7 @@ static void emit_stmt(Node *node, int indent, bool *terminated)
   case ND_CASE:
     gen_ir_stmt_case(node, indent, terminated);
     return;
+  case ND_GOTO_EXPR:
   case ND_ASM:
     gen_ir_stmt_asm(node, indent, terminated);
     return;
