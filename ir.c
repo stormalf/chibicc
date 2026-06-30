@@ -46,6 +46,9 @@ static const char *gen_ir_unreachable(Node *node, int indent);
 static const char *gen_ir_builtin_bswap16(Node *node, int indent);
 static const char *gen_ir_builtin_bswap32(Node *node, int indent);
 static const char *gen_ir_builtin_bswap64(Node *node, int indent);
+static const char *gen_ir_x86_rdpid(Node *node, int indent);
+static const char *gen_ir_x86_rdfsbase(Node *node, int indent);
+static const char *gen_ir_x86_rdgsbase(Node *node, int indent);
 static const char *gen_ir_builtin_inff(Node *node, int indent);
 static const char *gen_ir_builtin_inf(Node *node, int indent);
 static const char *gen_ir_builtin_nanl(Node *node, int indent);
@@ -1167,15 +1170,19 @@ static const char *emit_expr(Node *node, int indent)
     return gen_ir_sse_binop(node, indent);
 
   // === System-level x86 intrinsics ===
+  case ND_RDPID:
+    return gen_ir_x86_rdpid(node, indent);
+  case ND_RDFSBASE32: case ND_RDFSBASE64:
+    return gen_ir_x86_rdfsbase(node, indent);
+  case ND_RDGSBASE32: case ND_RDGSBASE64:
+    return gen_ir_x86_rdgsbase(node, indent);
   case ND_EMMS: case ND_FEMMS:
   case ND_MWAIT: case ND_MONITOR:
   case ND_PREFETCH:
   case ND_RDTSC: case ND_RDTSCP: case ND_RDPMC:
   case ND_READEFLAGS_U64: case ND_WRITEEFLAGS_U64:
   case ND_RDPKRU:
-  case ND_RDFSBASE32: case ND_RDFSBASE64:
-  case ND_RDGSBASE32: case ND_RDGSBASE64:
-  case ND_RDPID: case ND_RDSSPQ:
+  case ND_RDSSPQ:
   case ND_BSRSI: case ND_BSRDI:
   case ND_CRC32QI: case ND_CRC32HI: case ND_CRC32SI: case ND_CRC32DI:
   case ND_SBB_U32: case ND_SBB_U64:
@@ -1514,11 +1521,26 @@ static const char *gen_ir_cast(Node *node, int indent)
     const char *val = emit_expr(node->lhs, indent);
     const char *r = new_reg();
     emit_indent(indent);
-    emit("%s = bitcast ", r);
-    emit_type_str(src);
-    emit(" %s to ", val);
-    emit_type_str(dst);
-    emit("\n");
+    if (src->size == dst->size) {
+      emit("%s = bitcast ", r);
+      emit_type_str(src);
+      emit(" %s to ", val);
+      emit_type_str(dst);
+      emit("\n");
+    } else {
+      int size = src->size > dst->size ? src->size : dst->size;
+      int align = dst->align > src->align ? dst->align : src->align;
+      const char *ptr = new_reg();
+      emit("%s = alloca i8, i64 %d, align %d\n", ptr, size, align);
+      emit_indent(indent);
+      emit("store ");
+      emit_type_str(src);
+      emit(" %s, ptr %s, align %d\n", val, ptr, src->align);
+      emit_indent(indent);
+      emit("%s = load ", r);
+      emit_type_str(dst);
+      emit(", ptr %s, align %d\n", ptr, dst->align);
+    }
     return r;
   }
 
@@ -1594,20 +1616,16 @@ static const char *gen_ir_add(Node *node, int indent)
     emit("%s = getelementptr i8, ptr %s, i64 %s\n", reg, l, r);
     return reg;
   }
-  if (node->kind == ND_ADD && node->lhs->ty->kind == TY_VECTOR)
-  {
-    const char *l = emit_lval(node->lhs, indent);
-    const char *r = emit_expr(node->rhs, indent);
-    const char *reg = new_reg();
-    emit_indent(indent);
-    emit("%s = getelementptr i8, ptr %s, i64 %s\n", reg, l, r);
-    return reg;
-  }
   const char *l = emit_expr(node->lhs, indent);
   const char *r = emit_expr(node->rhs, indent);
   const char *reg = new_reg();
   emit_indent(indent);
-  if (is_float_type(node->ty))
+  bool is_vec_float = (node->ty->kind == TY_VECTOR) &&
+                      (node->ty->base &&
+                       (node->ty->base->kind == TY_FLOAT ||
+                        node->ty->base->kind == TY_DOUBLE ||
+                        node->ty->base->kind == TY_LDOUBLE));
+  if (is_float_type(node->ty) || is_vec_float)
   {
     const char *op;
     switch (node->kind)
@@ -1702,7 +1720,13 @@ static const char *gen_ir_eq(Node *node, int indent)
   }
   const char *reg = new_reg();
   emit_indent(indent);
-  emit("%s = zext i1 %s to i32\n", reg, tmp);
+  if (node->lhs->ty->kind == TY_VECTOR) {
+    emit("%s = sext <%d x i1> %s to ", reg, node->lhs->ty->array_len, tmp);
+    emit_type_str(node->ty);
+    emit("\n");
+  } else {
+    emit("%s = zext i1 %s to i32\n", reg, tmp);
+  }
   return reg;
 }
 
@@ -2331,6 +2355,37 @@ static const char *gen_ir_builtin_bswap64(Node *node, int indent)
 }
 
 
+static const char *gen_ir_x86_rdpid(Node *node, int indent)
+{
+  const char *r = new_reg();
+  emit_indent(indent);
+  emit("%s = call i32 @llvm.x86.rdpid(i32 0)\n", r);
+  return r;
+}
+
+
+static const char *gen_ir_x86_rdfsbase(Node *node, int indent)
+{
+  int bits = (node->kind == ND_RDFSBASE64) ? 64 : 32;
+  const char *r = new_reg();
+  emit_indent(indent);
+  emit("%s = call i%d @llvm.x86.rdfsbase.i%d(i%d 0)\n",
+       r, bits, bits, bits);
+  return r;
+}
+
+
+static const char *gen_ir_x86_rdgsbase(Node *node, int indent)
+{
+  int bits = (node->kind == ND_RDGSBASE64) ? 64 : 32;
+  const char *r = new_reg();
+  emit_indent(indent);
+  emit("%s = call i%d @llvm.x86.rdgsbase.i%d(i%d 0)\n",
+       r, bits, bits, bits);
+  return r;
+}
+
+
 static const char *gen_ir_builtin_inff(Node *node, int indent)
 {
 
@@ -2457,123 +2512,93 @@ static const char *gen_ir_stdc_bit_ceil(Node *node, int indent)
 }
 
 
-static const char *gen_ir_builtin_add_overflow(Node *node, int indent)
+static const char *gen_ir_overflow_arith(Node *node, int indent, const char *op)
 {
+  Type *dest_ty = node->builtin_dest->ty->base;
+  int dest_bits = int_type_bits(dest_ty);
+  if (dest_bits <= 0) dest_bits = 32;
 
   const char *l = emit_expr(node->lhs, indent);
   const char *r = emit_expr(node->rhs, indent);
-  int bits = int_type_bits(node->rhs->ty);
-  if (bits <= 0) bits = 32;
+
+  int lhs_bits = int_type_bits(node->lhs->ty);
+  int rhs_bits = int_type_bits(node->rhs->ty);
+  if (lhs_bits <= 0) lhs_bits = 32;
+  if (rhs_bits <= 0) rhs_bits = 32;
+
+  int wide_bits;
+  if (dest_bits >= 128 || lhs_bits > 128 || rhs_bits > 128)
+    wide_bits = 256;
+  else if (dest_bits >= 64 || lhs_bits > 64 || rhs_bits > 64)
+    wide_bits = 128;
+  else
+    wide_bits = 64;
+
+  const char *l_ext = l;
+  if (lhs_bits < wide_bits) {
+    l_ext = new_reg();
+    emit_indent(indent);
+    emit("%s = %s i%d %s to i%d\n", l_ext,
+         node->lhs->ty->is_unsigned ? "zext" : "sext", lhs_bits, l, wide_bits);
+  }
+  const char *r_ext = r;
+  if (rhs_bits < wide_bits) {
+    r_ext = new_reg();
+    emit_indent(indent);
+    emit("%s = %s i%d %s to i%d\n", r_ext,
+         node->rhs->ty->is_unsigned ? "zext" : "sext", rhs_bits, r, wide_bits);
+  }
+
   const char *result = new_reg();
   emit_indent(indent);
-  emit("%s = call {i%d, i1} @llvm.sadd.with.overflow.i%d(i%d %s, i%d %s)\n",
-       result, bits, bits, bits, l, bits, r);
+  emit("%s = %s i%d %s, %s\n", result, op, wide_bits, l_ext, r_ext);
+
   const char *val = new_reg();
   emit_indent(indent);
-  emit("%s = extractvalue {i%d, i1} %s, 0\n", val, bits, result);
+  emit("%s = trunc i%d %s to i%d\n", val, wide_bits, result, dest_bits);
   const char *dest_ptr = emit_expr(node->builtin_dest, indent);
   emit_indent(indent);
-  emit("store i%d %s, ptr %s\n", bits, val, dest_ptr);
+  emit("store i%d %s, ptr %s\n", dest_bits, val, dest_ptr);
+
+  const char *val_ext = new_reg();
+  emit_indent(indent);
+  emit("%s = %s i%d %s to i%d\n", val_ext,
+       dest_ty->is_unsigned ? "zext" : "sext", dest_bits, val, wide_bits);
+
   const char *overflow = new_reg();
   emit_indent(indent);
-  emit("%s = extractvalue {i%d, i1} %s, 1\n", overflow, bits, result);
+  emit("%s = icmp ne i%d %s, %s\n", overflow, wide_bits, result, val_ext);
   return overflow;
+}
+
+
+static const char *gen_ir_builtin_add_overflow(Node *node, int indent)
+{
+  return gen_ir_overflow_arith(node, indent, "add");
 }
 
 
 static const char *gen_ir_builtin_sub_overflow(Node *node, int indent)
 {
-
-  const char *l = emit_expr(node->lhs, indent);
-  const char *r = emit_expr(node->rhs, indent);
-  int bits = int_type_bits(node->rhs->ty);
-  if (bits <= 0) bits = 32;
-  const char *result = new_reg();
-  emit_indent(indent);
-  emit("%s = call {i%d, i1} @llvm.ssub.with.overflow.i%d(i%d %s, i%d %s)\n",
-       result, bits, bits, bits, l, bits, r);
-  const char *val = new_reg();
-  emit_indent(indent);
-  emit("%s = extractvalue {i%d, i1} %s, 0\n", val, bits, result);
-  const char *dest_ptr = emit_expr(node->builtin_dest, indent);
-  emit_indent(indent);
-  emit("store i%d %s, ptr %s\n", bits, val, dest_ptr);
-  const char *overflow = new_reg();
-  emit_indent(indent);
-  emit("%s = extractvalue {i%d, i1} %s, 1\n", overflow, bits, result);
-  return overflow;
+  return gen_ir_overflow_arith(node, indent, "sub");
 }
 
 
 static const char *gen_ir_builtin_mul_overflow(Node *node, int indent)
 {
-
-  const char *l = emit_expr(node->lhs, indent);
-  const char *r = emit_expr(node->rhs, indent);
-  int bits = int_type_bits(node->rhs->ty);
-  if (bits <= 0) bits = 32;
-  const char *result = new_reg();
-  emit_indent(indent);
-  emit("%s = call {i%d, i1} @llvm.smul.with.overflow.i%d(i%d %s, i%d %s)\n",
-       result, bits, bits, bits, l, bits, r);
-  const char *val = new_reg();
-  emit_indent(indent);
-  emit("%s = extractvalue {i%d, i1} %s, 0\n", val, bits, result);
-  const char *dest_ptr = emit_expr(node->builtin_dest, indent);
-  emit_indent(indent);
-  emit("store i%d %s, ptr %s\n", bits, val, dest_ptr);
-  const char *overflow = new_reg();
-  emit_indent(indent);
-  emit("%s = extractvalue {i%d, i1} %s, 1\n", overflow, bits, result);
-  return overflow;
+  return gen_ir_overflow_arith(node, indent, "mul");
 }
 
 
 static const char *gen_ir_uadd_overflow(Node *node, int indent)
 {
-
-  const char *l = emit_expr(node->lhs, indent);
-  const char *r = emit_expr(node->rhs, indent);
-  int bits = int_type_bits(node->rhs->ty);
-  if (bits <= 0) bits = 64;
-  const char *result = new_reg();
-  emit_indent(indent);
-  emit("%s = call {i%d, i1} @llvm.uadd.with.overflow.i%d(i%d %s, i%d %s)\n",
-       result, bits, bits, bits, l, bits, r);
-  const char *val = new_reg();
-  emit_indent(indent);
-  emit("%s = extractvalue {i%d, i1} %s, 0\n", val, bits, result);
-  const char *dest_ptr = emit_expr(node->builtin_dest, indent);
-  emit_indent(indent);
-  emit("store i%d %s, ptr %s\n", bits, val, dest_ptr);
-  const char *overflow = new_reg();
-  emit_indent(indent);
-  emit("%s = extractvalue {i%d, i1} %s, 1\n", overflow, bits, result);
-  return overflow;
+  return gen_ir_overflow_arith(node, indent, "add");
 }
 
 
 static const char *gen_ir_umul_overflow(Node *node, int indent)
 {
-
-  const char *l = emit_expr(node->lhs, indent);
-  const char *r = emit_expr(node->rhs, indent);
-  int bits = int_type_bits(node->rhs->ty);
-  if (bits <= 0) bits = 64;
-  const char *result = new_reg();
-  emit_indent(indent);
-  emit("%s = call {i%d, i1} @llvm.umul.with.overflow.i%d(i%d %s, i%d %s)\n",
-       result, bits, bits, bits, l, bits, r);
-  const char *val = new_reg();
-  emit_indent(indent);
-  emit("%s = extractvalue {i%d, i1} %s, 0\n", val, bits, result);
-  const char *dest_ptr = emit_expr(node->builtin_dest, indent);
-  emit_indent(indent);
-  emit("store i%d %s, ptr %s\n", bits, val, dest_ptr);
-  const char *overflow = new_reg();
-  emit_indent(indent);
-  emit("%s = extractvalue {i%d, i1} %s, 1\n", overflow, bits, result);
-  return overflow;
+  return gen_ir_overflow_arith(node, indent, "mul");
 }
 
 

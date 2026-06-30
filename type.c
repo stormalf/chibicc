@@ -1064,7 +1064,6 @@ void add_type(Node *node)
   case ND_PUNPCKHWD:    
   case ND_PACKSSDW:
   case ND_PAVGW:
-  case ND_PACKSSDW128:
   case ND_PHADDW:
   case ND_PHADDSW:
   case ND_PMADDUBSW:
@@ -1133,6 +1132,7 @@ void add_type(Node *node)
   case ND_PABSW128:  
   case ND_PMOVSXBW128:
   case ND_PMOVZXBW128:  
+  case ND_PACKSSDW128:
   case ND_PACKUSDW128:
   case ND_VECSETV8HI:
   case ND_MPSADBW128:
@@ -1368,8 +1368,8 @@ void add_type(Node *node)
   case ND_SI_SI256:
   case ND_PSRLQI256:
   case ND_PSLLQI256:
-  case ND_PERMDI256:  
-    node->ty = vector_of(ty_uchar, 32);
+  case ND_PERMDI256:
+    node->ty = vector_of(ty_long, 4);
     return;
   case ND_SI256_SI:
   case ND_VEXTRACTF128_SI256:
