@@ -16,7 +16,7 @@ typedef enum
 } FileType;
 
 
-Standard current_std = STD_GNU89;  // default like GCC
+Standard current_std = STD_GNU17;
 StringArray include_paths;
 bool opt_fcommon = true;
 bool opt_fbuiltin = true;

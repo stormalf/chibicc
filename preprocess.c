@@ -1390,35 +1390,18 @@ static Token *stdver_macro(Token *tok) {
   switch (current_std) {
   case STD_C89:
   case STD_GNU89:
-    tok->val = 0;
-    break; // __STDC_VERSION__ not defined
-
+    return new_num_token(0, tok);
   case STD_C99:
   case STD_GNU99:
-    tok->val = 199901L;
-    break;
-
+    return new_num_token(199901L, tok);
   case STD_C11:
   case STD_GNU11:
-    tok->val = 201112L;
-    break;
-
+    return new_num_token(201112L, tok);
   case STD_C17:
   case STD_GNU17:
-    tok->val = 201710L;
-    break;
-
-  case STD_C23:
-    tok->val = 202311L;
-    break;
-
-  default:
-    unreachable();
+    return new_num_token(201710L, tok);
   }
-
-  tok->kind = TK_NUM;
-  tok->ty = ty_long;
-  return tok;  
+  return new_num_token(0, tok);
 }
 
 

@@ -1509,6 +1509,19 @@ static const char *gen_ir_cast(Node *node, int indent)
   if (src->kind == TY_VECTOR && dst->kind == TY_PTR)
     return emit_lval(node->lhs, indent);
 
+  if (src->kind == TY_VECTOR && dst->kind == TY_VECTOR)
+  {
+    const char *val = emit_expr(node->lhs, indent);
+    const char *r = new_reg();
+    emit_indent(indent);
+    emit("%s = bitcast ", r);
+    emit_type_str(src);
+    emit(" %s to ", val);
+    emit_type_str(dst);
+    emit("\n");
+    return r;
+  }
+
   return emit_expr(node->lhs, indent);
 }
 
@@ -1704,9 +1717,11 @@ static const char *gen_ir_logand(Node *node, int indent)
 
   emit_indent(indent);
   emit("br label %%%s\n", entry_label);
+  is_terminated = true;
   emit_label(entry_label);
   const char *l_bool = emit_to_bool(emit_expr(node->lhs, indent), node->lhs->ty, indent);
 
+  const char *lhs_block = current_block;
   if (node->kind == ND_LOGAND)
   {
     emit_indent(indent);
@@ -1731,7 +1746,7 @@ static const char *gen_ir_logand(Node *node, int indent)
   emit_indent(indent);
   const char *entry_result = (node->kind == ND_LOGAND) ? "false" : "true";
   emit("%s = phi i1 [ %s, %%%s ], [ %s, %%%s ]\n",
-       result, entry_result, entry_label, r_bool, rhs_label);
+       result, entry_result, lhs_block, r_bool, rhs_label);
 
   const char *final = new_reg();
   emit_indent(indent);
@@ -1837,11 +1852,7 @@ static const char *gen_ir_cond(Node *node, int indent)
   if (node->cond->ty->kind == TY_BOOL || node->cond->ty->kind == TY_PTR)
     cond_bool = cond_val;
   else
-  {
-    cond_bool = new_reg();
-    emit_indent(indent);
-    emit("%s = icmp ne i32 %s, 0\n", cond_bool, cond_val);
-  }
+    cond_bool = emit_to_bool(cond_val, node->cond->ty, indent);
 
   const char *true_label = format(".L.cond.true.%d", ir_reg++);
   const char *false_label = format(".L.cond.false.%d", ir_reg++);
@@ -3828,15 +3839,7 @@ static void gen_ir_stmt_if(Node *node, int indent, bool *terminated)
 {
 {
   const char *cond_val = emit_expr(node->cond, indent);
-  const char *cond_bool;
-  if (node->cond->ty->kind == TY_BOOL)
-    cond_bool = cond_val;
-  else
-  {
-    cond_bool = new_reg();
-    emit_indent(indent);
-    emit("%s = icmp ne i32 %s, 0\n", cond_bool, cond_val);
-  }
+  const char *cond_bool = emit_to_bool(cond_val, node->cond->ty, indent);
   const char *then_label = format(".L.then.%d", ir_reg++);
   const char *else_label = format(".L.else.%d", ir_reg++);
   const char *end_label = format(".L.end.%d", ir_reg++);
@@ -3889,44 +3892,39 @@ static void gen_ir_stmt_for(Node *node, int indent, bool *terminated)
 {
 
   const char *begin_label = format(".L.begin.%d", ir_reg++);
-  const char *cont_label = format(".L.cont.%d", ir_reg++);
-  const char *end_label = format(".L.end.%d", ir_reg++);
+  const char *body_label = format(".L.body.%d", ir_reg++);
   if (node->init)
     emit_stmt(node->init, indent, NULL);
   emit_label(begin_label);
   if (node->cond)
   {
     const char *cond_val = emit_expr(node->cond, indent);
-    const char *cond_bool;
-    if (node->cond->ty->kind == TY_BOOL)
-      cond_bool = cond_val;
-    else
-    {
-      cond_bool = new_reg();
-      emit_indent(indent);
-      emit("%s = icmp ne i32 %s, 0\n", cond_bool, cond_val);
-    }
+    const char *cond_bool = emit_to_bool(cond_val, node->cond->ty, indent);
     emit_indent(indent);
-    emit("br i1 %s, label %%%s, label %%%s\n", cond_bool, cont_label, end_label);
+    emit("br i1 %s, label %%%s, label %%%s\n", cond_bool, body_label, node->brk_label);
     is_terminated = true;
   }
   else
   {
     emit_indent(indent);
-    emit("br label %%%s\n", cont_label);
+    emit("br label %%%s\n", body_label);
     is_terminated = true;
   }
-  emit_label(cont_label);
+  emit_label(body_label);
   emit_stmt(node->then, indent, NULL);
-  if (node->inc)
-    emit_expr(node->inc, indent);
   if (!is_terminated)
   {
     emit_indent(indent);
-    emit("br label %%%s\n", begin_label);
+    emit("br label %%%s\n", node->cont_label);
     is_terminated = true;
   }
-  emit_label(end_label);
+  emit_label(node->cont_label);
+  if (node->inc)
+    emit_expr(node->inc, indent);
+  emit_indent(indent);
+  emit("br label %%%s\n", begin_label);
+  is_terminated = true;
+  emit_label(node->brk_label);
   return;
 }
 
@@ -3948,15 +3946,7 @@ static void gen_ir_stmt_do(Node *node, int indent, bool *terminated)
   emit_label(cont_label);
   {
     const char *cond_val = emit_expr(node->cond, indent);
-    const char *cond_bool;
-    if (node->cond->ty->kind == TY_BOOL)
-      cond_bool = cond_val;
-    else
-    {
-      cond_bool = new_reg();
-      emit_indent(indent);
-      emit("%s = icmp ne i32 %s, 0\n", cond_bool, cond_val);
-    }
+    const char *cond_bool = emit_to_bool(cond_val, node->cond->ty, indent);
     emit_indent(indent);
     emit("br i1 %s, label %%%s, label %%%s\n", cond_bool, begin_label, end_label);
     is_terminated = true;

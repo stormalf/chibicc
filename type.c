@@ -579,6 +579,12 @@ void add_type(Node *node)
   case ND_BITAND:
   case ND_BITOR:
   case ND_BITXOR:
+  case ND_PAND:
+  case ND_PANDN:
+  case ND_PANDN128:
+  case ND_PXOR:
+  case ND_POR:
+  case ND_ANDNOTSI256:
     if (is_vector(node->lhs->ty) && is_vector(node->rhs->ty)) {
           node->ty = node->lhs->ty;
     } else {
@@ -743,10 +749,6 @@ void add_type(Node *node)
   case ND_PMULUDQ128:
     node->ty = vector_of(ty_ulong, 2);
     return;
-  case ND_PXOR:
-  case ND_POR:
-  case ND_PAND:
-  case ND_PANDN:
   case ND_PSRLQ:
   case ND_PSRLQI:
   case ND_PSLLQI:
@@ -1152,7 +1154,6 @@ void add_type(Node *node)
   case ND_PSLLD128:
   case ND_PSRAD128:
   case ND_PSRLD128:
-  case ND_PANDN128:
   case ND_PHADDD128:
   case ND_PHSUBD128:
   case ND_PMOVSXBD128:
@@ -1363,7 +1364,6 @@ void add_type(Node *node)
   case ND_VPERM2I128_SI256:
   case ND_VINSERTF128_SI256:  
   case ND_PBLENDD256:
-  case ND_ANDNOTSI256:
   case ND_PMULHUW256:
   case ND_SI_SI256:
   case ND_PSRLQI256:
