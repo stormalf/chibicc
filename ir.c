@@ -369,8 +369,23 @@ static void emit_global(Obj *var)
 {
   if (var->alias_name)
     return;
-  if (var->is_function || !var->is_definition)
+
+  if (var->is_function)
     return;
+
+  if (!var->is_definition) {
+    emit_llvm_name(var->name);
+    emit(" = external ");
+    if (var->is_tls)
+      emit("thread_local ");
+    if (var->is_static)
+      emit("internal ");
+    emit("global ");
+    emit_type_str(var->ty);
+    emit("\n");
+    return;
+  }
+
 
   emit_llvm_name(var->name);
   emit(" = ");
@@ -4514,6 +4529,7 @@ void emit_ir(Obj *prog, FILE *out)
     }
   if (!has_abort_decl)
     emit("declare void @abort()\n");
+    
 
   for (Obj *fn = prog; fn; fn = fn->next)
   {
