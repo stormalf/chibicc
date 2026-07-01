@@ -691,8 +691,9 @@ static void ir_emit_atomic_store(const char *val, const char *ptr, Type *ty,
 
 // Emit an atomicrmw read-modify-write with the requested LLVM opcode and
 // return the register holding the old value.
+// val_bits is the IR bit-width of the incoming `val` register (0 = unknown/i32).
 static const char *ir_emit_atomicrmw(const char *op, const char *ptr, const char *val,
-                                     Type *ty, int memorder, int indent)
+                                     Type *ty, int memorder, int indent, int val_bits)
 {
   int orig_bits = int_type_bits(ty);
   if (orig_bits <= 0) orig_bits = (ty->size > 0) ? ty->size * 8 : 32;
@@ -701,14 +702,20 @@ static const char *ir_emit_atomicrmw(const char *op, const char *ptr, const char
   // TY_BOOL (i1) must be widened to i8 for atomicrmw/load/store.
   if (bits < 8)
     bits = 8;
-  // When widening (e.g. i1 -> i8), the incoming val may have a wider type
-  // (e.g. i32 from a constant literal).  Truncate it to i{bits} so the
-  // atomicrmw operand type matches the instruction type.
-  if (bits != orig_bits || bits < 32)
+  // Normalise val_bits: 0 means caller doesn't know, assume i32 (constant literal).
+  if (val_bits <= 0)
+    val_bits = 32;
+  // Ensure the incoming val register has exactly i{bits} width.
+  // This handles: bool widening (i1->i8), small types (i8/i16 from i32 constants),
+  // and large types (i32 val fed into an i64 atomicrmw for `long`).
+  if (val_bits != bits)
   {
     const char *casted = new_reg();
     emit_indent(indent);
-    emit("%s = trunc i32 %s to i%d\n", casted, val, bits);
+    if (val_bits > bits)
+      emit("%s = trunc i%d %s to i%d\n", casted, val_bits, val, bits);
+    else
+      emit("%s = zext i%d %s to i%d\n", casted, val_bits, val, bits);
     val = casted;
   }
   const char *r = new_reg();
@@ -2833,8 +2840,9 @@ static const char *gen_ir_exch(Node *node, int indent)
   Type *ty = (node->lhs && node->lhs->ty->base) ? node->lhs->ty->base : node->ty;
   const char *addr = emit_expr(node->lhs, indent);
   const char *val = emit_expr(node->rhs, indent);
+  int vbits = (node->rhs && node->rhs->ty) ? int_type_bits(node->rhs->ty) : 0;
   return ir_emit_atomicrmw("xchg", addr, val, ty,
-                           node->memorder ? node->memorder : 5, indent);
+                           node->memorder ? node->memorder : 5, indent, vbits);
 }
 
 
@@ -2843,8 +2851,9 @@ static const char *gen_ir_exch_n(Node *node, int indent)
   Type *ty = (node->lhs && node->lhs->ty->base) ? node->lhs->ty->base : node->ty;
   const char *addr = emit_expr(node->lhs, indent);
   const char *val = emit_expr(node->rhs, indent);
+  int vbits = (node->rhs && node->rhs->ty) ? int_type_bits(node->rhs->ty) : 0;
   return ir_emit_atomicrmw("xchg", addr, val, ty,
-                           node->memorder ? node->memorder : 5, indent);
+                           node->memorder ? node->memorder : 5, indent, vbits);
 }
 
 
@@ -2852,14 +2861,17 @@ static const char *gen_ir_cmpxchg(Node *node, int indent)
 {
   // For ND_CMPEXCH (from __atomic_compare_exchange), cas_expected is
   // a POINTER to the expected value.  We dereference it before cmpxchg.
+  // On failure, the actual memory value must be written back to *expected.
   int succ = node->cas_success ? node->cas_success->val : 5;
   int fail = node->cas_failure ? node->cas_failure->val : 5;
   Type *ty = (node->cas_ptr && node->cas_ptr->ty->base)
              ? node->cas_ptr->ty->base : node->ty;
   const char *ptr = emit_expr(node->cas_ptr, indent);
-  const char *expected = ir_emit_atomic_load(
-      emit_expr(node->cas_expected, indent), ty, 5, indent);
-  const char *desired = emit_expr(node->cas_desired, indent);
+  const char *expected_ptr = emit_expr(node->cas_expected, indent);
+  const char *expected = ir_emit_atomic_load(expected_ptr, ty, 5, indent);
+  // cas_desired is a pointer (caller passes &desired), so load the value through it.
+  const char *desired_ptr = emit_expr(node->cas_desired, indent);
+  const char *desired = ir_emit_atomic_load(desired_ptr, ty, 5, indent);
   const char *pair = new_reg();
   emit_indent(indent);
   emit("%s = cmpxchg ptr %s, ", pair, ptr);
@@ -2868,6 +2880,15 @@ static const char *gen_ir_cmpxchg(Node *node, int indent)
   emit_type_str(ty);
   emit(" %s %s %s\n",
        desired, ir_atomic_ordering(succ), ir_atomic_ordering(fail));
+  // Extract the old value and write it back to *expected (required by C spec
+  // on failure, harmless on success since old==expected in that case).
+  const char *old_val = new_reg();
+  emit_indent(indent);
+  emit("%s = extractvalue {", old_val);
+  emit_type_str(ty);
+  emit(", i1} %s, 0\n", pair);
+  ir_emit_atomic_store(old_val, expected_ptr, ty, fail, indent);
+  // Return the success flag (index 1).
   const char *r = new_reg();
   emit_indent(indent);
   emit("%s = extractvalue {", r);
@@ -2882,15 +2903,15 @@ static const char *gen_ir_cmpxchg_n(Node *node, int indent)
   // For ND_CMPEXCH_N (from __atomic_compare_exchange_n), cas_expected
   // is a POINTER to the expected value (matches gen_cmpxchgn in
   // codegen.c, which dereferences it before cmpxchg).  The function
-  // returns the bool success flag (chibicc semantics; see comment in
-  // gen_ir_cas_n).
+  // returns the bool success flag.  On failure, the actual memory value
+  // must be written back to *expected (C11 __atomic_compare_exchange_n spec).
   int succ = node->cas_success ? node->cas_success->val : 5;
   int fail = node->cas_failure ? node->cas_failure->val : 5;
   Type *ty = (node->cas_ptr && node->cas_ptr->ty->base)
              ? node->cas_ptr->ty->base : node->ty;
   const char *ptr = emit_expr(node->cas_ptr, indent);
-  const char *expected = ir_emit_atomic_load(
-      emit_expr(node->cas_expected, indent), ty, 5, indent);
+  const char *expected_ptr = emit_expr(node->cas_expected, indent);
+  const char *expected = ir_emit_atomic_load(expected_ptr, ty, 5, indent);
   const char *desired = emit_expr(node->cas_desired, indent);
   const char *pair = new_reg();
   emit_indent(indent);
@@ -2900,6 +2921,14 @@ static const char *gen_ir_cmpxchg_n(Node *node, int indent)
   emit_type_str(ty);
   emit(" %s %s %s\n",
        desired, ir_atomic_ordering(succ), ir_atomic_ordering(fail));
+  // Extract the old value and write it back to *expected (harmless on success).
+  const char *old_val = new_reg();
+  emit_indent(indent);
+  emit("%s = extractvalue {", old_val);
+  emit_type_str(ty);
+  emit(", i1} %s, 0\n", pair);
+  ir_emit_atomic_store(old_val, expected_ptr, ty, fail, indent);
+  // Return the success flag (index 1).
   const char *r = new_reg();
   emit_indent(indent);
   emit("%s = extractvalue {", r);
@@ -3008,7 +3037,8 @@ static const char *gen_ir_testandset(Node *node, int indent)
   Type *ty = (node->lhs && node->lhs->ty->base) ? node->lhs->ty->base : node->ty;
   const char *addr = emit_expr(node->lhs, indent);
   const char *val = emit_expr(node->rhs, indent);
-  return ir_emit_atomicrmw("xchg", addr, val, ty, 5, indent);
+  int vbits = (node->rhs && node->rhs->ty) ? int_type_bits(node->rhs->ty) : 0;
+  return ir_emit_atomicrmw("xchg", addr, val, ty, 5, indent, vbits);
 }
 
 
@@ -3024,8 +3054,10 @@ static const char *gen_ir_testandseta(Node *node, int indent)
     emit("%s = add i8 0, 1\n", one);
   else
     emit("%s = add i%d 0, 1\n", one, bits);
+  // `one` was generated with i{bits} width (or i8 for bool widened to 8)
+  int one_bits = bits < 8 ? 8 : bits;
   return ir_emit_atomicrmw("xchg", addr, one, ty,
-                           node->memorder ? node->memorder : 5, indent);
+                           node->memorder ? node->memorder : 5, indent, one_bits);
 }
 
 
@@ -3035,8 +3067,9 @@ static const char *gen_ir_rmw_old(Node *node, int indent, const char *op)
   Type *ty = (node->lhs && node->lhs->ty->base) ? node->lhs->ty->base : node->ty;
   const char *addr = emit_expr(node->lhs, indent);
   const char *val = emit_expr(node->rhs, indent);
+  int vbits = (node->rhs && node->rhs->ty) ? int_type_bits(node->rhs->ty) : 0;
   return ir_emit_atomicrmw(op, addr, val, ty,
-                           node->memorder ? node->memorder : 5, indent);
+                           node->memorder ? node->memorder : 5, indent, vbits);
 }
 
 
@@ -3047,8 +3080,9 @@ static const char *gen_ir_rmw_new(Node *node, int indent, const char *op)
   Type *ty = (node->lhs && node->lhs->ty->base) ? node->lhs->ty->base : node->ty;
   const char *addr = emit_expr(node->lhs, indent);
   const char *val = emit_expr(node->rhs, indent);
+  int vbits = (node->rhs && node->rhs->ty) ? int_type_bits(node->rhs->ty) : 0;
   const char *old = ir_emit_atomicrmw(op, addr, val, ty,
-                                      node->memorder ? node->memorder : 5, indent);
+                                      node->memorder ? node->memorder : 5, indent, vbits);
   // LLVM's atomicrmw always returns the old value.  Compute the new
   // value with the same arithmetic the C abstract machine describes.
   const char *r = new_reg();
