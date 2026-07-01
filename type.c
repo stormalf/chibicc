@@ -728,7 +728,12 @@ void add_type(Node *node)
     node->ty = ty_bool;
     return;
   case ND_CAS_N:
-    node->ty = ty_bool;
+    add_type(node->cas_addr);
+    add_type(node->cas_old);
+    add_type(node->cas_new);
+    // __sync_val_compare_and_swap returns the old value at *ptr, not bool.
+    node->ty = (node->cas_addr && node->cas_addr->ty && node->cas_addr->ty->base)
+               ? node->cas_addr->ty->base : ty_int;
     return;
   case ND_ATOMIC_IS_LOCK_FREE:
     add_type(node->lhs);

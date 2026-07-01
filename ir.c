@@ -15,6 +15,7 @@ static const char *gen_ir_num(Node *node, int indent);
 static const char *gen_ir_var(Node *node, int indent);
 static const char *gen_ir_deref(Node *node, int indent);
 static const char *gen_ir_assign(Node *node, int indent);
+static const char *emit_lval_ptr(Node *node, int indent);
 static const char *gen_ir_cast(Node *node, int indent);
 static const char *gen_ir_add(Node *node, int indent);
 static const char *gen_ir_eq(Node *node, int indent);
@@ -464,6 +465,42 @@ static const char *emit_insert_bitfield(const char *container, const char *val, 
   return result;
 }
 
+// Returns the store address (always a ptr) for an lvalue node.
+// Unlike emit_lval, this never loads the value of a scalar variable.
+static const char *emit_lval_ptr(Node *node, int indent)
+{
+  switch (node->kind)
+  {
+  case ND_VAR:
+    return var_ptr(node->var);
+  case ND_DEREF:
+    return emit_expr(node->lhs, indent);
+  case ND_VLA_PTR:
+    return var_ptr(node->var);
+  case ND_CAST:
+    return emit_lval_ptr(node->lhs, indent);
+  case ND_COMMA:
+    // Evaluate lhs for side effects, then yield the store address of the rhs.
+    emit_expr(node->lhs, indent);
+    return emit_lval_ptr(node->rhs, indent);
+  case ND_MEMBER:
+  {
+    const char *base = emit_expr(node->lhs, indent);
+    const char *base_i8 = new_reg();
+    emit_indent(indent);
+    emit("%s = getelementptr i8, ptr %s, i32 0\n", base_i8, base);
+    const char *addr = new_reg();
+    emit_indent(indent);
+    emit("%s = getelementptr i8, ptr %s, i32 %d\n", addr, base_i8, node->member->offset);
+    return addr;
+  }
+  default:
+    error_tok(node->tok, "%s:%d: in %s: emit_lval_ptr: unexpected node kind %d",
+              __FILE__, __LINE__, __func__, node->kind);
+    return NULL;
+  }
+}
+
 static const char *emit_lval(Node *node, int indent)
 {
   switch (node->kind)
@@ -561,6 +598,10 @@ if (mem->is_bitfield)
    case ND_CAST:
      // A cast does not change the address of an lvalue.
      return emit_lval(node->lhs, indent);
+   case ND_COMMA:
+     // Evaluate the lhs for side effects, then yield the address of the rhs lvalue.
+     emit_expr(node->lhs, indent);
+     return emit_lval(node->rhs, indent);
    default:
      error_tok(node->tok, "%s:%d: in %s: emit_lval: unexpected node kind %d", __FILE__, __LINE__, __func__, node->kind);
      return NULL;
@@ -653,19 +694,30 @@ static void ir_emit_atomic_store(const char *val, const char *ptr, Type *ty,
 static const char *ir_emit_atomicrmw(const char *op, const char *ptr, const char *val,
                                      Type *ty, int memorder, int indent)
 {
-  int bits = int_type_bits(ty);
-  if (bits <= 0) bits = (ty->size > 0) ? ty->size * 8 : 32;
+  int orig_bits = int_type_bits(ty);
+  if (orig_bits <= 0) orig_bits = (ty->size > 0) ? ty->size * 8 : 32;
+  int bits = orig_bits;
   // LLVM requires atomic memory accesses to be at least one byte wide;
   // TY_BOOL (i1) must be widened to i8 for atomicrmw/load/store.
   if (bits < 8)
     bits = 8;
+  // When widening (e.g. i1 -> i8), the incoming val may have a wider type
+  // (e.g. i32 from a constant literal).  Truncate it to i{bits} so the
+  // atomicrmw operand type matches the instruction type.
+  if (bits != orig_bits || bits < 32)
+  {
+    const char *casted = new_reg();
+    emit_indent(indent);
+    emit("%s = trunc i32 %s to i%d\n", casted, val, bits);
+    val = casted;
+  }
   const char *r = new_reg();
   emit_indent(indent);
   emit("%s = atomicrmw %s ptr %s, i%d %s %s\n",
        r, op, ptr, bits, val, ir_atomic_ordering(memorder));
   // Narrow the i8 result back to i1 for boolean types so callers see
   // the original width.
-  if (int_type_bits(ty) == 1)
+  if (orig_bits == 1)
   {
     const char *trunc = new_reg();
     emit_indent(indent);
@@ -1357,6 +1409,11 @@ static const char *gen_ir_assign(Node *node, int indent)
        addr = emit_lval(node->lhs, indent);
        break;
      }
+     case ND_COMMA:
+     {
+       addr = emit_lval_ptr(node->lhs, indent);
+       break;
+     }
      case ND_MEMBER:
     {
       Member *lhs_mem = node->lhs->member;
@@ -2030,6 +2087,16 @@ static const char *gen_ir_funcall(Node *node, int indent)
   {
     Node *arg = node->args;
     const char *size = emit_expr(arg, indent);
+    // The alloca size operand must be i64 on x86-64.  Widen sub-64-bit
+    // integer arguments (e.g. int/i32) so llc does not reject the IR.
+    if (arg->ty->size < 8) {
+      const char *size64 = new_reg();
+      emit_indent(indent);
+      emit("%s = %s i%d %s to i64\n", size64,
+           arg->ty->is_unsigned ? "zext" : "sext",
+           arg->ty->size * 8, size);
+      size = size64;
+    }
     const char *r = new_reg();
     emit_indent(indent);
     emit("%s = alloca i8, i64 %s, align 16\n", r, size);
@@ -2937,19 +3004,11 @@ static const char *gen_ir_release(Node *node, int indent)
 
 static const char *gen_ir_testandset(Node *node, int indent)
 {
+  // __sync_lock_test_and_set(ptr, val): atomically store val, return old.
   Type *ty = (node->lhs && node->lhs->ty->base) ? node->lhs->ty->base : node->ty;
   const char *addr = emit_expr(node->lhs, indent);
-  int bits = int_type_bits(ty);
-  if (bits <= 0) bits = (ty->size > 0) ? ty->size * 8 : 32;
-  // For TY_BOOL atomic_flag, widen the value to i8 to satisfy LLVM's
-  // byte-sized atomic requirement.
-  const char *one = new_reg();
-  emit_indent(indent);
-  if (bits == 1)
-    emit("%s = add i8 0, 1\n", one);
-  else
-    emit("%s = add i%d 0, 1\n", one, bits);
-  return ir_emit_atomicrmw("xchg", addr, one, ty, 5, indent);
+  const char *val = emit_expr(node->rhs, indent);
+  return ir_emit_atomicrmw("xchg", addr, val, ty, 5, indent);
 }
 
 
