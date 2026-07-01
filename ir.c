@@ -137,14 +137,13 @@ static void gen_ir_stmt_switch(Node *node, int indent, bool *terminated);
 static void gen_ir_stmt_case(Node *node, int indent, bool *terminated);
 static void gen_ir_stmt_asm(Node *node, int indent, bool *terminated);
 static void gen_ir_stmt_default(Node *node, int indent, bool *terminated);
-
-
+static const char *emit_expr(Node *node, int indent);
+static void emit_stmt(Node *node, int indent, bool *terminated);
 
 static bool is_sret(Type *ty) {
   return (ty->kind == TY_STRUCT || ty->kind == TY_UNION) && ty->size > 16;
 }
 
-static void emit_stmt(Node *node, int indent, bool *terminated);
 
 #define MAX_OBJ_MAP 4096
 static Obj *obj_map[MAX_OBJ_MAP];
@@ -351,7 +350,28 @@ static void emit_global(Obj *var)
   emit("\n");
 }
 
-static const char *emit_expr(Node *node, int indent);
+
+static const char *emit_reinterpret_via_mem_ty(const char *val,
+                                                Type *src_ty, Type *dst_ty,
+                                                int indent)
+{
+  int size = src_ty->size > dst_ty->size ? src_ty->size : dst_ty->size;
+  int align = src_ty->align > dst_ty->align ? src_ty->align : dst_ty->align;
+  const char *ptr = new_reg();
+  emit_indent(indent);
+  emit("%s = alloca i8, i64 %d, align %d\n", ptr, size, align);
+  emit_indent(indent);
+  emit("store ");
+  emit_type_str(src_ty);
+  emit(" %s, ptr %s, align %d\n", val, ptr, src_ty->align);
+  emit_indent(indent);
+  const char *r = new_reg();
+  emit_indent(indent);
+  emit("%s = load ", r);
+  emit_type_str(dst_ty);
+  emit(", ptr %s, align %d\n", ptr, dst_ty->align);
+  return r;
+}
 
 static const char *var_ptr(Obj *var)
 {
@@ -483,9 +503,9 @@ static const char *emit_lval(Node *node, int indent)
   {
     const char *addr = emit_expr(node->lhs, indent);
 
-    if (node->ty->kind == TY_ARRAY || node->ty->kind == TY_STRUCT ||
+    if (is_array(node->ty) || node->ty->kind == TY_STRUCT ||
         node->ty->kind == TY_UNION || node->ty->kind == TY_FUNC ||
-        node->ty->kind == TY_VLA || node->ty->kind == TY_VECTOR)
+        node->ty->kind == TY_VECTOR)
       return addr;
 
     const char *r = new_reg();
@@ -505,9 +525,9 @@ static const char *emit_lval(Node *node, int indent)
     emit_indent(indent);
     emit("%s = getelementptr i8, ptr %s, i32 %d\n", addr, base_i8, node->member->offset);
 
-    if (node->ty->kind == TY_ARRAY || node->ty->kind == TY_STRUCT ||
+    if (is_array(node->ty) || node->ty->kind == TY_STRUCT ||
         node->ty->kind == TY_UNION || node->ty->kind == TY_FUNC ||
-        node->ty->kind == TY_VLA || node->ty->kind == TY_VECTOR)
+        node->ty->kind == TY_VECTOR)
       return addr;
 
     Member *mem = node->member;
@@ -1516,6 +1536,59 @@ static const char *gen_ir_cast(Node *node, int indent)
   if (src->kind == TY_VECTOR && dst->kind == TY_PTR)
     return emit_lval(node->lhs, indent);
 
+  if (sb > 0 && dst->kind == TY_VECTOR)
+  {
+    const char *val = emit_expr(node->lhs, indent);
+    const char *r = new_reg();
+    emit_indent(indent);
+    if ((size_t)sb / 8 == dst->size) {
+      emit("%s = bitcast i%d %s to ", r, sb, val);
+      emit_type_str(dst);
+      emit("\n");
+    } else {
+      int isize = sb / 8;
+      int dsize = dst->size;
+      int size = isize > dsize ? isize : dsize;
+      int align = dst->align > isize ? dst->align : isize;
+      const char *tmp = new_reg();
+      emit("%s = alloca i8, i64 %d, align %d\n", tmp, size, align);
+      emit_indent(indent);
+      emit("store i%d %s, ptr %s, align %d\n", sb, val, tmp, isize);
+      emit_indent(indent);
+      r = new_reg();
+      emit("%s = load ", r);
+      emit_type_str(dst);
+      emit(", ptr %s, align %d\n", tmp, dst->align);
+    }
+    return r;
+  }
+
+  if (src->kind == TY_VECTOR && db > 0)
+  {
+    const char *val = emit_expr(node->lhs, indent);
+    const char *r = new_reg();
+    emit_indent(indent);
+    if (src->size == (size_t)db / 8) {
+      emit("%s = bitcast ", r);
+      emit_type_str(src);
+      emit(" %s to i%d\n", val, db);
+    } else {
+      int dsize = db / 8;
+      int size = src->size > dsize ? src->size : dsize;
+      int align = dsize > src->align ? dsize : src->align;
+      const char *tmp = new_reg();
+      emit("%s = alloca i8, i64 %d, align %d\n", tmp, size, align);
+      emit_indent(indent);
+      emit("store ");
+      emit_type_str(src);
+      emit(" %s, ptr %s, align %d\n", val, tmp, src->align);
+      emit_indent(indent);
+      r = new_reg();
+      emit("%s = load i%d, ptr %s, align %d\n", r, db, tmp, dsize);
+    }
+    return r;
+  }
+
   if (src->kind == TY_VECTOR && dst->kind == TY_VECTOR)
   {
     const char *val = emit_expr(node->lhs, indent);
@@ -1528,18 +1601,7 @@ static const char *gen_ir_cast(Node *node, int indent)
       emit_type_str(dst);
       emit("\n");
     } else {
-      int size = src->size > dst->size ? src->size : dst->size;
-      int align = dst->align > src->align ? dst->align : src->align;
-      const char *ptr = new_reg();
-      emit("%s = alloca i8, i64 %d, align %d\n", ptr, size, align);
-      emit_indent(indent);
-      emit("store ");
-      emit_type_str(src);
-      emit(" %s, ptr %s, align %d\n", val, ptr, src->align);
-      emit_indent(indent);
-      emit("%s = load ", r);
-      emit_type_str(dst);
-      emit(", ptr %s, align %d\n", ptr, dst->align);
+      r = emit_reinterpret_via_mem_ty(val, src, dst, indent);
     }
     return r;
   }
@@ -1605,6 +1667,19 @@ static const char *gen_ir_add(Node *node, int indent)
     emit("%s = sdiv i64 %s, %s\n", res, diff, scale_i64);
 
     return res;
+  }
+  if (node->kind == ND_SUB &&
+      (node->lhs->ty->kind == TY_PTR || is_array(node->lhs->ty)))
+  {
+    const char *l = emit_expr(node->lhs, indent);
+    const char *r = emit_expr(node->rhs, indent);
+    const char *r_neg = new_reg();
+    emit_indent(indent);
+    emit("%s = sub i64 0, %s\n", r_neg, r);
+    const char *reg = new_reg();
+    emit_indent(indent);
+    emit("%s = getelementptr i8, ptr %s, i64 %s\n", reg, l, r_neg);
+    return reg;
   }
   if (node->kind == ND_ADD &&
       (node->lhs->ty->kind == TY_PTR || is_array(node->lhs->ty)))
@@ -2359,7 +2434,7 @@ static const char *gen_ir_x86_rdpid(Node *node, int indent)
 {
   const char *r = new_reg();
   emit_indent(indent);
-  emit("%s = call i32 @llvm.x86.rdpid(i32 0)\n", r);
+  emit("%s = call i32 asm \".byte 0xf3, 0x0f, 0xc7, 0xf8\", \"={eax}\"()\n", r);
   return r;
 }
 
@@ -2369,8 +2444,10 @@ static const char *gen_ir_x86_rdfsbase(Node *node, int indent)
   int bits = (node->kind == ND_RDFSBASE64) ? 64 : 32;
   const char *r = new_reg();
   emit_indent(indent);
-  emit("%s = call i%d @llvm.x86.rdfsbase.i%d(i%d 0)\n",
-       r, bits, bits, bits);
+  if (bits == 64)
+    emit("%s = call i64 asm \".byte 0xf3, 0x48, 0x0f, 0xae, 0xc0\", \"={rax}\"()\n", r);
+  else
+    emit("%s = call i32 asm \".byte 0xf3, 0x0f, 0xae, 0xc0\", \"={eax}\"()\n", r);
   return r;
 }
 
@@ -2380,8 +2457,10 @@ static const char *gen_ir_x86_rdgsbase(Node *node, int indent)
   int bits = (node->kind == ND_RDGSBASE64) ? 64 : 32;
   const char *r = new_reg();
   emit_indent(indent);
-  emit("%s = call i%d @llvm.x86.rdgsbase.i%d(i%d 0)\n",
-       r, bits, bits, bits);
+  if (bits == 64)
+    emit("%s = call i64 asm \".byte 0xf3, 0x48, 0x0f, 0xae, 0xc8\", \"={rax}\"()\n", r);
+  else
+    emit("%s = call i32 asm \".byte 0xf3, 0x0f, 0xae, 0xc8\", \"={eax}\"()\n", r);
   return r;
 }
 
@@ -4038,10 +4117,30 @@ static void gen_ir_stmt_case(Node *node, int indent, bool *terminated)
   return;
 }
 
+static char *escape_ir_asm(const char *s)
+{
+  int len = strlen(s);
+  int cnt = 0;
+  for (int i = 0; s[i]; i++)
+    if (s[i] == '$')
+      cnt++;
+  if (cnt == 0)
+    return (char *)s;
+  char *buf = calloc(1, len + cnt + 1);
+  int j = 0;
+  for (int i = 0; s[i]; i++) {
+    if (s[i] == '$')
+      buf[j++] = '$';
+    buf[j++] = s[i];
+  }
+  buf[j] = '\0';
+  return buf;
+}
+
 static void gen_ir_stmt_asm(Node *node, int indent, bool *terminated)
 {
-
   char *s = subst_fp_placeholder(node->asm_str, "%rbp");
+  s = escape_ir_asm(s);
   emit_indent(indent);
   emit("call void asm sideeffect \"%s\", \"\"()\n", s);
   return;

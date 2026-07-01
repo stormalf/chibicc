@@ -762,6 +762,8 @@ void add_type(Node *node)
   case ND_PCMPEQD:
   case ND_PSRADI:
   case ND_PSRAD:
+  case ND_PSRLDI:
+  case ND_PSRLD:
   case ND_PSLLDI:
   case ND_PSLLD:
   case ND_PSUBD:
@@ -1044,8 +1046,6 @@ void add_type(Node *node)
   case ND_PSHUFW:
   case ND_PCMPGTW:
   case ND_PCMPEQW:
-  case ND_PSRLDI:
-  case ND_PSRLD:       
   case ND_PSRLWI:
   case ND_PSRLW:
   case ND_PSRAWI:
@@ -1219,7 +1219,6 @@ void add_type(Node *node)
   case ND_UNPCKLPD:
   case ND_LOADHPD:
   case ND_LOADLPD:
-  case ND_MOVMSKPD:
   case ND_MOVNTPD:
   case ND_ADDSUBPD:
   case ND_HADDPD:
@@ -1268,6 +1267,7 @@ void add_type(Node *node)
   case ND_COMILE:
   case ND_COMILT:
   case ND_COMIEQ:
+  case ND_MOVMSKPD:
   case ND_MOVMSKPS:
   case ND_PMOVMSKB:
   case ND_COMISDEQ:
