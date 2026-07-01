@@ -101,6 +101,42 @@ static char logFile[] = "/tmp/chibicc.log";
 static StringArray input_paths;
 static StringArray tmpfiles;
 
+typedef struct {
+  char *driver_opt;
+  char *llc_opt;
+} LLVMOptMap;
+
+
+
+static LLVMOptMap llvm_opt_map[MAX_LLC_OPT] = {
+  {"-mavx",    "-mattr=+avx"},
+  {"-mavx2",   "-mattr=+avx2"},
+  {"-mfma",    "-mattr=+fma"},
+  {"-mbmi",    "-mattr=+bmi"},
+  {"-mbmi2",   "-mattr=+bmi2"},
+  {"-mf16c",   "-mattr=+f16c"},
+  {"-mpopcnt", "-mattr=+popcnt"},
+  {"-mlzcnt",  "-mattr=+lzcnt"},
+  {"-msse",    "-mattr=+sse"},
+  {"-msse2",   "-mattr=+sse2"},
+  {"-msse3",   "-mattr=+sse3"},
+  {"-mssse3",  "-mattr=+ssse3"},
+  {"-msse4.1", "-mattr=+sse4.1"},
+  {"-msse4.2", "-mattr=+sse4.2"},
+};
+
+static char *llc_args[128];
+static int llc_arg_cnt;
+
+static void add_llc_option(char *arg)
+{
+  for (int i = 0; i < MAX_LLC_OPT; i++) {
+    if (!strcmp(arg, llvm_opt_map[i].driver_opt)) {
+      llc_args[llc_arg_cnt++] = llvm_opt_map[i].llc_opt;
+      return;
+    }
+  }
+}
 
 static void enable_core_dump() {
     struct rlimit rl;
@@ -341,6 +377,11 @@ static void parse_args(int argc, char **argv)
       check_parms_length(opt_linker);
       continue;
     }
+
+    //for backend llvm needs adding each -m argument to llc option 
+    if (startswith(argv[i], "-m"))
+      add_llc_option(argv[i]);
+
 
     if (startsWith(argv[i], "-march="))
     {
@@ -1516,7 +1557,22 @@ static void assemble(char *input, char *output)
 
 static void assemble_llvm(char *input, char *output)
 {
-  char *cmd[] = {"llc", "-filetype=obj", input, "-o", output, NULL};
+  //char *cmd[] = {"llc", "-filetype=obj", input, "-o", output, NULL};
+char *cmd[256];
+if (llc_arg_cnt > 256)
+   error("%s:%d: error: in %s: too much arguments to pass to llc %d", __FILE__, __LINE__, __func__, llc_arg_cnt);
+int n = 0;
+
+cmd[n++] = "llc";
+cmd[n++] = "-filetype=obj";
+
+for (int i = 0; i < llc_arg_cnt; i++)
+    cmd[n++] = llc_args[i];
+
+cmd[n++] = input;
+cmd[n++] = "-o";
+cmd[n++] = output;
+cmd[n] = NULL;
   run_subprocess(cmd);
 }
 

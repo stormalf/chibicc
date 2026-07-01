@@ -56,6 +56,7 @@
 #define TARGET_TRIPLE "x86_64-pc-linux-gnu"
 #define MAX_BUILTIN_ARGS 8
 #define MAX_WEAK 20
+#define MAX_LLC_OPT  14
 
 #define STR_HELPER(x) #x
 #define STR(x) STR_HELPER(x)
