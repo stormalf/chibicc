@@ -8,7 +8,6 @@ static bool is_terminated;
 static Obj *current_fn;
 
 
-
 // Forward declarations for gen_ir_* helpers (defined after emit_expr)
 static const char *gen_ir_null_expr(Node *node, int indent);
 static const char *gen_ir_num(Node *node, int indent);
@@ -168,6 +167,54 @@ static void emit(const char *fmt, ...)
   va_end(ap);
 }
 
+// Returns true if the LLVM identifier 'name' must be quoted (i.e. contains
+// characters outside [-a-zA-Z$._0-9]).
+static bool needs_llvm_quoting(const char *name)
+{
+  if (!name || !name[0])
+    return false;
+  for (const char *p = name; *p; p++) {
+    unsigned char c = (unsigned char)*p;
+    if (c >= 128)
+      return true; // non-ASCII (e.g. UTF-8)
+    if (c == '-' || c == '$' || c == '.' || c == '_' ||
+        (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+        (c >= '0' && c <= '9'))
+      continue;
+    return true;
+  }
+  return false;
+}
+
+// Emit an LLVM global/function identifier, quoting it when necessary.
+// Produces either "@name" or "@\"name\"".
+static void emit_llvm_name(const char *name)
+{
+  if (needs_llvm_quoting(name))
+    emit("@\"%s\"", name);
+  else
+    emit("@%s", name);
+}
+
+// Like emit_llvm_name but returns the result as a formatted string.
+static const char *format_llvm_name(const char *name)
+{
+  if (needs_llvm_quoting(name))
+    return format("@\"%s\"", name);
+  return format("@%s", name);
+}
+
+// Format a local %-prefixed LLVM identifier, quoting if necessary.
+// The identifier is built as "_%s.addr_%d"; if any component needs quoting
+// the whole thing is wrapped: %"_name.addr_N".
+static const char *format_llvm_local(const char *name, int id)
+{
+  const char *inner = format("_%s.addr_%d", name, id);
+  if (needs_llvm_quoting(name))
+    return format("%%\"%s\"", inner);
+  return format("%%%s", inner);
+}
+
 static void emit_label(const char *label)
 {
   if (!is_terminated && current_block)
@@ -325,7 +372,8 @@ static void emit_global(Obj *var)
   if (var->is_function || !var->is_definition)
     return;
 
-  emit("@%s = ", var->name);
+  emit_llvm_name(var->name);
+  emit(" = ");
   if (var->is_tls)
     emit("thread_local ");
   if (var->is_static)
@@ -385,12 +433,12 @@ static const char *var_ptr(Obj *var)
       snprintf(buf, sizeof(buf), ".L.anon.%d", anon_id++);
       var->name = strdup(buf);
     }
-    return format("%%_%s.addr_%d", var->name, obj_id(var));
+    return format_llvm_local(var->name, obj_id(var));
   }
   else
   {
     if (var->name)
-      return format("@%s", var->name);
+      return format_llvm_name(var->name);
     return "@<anon>";
   }
 }
@@ -1884,6 +1932,10 @@ static const char *gen_ir_logand(Node *node, int indent)
   emit_label(entry_label);
   const char *l_bool = emit_to_bool(emit_expr(node->lhs, indent), node->lhs->ty, indent);
 
+  // Capture the block that the LHS expression actually ended in.
+  // The LHS may span multiple basic blocks (e.g. nested &&/|| or ternary),
+  // so current_block after emit_expr is the real predecessor of end_label,
+  // not entry_label which was set before the LHS was evaluated.
   const char *lhs_block = current_block;
   if (node->kind == ND_LOGAND)
   {
@@ -1900,6 +1952,9 @@ static const char *gen_ir_logand(Node *node, int indent)
 
   emit_label(rhs_label);
   const char *r_bool = emit_to_bool(emit_expr(node->rhs, indent), node->rhs->ty, indent);
+  // Capture the block the RHS actually ended in (may differ from rhs_label
+  // if the RHS expression itself generated multiple basic blocks).
+  const char *rhs_block = current_block;
   emit_indent(indent);
   emit("br label %%%s\n", end_label);
   is_terminated = true;
@@ -1909,7 +1964,7 @@ static const char *gen_ir_logand(Node *node, int indent)
   emit_indent(indent);
   const char *entry_result = (node->kind == ND_LOGAND) ? "false" : "true";
   emit("%s = phi i1 [ %s, %%%s ], [ %s, %%%s ]\n",
-       result, entry_result, lhs_block, r_bool, rhs_label);
+       result, entry_result, lhs_block, r_bool, rhs_block);
 
   const char *final = new_reg();
   emit_indent(indent);
@@ -2112,7 +2167,7 @@ static const char *gen_ir_funcall(Node *node, int indent)
 
   const char *callee_str;
   if (is_direct)
-    callee_str = format("@%s", node->lhs->var->name);
+    callee_str = format_llvm_name(node->lhs->var->name);
   else
     callee_str = emit_expr(node->lhs, indent);
 
@@ -3990,6 +4045,21 @@ static void gen_ir_stmt_return(Node *node, int indent, bool *terminated)
         else if (expr_ty->kind == TY_SHORT) expr_bits = 16;
         else if (expr_ty->kind == TY_INT) expr_bits = 32;
       }
+      // When the function returns an integer type but the expression
+      // produced a pointer (e.g. returning 0 cast to a pointer type in a
+      // function declared to return int), emit a ptrtoint to coerce the
+      // pointer value back to the required integer width.
+      int rty_bits = int_type_bits(rty);
+      bool expr_is_ptr = expr_ty &&
+                         (expr_ty->kind == TY_PTR || is_array(expr_ty) ||
+                          expr_ty->kind == TY_FUNC);
+      if (rty_bits > 0 && expr_is_ptr)
+      {
+        const char *coerced = new_reg();
+        emit_indent(indent);
+        emit("%s = ptrtoint ptr %s to i%d\n", coerced, val, rty_bits);
+        val = coerced;
+      }
       // Truncate to the declared return width when the expression is
       // wider than what the ABI requires (e.g. returning an int from a
       // bool/char/short function).  Mirrors the logic in codegen.c.
@@ -4343,7 +4413,9 @@ static void emit_func(Obj *fn)
     emit("void");
   else
     emit_type_str(fn->ty->return_ty);
-  emit(" @%s(", fn->name);
+  emit(" ");
+  emit_llvm_name(fn->name);
+  emit("(");
 
   if (sret)
   {
@@ -4427,6 +4499,22 @@ void emit_ir(Obj *prog, FILE *out)
 
   emit("\n");
 
+  // abort() is emitted by gen_ir_abort (ND_ABORT / __builtin_abort) as a
+  // hardcoded call.  When the source includes <stdlib.h>, the symbol is
+  // already declared by the loop below.  When it is not included (e.g. tests
+  // that call __builtin_abort without stdlib.h), no declaration is emitted
+  // and llc rejects the IR with "use of undefined value '@abort'".
+  // Scan the program list first; only emit the declaration when needed.
+  bool has_abort_decl = false;
+  for (Obj *fn = prog; fn; fn = fn->next)
+    if (fn->is_function && !fn->is_definition && fn->name &&
+        strcmp(fn->name, "abort") == 0) {
+      has_abort_decl = true;
+      break;
+    }
+  if (!has_abort_decl)
+    emit("declare void @abort()\n");
+
   for (Obj *fn = prog; fn; fn = fn->next)
   {
     if (fn->is_function)
@@ -4439,7 +4527,9 @@ void emit_ir(Obj *prog, FILE *out)
           emit("void");
         else
           emit_type_str(fn->ty->return_ty);
-        emit(" @%s(", fn->name);
+        emit(" ");
+        emit_llvm_name(fn->name);
+        emit("(");
 
         if (sret)
           emit("ptr sret(i8)");
