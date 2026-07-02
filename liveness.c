@@ -390,6 +390,21 @@ static void analyze_node(Node *node, LvContext ctx, int *pos) {
     analyze_operand(node->els, LV_READ, pos);
     analyze_operand(node->init, LV_READ, pos);
     analyze_operand(node->inc, LV_READ, pos);
+    analyze_operand(node->builtin_dest, LV_READ, pos);
+    analyze_operand(node->builtin_src, LV_READ, pos);
+    analyze_operand(node->builtin_size, LV_READ, pos);
+    analyze_operand(node->builtin_val, LV_READ, pos);
+    for (int i = 0; i < node->builtin_nargs; i++)
+      analyze_operand(node->builtin_args[i], LV_READ, pos);
+    analyze_operand(node->cas_addr, LV_READ, pos);
+    analyze_operand(node->cas_old, LV_READ, pos);
+    analyze_operand(node->cas_new, LV_READ, pos);
+    analyze_operand(node->cas_ptr, LV_READ, pos);
+    analyze_operand(node->cas_expected, LV_READ, pos);
+    analyze_operand(node->cas_desired, LV_READ, pos);
+    analyze_operand(node->cas_weak, LV_READ, pos);
+    analyze_operand(node->cas_success, LV_READ, pos);
+    analyze_operand(node->cas_failure, LV_READ, pos);
     if (node->body) {
       for (Node *n = node->body; n; n = n->next)
         analyze_operand(n, LV_READ, pos);
