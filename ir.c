@@ -380,10 +380,10 @@ static void emit_global(Obj *var)
       emit("extern_weak ");
     else
       emit("external ");
-    if (var->is_tls)
-      emit("thread_local ");
     if (var->is_static)
       emit("internal ");
+    if (var->is_tls)
+      emit("thread_local ");
     emit("global ");
     emit_type_str(var->ty);
     emit("\n");
@@ -393,12 +393,12 @@ static void emit_global(Obj *var)
 
   emit_llvm_name(var->name);
   emit(" = ");
-  if (var->is_tls)
-    emit("thread_local ");
   if (var->is_static)
     emit("internal ");
   else if (var->is_weak)
     emit("weak ");
+  if (var->is_tls)
+    emit("thread_local ");
 
   if (var->init_data && !var->rel)
   {
@@ -2321,12 +2321,9 @@ static const char *gen_ir_stmt_expr(Node *node, int indent)
 
   for (Node *n = node->body; n; n = n->next)
   {
-    bool term = false;
     if (n->next)
     {
-      emit_stmt(n, indent, &term);
-      if (term)
-        break;
+      emit_stmt(n, indent, NULL);
     }
     else
     {
@@ -2337,9 +2334,7 @@ static const char *gen_ir_stmt_expr(Node *node, int indent)
       // expressions like va_arg() that must not run twice.
       if (n->kind == ND_EXPR_STMT)
         return emit_expr(n->lhs, indent);
-      emit_stmt(n, indent, &term);
-      if (term)
-        break;
+      emit_stmt(n, indent, NULL);
     }
   }
   return NULL;

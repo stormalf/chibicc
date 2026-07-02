@@ -351,11 +351,11 @@ static void analyze_node(Node *node, LvContext ctx, int *pos) {
     analyze_operand(node->init, LV_READ, pos);
     analyze_operand(node->cond, LV_READ, pos);
     analyze_operand(node->inc, LV_READ, pos);
-    analyze_operand(node->body, LV_READ, pos);
+    analyze_operand(node->then, LV_READ, pos);
     break;
   case ND_DO:
     analyze_operand(node->cond, LV_READ, pos);
-    analyze_operand(node->body, LV_READ, pos);
+    analyze_operand(node->then, LV_READ, pos);
     break;
   case ND_SWITCH:
     analyze_operand(node->cond, LV_READ, pos);
@@ -425,10 +425,10 @@ static void scope_warn_unused(Scope *sc) {
       continue;
     if (var->is_param)
       continue;
+    //stack corruption when variable in macro
     if (var->tok && !var->tok->origin)
       warn_tok(var->tok, "%s:%d: in %s: unused variable '%s'", __FILE__, __LINE__, __func__, var->name);
-    else
-      warn("unused variable '%s'", var->name);
+ 
   }
 }
 
@@ -440,10 +440,10 @@ static void fn_warn_unused_params(Obj *fn) {
       continue;
     if (!var->name || !var->name[0])
       continue;
+    //stack corruption when variable in macro
     if (var->tok && !var->tok->origin)
       warn_tok(var->tok, "%s:%d: in %s: unused parameter '%s'", __FILE__, __LINE__, __func__, var->name);
-    else
-      warn("unused parameter '%s'", var->name);
+    
   }
 }
 
