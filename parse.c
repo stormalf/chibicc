@@ -8006,6 +8006,7 @@ static void create_param_lvars(Type *param, char *funcname)
       var = new_lvar(get_ident(param->name), param, funcname);
     }
     var->is_param = true;
+    var->tok = param->name_pos;
     order++;
 
 }

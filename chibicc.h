@@ -226,7 +226,10 @@ typedef struct
   // For #line directive
   char *display_name;
   int line_delta;
+  bool is_system_header;
 } File;
+
+bool is_system_include_path(char *path);
 
 // Token type
 typedef struct Token Token;

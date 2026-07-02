@@ -414,7 +414,7 @@ static void scope_init_liveness(Scope *sc) {
 }
 
 static void scope_warn_unused(Scope *sc) {
-  if (!sc || !sc->children)
+  if (!sc)
     return;
   for (Scope *child = sc->children; child; child = child->sibling_next)
     scope_warn_unused(child);
@@ -426,9 +426,9 @@ static void scope_warn_unused(Scope *sc) {
     if (var->is_param)
       continue;
     //stack corruption when variable in macro
-    if (var->tok && !var->tok->origin)
+    if (var->tok && !var->tok->origin && !(var->tok->file && var->tok->file->is_system_header))
       warn_tok(var->tok, "%s:%d: in %s: unused variable '%s'", __FILE__, __LINE__, __func__, var->name);
- 
+
   }
 }
 
@@ -441,7 +441,7 @@ static void fn_warn_unused_params(Obj *fn) {
     if (!var->name || !var->name[0])
       continue;
     //stack corruption when variable in macro
-    if (var->tok && !var->tok->origin)
+    if (var->tok && !var->tok->origin && !(var->tok->file && var->tok->file->is_system_header))
       warn_tok(var->tok, "%s:%d: in %s: unused parameter '%s'", __FILE__, __LINE__, __func__, var->name);
     
   }

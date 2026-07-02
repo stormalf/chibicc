@@ -972,6 +972,16 @@ File **get_input_files(void)
   return input_files;
 }
 
+bool is_system_include_path(char *path) {
+  if (!path)
+    return false;
+  if (strncmp(path, "/usr/include", 12) == 0 ||
+      strncmp(path, "/usr/local/include", 18) == 0 ||
+      strncmp(path, "/usr/lib/gcc", 12) == 0)
+    return true;
+  return false;
+}
+
 File *new_file(char *name, unsigned int file_no, char *contents)
 {
   File *file = calloc(1, sizeof(File));
@@ -983,6 +993,7 @@ File *new_file(char *name, unsigned int file_no, char *contents)
   file->display_name = name;
   file->file_no = file_no;
   file->contents = contents;
+  file->is_system_header = is_system_include_path(name);
   return file;
 }
 
