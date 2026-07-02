@@ -375,7 +375,11 @@ static void emit_global(Obj *var)
 
   if (!var->is_definition) {
     emit_llvm_name(var->name);
-    emit(" = external ");
+    emit(" = ");
+    if (var->is_weak)
+      emit("extern_weak ");
+    else
+      emit("external ");
     if (var->is_tls)
       emit("thread_local ");
     if (var->is_static)
@@ -393,6 +397,8 @@ static void emit_global(Obj *var)
     emit("thread_local ");
   if (var->is_static)
     emit("internal ");
+  else if (var->is_weak)
+    emit("weak ");
 
   if (var->init_data && !var->rel)
   {
@@ -2145,7 +2151,7 @@ static const char *gen_ir_addr(Node *node, int indent)
     emit("%s = getelementptr i8, ptr %s, i32 %d\n", r, base_i8, node->lhs->member->offset);
     return r;
   }
-  const char *ptr = emit_expr(node->lhs, indent);
+  const char *ptr = emit_lval_ptr(node->lhs, indent);
   const char *r = new_reg();
   emit_indent(indent);
   emit("%s = getelementptr i8, ptr %s, i32 0\n", r, ptr);
@@ -4215,25 +4221,23 @@ static void gen_ir_stmt_do(Node *node, int indent, bool *terminated)
 {
 
   const char *begin_label = format(".L.begin.%d", ir_reg++);
-  const char *cont_label = format(".L.cont.%d", ir_reg++);
-  const char *end_label = format(".L.end.%d", ir_reg++);
   emit_label(begin_label);
   bool body_terminated = false;
   emit_stmt(node->then, indent, &body_terminated);
   if (body_terminated)
   {
-    emit_label(end_label);
+    emit_label(node->brk_label);
     return;
   }
-  emit_label(cont_label);
+  emit_label(node->cont_label);
   {
     const char *cond_val = emit_expr(node->cond, indent);
     const char *cond_bool = emit_to_bool(cond_val, node->cond->ty, indent);
     emit_indent(indent);
-    emit("br i1 %s, label %%%s, label %%%s\n", cond_bool, begin_label, end_label);
+    emit("br i1 %s, label %%%s, label %%%s\n", cond_bool, begin_label, node->brk_label);
     is_terminated = true;
   }
-  emit_label(end_label);
+  emit_label(node->brk_label);
   return;
 }
 
@@ -4423,6 +4427,8 @@ static void emit_func(Obj *fn)
   emit("define ");
   if (fn->is_static)
     emit("internal ");
+  else if (fn->is_weak)
+    emit("weak ");
 
   if (sret)
     emit("void");
@@ -4537,7 +4543,10 @@ void emit_ir(Obj *prog, FILE *out)
     {
       if (!fn->is_definition && fn->ty && fn->ty->kind == TY_FUNC)
       {
-        emit("declare ");
+        emit("declare");
+        if (fn->is_weak)
+          emit(" extern_weak");
+        emit(" ");
         bool sret = is_sret(fn->ty->return_ty);
         if (sret)
           emit("void");
