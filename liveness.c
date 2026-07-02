@@ -414,6 +414,8 @@ static void scope_init_liveness(Scope *sc) {
 }
 
 static void scope_warn_unused(Scope *sc) {
+  if (!sc || !sc->children)
+    return;
   for (Scope *child = sc->children; child; child = child->sibling_next)
     scope_warn_unused(child);
   for (Obj *var = sc->locals; var; var = var->next) {
@@ -423,7 +425,7 @@ static void scope_warn_unused(Scope *sc) {
       continue;
     if (var->is_param)
       continue;
-    if (var->tok)
+    if (var->tok && !var->tok->origin)
       warn_tok(var->tok, "%s:%d: in %s: unused variable '%s'", __FILE__, __LINE__, __func__, var->name);
     else
       warn("unused variable '%s'", var->name);
@@ -438,7 +440,7 @@ static void fn_warn_unused_params(Obj *fn) {
       continue;
     if (!var->name || !var->name[0])
       continue;
-    if (var->tok)
+    if (var->tok && !var->tok->origin)
       warn_tok(var->tok, "%s:%d: in %s: unused parameter '%s'", __FILE__, __LINE__, __func__, var->name);
     else
       warn("unused parameter '%s'", var->name);

@@ -143,7 +143,7 @@ void warning_at(char *loc, char *fmt, ...)
 void warn_tok(Token *tok, char *fmt, ...)
 {
   va_list ap;
-  va_start(ap, fmt);
+  va_start(ap, fmt);  
   vwarning_at(tok->file->name, tok->file->contents, tok->line_no, tok->loc, fmt, ap);
   va_end(ap);
   if (opt_werror)
@@ -977,6 +977,8 @@ File *new_file(char *name, unsigned int file_no, char *contents)
   File *file = calloc(1, sizeof(File));
   if (file == NULL)
     error("%s:%d: error: in %s: file is null!", __FILE__, __LINE__, __func__);
+  if (name == NULL)
+    error("%s:%d: error: in %s: name is null!", __FILE__, __LINE__, __func__);  
   file->name = name;
   file->display_name = name;
   file->file_no = file_no;
