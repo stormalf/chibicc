@@ -6789,7 +6789,7 @@ static Node *primary(Token **rest, Token *tok)
       tok = skip(tok, ",", ctx);
       node->builtin_args[2] = assign(&tok, tok);
       add_type(node->builtin_args[2]);
-      node->builtin_nargs = 3;
+      node->builtin_nargs = 3;      
       SET_CTX(ctx);       
       *rest = skip(tok, ")", ctx);
     return node;
@@ -6901,12 +6901,18 @@ static Node *primary(Token **rest, Token *tok)
         Node *mask = assign(&tok, tok);
         add_type(mask);
         node->builtin_args[0] = a;
+        add_type(node->builtin_args[0]);
         node->builtin_args[1] = second;
+        add_type(node->builtin_args[1]);
         node->builtin_args[2] = mask;
+        add_type(node->builtin_args[2]);
       } else {
         node->builtin_args[0] = a;
+        add_type(node->builtin_args[0]);
         node->builtin_args[1] = a;      
+        add_type(node->builtin_args[1]);
         node->builtin_args[2] = second; 
+        add_type(node->builtin_args[2]);
       }
       node->builtin_nargs = 3;
       SET_CTX(ctx);

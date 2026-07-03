@@ -7,7 +7,7 @@ CFLAGS =-std=c11 -g -fno-common -Wall -Wno-switch -DPREFIX=\"$(PREFIX)\" -DGCC_V
 CFLAGS_DIAG= -std=c11 -g -mavx2 
 CFLAGS_SPE = -g -fomit-frame-pointer -O3 -mavx2 -DOMIT_FRAME_POINTER
 CFLAGS_LLVM = --backend-llvm  -mavx2 -g 
-LDFLAGS = -lcrypto
+LDFLAGS = -lcrypto -latomic
 TEST_JOBS ?=
 TEST_TIMEOUT ?= 30
 OBJECT=chibicc
@@ -48,7 +48,7 @@ LLVM_TEST_SRCS=$(wildcard test/*.c)
 LLVM_TESTS=$(LLVM_TEST_SRCS:test/%.c=test/%.llvm.exe)
 
 test/%.llvm.exe: $(OBJECT) test/%.c
-	@if timeout 30 ./$(OBJECT) $(CFLAGS_LLVM) -Iinclude -Itest -o $@ test/$*.c -xc test/common $(LDFLAGS) 2>/tmp/chibicc-llvm-$*.log; then \
+	@if timeout 30 ./$(OBJECT) $(LDFLAGS) $(CFLAGS_LLVM) -Iinclude -Itest -o $@ test/$*.c -xc test/common  2>/tmp/chibicc-llvm-$*.log; then \
 	  echo "  BUILD    $@"; \
 	else \
 	  echo "  BUILD FAIL $@"; \
