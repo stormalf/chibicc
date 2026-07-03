@@ -3312,10 +3312,12 @@ static const char *gen_ir_atomic_is_lock_free(Node *node, int indent)
 {
   // For x86-64 the lock-free limit is 8 bytes, the size of a register.
   // We compute this dynamically by comparing the size argument against 8.
+  int bits = int_type_bits(node->lhs->ty);
+  if (bits <= 0) bits = 32;
   const char *size = emit_expr(node->lhs, indent);
   const char *cmp = new_reg();
   emit_indent(indent);
-  emit("%s = icmp ule i32 %s, 8\n", cmp, size);
+  emit("%s = icmp ule i%d %s, 8\n", cmp, bits, size);
   // The second argument is the optional pointer argument; we ignore it
   // because lock-freeness in chibicc depends only on the requested size.
   if (node->rhs)
@@ -3818,17 +3820,34 @@ static const char *gen_ir_unary_float(Node *node, int indent)
     return gen_ir_sse_unsupported(node, indent);
   }
 
+  // ROUNDSS/ROUNDSD have irregular args (builtin_args, not node->lhs/node->rhs)
+  // so emit them before the call text begins.
+  if (node->kind == ND_ROUNDSS || node->kind == ND_ROUNDSD)
+  {
+    const char *dst = emit_expr(node->builtin_args[0], indent);
+    const char *src = emit_expr(node->builtin_args[1], indent);
+    const char *res = new_reg();
+    emit_indent(indent);
+    emit("%s = call ", res);
+    emit_type_str(dst_ty);
+    emit(" @%s(", intrinsic);
+    emit_type_str(node->builtin_args[0]->ty);
+    emit(" %s, ", dst);
+    emit_type_str(node->builtin_args[1]->ty);
+    emit(" %s, i32 %ld)\n", src, eval(node->builtin_args[2]));
+    return res;
+  }
+
   const char *res = new_reg();
   emit_indent(indent);
   emit("%s = call ", res);
   emit_type_str(dst_ty);
   emit(" @%s(", intrinsic);
   // Most SSE unary intrinsics take the operand first; some take immediates.
-  if (node->kind == ND_ROUNDSS || node->kind == ND_ROUNDPS ||
-      node->kind == ND_ROUNDPD || node->kind == ND_ROUNDSD)
+  if (node->kind == ND_ROUNDPS || node->kind == ND_ROUNDPD)
   {
-    emit("<2 x i32> ...\n");
-    (void)l;
+    emit_type_str(node->lhs->ty);
+    emit(" %s, i32 %ld)\n", l, (long)node->rhs->val);
     return res;
   }
   emit_type_str(node->lhs->ty);
