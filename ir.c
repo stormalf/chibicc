@@ -696,6 +696,84 @@ static bool is_float_type(Type *ty)
   return ty->kind == TY_FLOAT || ty->kind == TY_DOUBLE || ty->kind == TY_LDOUBLE;
 }
 
+// Emit the LLVM IR type string to use for atomic operations on the given
+// type.  LLVM's cmpxchg (and most atomicrmw ops) only accept integer types,
+// so for floating-point types we emit the equivalent-width integer type.
+static void emit_atomic_type_str(Type *ty)
+{
+  if (is_float_type(ty))
+    emit("i%d", ty->size * 8);
+  else
+    emit_type_str(ty);
+}
+
+// Convert a floating-point value (in an LLVM register) to the equivalent-width
+// integer type used for atomic operations.  For float/double (same size as i32/i64)
+// we can bitcast directly; for long double (80-bit x86_fp80 -> 128-bit i128) we
+// must go through memory because the sizes differ.  No-op for non-float types.
+static const char *float_val_to_atomic_int(const char *reg, Type *ty, int indent)
+{
+  if (!is_float_type(ty))
+    return reg;
+  if (ty->kind == TY_FLOAT)
+  {
+    const char *r = new_reg();
+    emit_indent(indent);
+    emit("%s = bitcast float %s to i32\n", r, reg);
+    return r;
+  }
+  if (ty->kind == TY_DOUBLE)
+  {
+    const char *r = new_reg();
+    emit_indent(indent);
+    emit("%s = bitcast double %s to i64\n", r, reg);
+    return r;
+  }
+  // TY_LDOUBLE: x86_fp80 is 80 bits but i128 is 128 bits.  Go through memory
+  // to get the full 128-bit representation including padding bytes.
+  const char *tmp = new_reg();
+  emit_indent(indent);
+  emit("%s = alloca i8, i64 16\n", tmp);
+  emit_indent(indent);
+  emit("store x86_fp80 %s, ptr %s\n", reg, tmp);
+  const char *r = new_reg();
+  emit_indent(indent);
+  emit("%s = load i128, ptr %s\n", r, tmp);
+  return r;
+}
+
+// Convert a value back from the atomic integer type to its original floating-point
+// type.  No-op for non-float types.
+static const char *atomic_int_to_float_val(const char *reg, Type *ty, int indent)
+{
+  if (!is_float_type(ty))
+    return reg;
+  if (ty->kind == TY_FLOAT)
+  {
+    const char *r = new_reg();
+    emit_indent(indent);
+    emit("%s = bitcast i32 %s to float\n", r, reg);
+    return r;
+  }
+  if (ty->kind == TY_DOUBLE)
+  {
+    const char *r = new_reg();
+    emit_indent(indent);
+    emit("%s = bitcast i64 %s to double\n", r, reg);
+    return r;
+  }
+  // TY_LDOUBLE: go through memory (i128 -> x86_fp80).
+  const char *tmp = new_reg();
+  emit_indent(indent);
+  emit("%s = alloca i8, i64 16\n", tmp);
+  emit_indent(indent);
+  emit("store i128 %s, ptr %s\n", reg, tmp);
+  const char *r = new_reg();
+  emit_indent(indent);
+  emit("%s = load x86_fp80, ptr %s\n", r, tmp);
+  return r;
+}
+
 // === Atomic helpers ===
 // Map a chibicc __ATOMIC_* memory order constant to the LLVM atomic
 // ordering keyword (monotonic/acquire/release/acq_rel/seq_cst).  chibicc
@@ -2853,20 +2931,21 @@ static const char *gen_ir_cas(Node *node, int indent)
   const char *cold = emit_expr(node->cas_old, indent);
   int ordering = node->memorder ? node->memorder : 5;
   const char *old_val = ir_emit_atomic_load(cold, ty, 5, indent);
+  const char *cnew_i = float_val_to_atomic_int(cnew, ty, indent);
   const char *pair = new_reg();
   emit_indent(indent);
   emit("%s = cmpxchg ptr %s, ", pair, addr);
-  emit_type_str(ty);
+  emit_atomic_type_str(ty);
   emit(" %s, ", old_val);
-  emit_type_str(ty);
+  emit_atomic_type_str(ty);
   emit(" %s %s %s\n",
-       cnew, ir_atomic_ordering(ordering), ir_atomic_ordering(ordering));
+       cnew_i, ir_atomic_ordering(ordering), ir_atomic_ordering(ordering));
   // Return the success flag (i1); downstream ND_CAST converts to the
   // user-visible type.
   const char *r = new_reg();
   emit_indent(indent);
   emit("%s = extractvalue {", r);
-  emit_type_str(ty);
+  emit_atomic_type_str(ty);
   emit(", i1} %s, 1\n", pair);
   return r;
 }
@@ -2886,22 +2965,25 @@ static const char *gen_ir_cas_n(Node *node, int indent)
   const char *cnew = emit_expr(node->cas_new, indent);
   const char *old_val = emit_expr(node->cas_old, indent);
   int ordering = node->memorder ? node->memorder : 5;
+  const char *old_val_i = float_val_to_atomic_int(old_val, ty, indent);
+  const char *cnew_i = float_val_to_atomic_int(cnew, ty, indent);
   const char *pair = new_reg();
   emit_indent(indent);
   emit("%s = cmpxchg ptr %s, ", pair, addr);
-  emit_type_str(ty);
-  emit(" %s, ", old_val);
-  emit_type_str(ty);
+  emit_atomic_type_str(ty);
+  emit(" %s, ", old_val_i);
+  emit_atomic_type_str(ty);
   emit(" %s %s %s\n",
-       cnew, ir_atomic_ordering(ordering), ir_atomic_ordering(ordering));
+       cnew_i, ir_atomic_ordering(ordering), ir_atomic_ordering(ordering));
   // Return the OLD value (extractvalue index 0).  Matches gen_cas_n
   // in codegen.c which leaves the previous value of *p in rax after
   // `lock cmpxchg`.
-  const char *r = new_reg();
+  const char *r_int = new_reg();
   emit_indent(indent);
-  emit("%s = extractvalue {", r);
-  emit_type_str(ty);
+  emit("%s = extractvalue {", r_int);
+  emit_atomic_type_str(ty);
   emit(", i1} %s, 0\n", pair);
+  const char *r = atomic_int_to_float_val(r_int, ty, indent);
   return r;
 }
 
@@ -2946,9 +3028,9 @@ static const char *gen_ir_cmpxchg(Node *node, int indent)
   const char *pair = new_reg();
   emit_indent(indent);
   emit("%s = cmpxchg ptr %s, ", pair, ptr);
-  emit_type_str(ty);
+  emit_atomic_type_str(ty);
   emit(" %s, ", expected);
-  emit_type_str(ty);
+  emit_atomic_type_str(ty);
   emit(" %s %s %s\n",
        desired, ir_atomic_ordering(succ), ir_atomic_ordering(fail));
   // Extract the old value and write it back to *expected (required by C spec
@@ -2956,14 +3038,14 @@ static const char *gen_ir_cmpxchg(Node *node, int indent)
   const char *old_val = new_reg();
   emit_indent(indent);
   emit("%s = extractvalue {", old_val);
-  emit_type_str(ty);
+  emit_atomic_type_str(ty);
   emit(", i1} %s, 0\n", pair);
   ir_emit_atomic_store(old_val, expected_ptr, ty, fail, indent);
   // Return the success flag (index 1).
   const char *r = new_reg();
   emit_indent(indent);
   emit("%s = extractvalue {", r);
-  emit_type_str(ty);
+  emit_atomic_type_str(ty);
   emit(", i1} %s, 1\n", pair);
   return r;
 }
@@ -2984,26 +3066,27 @@ static const char *gen_ir_cmpxchg_n(Node *node, int indent)
   const char *expected_ptr = emit_expr(node->cas_expected, indent);
   const char *expected = ir_emit_atomic_load(expected_ptr, ty, 5, indent);
   const char *desired = emit_expr(node->cas_desired, indent);
+  const char *desired_i = float_val_to_atomic_int(desired, ty, indent);
   const char *pair = new_reg();
   emit_indent(indent);
   emit("%s = cmpxchg ptr %s, ", pair, ptr);
-  emit_type_str(ty);
+  emit_atomic_type_str(ty);
   emit(" %s, ", expected);
-  emit_type_str(ty);
+  emit_atomic_type_str(ty);
   emit(" %s %s %s\n",
-       desired, ir_atomic_ordering(succ), ir_atomic_ordering(fail));
+       desired_i, ir_atomic_ordering(succ), ir_atomic_ordering(fail));
   // Extract the old value and write it back to *expected (harmless on success).
   const char *old_val = new_reg();
   emit_indent(indent);
   emit("%s = extractvalue {", old_val);
-  emit_type_str(ty);
+  emit_atomic_type_str(ty);
   emit(", i1} %s, 0\n", pair);
   ir_emit_atomic_store(old_val, expected_ptr, ty, fail, indent);
   // Return the success flag (index 1).
   const char *r = new_reg();
   emit_indent(indent);
   emit("%s = extractvalue {", r);
-  emit_type_str(ty);
+  emit_atomic_type_str(ty);
   emit(", i1} %s, 1\n", pair);
   return r;
 }
@@ -3019,17 +3102,19 @@ static const char *gen_ir_bool_cas(Node *node, int indent)
   const char *ptr = emit_expr(node->cas_ptr, indent);
   const char *expected = emit_expr(node->cas_expected, indent);
   const char *desired = emit_expr(node->cas_desired, indent);
+  const char *expected_i = float_val_to_atomic_int(expected, ty, indent);
+  const char *desired_i = float_val_to_atomic_int(desired, ty, indent);
   const char *pair = new_reg();
   emit_indent(indent);
   emit("%s = cmpxchg ptr %s, ", pair, ptr);
-  emit_type_str(ty);
-  emit(" %s, ", expected);
-  emit_type_str(ty);
-  emit(" %s seq_cst seq_cst\n", desired);
+  emit_atomic_type_str(ty);
+  emit(" %s, ", expected_i);
+  emit_atomic_type_str(ty);
+  emit(" %s seq_cst seq_cst\n", desired_i);
   const char *r = new_reg();
   emit_indent(indent);
   emit("%s = extractvalue {", r);
-  emit_type_str(ty);
+  emit_atomic_type_str(ty);
   emit(", i1} %s, 1\n", pair);
   return r;
 }

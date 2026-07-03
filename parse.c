@@ -7369,12 +7369,20 @@ static Node *primary(Token **rest, Token *tok)
 
   if (equal(tok, "__builtin_stdc_trailing_zeros"))
   {
-    return ParseBuiltin(ND_BUILTIN_CTZLL, tok, rest);
+    Node *node = ParseBuiltin(ND_BUILTIN_CTZLL, tok, rest);
+    node->builtin_val = new_cast(node->builtin_val, ty_ulong);
+    add_type(node->builtin_val);
+    add_type(node);
+    return node;
   }
 
   if (equal(tok, "__builtin_stdc_count_ones"))
   {
-    return ParseBuiltin(ND_POPCOUNTLL, tok, rest);
+    Node *node = ParseBuiltin(ND_POPCOUNTLL, tok, rest);
+    node->builtin_val = new_cast(node->builtin_val, ty_ulong);
+    add_type(node->builtin_val);
+    add_type(node);
+    return node;
   }
 
   if (equal(tok, "__builtin_stdc_has_single_bit"))

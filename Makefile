@@ -48,7 +48,7 @@ LLVM_TEST_SRCS=$(wildcard test/*.c)
 LLVM_TESTS=$(LLVM_TEST_SRCS:test/%.c=test/%.llvm.exe)
 
 test/%.llvm.exe: $(OBJECT) test/%.c
-	@if timeout 30 ./$(OBJECT) $(CFLAGS_LLVM) -Iinclude -Itest -o $@ test/$*.c -xc test/common 2>/tmp/chibicc-llvm-$*.log; then \
+	@if timeout 30 ./$(OBJECT) $(CFLAGS_LLVM) -Iinclude -Itest -o $@ test/$*.c -xc test/common $(LDFLAGS) 2>/tmp/chibicc-llvm-$*.log; then \
 	  echo "  BUILD    $@"; \
 	else \
 	  echo "  BUILD FAIL $@"; \
