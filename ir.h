@@ -8,12 +8,10 @@ extern FILE *output_file;
 extern int ir_reg;
 extern const char *current_block;
 extern const char *sret_reg;
-extern bool is_terminated;
 FILE *output_file;
 int ir_reg;
 const char *current_block;
 const char *sret_reg;
-bool is_terminated;
 static Obj *current_fn;
 
 // Debug-info (DWARF) state.  When -g is given we emit minimal LLVM debug

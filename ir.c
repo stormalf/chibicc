@@ -1,6 +1,8 @@
 #include "chibicc.h"
 #include "ir.h"
 
+static bool is_terminated;
+
 static int llvm_obj_id(Obj *var)
 {
   for (int i = 0; i < obj_map_count; i++)
@@ -16,6 +18,8 @@ static int llvm_obj_id(Obj *var)
 
 void emit(const char *fmt, ...)
 {
+  if (is_terminated)
+    return;
   va_list ap;
   va_start(ap, fmt);
   vfprintf(output_file, fmt, ap);
@@ -65,7 +69,11 @@ void emit_label(const char *label)
   if (!is_terminated && current_block)
     emit("  br label %%%s\n", label);
   current_block = label;
-  emit("%s:\n", label);
+  // A label always opens a fresh, reachable block: branch targets must be
+  // emitted even when the previous block was terminated by an `unreachable`
+  // (e.g. after a noreturn call), so emit it directly rather than through
+  // emit() (which swallows output once a block is terminated).
+  fprintf(output_file, "%s:\n", label);
   is_terminated = false;
 }
 
@@ -1040,21 +1048,59 @@ const char *ir_atomic_ordering(int memorder)
   }
 }
 
+// A store cannot use Acquire ordering (Acquire is load-only).  Like GCC/clang,
+// drop an invalid acquire store ordering to relaxed (monotonic) so the IR stays
+// valid.
+const char *ir_atomic_store_ordering(int memorder)
+{
+  if (memorder == 2)  // __ATOMIC_ACQUIRE
+    return "monotonic";
+  return ir_atomic_ordering(memorder);
+}
+
+// A load cannot use Release ordering (Release is store-only).  Drop an invalid
+// release load ordering to relaxed (monotonic).
+const char *ir_atomic_load_ordering(int memorder)
+{
+  if (memorder == 3)  // __ATOMIC_RELEASE
+    return "monotonic";
+  return ir_atomic_ordering(memorder);
+}
+
 // Emit an atomic load with the requested ordering.  Pointers and
 // floating-point values are loaded with their real LLVM type (so e.g. a
 // `char *` atom loads as `ptr` and not as `i64`, which would break callers
 // expecting a pointer), while integer/boolean values keep the existing
 // widening/narrowing behaviour.
-const char *ir_emit_atomic_load(const char *ptr, Type *ty, int memorder, int indent)
-{
-  if (is_pointer(ty) || ty->kind == TY_FUNC || is_array(ty) || is_vector(ty))
-  {
-    const char *r = new_reg();
-    emit_indent(indent);
-    emit("%s = load atomic ptr, ptr %s %s, align %d\n",
-         r, ptr, ir_atomic_ordering(memorder), ty->align);
-    return r;
-  }
+ const char *ir_emit_atomic_load(const char *ptr, Type *ty, int memorder, int indent)
+ {
+   if (ty->kind == TY_STRUCT || ty->kind == TY_UNION)
+   {
+     // Aggregates are passed by address in this backend.  Load the atomic
+     // location as an integer of the same width, then copy it into a fresh
+     // aggregate slot and return that slot's address as the loaded value.
+     int bits = ty->size * 8;
+     const char *loaded = new_reg();
+     emit_indent(indent);
+     emit("%s = load atomic i%d, ptr %s %s, align %d\n", loaded, bits, ptr,
+          ir_atomic_load_ordering(memorder), ty->align);
+     const char *tmp = new_reg();
+     emit_indent(indent);
+     emit("%s = alloca i8, i64 %d, align %d\n", tmp, ty->size, ty->align);
+     emit_indent(indent);
+     emit("store i%d %s, ptr %s, align %d\n", bits, loaded, tmp, ty->align);
+     return tmp;
+   }
+
+   if (is_pointer(ty) || ty->kind == TY_FUNC || is_array(ty) || is_vector(ty))
+   {
+     const char *r = new_reg();
+     emit_indent(indent);
+     emit("%s = load atomic ptr, ptr %s %s, align %d\n",
+          r, ptr, ir_atomic_load_ordering(memorder), ty->align);
+     return r;
+   }
+
 
   if (is_flonum(ty))
   {
@@ -1064,7 +1110,7 @@ const char *ir_emit_atomic_load(const char *ptr, Type *ty, int memorder, int ind
     const char *r = new_reg();
     emit_indent(indent);
     emit("%s = load atomic i%d, ptr %s %s, align %d\n",
-         r, ty->size * 8, ptr, ir_atomic_ordering(memorder), ty->align);
+         r, ty->size * 8, ptr, ir_atomic_load_ordering(memorder), ty->align);
     return atomic_int_to_float_val(r, ty, indent);
   }
 
@@ -1076,7 +1122,7 @@ const char *ir_emit_atomic_load(const char *ptr, Type *ty, int memorder, int ind
   const char *r = new_reg();
   emit_indent(indent);
   emit("%s = load atomic i%d, ptr %s %s, align %d\n",
-       r, load_bits, ptr, ir_atomic_ordering(memorder), ty->align);
+       r, load_bits, ptr, ir_atomic_load_ordering(memorder), ty->align);
   // Narrow the i8 result back to i1 for boolean types.
   if (bits == 1)
   {
@@ -1093,16 +1139,33 @@ const char *ir_emit_atomic_load(const char *ptr, Type *ty, int memorder, int ind
 // atom stores as `ptr`, not as `i64`), while integer/boolean values keep the
 // existing widening/narrowing behaviour.  `val_bits` is the IR bit-width of
 // the incoming `val` register (0 = unknown, assume i32).
-void ir_emit_atomic_store(const char *val, const char *ptr, Type *ty,
-                                 int memorder, int indent, int val_bits)
-{
-  if (is_pointer(ty) || ty->kind == TY_FUNC || is_array(ty) || is_vector(ty))
-  {
-    emit_indent(indent);
-    emit("store atomic ptr %s, ptr %s %s, align %d\n",
-         val, ptr, ir_atomic_ordering(memorder), ty->align);
-    return;
-  }
+ void ir_emit_atomic_store(const char *val, const char *ptr, Type *ty,
+                                  int memorder, int indent, int val_bits)
+ {
+   if (ty->kind == TY_STRUCT || ty->kind == TY_UNION)
+   {
+     // Aggregates are passed by address in this backend.  Bitcast the source
+     // location to an integer of the same width and load it, since LLVM
+     // cannot atomically store aggregate types directly.  Opaque pointers let
+     // us load/store the integer directly without an explicit bitcast.
+     int bits = ty->size * 8;
+     const char *loaded = new_reg();
+     emit_indent(indent);
+     emit("%s = load i%d, ptr %s, align %d\n", loaded, bits, val, ty->align);
+     emit_indent(indent);
+     emit("store atomic i%d %s, ptr %s %s, align %d\n", bits, loaded, ptr,
+          ir_atomic_store_ordering(memorder), ty->align);
+     return;
+   }
+
+   if (is_pointer(ty) || ty->kind == TY_FUNC || is_array(ty) || is_vector(ty))
+   {
+     emit_indent(indent);
+     emit("store atomic ptr %s, ptr %s %s, align %d\n",
+          val, ptr, ir_atomic_store_ordering(memorder), ty->align);
+     return;
+   }
+
 
   if (is_flonum(ty))
   {
@@ -1111,7 +1174,7 @@ void ir_emit_atomic_store(const char *val, const char *ptr, Type *ty,
     const char *v = float_val_to_atomic_int(val, ty, indent);
     emit_indent(indent);
     emit("store atomic i%d %s, ptr %s %s, align %d\n",
-         ty->size * 8, v, ptr, ir_atomic_ordering(memorder), ty->align);
+         ty->size * 8, v, ptr, ir_atomic_store_ordering(memorder), ty->align);
     return;
   }
 
@@ -1152,7 +1215,7 @@ void ir_emit_atomic_store(const char *val, const char *ptr, Type *ty,
   }
   emit_indent(indent);
   emit("store atomic i%d %s, ptr %s %s, align %d\n",
-       store_bits, store_val, ptr, ir_atomic_ordering(memorder), ty->align);
+       store_bits, store_val, ptr, ir_atomic_store_ordering(memorder), ty->align);
 }
 
 // Emit an atomicrmw read-modify-write with the requested LLVM opcode and
@@ -1161,6 +1224,18 @@ void ir_emit_atomic_store(const char *val, const char *ptr, Type *ty,
 const char *ir_emit_atomicrmw(const char *op, const char *ptr, const char *val,
                                      Type *ty, int memorder, int indent, int val_bits)
 {
+  // Pointers (and func/array/vector) atomics exchange their real LLVM type
+  // (so a `T *` atom does `atomicrmw xchg ptr ..., ptr ...`, not an
+  // integer access that would try to zext a pointer value).
+  if (is_pointer(ty) || ty->kind == TY_FUNC || is_array(ty) || is_vector(ty))
+  {
+    const char *r = new_reg();
+    emit_indent(indent);
+    emit("%s = atomicrmw %s ptr %s, ptr %s %s\n",
+         r, op, ptr, val, ir_atomic_ordering(memorder));
+    return r;
+  }
+
   int orig_bits = int_type_bits(ty);
   if (orig_bits <= 0) orig_bits = (ty->size > 0) ? ty->size * 8 : 32;
   int bits = orig_bits;
@@ -8894,13 +8969,15 @@ void gen_ir_stmt_block(Node *node, int indent, bool *terminated)
 {
   for (Node *n = node->body; n; n = n->next)
   {
-    // Once the current basic block is terminated (by continue/break/
-    // return/goto), any following statement is unreachable. Skip it,
-    // except statements that define labels (ND_LABEL / ND_CASE) which
-    // must still be emitted because other blocks may branch to them.
-    // This includes statements that contain such labels transitively
-    // (e.g. a case nested inside an `if (0)` block), otherwise the
-    // switch dispatch would reference undefined labels.
+    // Once the current block is terminated (by a noreturn call that emitted
+    // `unreachable`, or by return/goto/break/continue), every following
+    // statement is unreachable.  Skip it unless it defines a label (or
+    // contains one transitively) -- such a label is still a potential
+    // branch target and must be emitted (emit_label resets the terminated
+    // state and starts a fresh block).  Note: dead code that appears *inside*
+    // the same statement (e.g. the store of `tab[i] = (abort(), x)`) is
+    // handled by emit(), which swallows output while the block is
+    // terminated.
     if (is_terminated && !contains_label(n))
       continue;
     emit_stmt(n, indent, terminated);
@@ -8916,11 +8993,12 @@ void gen_ir_stmt_return(Node *node, int indent, bool *terminated)
     emit_indent(indent);
     if (sret_reg)
     {
+      emit_indent(indent);
       emit("call void @llvm.memcpy.p0.p0.i64(ptr %s, ptr %s, i64 %ld, i1 false)\n", sret_reg, val, node->lhs->ty->size);
       emit_indent(indent);
       emit("ret void\n");
       is_terminated = true;
-    }
+  }
     else
     {
       // The ND_RETURN node itself has no type set; use the enclosing
@@ -10106,6 +10184,10 @@ static void emit_func(Obj *fn)
       }
     }
   }
+  // Always close the function, even if its body ended in a noreturn call
+  // that left the current block terminated (emit() swallows trailing
+  // output in that case).  The closing brace is pure syntax and required.
+  is_terminated = false;
   emit("}\n\n");
 
   if (dbg_saved_out)

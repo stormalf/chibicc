@@ -1852,14 +1852,16 @@ static void run_linker(StringArray *inputs, char *output)
     strarray_push(&arr, "-lgcc");
     strarray_push(&arr, "-lgcc_eh");
     strarray_push(&arr, "-lc");
+    strarray_push(&arr, "-latomic");
     strarray_push(&arr, "--end-group");
   }
-  else 
+  else
   {
     strarray_push(&arr, "-lc");
     strarray_push(&arr, "-lgcc");
     strarray_push(&arr, "--as-needed");
     strarray_push(&arr, "-lgcc_s");
+    strarray_push(&arr, "-latomic");
     //strarray_push(&arr, "--no-as-needed");
   }
 

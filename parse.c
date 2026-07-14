@@ -8802,6 +8802,8 @@ static Node *ParseAtomic3(NodeKind kind, Token *tok, Token **rest) {
   tok = skip(tok, ",", ctx);
   node->rhs = assign(&tok, tok);
   add_type(node->rhs);
+  if (kind != ND_STORE && kind != ND_LOAD && !is_pointer(node->ty))
+    node->rhs = new_cast(node->rhs, node->ty);
   // Check if there's a comma, indicating a memory order argument
   if (equal(tok, ",")) {
     SET_CTX(ctx); 

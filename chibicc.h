@@ -1864,4 +1864,6 @@ char *retrieveVariableNumber(int index);
 char *generate_input_for_output(void);
 char *generate_return_rax(Token *retval);
 
+
+
 #endif // CHIBICC_H
