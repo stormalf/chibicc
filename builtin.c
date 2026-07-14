@@ -1150,67 +1150,88 @@ void gen_clrssbsy(Node *node) {
 
 void gen_sbb_u32(Node *node) { 
   gen_expr(node->builtin_args[0]);
-  println("  movl %%eax, %%edi");
+  println("  movl %%eax, %%edi");     // edi = bin (borrow-in)
   gen_expr(node->builtin_args[1]);
-  println("  movl %%eax, %%esi");    
+  println("  movl %%eax, %%esi");     // esi = a
   gen_expr(node->builtin_args[2]);
-  println("  movl %%eax, %%edx");    
+  println("  movl %%eax, %%edx");     // edx = b
   gen_expr(node->builtin_args[3]);
-  println("  movq %%rax, %%rcx");    
-  println("  movl %%edi, %%eax");
-  println("  bt $0, %%edx");
-  println("  sbbl %%esi, %%eax");
+  println("  movq %%rax, %%rcx");     // rcx = out ptr
+  println("  movl %%esi, %%eax");     // eax = a
+  println("  bt $0, %%edi");          // CF = borrow-in bit0
+  println("  sbbl %%edx, %%eax");     // eax = a - b - bin
   println("  setc %%dl");
   println("  movzbl %%dl, %%edx");
-  println("  movl %%edx, (%%rcx)");
+  println("  movl %%edx, (%%rcx)");   // *out = borrow
 }
 
 void gen_sbb_u64(Node *node) { 
   gen_expr(node->builtin_args[0]);
-  println("  movq %%rax, %%rdi");
+  push_tmp();                       // bin -> stack
   gen_expr(node->builtin_args[1]);
-  println("  movq %%rax, %%rsi");    
+  push_tmp();                       // x -> stack
   gen_expr(node->builtin_args[2]);
-  println("  movq %%rax, %%rdx");    
+  push_tmp();                       // y -> stack
   gen_expr(node->builtin_args[3]);
-  println("  movq %%rax, %%rcx");    
-  println("  movq %%rsi, %%rax");
-  println("  sbbq %%rdx, %%rax");
-  println("  sbbq %%rdi, %%rax");
-  println("  movq %%rax, (%%rcx)");
-  println("  setc %%al");
+  println("  movq %%rax, %%rcx");    // rcx = out ptr
+  pop_tmp("%rdx");                  // y
+  pop_tmp("%rsi");                  // x
+  pop_tmp("%rdi");                  // bin
+  println("  movq %%rsi, %%rax");    // rax = x
+  println("  subq %%rdx, %%rax");    // rax = x-y, CF = borrow1
+  println("  setc %%r9b");           // r9b = borrow1
+  println("  movq %%rdi, %%r8");     // r8 = bin
+  println("  subq %%r8, %%rax");     // rax = (x-y)-bin, CF = borrow2 (independent sub)
+  println("  setc %%r10b");          // r10b = borrow2
+  println("  movq %%rax, (%%rcx)");  // *out = (x-y)-bin (store before clobbering rax)
+  println("  orb %%r9b, %%r10b");    // r10b = borrow1 | borrow2 (reference semantics)
+  println("  movzbl %%r10b, %%eax"); // eax = returned borrow
 }
 
 void gen_addcarryx_u32(Node *node) { 
   gen_expr(node->builtin_args[0]);
-  println("  movb %%al, %%dil");
+  push_tmp();                       // cin -> stack (callee-saved across next evals)
   gen_expr(node->builtin_args[1]);
-  println("  movl %%eax, %%esi");    
+  push_tmp();                       // x -> stack
   gen_expr(node->builtin_args[2]);
-  println("  movl %%eax, %%edx");    
+  push_tmp();                       // y -> stack
   gen_expr(node->builtin_args[3]);
-  println("  movq %%rax, %%rcx");    
-  println("  movl %%esi, %%eax");
-  println("  movzx %%dil, %%r9d ");
-  println("  addl %%edx, %%eax");
-  println("  addl %%r9d, %%eax");
-  println("  setc %%al");
-  println("  movl %%eax, (%%rcx)");
+  println("  movq %%rax, %%rcx");    // rcx = out ptr
+  pop_tmp("%rdx");                  // y
+  pop_tmp("%rsi");                  // x
+  pop_tmp("%rdi");                  // cin (low byte in dil)
+  println("  movl %%esi, %%eax");    // eax = x
+  println("  addl %%edx, %%eax");    // eax = x+y, CF = carry1
+  println("  setc %%r9b");           // r9b = carry1
+  println("  movzx %%dil, %%edi");   // edi = cin (zero-extended)
+  println("  addl %%edi, %%eax");    // eax = (x+y)+cin (the sum)
+  println("  setc %%r10b");          // r10b = carry2
+  println("  movl %%eax, (%%rcx)");  // *out = sum (store before clobbering eax)
+  println("  orb %%r9b, %%r10b");    // r10b = carry1 | carry2 (reference semantics)
+  println("  movzbl %%r10b, %%eax"); // eax = returned carry
 }
 
 void gen_addcarryx_u64(Node *node) { 
   gen_expr(node->builtin_args[0]);
-  println("  movq %%rax, %%rdi");
+  push_tmp();                       // cin -> stack
   gen_expr(node->builtin_args[1]);
-  println("  movq %%rax, %%rsi");    
+  push_tmp();                       // x -> stack
   gen_expr(node->builtin_args[2]);
-  println("  movq %%rax, %%rdx");    
+  push_tmp();                       // y -> stack
   gen_expr(node->builtin_args[3]);
-  println("  movq %%rax, %%rcx");    
-  println("  movq %%rsi, %%rax");
-  println("  addq    %%rdx, %%rax");
-  println("  addq    %%rdi, %%rax");
-  println("  movq    %%rax, (%%rcx)");
+  println("  movq %%rax, %%rcx");    // rcx = out ptr
+  pop_tmp("%rdx");                  // y
+  pop_tmp("%rsi");                  // x
+  pop_tmp("%rdi");                  // cin
+  println("  movq %%rsi, %%rax");    // rax = x
+  println("  addq %%rdx, %%rax");    // rax = x+y, CF = carry1
+  println("  setc %%r9b");           // r9b = carry1
+  println("  movq %%rdi, %%r8");     // r8 = cin
+  println("  addq %%r8, %%rax");     // rax = (x+y)+cin (the sum)
+  println("  setc %%r10b");          // r10b = carry2
+  println("  movq %%rax, (%%rcx)");  // *out = sum (store before clobbering rax)
+  println("  orb %%r9b, %%r10b");    // r10b = carry1 | carry2
+  println("  movzbl %%r10b, %%eax"); // eax = returned carry
 }
 
 // CAS/Atomic functions (Group H)

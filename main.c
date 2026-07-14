@@ -20,6 +20,8 @@ Standard current_std = STD_GNU17;
 StringArray include_paths;
 bool opt_fcommon = true;
 bool opt_fbuiltin = true;
+const char *opt_target_triple = TARGET_TRIPLE;
+const char *opt_datalayout = TARGET_DATALAYOUT;
 bool opt_fpic;
 bool opt_fpie;
 bool opt_shared;
@@ -111,6 +113,7 @@ typedef struct {
 static LLVMOptMap llvm_opt_map[MAX_LLC_OPT] = {
   {"-mavx",    "-mattr=+avx"},
   {"-mavx2",   "-mattr=+avx2"},
+  {"-mmmx",    "-mattr=+mmx"},
   {"-mfma",    "-mattr=+fma"},
   {"-mbmi",    "-mattr=+bmi"},
   {"-mbmi2",   "-mattr=+bmi2"},
@@ -123,6 +126,10 @@ static LLVMOptMap llvm_opt_map[MAX_LLC_OPT] = {
   {"-mssse3",  "-mattr=+ssse3"},
   {"-msse4.1", "-mattr=+sse4.1"},
   {"-msse4.2", "-mattr=+sse4.2"},
+  {"-O0",      "-O0"},
+  {"-O1",      "-O1"},
+  {"-O2",      "-O2"},
+  {"-O3",      "-O3"},
 };
 
 static char *llc_args[128];
@@ -131,11 +138,49 @@ static int llc_arg_cnt;
 static void add_llc_option(char *arg)
 {
   for (int i = 0; i < MAX_LLC_OPT; i++) {
+    if (!llvm_opt_map[i].driver_opt)
+      break;
     if (!strcmp(arg, llvm_opt_map[i].driver_opt)) {
       llc_args[llc_arg_cnt++] = llvm_opt_map[i].llc_opt;
       return;
     }
   }
+  
+}
+
+// Select the data layout matching the given target triple.  Unknown
+// architectures fall back to the x86_64 default so the backend keeps working;
+// only the layout string changes, the IR emitter still assumes x86_64
+// semantics (calling convention, GOTPCREL, long-double shape...).
+static const char *datalayout_for_triple(const char *triple)
+{
+  if (!strncmp(triple, "aarch64", 7) || !strncmp(triple, "arm64", 5))
+    return "e-m:e-i8:8:32-i16:16:32-i64:64-i128:128-n32:64-S128";
+  if (!strncmp(triple, "arm", 3) || !strncmp(triple, "thumb", 5))
+    return "e-m:e-p:32:32-i64:64-v128:64:128-a:0:32-n32-S64";
+  if (strstr(triple, "i386") || strstr(triple, "i686") || strstr(triple, "i586"))
+    return "e-m:e-p:32:32-f64:32:64-f80:32-n8:16:32-S128";
+  if (!strncmp(triple, "riscv32", 7))
+    return "e-m:e-p:32:32-i64:64-n32-S128";
+  if (!strncmp(triple, "riscv64", 7))
+    return "e-m:e-p:64:64-i64:64-i128:128-n32:64-S128";
+  if (strstr(triple, "wasm32"))
+    return "e-m:e-p:32:32-i64:64-n32:64-S128";
+  if (strstr(triple, "wasm64"))
+    return "e-m:e-p:64:64-i64:64-n32:64-S128";
+  if (strstr(triple, "powerpc64"))
+    return "e-m:e-i64:64-n32:64";
+  if (strstr(triple, "mips64"))
+    return "e-m:e-i8:8:32-i16:16:32-i64:64-n32:64-S128";
+  if (strstr(triple, "mips"))
+    return "e-m:e-p:32:32-i64:64-n32-S128";
+  return TARGET_DATALAYOUT;
+}
+
+static void apply_target(const char *triple)
+{
+  opt_target_triple = triple;
+  opt_datalayout = datalayout_for_triple(triple);
 }
 
 static void enable_core_dump() {
@@ -379,12 +424,18 @@ static void parse_args(int argc, char **argv)
     }
 
     //for backend llvm needs adding each -m argument to llc option 
-    if (startswith(argv[i], "-m"))
+    if (startswith(argv[i], "-m") || startswith(argv[i], "-O"))
       add_llc_option(argv[i]);
 
 
     if (startsWith(argv[i], "-march="))
     {
+      // Forward the requested CPU to llc as -mcpu= so the LLVM backend honors
+      // -march=native / -march=x86-64-v3 etc. (otherwise llc uses the generic
+      // baseline and the IR/cpu attributes are silently ignored).
+      char *cpu = argv[i] + strlen("-march=");
+      llc_args[llc_arg_cnt++] = "-mcpu";
+      llc_args[llc_arg_cnt++] = cpu;
       continue;
     }
 
@@ -468,6 +519,28 @@ static void parse_args(int argc, char **argv)
 
     if (startsWith(argv[i], "-mtune="))
     {
+      continue;
+    }
+
+    // Override the target triple (e.g. -target aarch64-linux-gnu or
+    // --target=x86_64-apple-darwin).  The value drives both the IR
+    // `target triple` line and the llc -mtriple= option, so the backend is no
+    // longer tied to the compile-time TARGET_TRIPLE default.
+    if (!strcmp(argv[i], "-target") || !strcmp(argv[i], "--target"))
+    {
+      const char *triple = argv[++i];
+      check_parms_length((char *)triple);
+      apply_target(triple);
+      llc_args[llc_arg_cnt++] = "-mtriple";
+      llc_args[llc_arg_cnt++] = (char *)triple;
+      continue;
+    }
+    if (startsWith(argv[i], "--target="))
+    {
+      const char *triple = argv[i] + strlen("--target=");
+      apply_target(triple);
+      llc_args[llc_arg_cnt++] = "-mtriple";
+      llc_args[llc_arg_cnt++] = (char *)triple;
       continue;
     }
 
@@ -889,10 +962,16 @@ static void parse_args(int argc, char **argv)
     } 
 
     if (!strcmp(argv[i], "-Wall")) {
-      opt_unused_warn = true;
-      opt_unused_param_warn = true;
+      opt_unused_warn = true;      
       continue;
     }
+
+    if (!strcmp(argv[i], "-Wextra")) {
+      opt_unused_warn = true;     
+      opt_unused_param_warn = true; 
+      continue;
+    }
+
 
     if (!strcmp(argv[i], "-Wunused-variable")) {
       opt_unused_warn = true;
@@ -972,26 +1051,26 @@ static void parse_args(int argc, char **argv)
       continue;
     }
 
-    if (!strcmp(argv[i], "-O")) {      
+    if (!strcmp(argv[i], "-O")) {
       opt_optimize = true;
       opt_optimize_level1 = true;
       continue;
     }
 
-    if (!strcmp(argv[i], "-O1")) {      
+    if (!strcmp(argv[i], "-O1")) {
       opt_optimize = true;
       opt_optimize_level1 = true;
       continue;
     }
 
-    if (!strcmp(argv[i], "-O2")) {      
+    if (!strcmp(argv[i], "-O2")) {
       opt_optimize = true;
       opt_optimize_level1 = true;
       opt_optimize_level2 = true;
       continue;
     }
 
-    if (!strcmp(argv[i], "-O3")) {      
+    if (!strcmp(argv[i], "-O3")) {
       opt_optimize = true;
       opt_optimize_level1 = true;
       opt_optimize_level2 = true;
@@ -1060,8 +1139,7 @@ static void parse_args(int argc, char **argv)
     }
 
     // These options are ignored for now.
-    if (!strcmp(argv[i], "-P") || 
-        !strcmp(argv[i], "-Wextra") || 
+    if (!strcmp(argv[i], "-P") ||         
         !strcmp(argv[i], "-Wpedantic") || 
         !strcmp(argv[i], "-Wno-switch") || 
         !strcmp(argv[i], "-Wno-clobbered") ||
@@ -1566,13 +1644,48 @@ int n = 0;
 cmd[n++] = "llc";
 cmd[n++] = "-filetype=obj";
 
-for (int i = 0; i < llc_arg_cnt; i++)
-    cmd[n++] = llc_args[i];
+// Preserve (or omit) the frame-pointer chain (rbp) globally, honoring the
+// driver's -f(no-)omit-frame-pointer handling.  Keeping frame pointers is
+// required for __builtin_frame_address / __builtin_return_address with a
+// nonzero level to walk up the call stack (matching clang/gcc behavior).
+  cmd[n++] = opt_omit_frame_pointer ? "-frame-pointer=none"
+                                    : "-frame-pointer=all";
 
-cmd[n++] = input;
-cmd[n++] = "-o";
-cmd[n++] = output;
-cmd[n] = NULL;
+  // Use the PIC relocation model when -fPIC/-fpic is requested, otherwise
+  // llc defaults to the static model and emits absolute 32-bit relocations
+  // (R_X86_64_32S) which fail when building shared libraries.
+  if (opt_fpic)
+    cmd[n++] = "-relocation-model=pic";
+
+   
+  for (int i = 0; i < llc_arg_cnt; i++)
+  {
+    cmd[n++] = llc_args[i];
+  }
+
+  // `cmpxchg16b` is part of the baseline x86-64 ISA (gcc/clang enable it by
+  // default).  Without it, LLVM lowers 16-byte `cmpxchg` to a libatomic
+  // libcall whose emulation can overflow the stack for large frames (e.g.
+  // tests with many `_Atomic`/16-byte objects).  Enable it for x86 targets
+  // so 16-byte atomics stay lock-free (inline `cmpxchg16b`).
+  bool x86_target = true;
+  for (int i = 0; i + 1 < llc_arg_cnt; i++)
+  {
+    if (!strcmp(llc_args[i], "-mtriple") && llc_args[i + 1])
+    {
+      const char *t = llc_args[i + 1];
+      x86_target = (strstr(t, "x86_64") || strstr(t, "i386") ||
+                    strstr(t, "i686") || strstr(t, "x86"));
+      break;
+    }
+  }
+  if (x86_target)
+    cmd[n++] = "-mattr=+cx16";
+
+  cmd[n++] = input;
+  cmd[n++] = "-o";
+  cmd[n++] = output;
+  cmd[n] = NULL;
   run_subprocess(cmd);
 }
 
@@ -1880,7 +1993,7 @@ int main(int argc, char **argv)
       output = replace_extn(input, ".ll");
     else if (opt_S)
       output = replace_extn(input, ".s");
-    else if (opt_emit_ir || opt_backend_llvm)
+    else if (opt_emit_ir)
       output = replace_extn(input, ".ll");
     else
       output = replace_extn(input, ".o");

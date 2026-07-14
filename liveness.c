@@ -302,20 +302,22 @@ static void analyze_operand(Node *node, LvContext ctx, int *pos) {
 static void analyze_node(Node *node, LvContext ctx, int *pos) {
   if (!node) return;
 
-  if (node->kind == ND_VAR && node->var && node->var->is_local) {
+  if (node->kind == ND_VAR && node->var) {
     Obj *var = node->var;
     (*pos)++;
     if (var->first_use < 0) var->first_use = *pos;
     var->last_use = *pos;
-    switch (ctx) {
-    case LV_READ:
-      var->is_read = true;
-      break;
-    case LV_WRITE:
-      var->is_written = true;
-      break;
-    case LV_ADDR:
-      break;
+    if (var->is_local) {
+      switch (ctx) {
+      case LV_READ:
+        var->is_read = true;
+        break;
+      case LV_WRITE:
+        var->is_written = true;
+        break;
+      case LV_ADDR:
+        break;
+      }
     }
     return;
   }
@@ -417,15 +419,27 @@ static void analyze_node(Node *node, LvContext ctx, int *pos) {
   }
 }
 
+void mark_liveness_on_subtree(Node *node) {
+  int pos = 0;
+  analyze_node(node, LV_READ, &pos);
+}
+
 static void scope_init_liveness(Scope *sc) {
   for (Scope *child = sc->children; child; child = child->sibling_next)
     scope_init_liveness(child);
   for (Obj *var = sc->locals; var; var = var->next) {
     var->first_use = -1;
     var->last_use = -1;
-    var->is_read = false;
-    var->is_written = false;
   }
+}
+
+static bool is_suppressed_ext(char *name) {
+  int len = strlen(name);
+  if (len >= 2 && name[len-2] == '.' && name[len-1] == 'h')
+    return true;
+  if (len >= 4 && strcmp(name + len - 4, ".map") == 0)
+    return true;
+  return false;
 }
 
 static void scope_warn_unused(Scope *sc) {
@@ -434,12 +448,14 @@ static void scope_warn_unused(Scope *sc) {
   for (Scope *child = sc->children; child; child = child->sibling_next)
     scope_warn_unused(child);
   for (Obj *var = sc->locals; var; var = var->next) {
-    if (var->first_use >= 0)
+    if (var->first_use >= 0 || var->is_read)
       continue;
     if (!var->name || !var->name[0] || var->name[0] == '.')
       continue;
     if (var->is_param)
       continue;
+    if (var->tok && var->tok->file && is_suppressed_ext(var->tok->file->name))
+      return;
     //stack corruption when variable in macro
     if (var->tok && !var->tok->origin && !(var->tok->file && var->tok->file->is_system_header))
       warn_tok(var->tok, "%s:%d: in %s: unused variable '%s'", __FILE__, __LINE__, __func__, var->name);
@@ -451,7 +467,7 @@ static void fn_warn_unused_params(Obj *fn) {
   if (!opt_unused_param_warn)
     return;
   for (Obj *var = fn->params; var; var = var->next) {
-    if (var->first_use >= 0)
+    if (var->first_use >= 0 || var->is_read)
       continue;
     if (!var->name || !var->name[0])
       continue;
@@ -461,6 +477,7 @@ static void fn_warn_unused_params(Obj *fn) {
     
   }
 }
+
 
 static void analyze_function(Obj *fn) {
   if (!fn->ty->scopes)
@@ -474,11 +491,69 @@ static void analyze_function(Obj *fn) {
   fn_warn_unused_params(fn);
 }
 
+//global variables warning when unused
+static void var_warn_unused(Obj *var) {
+  if (!var)
+    return;
+  if (var->first_use >= 0)
+    return;
+  if (!var->name || !var->name[0] || var->name[0] == '.')
+    return;
+  if (var->is_param)
+    return;
+  if (!var->is_definition)
+    return;
+  if (!var->is_static)
+    return;
+  if (var->is_inline)
+    return;
+
+  if (!var->tok || var->tok->origin)
+    return;
+  if (var->tok->file && var->tok->file->is_system_header)
+    return;
+  if (var->tok->file && is_suppressed_ext(var->tok->file->name))
+    return;
+
+  if (var->is_function)
+    warn_tok(var->tok, "'%s' defined but not used [-Wunused-function]", var->name);
+  else if (!var->is_tls && !var->is_extern)
+    warn_tok(var->tok, "'%s' defined but not used [-Wunused-variable]", var->name);
+}
+
+// Mark globals that are referenced by other global initializers as used.
+// This prevents false positives for static globals that are only used in
+// global initializer expressions (e.g., parse table arrays referenced by
+// a designated initializer in another global).
+static void mark_globals_used_in_initializers(void) {
+  for (Obj *var = get_globals(); var; var = var->next) {
+    for (Relocation *rel = var->rel; rel; rel = rel->next) {
+      if (!rel->label)
+        continue;
+      for (Obj *var2 = get_globals(); var2; var2 = var2->next) {
+        if (var2 == var)
+          continue;
+        if (*rel->label == var2->name) {
+          if (var2->first_use < 0)
+            var2->first_use = 1;
+          var2->last_use = 1;
+          break;
+        }
+      }
+    }
+  }
+}
+
 void analyze_liveness(Obj *prog) {
   build_bbs(prog);
   for (Obj *fn = prog; fn; fn = fn->next) {
     if (!fn->is_function || !fn->is_definition)
       continue;
     analyze_function(fn);
+  }
+  if (opt_unused_warn) {
+    mark_globals_used_in_initializers();
+    for (Obj *var = get_globals(); var; var = var->next)
+      var_warn_unused(var);
   }
 }

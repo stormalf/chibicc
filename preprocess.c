@@ -817,13 +817,15 @@ static MacroArg *read_macro_arg_one(Token **rest, Token *tok, bool read_rest)
 {
   Token head = {};
   Token *cur = &head;
-  int level = 0;
+  int paren = 0;
+  int brace = 0;
+  int bracket = 0;
 
   for (;;)
   {
-    if (level == 0 && equal(tok, ")"))
+    if (paren == 0 && brace == 0 && bracket == 0 && equal(tok, ")"))
       break;
-    if (level == 0 && !read_rest && equal(tok, ","))
+    if (paren == 0 && brace == 0 && bracket == 0 && !read_rest && equal(tok, ","))
       break;
 
     if (tok->kind == TK_EOF)
@@ -831,9 +833,17 @@ static MacroArg *read_macro_arg_one(Token **rest, Token *tok, bool read_rest)
     
 
     if (equal(tok, "("))
-      level++;
+      paren++;
     else if (equal(tok, ")"))
-      level--;
+      paren--;
+    else if (equal(tok, "{"))
+      brace++;
+    else if (equal(tok, "}"))
+      brace--;
+    else if (equal(tok, "["))
+      bracket++;
+    else if (equal(tok, "]"))
+      bracket--;
     cur = cur->next = copy_token(tok);
     tok = tok->next;
   }

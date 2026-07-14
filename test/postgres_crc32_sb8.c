@@ -614,7 +614,12 @@ pg_crc32c pg_comp_crc32c_sb8(pg_crc32c crc, const void *data, size_t len)
 }
 
 int main() {
-	ControlFileData cf;
+    /* Zero-initialize the whole struct. Computing a CRC over an only
+       partially initialized struct reads uninitialized (indeterminate)
+       stack memory, which is undefined behavior and yields a different
+       result on every compiler (chibicc/gcc/clang). Zeroing makes the
+       result deterministic and portable. */
+	ControlFileData cf = {0};
     /* Initialize some fields */
     cf.pg_control_version = 1234;
     cf.catalog_version_no = 5678;

@@ -1,5 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 #define _GNU_SOURCE
+#ifndef CHIBICC_H
+#define CHIBICC_H
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
@@ -54,9 +56,15 @@
 #define DEFAULT_TARGET_MACHINE "x86_64-linux-gnu"
 #define TARGET_DATALAYOUT "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-f80:128-n8:16:32:64-S128"
 #define TARGET_TRIPLE "x86_64-pc-linux-gnu"
+
+// Runtime target description.  Defaults to the x86_64 description above but can
+// be overridden per-invocation via -target/--target= so the backend is not tied
+// to a compile-time triple/data-layout.
+extern const char *opt_target_triple;
+extern const char *opt_datalayout;
 #define MAX_BUILTIN_ARGS 8
 #define MAX_WEAK 20
-#define MAX_LLC_OPT  14
+#define MAX_LLC_OPT  24
 
 #define STR_HELPER(x) #x
 #define STR(x) STR_HELPER(x)
@@ -64,6 +72,7 @@
 
 #define HELP PRODUCT " is a C compiler based on " PRODUCT " created by Rui Ueyama.\n \
 See original project https://github.com/rui314/chibicc for more information\n \
+For now only x86-64 architecture is managed in the futue other architecture could be managed using llvm as backend \n \
 this " PRODUCT " supports vector, some extended assembly and int128 \n"
 
 #define USAGE PRODUCT " usage :\n \
@@ -137,7 +146,8 @@ this " PRODUCT " supports vector, some extended assembly and int128 \n"
 -fvisibility=default|hidden|protected  Set default symbol visibility\n \
 -Wimplicit-function-declaration  Warn about implicit function declarations\n \
 -Wno-implicit-function-declaration  Suppress implicit function declaration diagnostics\n \
--Wall  Enable all warnings (unused-variable, unused-parameter)\n \
+-Wall  Enable all warnings (unused-variable)\n \
+-Wextra  Enable all warnings (unused-variable, unused-parameter)\n \
 -Wunused-variable  Warn about unused local variables\n \
 -Wno-unused-variable  Suppress unused variable diagnostics\n \
 -Wunused-parameter  Warn about unused function parameters\n \
@@ -158,9 +168,11 @@ this " PRODUCT " supports vector, some extended assembly and int128 \n"
 -O or -O1 enabling optimization level 1 \n \
  -O2 enabling optimization level 2 \n \
  -O3 enabling optimization level 3 \n \
- --emit-ir Emit LLVM IR to the output file instead of assembly \n \
- --backend-llvm Use the LLVM backend (llc) to compile LLVM IR to assembly \n \
-chibicc [ -o <path> ] <file>\n"
+  --emit-ir Emit LLVM IR to the output file instead of assembly \n \
+  --backend-llvm Use the LLVM backend (llc) to compile LLVM IR to assembly \n \
+  -march=<cpu> Select the target CPU passed to llc as -mcpu (e.g. -march=native, -march=x86-64-v3) \n \
+  -target <triple> or --target=<triple> Override the target triple (e.g. aarch64-linux-gnu). Defaults to x86_64-pc-linux-gnu \n \
+  chibicc [ -o <path> ] <file>\n"
 
 typedef struct Type Type;
 typedef struct Node Node;
@@ -438,6 +450,11 @@ struct Relocation
   int offset;
   char **label;
   long addend;
+  // True when `label` refers to a basic-block label (from &&label) rather
+  // than a global/function symbol.  Such relocations must be emitted as an
+  // LLVM blockaddress and require the enclosing function's name.
+  bool is_label;
+  char *func_name;
 };
 
 // AST node
@@ -1186,6 +1203,19 @@ Node
   bool is_scalar_promoted;  
   bool is_tail;
   bool clobbers_rbx;
+
+  // For extended asm with --backend-llvm (LLVM path)
+  char *asm_template;
+  struct AsmOperand *asm_outputs;
+  struct AsmOperand *asm_inputs;
+  char **asm_clobbers;
+  int asm_noutputs;
+  int asm_ninputs;
+  int asm_nclobbers;
+  bool asm_is_volatile;
+
+  // Scope created for this block (ND_BLOCK only)
+  Scope *scope;
 };
 
 typedef struct
@@ -1196,16 +1226,26 @@ typedef struct
   int enum_val;
 } VarScope;
 
+typedef struct AsmOperand {
+  char *constraint;
+  Node *expr;
+  int match_index;
+  char *name;
+} AsmOperand;
+
 Node *new_cast(Node *expr, Type *ty);
 int64_t  const_expr(Token **rest, Token *tok);
 Node *conditional(Token **rest, Token *tok);
+void parse_llvm_asm(Node *node, Token **rest, Token *tok, Obj *locals, Obj *current_fn);
 Obj *parse(Token *tok);
 VarScope *find_var(Token *tok);
 Obj *find_func(char *name);
 //from COSMOPOLITAN adding function ConsumeStringLiteral
 char *ConsumeStringLiteral(Token **rest, Token *tok) ;
 int64_t  eval(Node *node);
+void mark_liveness_on_subtree(Node *node);
 bool equal_tok(Token *a, Token *b);
+Obj *get_globals(void);
 
 extern bool opt_fbuiltin;
 //
@@ -1386,8 +1426,13 @@ bool is_array(Type *ty);
 Type *new_qualified_type(Type *ty);
 Type *unqual(Type *ty);
 bool is_vector(Type *ty);
+bool has_flonum(Type *ty, int lo, int hi, int offset);
+bool has_flonum1(Type *ty);
+bool has_flonum2(Type *ty);
 bool is_int128(Type *ty);
 bool is_pointer(Type *ty);
+bool is_sret(Type *ty);
+bool has_pointer(Type *ty);
 bool is_const_expr(Node *node);
 bool contains_label(Node *node);
 
@@ -1449,6 +1494,7 @@ void clear_register_used();
 char *register32_to_64(char *regist);
 char *register16_to_64(char *regist);
 char *register8_to_64(char *regist);
+char *register_to_64(char *regist);
 char *register_available();  
 char *specific_register_available(char *regist); 
 bool check_register_used(char *regist);
@@ -1718,6 +1764,7 @@ struct Scope
   Obj *locals;
   HashMap vars;
   HashMap tags;
+  bool is_dead;
 };
 
 //
@@ -1816,3 +1863,5 @@ int retrieve_output_index_from_letter(char letter);
 char *retrieveVariableNumber(int index);
 char *generate_input_for_output(void);
 char *generate_return_rax(Token *retval);
+
+#endif // CHIBICC_H

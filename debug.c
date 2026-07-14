@@ -479,31 +479,6 @@ static void emit_typedef_dies(DebugTypeInfo *types, DebugQualTypeInfo *quals, in
 }
 
 
-static bool has_float_in_range(Type *ty, int lo, int hi, int offset) {
-  if (ty->kind == TY_STRUCT || ty->kind == TY_UNION) {
-    for (Member *mem = ty->members; mem; mem = mem->next) {
-      int tmpoffset = offset + mem->offset;
-      if (tmpoffset + mem->ty->size <= lo) continue;
-      if (hi <= tmpoffset) break;
-      if (!has_float_in_range(mem->ty, lo, hi, tmpoffset))
-        return false;
-    }
-    return true;
-  }
-  if (ty->kind == TY_ARRAY) {
-    for (int i = 0; i < ty->array_len; i++) {
-      int tmpoffset = offset + ty->base->size * i;
-      if (tmpoffset + ty->base->size <= lo) continue;
-      if (hi <= tmpoffset) break;
-      if (!has_float_in_range(ty->base, lo, hi, tmpoffset))
-        return false;
-    }
-    return true;
-  }
-  if (ty->kind == TY_VECTOR) return true;
-  return ty->kind == TY_FLOAT || ty->kind == TY_DOUBLE;
-}
-
 static void collect_scope_debug_types(Scope *sc, DebugTypeInfo **types, int *next_type_id, DebugQualTypeInfo **quals, int *next_qual_id) {
   for (Scope *child = sc->children; child; child = child->sibling_next)
     collect_scope_debug_types(child, types, next_type_id, quals, next_qual_id);
@@ -961,11 +936,11 @@ void emit_debug_info(Obj *prog) {
             case TY_UNION: {
                 int sz = ty->size;
                 if (sz > 0 && sz <= 16) {
-                    int f1 = has_float_in_range(ty, 0, 8, 0);
+                    int f1 = has_flonum(ty, 0, 8, 0);
                     gp += f1 ? 0 : 1;
                     fp += f1 ? 1 : 0;
                     if (sz > 8) {
-                        int f2 = has_float_in_range(ty, 8, 16, 0);
+                        int f2 = has_flonum(ty, 8, 16, 0);
                         gp += f2 ? 0 : 1;
                         fp += f2 ? 1 : 0;
                     }

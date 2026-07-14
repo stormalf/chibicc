@@ -40,3 +40,5 @@ check_constant_folding.sh
 .mcp.json
 **/*.ll
 **/*.bak
+__pycache__/
+llvm-ir.md

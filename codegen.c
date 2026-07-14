@@ -1258,32 +1258,6 @@ static void cast(Type *from, Type *to)
     println("  %s", cast_table[t1][t2]);
 }
 
-// Returns true if 'ty' is or contains a pointer (recursively)
-static bool has_pointer(Type *ty) {
-  if (!ty)
-    return false;
-
-  switch (ty->kind) {
-  case TY_PTR:
-    return true;
-  case TY_VECTOR:
-  case TY_ARRAY:
-    return has_pointer(ty->base);
-
-  case TY_STRUCT:
-  case TY_UNION: {
-    for (Member *mem = ty->members; mem; mem = mem->next) {
-      if (has_pointer(mem->ty))
-        return true;
-    }
-    return false;
-  }
-
-  default:
-    return false;
-  }
-}
-
 // Structs or unions equal or smaller than 16 bytes are passed
 // using up to two registers.
 //
@@ -1294,54 +1268,8 @@ static bool has_pointer(Type *ty) {
 // If a struct/union is larger than 8 bytes, the same rule is
 // applied to the the next 8 byte chunk.
 //
-// This function returns true if `ty` has only floating-point
-// members in its byte range [lo, hi).
-static bool has_flonum(Type *ty, int lo, int hi, int offset) {
-  if (ty->is_variadic && (ty->kind == TY_STRUCT || ty->kind == TY_UNION))
-    return false;
-    
-  if (ty->kind == TY_STRUCT || ty->kind == TY_UNION) {
-    for (Member *mem = ty->members; mem; mem = mem->next) {
-      int tmpoffset = offset + mem->offset;
-      if ((tmpoffset + mem->ty->size) <= lo)
-        continue;
-      if (hi <= tmpoffset)
-        break;
-      if (!has_flonum(mem->ty, lo, hi, tmpoffset))
-        return false;
-    }
-    return true;
-  }
-
-  if (ty->kind == TY_ARRAY) {
-    for (int i = 0; i < ty->array_len; i++) {
-      int tmpoffset = offset + ty->base->size * i;
-      if ((tmpoffset + ty->base->size) <= lo)
-        continue;
-      if (hi <= tmpoffset)
-        break;
-      if (!has_flonum(ty->base, lo, hi, tmpoffset))
-        return false;
-      }
-    return true;
-  }
-
-  if (ty->kind == TY_VECTOR)
-    return true;
-
-  return ty->kind == TY_FLOAT || ty->kind == TY_DOUBLE;
-}
-
-
-static bool has_flonum1(Type *ty)
-{
-  return has_flonum(ty, 0, 8, 0);
-}
-
-static bool has_flonum2(Type *ty)
-{
-  return has_flonum(ty, 8, 16, 0);
-}
+// The shared has_flonum()/has_flonum1()/has_flonum2() helpers in
+// type.c implement this classification; see there for details.
 
 static bool has_longdouble(Type *ty) {
   if (!ty)
@@ -5288,6 +5216,49 @@ int i;
       }
   }
   error("%s:%d: error: in %s: unexpected error!", __FILE__, __LINE__, __func__);
+}
+
+//convert any register sub-name (64/32/16/8-bit) to its 64-bit name
+char *register_to_64(char *regist) {
+  int len, i;
+
+  // Callee-saved registers are not argument registers, so they are absent from
+  // newargreg*. Map their 32/16/8-bit sub-names to the 64-bit name explicitly;
+  // this is what callee_save() and the clobbers_rbx check rely on.
+  static char *cs64[] = {"%rbx","%rbp","%r12","%r13","%r14","%r15"};
+  static char *cs32[] = {"%ebx","%ebp","%r12d","%r13d","%r14d","%r15d"};
+  static char *cs16[] = {"%bx","%bp","%r12w","%r13w","%r14w","%r15w"};
+  static char *cs8[]  = {"%bl","%bpl","%r12b","%r13b","%r14b","%r15b"};
+  static char **cs[] = {cs64, cs32, cs16, cs8};
+  for (i = 0; i < 4; i++) {
+    len = sizeof(cs64)/sizeof(cs64[0]);
+    for (int j = 0; j < len; j++)
+      if (!strncmp(cs[i][j], regist, strlen(regist)))
+        return cs64[j];
+  }
+
+  len = sizeof(newargreg64)/sizeof(newargreg64[0]);
+  for (i = 0; i < len; ++i)
+    if (!strncmp(newargreg64[i], regist, strlen(regist)))
+      return newargreg64[i];
+
+  len = sizeof(newargreg32)/sizeof(newargreg32[0]);
+  for (i = 0; i < len; ++i)
+    if (!strncmp(newargreg32[i], regist, strlen(regist)))
+      return newargreg64[i];
+
+  len = sizeof(newargreg16)/sizeof(newargreg16[0]);
+  for (i = 0; i < len; ++i)
+    if (!strncmp(newargreg16[i], regist, strlen(regist)))
+      return newargreg64[i];
+
+  len = sizeof(newargreg8)/sizeof(newargreg8[0]);
+  for (i = 0; i < len; ++i)
+    if (!strncmp(newargreg8[i], regist, strlen(regist)))
+      return newargreg64[i];
+
+  // not a GP register (e.g. xmm, segment): leave unchanged
+  return regist;
 }
 
 //convert register 32 to register 64

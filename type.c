@@ -40,11 +40,19 @@ static Type *new_type(TypeKind kind, int64_t size, int align)
 }
 
 Type *new_qualified_type(Type *ty) {
+  // Preserve the alignment requested on the qualified type itself.  The
+  // base type reached through `origin` may carry a smaller alignment
+  // (e.g. an `aligned(N)` attribute applied on top of a typedef), so we
+  // must not let the origin-following below clobber it.
+  int saved_align = ty->align;
+  bool saved_is_aligned = ty->is_aligned;
   if (ty->origin)
     ty = ty->origin;
 
   Type *ret = calloc(1, sizeof(Type));
   *ret = *ty;
+  ret->align = saved_align;
+  ret->is_aligned = saved_is_aligned;
   ret->origin = ty;
   if (ty->size < 0) {
     ret->decl_next = ty->decl_next;
@@ -104,6 +112,9 @@ static bool is_bitfield2(Node *node, int *width) {
       return is_bitfield2(stmt->lhs, width);
   }
   case ND_MEMBER:
+    if (!node->member) {
+      return false;
+    }
     if (!node->member->is_bitfield)
       return false;
     *width = node->member->bit_width;
@@ -517,12 +528,88 @@ bool is_vector(Type *ty) {
   return ty && ty->kind == TY_VECTOR;
 }
 
+// Returns true if `ty` has only floating-point members in its byte range
+// [lo, hi).  Used to classify aggregate arguments for the AMD64 SysV ABI:
+// if the first 8 bytes (has_flonum1) or the next 8 bytes (has_flonum2)
+// contain only floats, they are passed in XMM registers, otherwise in
+// general-purpose registers.
+bool has_flonum(Type *ty, int lo, int hi, int offset) {
+  if (!ty)
+    return false;
+  if (ty->is_variadic && (ty->kind == TY_STRUCT || ty->kind == TY_UNION))
+    return false;
+  if (ty->kind == TY_STRUCT || ty->kind == TY_UNION) {
+    for (Member *mem = ty->members; mem; mem = mem->next) {
+      int tmpoffset = offset + mem->offset;
+      if (tmpoffset + mem->ty->size <= lo)
+        continue;
+      if (hi <= tmpoffset)
+        break;
+      if (!has_flonum(mem->ty, lo, hi, tmpoffset))
+        return false;
+    }
+    return true;
+  }
+  if (ty->kind == TY_ARRAY) {
+    for (int i = 0; i < ty->array_len; i++) {
+      int tmpoffset = offset + ty->base->size * i;
+      if (tmpoffset + ty->base->size <= lo)
+        continue;
+      if (hi <= tmpoffset)
+        break;
+      if (!has_flonum(ty->base, lo, hi, tmpoffset))
+        return false;
+    }
+    return true;
+  }
+  if (is_vector(ty))
+    return true;
+  return ty->kind == TY_FLOAT || ty->kind == TY_DOUBLE;
+}
+
+bool has_flonum1(Type *ty) {
+  return has_flonum(ty, 0, 8, 0);
+}
+
+bool has_flonum2(Type *ty) {
+  return has_flonum(ty, 8, 16, 0);
+}
+
 bool is_int128(Type *ty) {
   return ty && ty->kind == TY_INT128;
 }
 
 bool is_pointer(Type *ty) {
   return ty && ty->kind == TY_PTR;
+}
+
+bool is_sret(Type *ty) {
+  return (ty->kind == TY_STRUCT || ty->kind == TY_UNION) && ty->size > 0;
+}
+
+bool has_pointer(Type *ty) {
+  if (!ty)
+    return false;
+
+  switch (ty->kind) {
+  case TY_PTR:
+    return true;
+  case TY_VECTOR:
+  case TY_ARRAY:
+    return has_pointer(ty->base);
+
+  case TY_STRUCT:
+  case TY_UNION: {
+    for (Member *mem = ty->members; mem; mem = mem->next) {
+      if (has_pointer(mem->ty))
+        return true;
+    }
+    return false;
+  }
+
+  default:
+    return false;
+  }
 }
 
 void add_type(Node *node)
@@ -620,6 +707,20 @@ void add_type(Node *node)
   case ND_LE:
     if (is_vector(node->lhs->ty) && is_vector(node->rhs->ty)) {
       node->ty = node->lhs->ty;
+    } else if (node->lhs->ty->kind == TY_PTR || is_array(node->lhs->ty) ||
+               node->rhs->ty->kind == TY_PTR || is_array(node->rhs->ty)) {
+      // Pointer (or array) comparison: convert the integer operand (e.g. 0 /
+      // NULL) to the pointer type so the backend emits `icmp ptr, null`
+      // instead of truncating the pointer to an integer. The comparison
+      // result is still an int.
+      Type *pty = node->lhs->ty->kind == TY_PTR || is_array(node->lhs->ty)
+                     ? (is_array(node->lhs->ty) ? array_to_pointer(node->lhs->ty) : node->lhs->ty)
+                     : (is_array(node->rhs->ty) ? array_to_pointer(node->rhs->ty) : node->rhs->ty);
+      if (node->lhs->ty->kind != TY_PTR && !is_array(node->lhs->ty))
+        node->lhs = new_cast(node->lhs, pty);
+      if (node->rhs->ty->kind != TY_PTR && !is_array(node->rhs->ty))
+        node->rhs = new_cast(node->rhs, pty);
+      node->ty = ty_int;
     } else {
       usual_arith_conv(&node->lhs, &node->rhs);
       node->ty = ty_int;
@@ -717,6 +818,11 @@ void add_type(Node *node)
     }
     //trying to fix =====ISS-144 compiling util-linux failed with expression returning void is not supported
     //error_tok(node->tok, "%s statement expression returning void is not supported", __FILE__);
+    //If the trailing statement is not an ND_EXPR_STMT (e.g. goto, break,
+    //continue, return), the statement expression never produces a value.
+    //Default its type to void so downstream consumers (e.g. cast/cond
+    //type unification) don't have to deal with a NULL ty.
+    node->ty = ty_void;
     return;
   case ND_LABEL_VAL:
     node->ty = pointer_to(ty_void);
@@ -846,9 +952,16 @@ void add_type(Node *node)
   case ND_LOADHPS:
   case ND_LOADLPS:
   case ND_SHUFPS:
+    node->ty = vector_of(ty_float, 4);
+    return;
   case ND_SHUFFLE:
+    node->ty = (node->builtin_args[0] && node->builtin_args[0]->ty)
+                   ? node->builtin_args[0]->ty : node->ty;
+    return;
   case ND_PMAXSW:
   case ND_PMINSW:
+    node->ty = vector_of(ty_short, 4);
+    return;
   case ND_SHUFPD:
   case ND_CVTDQ2PS:
   case ND_CVTPD2PS:
@@ -874,9 +987,8 @@ void add_type(Node *node)
   case ND_ABORT:
     return;
   case ND_STORELPS:
-  case ND_STOREHPS:    
+  case ND_STOREHPS:
   case ND_LDMXCSR:
-  case ND_STMXCSR:
   case ND_MASKMOVQ:
   case ND_MOVNTQ:
   case ND_MOVNTPS:
@@ -886,6 +998,11 @@ void add_type(Node *node)
   case ND_MOVNTDQ:
   case ND_SLWPCB:
     node->ty = ty_void_ptr;
+    return;
+  case ND_STMXCSR:
+    // No-argument form __builtin_ia32_stmxcsr() returns the MXCSR value as
+    // an unsigned int; the pointer form stores it and yields no value.
+    node->ty = node->lhs ? ty_void_ptr : ty_uint;
     return;
   case ND_CLFLUSH:
   case ND_BUILTIN_FRAME_ADDRESS:
@@ -1346,6 +1463,7 @@ void add_type(Node *node)
   case ND_RORQI:
   case ND_TESTUI:
   case ND_ADDCARRYX_U32:
+  case ND_ADDCARRYX_U64:
   case ND_SBB_U64:
     node->ty = ty_uchar;
     return;
@@ -1359,6 +1477,8 @@ void add_type(Node *node)
   case ND_PBLENDVB256:
   case ND_PSRLDQI256:
   case ND_PSLLDQI256:
+    node->ty = vector_of(ty_long, 4);
+    return;
   case ND_PALIGNR128:
     node->ty = vector_of(ty_uchar, 16);
     return;
@@ -1377,6 +1497,8 @@ void add_type(Node *node)
     node->ty = vector_of(ty_long, 4);
     return;
   case ND_SI256_SI:
+    node->ty = vector_of(ty_long, 4);
+    return;
   case ND_VEXTRACTF128_SI256:
   case ND_PD256_PD:
   case ND_PS256_PS:

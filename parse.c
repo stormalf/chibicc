@@ -107,6 +107,7 @@ static Node *current_switch;
 
 static Obj *builtin_alloca;
 DebugTypedef *debug_typedefs;
+Obj *get_globals(void);
 
 extern Context *ctx;
 
@@ -509,7 +510,7 @@ static Obj *new_gvar(char *name, Type *ty)
   var->next = globals;
   var->is_static = true;
   var->is_definition = true;
-  globals = var;
+  globals = var;  
   return var;
 }
 
@@ -1276,6 +1277,8 @@ static Type *enum_specifier(Token **rest, Token *tok)
   // Read an enum-list.
   int i = 0;
   int val = 0;
+  int enum_min = 0;
+  bool enum_has_negative = false;
   while (!consume_end(rest, tok))
   {
     //tok->next = attribute_list(tok->next, ty, type_attributes);
@@ -1292,6 +1295,11 @@ static Type *enum_specifier(Token **rest, Token *tok)
       val = const_expr(&tok, tok->next);
     tok = attribute_list(tok, ty, type_attributes);
 
+    if (val < enum_min)
+      enum_min = val;
+    if (val < 0)
+      enum_has_negative = true;
+
     Member *mem = calloc(1, sizeof(Member));
     mem->name = name_tok;
     mem->offset = val;
@@ -1303,6 +1311,13 @@ static Type *enum_specifier(Token **rest, Token *tok)
     sc->enum_ty = ty;
     sc->enum_val = val++;
   }
+
+  // When every enumerator is non-negative the enum has no sign bit, so treat
+  // it as unsigned.  This matches GCC, which (with -fshort-enums) selects an
+  // unsigned underlying type, and makes bit-fields of such enums zero-extend
+  // instead of sign-extend (see suite218).
+  if (!enum_has_negative)
+    ty->is_unsigned = true;
 
   if (tag) {
     push_tag_scope(tag, ty);
@@ -2402,8 +2417,20 @@ static void write_buf(char *buf, uint64_t val, int sz)
     unreachable();
 }
 
-static Relocation *
-write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int offset)
+// Returns true if `node` (after stripping casts) is a label-value
+// expression (&&label), i.e. its address is a basic-block label that must
+// be emitted as an LLVM blockaddress rather than a global symbol.
+static bool is_label_val_expr(Node *node)
+{
+  for (; node; node = node->kind == ND_CAST ? node->lhs : NULL)
+  {
+    if (node->kind == ND_LABEL_VAL)
+      return true;
+  }
+  return false;
+}
+
+static Relocation *write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int offset)
 {
   if (ty->kind == TY_ARRAY)
   {
@@ -2491,7 +2518,9 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
             cur = cur->next = calloc(1, sizeof(Relocation));
             cur->offset = (pos + offset);
             cur->label = srel->label;
-            cur->addend = srel->addend;           
+            cur->addend = srel->addend;
+            cur->is_label = srel->is_label;
+            cur->func_name = srel->func_name;
             srel = srel->next;
             pos += ty->base ? ty->base->size : 8;
           } else {
@@ -2565,6 +2594,8 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
           rel->offset = offset;
           rel->label = srel->label;
           rel->addend = srel->addend;
+          rel->is_label = srel->is_label;
+          rel->func_name = srel->func_name;
           cur->next = rel;
           return cur->next;
         }
@@ -2579,6 +2610,14 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
   rel->offset = offset;
   rel->label = label;
   rel->addend = val;
+  // A label value (&&label) refers to a basic-block label inside the
+  // enclosing function; record it so the IR backend can emit blockaddress.
+  if (is_label_val_expr(init->expr) && current_fn)
+  {
+    rel->is_label = true;
+    rel->func_name = current_fn->asmname ? current_fn->asmname
+                                         : current_fn->name;
+  }
   cur->next = rel;
   return cur->next;
 }
@@ -2628,8 +2667,11 @@ static Node *asm_stmt(Token **rest, Token *tok)
   Node *node = new_node(ND_ASM, tok);
   tok = tok->next;
 
-  while (equal(tok, "volatile") || equal(tok, "inline")  || equal(tok, "__inline"))
+  while (equal(tok, "volatile") || equal(tok, "inline")  || equal(tok, "__inline")) {
+    if (equal(tok, "volatile"))
+      node->asm_is_volatile = true;
     tok = tok->next;
+  }
 
   SET_CTX(ctx);   
   tok = skip(tok, "(", ctx);
@@ -2643,14 +2685,22 @@ static Node *asm_stmt(Token **rest, Token *tok)
     if (current_fn)
       current_fn->force_frame_pointer = true;
 
-    node->asm_str = extended_asm(node, rest, tok, scope->locals, current_fn);
-    if (!node->asm_str)
-      error_tok(tok, "%s:%d: in %s: error during extended_asm function null returned!", __FILE__, __LINE__, __func__);
+    if (opt_emit_ir || opt_backend_llvm) {
+      node->asm_str = NULL;
+      parse_llvm_asm(node, rest, tok, scope->locals, current_fn);
+      SET_CTX(ctx);
+      *rest = skip(*rest, ";", ctx);
+    } else {
+      node->asm_str = extended_asm(node, rest, tok, scope->locals, current_fn);
+      if (!node->asm_str)
+        error_tok(tok, "%s:%d: in %s: error during extended_asm function null returned!", __FILE__, __LINE__, __func__);
+    }
     return node;
   }
   node->asm_str = tok->str;
-  SET_CTX(ctx);     
+  SET_CTX(ctx);
   *rest = skip(tok->next, ")", ctx);
+  *rest = skip(*rest, ";", ctx);
   return node;
 }
 
@@ -2669,6 +2719,9 @@ static Node *asm_stmt(Token **rest, Token *tok)
 //      | ident ":" stmt
 //      | "{" compound-stmt
 //      | expr-stmt
+
+
+
 static Node *stmt(Token **rest, Token *tok, bool chained) 
 {
 
@@ -2740,11 +2793,13 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
     if (is_const_expr(node->cond)) {
       if (eval(node->cond)) {
         if (!contains_label(node->els)) {
+          mark_liveness_on_subtree(node->els);          
           *rest = tok;
           return node->then;
         }
       } else {
         if (!contains_label(node->then)) {
+          mark_liveness_on_subtree(node->then);          
           *rest = tok;
           return node->els ? node->els : new_node(ND_NULL_EXPR, tok);
         }
@@ -3048,6 +3103,7 @@ static Node *compound_stmt(Token **rest, Token *tok, Node **last)
   Node head = {0};
   Node *cur = &head;
   enter_scope();
+  node->scope = scope;
 
   //while (!equal(tok, "}"))
   for (; !equal(tok, "}"); add_type(cur)) 
@@ -3115,6 +3171,7 @@ static Node *compound_stmt2(Token **rest, Token *tok)
   Node head = {};
   Node *cur = &head;
   enter_scope();
+  node->scope = scope;
   while (!equal(tok, "}") && !equal(tok, "case") && !equal(tok, "default"))
   {
     VarAttr attr = {};
@@ -3427,7 +3484,7 @@ static int64_t eval2(Node *node, char ***label)
 
     if (node->var->is_static || node->var->is_definition) {
       if (label)
-          *label = &node->var->name;
+          *label = node->var->asmname ? &node->var->asmname : &node->var->name;
       return 0;          
     }
     
@@ -3441,7 +3498,7 @@ static int64_t eval2(Node *node, char ***label)
     if (!label) {
       error_tok(node->tok, "%s:%d: in %s: not a compile-time constant %d", __FILE__, __LINE__, __func__, node->var->ty->kind);
     }
-    *label = &node->var->name;
+    *label = node->var->asmname ? &node->var->asmname : &node->var->name;
     return 0;
   case ND_NUM:
     return node->val;
@@ -8178,6 +8235,7 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   else
   {
     fn = new_gvar(name_str, ty);
+    fn->tok = ty->name_pos;
     fn->funcname = name_str;
     fn->is_function = true;
     fn->is_definition = equal(tok, "{");
@@ -8344,6 +8402,7 @@ static Token *global_declaration(Token *tok, Type *basety, VarAttr *attr)
   }
     
     Obj *var = new_gvar(get_ident(ty->name), ty);
+    var->tok = ty->name_pos;
     if (ty->kind == TY_FUNC)
       var->is_function = true;
     
@@ -9681,8 +9740,10 @@ static Node *constant_folding(int kind, Node *lhs, Node *rhs, Token *tok)
     case ND_SUB: node = new_double(a - b, tok); break;
     case ND_MUL: node = new_double(a * b, tok); break;
     case ND_DIV:
-      if (b == 0.0)
-        return NULL;
+      // Fold even division by zero into the host's IEEE result (NaN/inf with
+      // the platform's sign bit).  This mirrors what the native backend
+      // produces by emitting a real hardware division instruction, so the
+      // embedded constant matches signbit/isnan expectations on x86.
       node = new_double(a / b, tok);
       break;
     default: return NULL;
@@ -9728,4 +9789,9 @@ static Node *constant_folding(int kind, Node *lhs, Node *rhs, Token *tok)
     node->fval = (float)node->fval;
 
   return node;
+}
+
+
+Obj *get_globals(void) {
+    return globals;
 }

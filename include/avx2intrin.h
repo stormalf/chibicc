@@ -107,12 +107,12 @@ _mm256_add_epi8 (__m256i __A, __m256i __B)
   return (__m256i) ((__v32qu)__A + (__v32qu)__B);
 }
 
-// extern __inline __m256i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_add_epi16 (__m256i __A, __m256i __B)
-// {
-//   return (__m256i) ((__v16hu)__A + (__v16hu)__B);
-// }
+extern __inline __m256i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_add_epi16 (__m256i __A, __m256i __B)
+{
+  return (__m256i) ((__v16hu)__A + (__v16hu)__B);
+}
 
 extern __inline __m256i
 __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
@@ -261,26 +261,26 @@ _mm256_cmpgt_epi8 (__m256i __A, __m256i __B)
   return (__m256i) ((__v32qs)__A > (__v32qs)__B);
 }
 
-// extern __inline __m256i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_cmpgt_epi16 (__m256i __A, __m256i __B)
-// {
-//   return (__m256i) ((__v16hi)__A > (__v16hi)__B);
-// }
+extern __inline __m256i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_cmpgt_epi16 (__m256i __A, __m256i __B)
+{
+  return (__m256i) ((__v16hi)__A > (__v16hi)__B);
+}
 
-// extern __inline __m256i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_cmpgt_epi32 (__m256i __A, __m256i __B)
-// {
-//   return (__m256i) ((__v8si)__A > (__v8si)__B);
-// }
+extern __inline __m256i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_cmpgt_epi32 (__m256i __A, __m256i __B)
+{
+  return (__m256i) ((__v8si)__A > (__v8si)__B);
+}
 
-// extern __inline __m256i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_cmpgt_epi64 (__m256i __A, __m256i __B)
-// {
-//   return (__m256i) ((__v4di)__A > (__v4di)__B);
-// }
+extern __inline __m256i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_cmpgt_epi64 (__m256i __A, __m256i __B)
+{
+  return (__m256i) ((__v4di)__A > (__v4di)__B);
+}
 
 // extern __inline __m256i
 // __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))

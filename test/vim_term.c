@@ -8,6 +8,7 @@
 #include <signal.h>
 #include <sys/wait.h>
 #include <sys/select.h>
+#include <sys/time.h>
 #include <sys/ioctl.h>
 #include <errno.h>
 #include <pty.h>
@@ -16,6 +17,43 @@ volatile sig_atomic_t child_exited = 0;
 
 void sigchld_handler(int sig) {
   child_exited = 1;
+}
+
+static long now_ms(void) {
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+  return (long)tv.tv_sec * 1000 + tv.tv_usec / 1000;
+}
+
+// Drain both fds into their buffers, appending whatever is ready.
+static void drain_once(int master, int errfd, char *out_buf, char *err_buf,
+                       int timeout_ms) {
+  fd_set rfds;
+  struct timeval tv;
+  FD_ZERO(&rfds);
+  FD_SET(master, &rfds);
+  FD_SET(errfd, &rfds);
+  int maxfd = (master > errfd) ? master : errfd;
+  tv.tv_sec = timeout_ms / 1000;
+  tv.tv_usec = (timeout_ms % 1000) * 1000;
+  if (select(maxfd + 1, &rfds, NULL, NULL, &tv) <= 0)
+    return;
+  if (FD_ISSET(master, &rfds))
+    read(master, out_buf + strlen(out_buf), 4096 - strlen(out_buf) - 1);
+  if (FD_ISSET(errfd, &rfds))
+    read(errfd, err_buf + strlen(err_buf), 4096 - strlen(err_buf) - 1);
+}
+
+// Keep reading until 'needle' appears on err_buf or the deadline elapses.
+// A NULL needle just drains until the deadline. Robust under heavy load.
+static void read_until(int master, int errfd, char *out_buf, char *err_buf,
+                       const char *needle, int deadline_ms) {
+  long deadline = now_ms() + deadline_ms;
+  while (now_ms() < deadline) {
+    drain_once(master, errfd, out_buf, err_buf, 50);
+    if (needle && strstr(err_buf, needle))
+      return;
+  }
 }
 
 int main() {
@@ -86,31 +124,9 @@ int main() {
 
   char out_buf[4096] = {0};
   char err_buf[4096] = {0};
-  fd_set rfds;
-  struct timeval tv;
 
   // Read initial output (should get prompt on err pipe)
-  int iter = 0;
-  while (iter < 10) {
-    FD_ZERO(&rfds);
-    FD_SET(master, &rfds);
-    FD_SET(err_pipe[0], &rfds);
-    int maxfd = (master > err_pipe[0]) ? master : err_pipe[0];
-    tv.tv_sec = 0;
-    tv.tv_usec = 50000;
-    int ret = select(maxfd + 1, &rfds, NULL, NULL, &tv);
-    if (ret <= 0) break;
-
-    if (FD_ISSET(master, &rfds)) {
-      int n = read(master, out_buf + strlen(out_buf), sizeof(out_buf) - strlen(out_buf) - 1);
-      if (n <= 0) break;
-    }
-    if (FD_ISSET(err_pipe[0], &rfds)) {
-      int n = read(err_pipe[0], err_buf + strlen(err_buf), sizeof(err_buf) - strlen(err_buf) - 1);
-      if (n <= 0) break;
-    }
-    iter++;
-  }
+  read_until(master, err_pipe[0], out_buf, err_buf, "$", 2000);
 
   printf("=== After initial wait ===\n");
   printf("STDOUT: '%s'\n", out_buf);
@@ -118,60 +134,17 @@ int main() {
 
   // Send "XXXX\r" (like Vim's term_sendkeys)
   write(master, "XXXX\r", 5);
-  usleep(50000);
 
-  // Read output (like Vim's term_wait)
-  iter = 0;
-  while (iter < 10) {
-    FD_ZERO(&rfds);
-    FD_SET(master, &rfds);
-    FD_SET(err_pipe[0], &rfds);
-    int maxfd = (master > err_pipe[0]) ? master : err_pipe[0];
-    tv.tv_sec = 0;
-    tv.tv_usec = 50000;
-    int ret = select(maxfd + 1, &rfds, NULL, NULL, &tv);
-    if (ret <= 0) break;
-
-    if (FD_ISSET(master, &rfds)) {
-      int n = read(master, out_buf + strlen(out_buf), sizeof(out_buf) - strlen(out_buf) - 1);
-      if (n <= 0) break;
-    }
-    if (FD_ISSET(err_pipe[0], &rfds)) {
-      int n = read(err_pipe[0], err_buf + strlen(err_buf), sizeof(err_buf) - strlen(err_buf) - 1);
-      if (n <= 0) break;
-    }
-    iter++;
-  }
+  // Read output (like Vim's term_wait), keep polling until the shell has had
+  // time to fork+exec and report the error. Robust under heavy parallel load.
+  read_until(master, err_pipe[0], out_buf, err_buf, "not found", 3000);
 
   printf("=== After sending XXXX ===\n");
   printf("STDOUT: '%s'\n", out_buf);
   printf("STDERR: '%s'\n", err_buf);
 
-  // Wait for the error to propagate (the shell needs time to fork+exec)
-  usleep(200000);
-
-  // Read any additional output
-  iter = 0;
-  while (iter < 10) {
-    FD_ZERO(&rfds);
-    FD_SET(master, &rfds);
-    FD_SET(err_pipe[0], &rfds);
-    int maxfd = (master > err_pipe[0]) ? master : err_pipe[0];
-    tv.tv_sec = 0;
-    tv.tv_usec = 50000;
-    int ret = select(maxfd + 1, &rfds, NULL, NULL, &tv);
-    if (ret <= 0) break;
-
-    if (FD_ISSET(master, &rfds)) {
-      int n = read(master, out_buf + strlen(out_buf), sizeof(out_buf) - strlen(out_buf) - 1);
-      if (n <= 0) break;
-    }
-    if (FD_ISSET(err_pipe[0], &rfds)) {
-      int n = read(err_pipe[0], err_buf + strlen(err_buf), sizeof(err_buf) - strlen(err_buf) - 1);
-      if (n <= 0) break;
-    }
-    iter++;
-  }
+  // Give any trailing output a brief chance to arrive.
+  read_until(master, err_pipe[0], out_buf, err_buf, NULL, 200);
 
   printf("=== After waiting more ===\n");
   printf("STDOUT: '%s'\n", out_buf);

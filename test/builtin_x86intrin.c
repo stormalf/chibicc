@@ -219,7 +219,7 @@ int main(void) {
 
                 unsigned ref = ref_sbb_u32(a, b, bin, &ref_bout);
                 unsigned test = __builtin_ia32_sbb_u32(
-                    a, b, bin, &test_bout);
+                    bin, a, b, &test_bout);
                     printf("a=0x%08x b=0x%08x bin=%u => "
                            "ref=0x%08x bout=%u | "
                            "test=0x%08x bout=%u\n",
@@ -236,10 +236,10 @@ int main(void) {
     printf("PASS: __builtin_ia32_sbb_u32\n");
     int az = test_addcarryx();
     printf("%d\n", az);
-    ASSERT(1, az);
+    ASSERT(0, az);
     int bz = test_sbb_u64();
     printf("%d\n", bz);
-    ASSERT(1, bz);
+    ASSERT(0, bz);
     for (int i = 0; i <= 16; i++) {
     unsigned short x = (i == 16) ? 0 : (1u << i);
     unsigned short r = __builtin_ia32_tzcnt_u16(x);
