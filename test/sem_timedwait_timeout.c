@@ -1,7 +1,7 @@
 #include <errno.h>
 #include <pthread.h>
 #include <semaphore.h>
-#include <stdio.h>
+#include "test.h"
 #include <stdlib.h>
 #include <sys/time.h>
 #include <time.h>
@@ -11,7 +11,7 @@ static sem_t sema;
 
 static void *late_post(void *arg) {
   (void)arg;
-  usleep(1000 * 1000); // 1s
+  usleep(2000 * 1000); // 2s
   sem_post(&sema);
   return NULL;
 }
@@ -22,6 +22,17 @@ int main(void) {
     return 1;
   }
 
+  // Capture the clock *before* spawning the poster so the deadline and the
+  // poster's sleep are measured from the same origin.  Otherwise, under
+  // system overload the main thread may be descheduled between
+  // pthread_create() and gettimeofday(), pushing the deadline past the
+  // poster's post and making sem_timedwait() succeed instead of timing out.
+  struct timeval now;
+  if (gettimeofday(&now, NULL) != 0) {
+    perror("gettimeofday");
+    return 1;
+  }
+
   pthread_t th;
   if (pthread_create(&th, NULL, late_post, NULL) != 0) {
     perror("pthread_create");
@@ -29,12 +40,6 @@ int main(void) {
   }
 
   // Mirror CPython _multiprocessing/semaphore.c deadline math.
-  struct timeval now;
-  if (gettimeofday(&now, NULL) != 0) {
-    perror("gettimeofday");
-    return 1;
-  }
-
   double timeout = 0.5; // 500ms
   long sec = (long)timeout;
   long nsec = (long)(1e9 * (timeout - sec) + 0.5);

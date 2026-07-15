@@ -11,8 +11,8 @@ unsigned int my_clzl(long x);
 
 int main() {
     // Test values
-    long test_values[] = {
-        0,                    // Should return 63 (all bits are zeros)
+        long test_values[] = {
+        1,                    // Defined: single bit at position 0 -> 63 leading zeros
         1,                    // Should return 63 (1 << 63 has one leading zero)
         0xFFFFFFFFFFFFFFFE,   // Should return 0 (64-bit value with a single bit set)
         0x8000000000000000,   // Should return 0 (64-bit value with the highest bit set)

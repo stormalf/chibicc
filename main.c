@@ -16,10 +16,12 @@ typedef enum
 } FileType;
 
 
-Standard current_std = STD_GNU89;  // default like GCC
+Standard current_std = STD_GNU17;
 StringArray include_paths;
 bool opt_fcommon = true;
 bool opt_fbuiltin = true;
+const char *opt_target_triple = TARGET_TRIPLE;
+const char *opt_datalayout = TARGET_DATALAYOUT;
 bool opt_fpic;
 bool opt_fpie;
 bool opt_shared;
@@ -31,6 +33,7 @@ bool opt_mmx;
 bool opt_crc32;
 bool opt_g;
 bool opt_implicit;
+bool opt_no_implicit;
 bool opt_werror;
 bool opt_omit_frame_pointer = false;
 bool opt_optimize = false;
@@ -39,6 +42,14 @@ bool opt_optimize_level2 = false;
 bool opt_optimize_level3 = false;
 bool opt_avx2;
 bool opt_avx;
+bool opt_tbm;
+char *opt_fvisibility;
+bool opt_implicit_warn;
+bool opt_unused_warn = false;
+bool opt_unused_param_warn = false;
+bool opt_ffreestanding;
+bool opt_emit_ir;
+bool opt_backend_llvm;
 
 static FileType opt_x;
 static StringArray opt_include;
@@ -65,6 +76,7 @@ static bool opt_nostdinc;
 static bool opt_nostdlib;
 static bool opt_v;
 static bool opt_fstack_protector;
+bool opt_cf_protection;
 static bool no_omit_frame_pointer_arg;
 
 static StringArray ld_extra_args;
@@ -91,6 +103,85 @@ static char logFile[] = "/tmp/chibicc.log";
 static StringArray input_paths;
 static StringArray tmpfiles;
 
+typedef struct {
+  char *driver_opt;
+  char *llc_opt;
+} LLVMOptMap;
+
+
+
+static LLVMOptMap llvm_opt_map[MAX_LLC_OPT] = {
+  {"-mavx",    "-mattr=+avx"},
+  {"-mavx2",   "-mattr=+avx2"},
+  {"-mmmx",    "-mattr=+mmx"},
+  {"-mfma",    "-mattr=+fma"},
+  {"-mbmi",    "-mattr=+bmi"},
+  {"-mbmi2",   "-mattr=+bmi2"},
+  {"-mf16c",   "-mattr=+f16c"},
+  {"-mpopcnt", "-mattr=+popcnt"},
+  {"-mlzcnt",  "-mattr=+lzcnt"},
+  {"-msse",    "-mattr=+sse"},
+  {"-msse2",   "-mattr=+sse2"},
+  {"-msse3",   "-mattr=+sse3"},
+  {"-mssse3",  "-mattr=+ssse3"},
+  {"-msse4.1", "-mattr=+sse4.1"},
+  {"-msse4.2", "-mattr=+sse4.2"},
+  {"-O0",      "-O0"},
+  {"-O1",      "-O1"},
+  {"-O2",      "-O2"},
+  {"-O3",      "-O3"},
+};
+
+static char *llc_args[128];
+static int llc_arg_cnt;
+
+static void add_llc_option(char *arg)
+{
+  for (int i = 0; i < MAX_LLC_OPT; i++) {
+    if (!llvm_opt_map[i].driver_opt)
+      break;
+    if (!strcmp(arg, llvm_opt_map[i].driver_opt)) {
+      llc_args[llc_arg_cnt++] = llvm_opt_map[i].llc_opt;
+      return;
+    }
+  }
+  
+}
+
+// Select the data layout matching the given target triple.  Unknown
+// architectures fall back to the x86_64 default so the backend keeps working;
+// only the layout string changes, the IR emitter still assumes x86_64
+// semantics (calling convention, GOTPCREL, long-double shape...).
+static const char *datalayout_for_triple(const char *triple)
+{
+  if (!strncmp(triple, "aarch64", 7) || !strncmp(triple, "arm64", 5))
+    return "e-m:e-i8:8:32-i16:16:32-i64:64-i128:128-n32:64-S128";
+  if (!strncmp(triple, "arm", 3) || !strncmp(triple, "thumb", 5))
+    return "e-m:e-p:32:32-i64:64-v128:64:128-a:0:32-n32-S64";
+  if (strstr(triple, "i386") || strstr(triple, "i686") || strstr(triple, "i586"))
+    return "e-m:e-p:32:32-f64:32:64-f80:32-n8:16:32-S128";
+  if (!strncmp(triple, "riscv32", 7))
+    return "e-m:e-p:32:32-i64:64-n32-S128";
+  if (!strncmp(triple, "riscv64", 7))
+    return "e-m:e-p:64:64-i64:64-i128:128-n32:64-S128";
+  if (strstr(triple, "wasm32"))
+    return "e-m:e-p:32:32-i64:64-n32:64-S128";
+  if (strstr(triple, "wasm64"))
+    return "e-m:e-p:64:64-i64:64-n32:64-S128";
+  if (strstr(triple, "powerpc64"))
+    return "e-m:e-i64:64-n32:64";
+  if (strstr(triple, "mips64"))
+    return "e-m:e-i8:8:32-i16:16:32-i64:64-n32:64-S128";
+  if (strstr(triple, "mips"))
+    return "e-m:e-p:32:32-i64:64-n32-S128";
+  return TARGET_DATALAYOUT;
+}
+
+static void apply_target(const char *triple)
+{
+  opt_target_triple = triple;
+  opt_datalayout = datalayout_for_triple(triple);
+}
 
 static void enable_core_dump() {
     struct rlimit rl;
@@ -332,8 +423,19 @@ static void parse_args(int argc, char **argv)
       continue;
     }
 
+    //for backend llvm needs adding each -m argument to llc option 
+    if (startswith(argv[i], "-m") || startswith(argv[i], "-O"))
+      add_llc_option(argv[i]);
+
+
     if (startsWith(argv[i], "-march="))
     {
+      // Forward the requested CPU to llc as -mcpu= so the LLVM backend honors
+      // -march=native / -march=x86-64-v3 etc. (otherwise llc uses the generic
+      // baseline and the IR/cpu attributes are silently ignored).
+      char *cpu = argv[i] + strlen("-march=");
+      llc_args[llc_arg_cnt++] = "-mcpu";
+      llc_args[llc_arg_cnt++] = cpu;
       continue;
     }
 
@@ -375,7 +477,7 @@ static void parse_args(int argc, char **argv)
     }
 
 
-    if (!strcmp(argv[i], "-msse3")) {
+    if (!strcmp(argv[i], "-msse3") || !strcmp(argv[i], "-mssse3")) {
       opt_sse3 = true;
       continue;
     }
@@ -405,6 +507,11 @@ static void parse_args(int argc, char **argv)
       continue;
     }
 
+    if (!strcmp(argv[i], "-mtbm")) {
+      opt_tbm = true;
+      continue;
+    }
+
     if (startsWith(argv[i], "-flto"))
     {
       continue;
@@ -412,6 +519,28 @@ static void parse_args(int argc, char **argv)
 
     if (startsWith(argv[i], "-mtune="))
     {
+      continue;
+    }
+
+    // Override the target triple (e.g. -target aarch64-linux-gnu or
+    // --target=x86_64-apple-darwin).  The value drives both the IR
+    // `target triple` line and the llc -mtriple= option, so the backend is no
+    // longer tied to the compile-time TARGET_TRIPLE default.
+    if (!strcmp(argv[i], "-target") || !strcmp(argv[i], "--target"))
+    {
+      const char *triple = argv[++i];
+      check_parms_length((char *)triple);
+      apply_target(triple);
+      llc_args[llc_arg_cnt++] = "-mtriple";
+      llc_args[llc_arg_cnt++] = (char *)triple;
+      continue;
+    }
+    if (startsWith(argv[i], "--target="))
+    {
+      const char *triple = argv[i] + strlen("--target=");
+      apply_target(triple);
+      llc_args[llc_arg_cnt++] = "-mtriple";
+      llc_args[llc_arg_cnt++] = (char *)triple;
       continue;
     }
 
@@ -691,6 +820,7 @@ static void parse_args(int argc, char **argv)
     if (!strcmp(argv[i], "-fpie") || !strcmp(argv[i], "-fPIE") || !strcmp(argv[i], "-pie"))
     {
       opt_fpie = true;
+      opt_fpic = true;
       strarray_push(&ld_extra_args, "-pie");
       continue;
     }
@@ -729,7 +859,6 @@ static void parse_args(int argc, char **argv)
     if (!strcmp(argv[i], "-static"))
     {
       opt_static = true;
-      strarray_push(&ld_extra_args, "-static");
       continue;
     }
 
@@ -747,32 +876,20 @@ static void parse_args(int argc, char **argv)
       continue;
     }
 
-    if (!strncmp(argv[i], "-L", 2))
-    {
-      //strarray_push(&ld_extra_args, "-L");
-      char *tmp = argv[i];
-      check_parms_length(tmp);
-      strarray_push(&ld_extra_args, tmp);
-      continue;
-    }
-
     if (!strcmp(argv[i], "-L"))
     {
       strarray_push(&ld_extra_args, "-L");
       char *tmp = argv[++i];
       check_parms_length(tmp);
       strarray_push(&ld_extra_args, tmp);
-      // strarray_push(&ld_extra_args, argv[++i]);
       continue;
     }
 
     if (!strncmp(argv[i], "-L", 2))
     {
-      strarray_push(&ld_extra_args, "-L");
-      char *tmp = argv[i] + 2;
+      char *tmp = argv[i];
       check_parms_length(tmp);
       strarray_push(&ld_extra_args, tmp);
-      // strarray_push(&ld_extra_args, argv[i] + 2);
       continue;
     }
 
@@ -807,7 +924,7 @@ static void parse_args(int argc, char **argv)
     }
 
 
-    if (!strcmp(argv[i], "Wl,-rpath,") || !strcmp(argv[i], "-rpath"))
+    if (!strcmp(argv[i], "-Wl,-rpath,") || !strcmp(argv[i], "-rpath"))
     {
       char *tmp = argv[++i];
       check_parms_length(tmp);
@@ -828,12 +945,63 @@ static void parse_args(int argc, char **argv)
       continue;
     } 
 
+    if (!strcmp(argv[i], "-Wimplicit-function-declaration")) {
+      opt_implicit_warn = true;
+      continue;
+    }
+
+    if (!strcmp(argv[i], "-Wno-implicit-function-declaration")) {
+      opt_implicit_warn = false;
+      opt_no_implicit = true;
+      continue;
+    }
+
     if (!strcmp(argv[i], "-Werror")) {
       opt_werror = true;
       continue;
     } 
 
+    if (!strcmp(argv[i], "-Wall")) {
+      opt_unused_warn = true;      
+      continue;
+    }
 
+    if (!strcmp(argv[i], "-Wextra")) {
+      opt_unused_warn = true;     
+      opt_unused_param_warn = true; 
+      continue;
+    }
+
+
+    if (!strcmp(argv[i], "-Wunused-variable")) {
+      opt_unused_warn = true;
+      continue;
+    }
+
+    if (!strcmp(argv[i], "-Wno-unused-variable")) {
+      opt_unused_warn = false;
+      continue;
+    }
+
+    if (!strcmp(argv[i], "-Wunused-parameter")) {
+      opt_unused_param_warn = true;
+      continue;
+    }
+
+    if (!strcmp(argv[i], "-Wno-unused-parameter")) {
+      opt_unused_param_warn = false;
+      continue;
+    }
+
+    if (!strcmp(argv[i], "--emit-ir")) {
+      opt_emit_ir = true;
+      continue;
+    }
+
+    if (!strcmp(argv[i], "--backend-llvm")) {
+      opt_backend_llvm = true;
+      continue;
+    }
 
     //other options -Axxx ignored
     if (startsWith(argv[i], "-A"))
@@ -883,26 +1051,26 @@ static void parse_args(int argc, char **argv)
       continue;
     }
 
-    if (!strcmp(argv[i], "-O")) {      
+    if (!strcmp(argv[i], "-O")) {
       opt_optimize = true;
       opt_optimize_level1 = true;
       continue;
     }
 
-    if (!strcmp(argv[i], "-O1")) {      
+    if (!strcmp(argv[i], "-O1")) {
       opt_optimize = true;
       opt_optimize_level1 = true;
       continue;
     }
 
-    if (!strcmp(argv[i], "-O2")) {      
+    if (!strcmp(argv[i], "-O2")) {
       opt_optimize = true;
       opt_optimize_level1 = true;
       opt_optimize_level2 = true;
       continue;
     }
 
-    if (!strcmp(argv[i], "-O3")) {      
+    if (!strcmp(argv[i], "-O3")) {
       opt_optimize = true;
       opt_optimize_level1 = true;
       opt_optimize_level2 = true;
@@ -919,6 +1087,16 @@ static void parse_args(int argc, char **argv)
 
     if (!strcmp(argv[i], "-fstack-protector") || !strcmp(argv[i], "-fstack-protector-strong") || !strcmp(argv[i], "-fstack-clash-protection") ) {
       opt_fstack_protector = true;
+      continue;
+    }
+
+    if (!strcmp(argv[i], "-fcf-protection")) {
+      opt_cf_protection = true;
+      continue;
+    }
+
+    if (!strncmp(argv[i], "-fvisibility=", 13)) {
+      opt_fvisibility = argv[i] + 13;
       continue;
     }
 
@@ -947,6 +1125,11 @@ static void parse_args(int argc, char **argv)
     continue;
     }
 
+    if (!strcmp(argv[i], "-ffreestanding")) {
+      opt_ffreestanding = true;
+      continue;
+    }
+
     if (!strcmp(argv[i], "-Werror=invalid-command-line-argument")) {
       error("%s:%d: error: in %s: argument not accepted : -Werror=invalid-command-line-argument", __FILE__, __LINE__, __func__); 
     }
@@ -956,14 +1139,10 @@ static void parse_args(int argc, char **argv)
     }
 
     // These options are ignored for now.
-    if (!strcmp(argv[i], "-P") || 
-        !strcmp(argv[i], "-Wall") || 
-        !strcmp(argv[i], "-Wextra") || 
+    if (!strcmp(argv[i], "-P") ||         
         !strcmp(argv[i], "-Wpedantic") || 
         !strcmp(argv[i], "-Wno-switch") || 
         !strcmp(argv[i], "-Wno-clobbered") ||
-        !strcmp(argv[i], "-Wno-unused-variable") ||
-        !strcmp(argv[i], "-Wno-unused-parameter") ||  
         !strcmp(argv[i], "-Wno-sign-compare") ||
         !strcmp(argv[i], "-Wno-format-y2k") || 
         !strcmp(argv[i], "-Wmissing-prototypes") ||
@@ -977,7 +1156,6 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-fcx-limited-range") ||
         !strcmp(argv[i], "-funsafe-math-optimizations") ||  
         !strcmp(argv[i], "-funroll-loops") ||
-        !strcmp(argv[i], "-ffreestanding") ||
         !strcmp(argv[i], "-funwind-tables") ||   
         !strcmp(argv[i], "-fno-stack-protector") ||
         !strcmp(argv[i], "-fno-strict-aliasing") ||
@@ -990,8 +1168,6 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-pedantic") ||
         !strcmp(argv[i], "-pedantic-errors") ||         
         !strcmp(argv[i], "-mno-red-zone") ||
-        !strcmp(argv[i], "-fvisibility=default") ||
-        !strcmp(argv[i], "-fvisibility=hidden") ||
         !strcmp(argv[i], "-Wsign-compare") ||
         !strcmp(argv[i], "-Wundef") ||
         !strcmp(argv[i], "-Wpointer-arith") ||
@@ -1131,16 +1307,17 @@ char *extract_filename(char *tmpl)
 
 char * extract_path(char* tmpl)
 {
-    char* parent = calloc(1, sizeof(char) * 300);
+    char* parent = calloc(1, MAX_PATH_LENGTH);
     int parentLen;
     char* last = strrchr(tmpl, '/');
 
     if (last != NULL) {
 
         parentLen = strlen(tmpl) - strlen(last + 1);
-        if (parentLen > 300)
+        if (parentLen >= MAX_PATH_LENGTH)
           error("%s:%d: error: in %s: no enough size for parent in getParent function %d expected ", __FILE__, __LINE__, __func__, parentLen);
-        strncpy(parent, tmpl, parentLen);
+        memcpy(parent, tmpl, parentLen);
+        parent[parentLen] = '\0';
     } 
 
 return parent;
@@ -1414,8 +1591,18 @@ static void cc1(void)
   }
 
   Obj *prog = parse(tok);
+
+  analyze_liveness(prog);
+
   if (opt_A) {
     print_ast(f, prog);
+    return;
+  }
+
+  if (opt_emit_ir || opt_backend_llvm) {
+    FILE *out = open_file(output_file);
+    emit_ir(prog, out);
+    fclose(out);
     return;
   }
 
@@ -1444,6 +1631,62 @@ static void assemble(char *input, char *output)
     char *cmd[] = {"as", "-c", input, "-o", output, NULL};
     run_subprocess(cmd);
   }
+}
+
+static void assemble_llvm(char *input, char *output)
+{
+  //char *cmd[] = {"llc", "-filetype=obj", input, "-o", output, NULL};
+char *cmd[256];
+if (llc_arg_cnt > 256)
+   error("%s:%d: error: in %s: too much arguments to pass to llc %d", __FILE__, __LINE__, __func__, llc_arg_cnt);
+int n = 0;
+
+cmd[n++] = "llc";
+cmd[n++] = "-filetype=obj";
+
+// Preserve (or omit) the frame-pointer chain (rbp) globally, honoring the
+// driver's -f(no-)omit-frame-pointer handling.  Keeping frame pointers is
+// required for __builtin_frame_address / __builtin_return_address with a
+// nonzero level to walk up the call stack (matching clang/gcc behavior).
+  cmd[n++] = opt_omit_frame_pointer ? "-frame-pointer=none"
+                                    : "-frame-pointer=all";
+
+  // Use the PIC relocation model when -fPIC/-fpic is requested, otherwise
+  // llc defaults to the static model and emits absolute 32-bit relocations
+  // (R_X86_64_32S) which fail when building shared libraries.
+  if (opt_fpic)
+    cmd[n++] = "-relocation-model=pic";
+
+   
+  for (int i = 0; i < llc_arg_cnt; i++)
+  {
+    cmd[n++] = llc_args[i];
+  }
+
+  // `cmpxchg16b` is part of the baseline x86-64 ISA (gcc/clang enable it by
+  // default).  Without it, LLVM lowers 16-byte `cmpxchg` to a libatomic
+  // libcall whose emulation can overflow the stack for large frames (e.g.
+  // tests with many `_Atomic`/16-byte objects).  Enable it for x86 targets
+  // so 16-byte atomics stay lock-free (inline `cmpxchg16b`).
+  bool x86_target = true;
+  for (int i = 0; i + 1 < llc_arg_cnt; i++)
+  {
+    if (!strcmp(llc_args[i], "-mtriple") && llc_args[i + 1])
+    {
+      const char *t = llc_args[i + 1];
+      x86_target = (strstr(t, "x86_64") || strstr(t, "i386") ||
+                    strstr(t, "i686") || strstr(t, "x86"));
+      break;
+    }
+  }
+  if (x86_target)
+    cmd[n++] = "-mattr=+cx16";
+
+  cmd[n++] = input;
+  cmd[n++] = "-o";
+  cmd[n++] = output;
+  cmd[n] = NULL;
+  run_subprocess(cmd);
 }
 
 // static void symbolic_link(char *input, char *output) {
@@ -1536,6 +1779,8 @@ static void run_linker(StringArray *inputs, char *output)
   strarray_push(&arr, "--allow-multiple-definition");
   strarray_push(&arr, "--eh-frame-hdr");
 
+  if (opt_static)
+    strarray_push(&arr, "-static");
 
   //for some projects like POSTGRES it seems that the specific path for the project 
   //should be defined first
@@ -1544,11 +1789,7 @@ static void run_linker(StringArray *inputs, char *output)
     strarray_push(&arr, ld_extra_args.data[i]);
   }
 
-  if (opt_shared) {
-    opt_nostdlib = false;
-  } else if (opt_fstack_protector) {
-      opt_nostdlib = false;
-  }
+
 
   //enabling verbose mode for linker in case of debug
   // if (isDebug)
@@ -1556,10 +1797,8 @@ static void run_linker(StringArray *inputs, char *output)
 
   char *libpath = find_libpath();
   char *gcc_libpath = find_gcc_libpath();
-  if (opt_shared && !opt_fpic)
-    strarray_push(&ld_extra_args, "-fPIC");
-  // Only add startup files if not using -nostdlib
-  if (!opt_nostdlib) {
+  // Only add startup files if not using -nostdlib or -ffreestanding
+  if (!opt_nostdlib && !opt_ffreestanding) {
     if (opt_shared)
     {
       strarray_push(&arr, format("%s/crti.o", libpath));
@@ -1611,16 +1850,16 @@ static void run_linker(StringArray *inputs, char *output)
   {
     strarray_push(&arr, "--start-group");
     strarray_push(&arr, "-lgcc");
-    strarray_push(&arr, "-lgcc_eh");
+    strarray_push(&arr, "-lgcc_eh");	  
     strarray_push(&arr, "-lc");
     strarray_push(&arr, "--end-group");
   }
-  else 
+  else
   {
     strarray_push(&arr, "-lc");
     strarray_push(&arr, "-lgcc");
     strarray_push(&arr, "--as-needed");
-    strarray_push(&arr, "-lgcc_s");
+    strarray_push(&arr, "-lgcc_s");    
     //strarray_push(&arr, "--no-as-needed");
   }
 
@@ -1636,7 +1875,8 @@ static void run_linker(StringArray *inputs, char *output)
       strarray_push(&arr, format("%s/crtend.o", gcc_libpath));
   }
 
-  strarray_push(&arr, format("%s/crtn.o", libpath));
+  if (!opt_ffreestanding)
+    strarray_push(&arr, format("%s/crtn.o", libpath));
   strarray_push(&arr, NULL);
 
   // if (isDebug)
@@ -1749,8 +1989,12 @@ int main(int argc, char **argv)
     char *output;
     if (opt_o)
       output = opt_o;
+    else if (opt_S && opt_backend_llvm)
+      output = replace_extn(input, ".ll");
     else if (opt_S)
       output = replace_extn(input, ".s");
+    else if (opt_emit_ir)
+      output = replace_extn(input, ".ll");
     else
       output = replace_extn(input, ".o");
 
@@ -1805,6 +2049,29 @@ int main(int argc, char **argv)
     if (opt_S)
     {
       run_cc1(argc, argv, input, output);
+      continue;
+    }
+
+    // Emit LLVM IR
+    if (opt_emit_ir || opt_backend_llvm)
+    {
+      if (opt_backend_llvm && !opt_S)
+      {
+        char *tmp = create_tmpfile();
+        run_cc1(argc, argv, input, tmp);
+        if (opt_c)
+          assemble_llvm(tmp, output);
+        else
+        {
+          char *tmp2 = create_tmpfile();
+          assemble_llvm(tmp, tmp2);
+          strarray_push(&ld_args, tmp2);
+        }
+      }
+      else
+      {
+        run_cc1(argc, argv, input, output);
+      }
       continue;
     }
 

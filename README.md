@@ -8,6 +8,18 @@ Using PVS.studio to find some potential issues and fix them.
 
 Trying to work on issues and pull requests done in the original repository.
 
+This project used also AI to produce code.
+
+
+## contributors and inspiring people
+
+Many thanks to Justin Tunney for their great cosmopolitan project that fixed some chibicc bugs and added some features (like int128 management):  https://github.com/jart/cosmopolitan 
+Many thanks to Hsiang-Ying Fu for his great project slimcc that bring some features and bugs and tests to improve this chibicc forked project:  https://github.com/fuhsnn/slimcc 
+Many thanks also to  Freddy Cubas, Arne de Bruijn and Urs Jansen for their contributions and of course of the open source community that brings lots of beautiful projects and resources that are very inspirational!
+And of course many thanks on all contributors on the original project chibicc (that I merged their pull request or suggestion in this project).
+
+
+
 ## usage
 
 ./chibicc --help
@@ -16,6 +28,7 @@ or
 
     chibicc is a C compiler based on chibicc created by Rui Ueyama.
      See original project https://github.com/rui314/chibicc for more information
+     For now only x86-64 architecture is managed in the futue other architecture could be managed using llvm as backend 
      this chibicc supports vector, some extended assembly and int128 
     chibicc usage :
      --help or -h print the help
@@ -75,13 +88,25 @@ or
      -msse2 enabling sse2 support 
      -mno-sse2 disabling sse2 support 
      -msse3 enabling sse3 support 
+     -mssse3 enabling supplemental sse3 support (but chibicc managed it as -msse3)
      -mno-sse3 disabling sse3 support 
      -msse4 enabling sse4 support 
      -mno-sse4 disabling sse4 support 
      -msse4.1 enabling sse4.1 support 
+     -msse4.2 enabling sse4.2 support
      -mcrc32 enabling crc32 instruction support 
      -nostdlib  Do not use the standard system startup files or libraries when linking 
      -nostdinc Do not use the standard system header files when compiling 
+     -ffreestanding  Compile for a freestanding environment; implies no CRT startup files
+     -fvisibility=default|hidden|protected  Set default symbol visibility
+     -Wimplicit-function-declaration  Warn about implicit function declarations
+     -Wno-implicit-function-declaration  Suppress implicit function declaration diagnostics
+     -Wall  Enable all warnings (unused-variable, unused-parameter)
+     -Wextra  Enable all warnings (unused-variable, unused-parameter)
+     -Wunused-variable  Warn about unused local variables
+     -Wno-unused-variable  Suppress unused variable diagnostics
+     -Wunused-parameter  Warn about unused function parameters
+     -Wno-unused-parameter  Suppress unused parameter diagnostics
      -std=c99 generates an error on implicit function declaration (without -std only a warning is emitted) 
      -std=c11 generates an error on implicit function declaration (without -std only a warning is emitted) 
      -mmmx enabling mmx instructions 
@@ -92,11 +117,16 @@ or
      -Werror any warning is sent as an error and stops the compile 
      -fomit-frame-pointer omits frame pointer and uses rsp-relative addressing. Minimal stack usage 
      -f-no-omit-frame-pointer always keeps frame pointer (default) 
+     -fcf-protection enable control flow protection (CET IBT + SHSTK) 
      -g enabling debug symbols 
      -O0 disabling optimization 
      -O or -O1 enabling optimization level 1 
      -O2 enabling optimization level 2 
      -O3 enabling optimization level 3 
+     --emit-ir Emit LLVM IR to the output file instead of assembly 
+     --backend-llvm Use the LLVM backend (llc) to compile LLVM IR to assembly 
+     -march=<cpu> Select the target CPU passed to llc as -mcpu (e.g. -march=native, -march=x86-64-v3) 
+     -target <triple> or --target=<triple> Override the target triple (e.g. aarch64-linux-gnu). Defaults to x86_64-pc-linux-gnu 
      chibicc [ -o <path> ] <file>
 
 ## compile
@@ -238,14 +268,10 @@ it means that if you don't use the ld linker or ld.lld probably some options sho
 List of options ignored :
   
     "-P"
-    "-Wall"
-    "-Wextra"
     "-Wpedantic"
     "-Wno-switch"
     "-Wno-clobbered"
     "-Wduplicated-cond" 
-    "-Wno-unused-variable"    
-    "-Wno-unused-parameter"
     "-Wno-sign-compare"
     "-Wno-format-y2k"
     "-Wno-uninitialized"
@@ -259,7 +285,6 @@ List of options ignored :
     "-fcx-limited-range"
     "-funsafe-math-optimizations"
     "-funroll-loops"
-    "-ffreestanding"
     "-funwind-tables"
     "-fno-stack-protector"
     "-fno-strict-aliasing"
@@ -271,10 +296,7 @@ List of options ignored :
     "-Bsymbolic"
     "-pedantic"
     "-pedantic-errors"
-    "-nostdinc"
     "-mno-red-zone"
-    "-fvisibility=default"
-    "-fvisibility=hidden"
     "-Wsign-compare"
     "-Wundef"
     "-Wpointer-arith"
@@ -287,9 +309,6 @@ List of options ignored :
     "-Wlogical-op"
     "-Wshadow=local"
     "-Wmultistatement-macros"
-    "-fstack-protector"
-    "-fstack-protector-strong"
-    "-fstack-clash-protection"
     "-fdiagnostics-show-option"
     "-fasynchronous-unwind-tables"
     "-fexceptions"
@@ -298,8 +317,6 @@ List of options ignored :
     "-w"
     "--param=ssp-buffer-size=4"
     "-fno-lto"
-    "-fprofile-arcs"
-    "-ftest-coverage"
     "-ffat-lto-objects"
     "-static-libstdc++"
     "-static-libgcc"
@@ -375,6 +392,10 @@ openssh-portable : https://github.com/openssh/openssh-portable.git
     autoreconf -fi
     CC=chibicc ./configure
     make
+    make tests
+    unit tests passed
+    echo all tests passed
+    all tests passed
 
 
 luajit: https://github.com/LuaJIT/LuaJIT.git 
@@ -516,7 +537,7 @@ openssl : https://github.com/openssl/openssl.git
 
 postgres: https://github.com/postgres/postgres.git  (in case of bad network use git clone --filter=blob:none --depth=1 https://github.com/postgres/postgres.git --branch master)
 
-    CC=chibicc  CFLAGS="-g -std=c11" ./configure --host x86_64-linux-gnu 
+    CC=chibicc  CFLAGS="-g -std=c11 -mmmx -mavx2" ./configure --host x86_64-linux-gnu 
     make
     make check    
     # (test process exited with exit code 2)
@@ -556,19 +577,21 @@ cpython: git clone https://github.com/python/cpython.git
     - some extended assembly syntax taken in account (only when on macro body they are failing)
     - adding basic support on int128 (probably some operations are still not supported)
     - adding vector management and scalar promotion to vector    
-    - alignment attributes supported (like GNUC level 4)
+    - alignment attributes supported (like GNUC level 5)
     - some basic optimization
     - some basic debug information (dwarf information)
     - adding support on __m256 avx2
+    - adding support __Float32
+    - adding --emit-ir to generate llvm IR
+    - adding --backend-llvm to use llc as backend to generate executable
+    
 
  
 ## TODO
 
-- trying to pass GNUC from 4 to higher compatibility level
+- trying to pass GNUC from 5 to higher compatibility level
 - trying to compile other C projects from source to see what is missing or which bug we have with chibicc.
-- trying to fix issue with postgres tests
 - trying to rewrite extended assembly to be more robust
-- trying to improve chibicc by reporting tests from slimcc to see what is missing/need to be fixed.
 
 
 ## issues and pull requests fixed
@@ -580,7 +603,7 @@ cpython: git clone https://github.com/python/cpython.git
 
     on WSL all tests that use udp > 1500 failed. Need to change the value to 1500 or less to pass. It seems a known issue on WSL environment.
     
-    cpython : compile OK, some tests KO     
+    cpython : compile OK, some tests KO        
            
 
 ## projects compiled successfully with chibicc
@@ -588,8 +611,7 @@ cpython: git clone https://github.com/python/cpython.git
     util-linux : compile OK, tests OK    
     nginx: compile OK
     zlib: compile OK, tests OK
-    nmap: compile OK, tests OK    
-    openssh-portable : compile OK, tests OK
+    nmap: compile OK, tests OK        
     vlc: compile OK  
     memcached : compile OK, tests OK      
     php-src : compile OK, tests OK    
@@ -598,7 +620,23 @@ cpython: git clone https://github.com/python/cpython.git
     sqlite: compile OK, tests OK
     git : compile OK, tests OK
     vim : compile OK, tests OK 
+    openssh-portable : compile OK, tests OK
     
+## projects compiled successfully with chibicc and --backend-llvm
+
+    LLVM=1 make xxxxxx
+
+    util-linux : compile OK, tests OK    
+    nginx: compile OK
+    zlib: compile OK, tests OK
+    nmap: compile OK, tests OK           
+    memcached : compile OK, tests OK 
+    vlc: compile OK
+    sqlite: compile OK, tests OK  
+    postgres execution : compile OK, tests OK
+    openssh-portable : compile OK, tests OK  
+    
+
 
 ## debug
 
@@ -629,7 +667,7 @@ Example of diagram generated with -dotfile parameter :
 ## release notes
 
 
-1.0.25    Adding promotion to int on variadic argument. Fixing issue with mistake on help on -fomit-frame-pointer. Fixing issue with assign_lvar_offsets that skipped some offsets already assigned by extended assembly and caused failure on some cpython tests. Adding --eh-frame-hdr needed by glibc's backtrace. Disabling tail call optimization when volatile local variable is found. Reporting commit 4f4c864c3f6872d3c7c53c66fe2db1bf8143bb02 from slimcc (about variable scope instead of flat list). 
+1.0.25    Adding promotion to int on variadic argument. Fixing issue with mistake on help on -fomit-frame-pointer. Fixing issue with assign_lvar_offsets that skipped some offsets already assigned by extended assembly and caused failure on some cpython tests. Adding --eh-frame-hdr needed by glibc's backtrace. Disabling tail call optimization when volatile local variable is found. Reporting commit 4f4c864c3f6872d3c7c53c66fe2db1bf8143bb02 from slimcc (about variable scope instead of flat list). Fixing ISS-209 extended assembly issue found during openssh-portable compile. Adding builtin missing when __OPTIMIZE__ is enabled. Updating __GNUC__ from 4 to 5 and implementing __Float32 support. Supporting -ffreestanding, -fvisibility=hidden, -Wno-implicit-function-declaration. Managing pragma visibility found during vlc compile. Managing attributes used, returns_twice, noinline. Tracking used and unused local variables and managing -Wunused-variable and -Wno-unused-variable flags. Tracking unused parameters and managing corresponding flag including -Wall and -Wextra. Implementing --emit-ir and --backend-llvm. Tracking global unused variables and ignoring header files and .map files. For now llvm uses lots of x86 stuff (not portable yet).
 
 
 

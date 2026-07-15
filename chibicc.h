@@ -1,5 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 #define _GNU_SOURCE
+#ifndef CHIBICC_H
+#define CHIBICC_H
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
@@ -48,11 +50,21 @@
 #endif
 
 #define PRODUCT "chibicc"
-#define VERSION "1.0.25"
+#define VERSION "1.0.25_dev"
 #define MAXLEN 1001
+#define MAX_PATH_LENGTH 500
 #define DEFAULT_TARGET_MACHINE "x86_64-linux-gnu"
+#define TARGET_DATALAYOUT "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-f80:128-n8:16:32:64-S128"
+#define TARGET_TRIPLE "x86_64-pc-linux-gnu"
+
+// Runtime target description.  Defaults to the x86_64 description above but can
+// be overridden per-invocation via -target/--target= so the backend is not tied
+// to a compile-time triple/data-layout.
+extern const char *opt_target_triple;
+extern const char *opt_datalayout;
 #define MAX_BUILTIN_ARGS 8
 #define MAX_WEAK 20
+#define MAX_LLC_OPT  24
 
 #define STR_HELPER(x) #x
 #define STR(x) STR_HELPER(x)
@@ -60,6 +72,7 @@
 
 #define HELP PRODUCT " is a C compiler based on " PRODUCT " created by Rui Ueyama.\n \
 See original project https://github.com/rui314/chibicc for more information\n \
+For now only x86-64 architecture is managed in the futue other architecture could be managed using llvm as backend \n \
 this " PRODUCT " supports vector, some extended assembly and int128 \n"
 
 #define USAGE PRODUCT " usage :\n \
@@ -119,14 +132,26 @@ this " PRODUCT " supports vector, some extended assembly and int128 \n"
 -mno-sse disabling sse support \n \
 -msse2 enabling sse2 support \n \
 -mno-sse2 disabling sse2 support \n \
--msse3 enabling sse3 support \n\
+-msse3 enabling sse3 support \n \
+-mssse3 enabling supplemental sse3 support (but chibicc managed it as -msse3) \n \
 -mno-sse3 disabling sse3 support \n \
 -msse4 enabling sse4 support \n \
 -mno-sse4 disabling sse4 support \n \
 -msse4.1 enabling sse4.1 support \n \
+-msse4.2 enabling sse4.2 support \n \
 -mcrc32 enabling crc32 instruction support \n \
 -nostdlib  Do not use the standard system startup files or libraries when linking \n \
 -nostdinc Do not use the standard system header files when compiling \n \
+-ffreestanding  Compile for a freestanding environment; implies no CRT startup files\n \
+-fvisibility=default|hidden|protected  Set default symbol visibility\n \
+-Wimplicit-function-declaration  Warn about implicit function declarations\n \
+-Wno-implicit-function-declaration  Suppress implicit function declaration diagnostics\n \
+-Wall  Enable all warnings (unused-variable)\n \
+-Wextra  Enable all warnings (unused-variable, unused-parameter)\n \
+-Wunused-variable  Warn about unused local variables\n \
+-Wno-unused-variable  Suppress unused variable diagnostics\n \
+-Wunused-parameter  Warn about unused function parameters\n \
+-Wno-unused-parameter  Suppress unused parameter diagnostics\n \
 -std=c99 generates an error on implicit function declaration (without -std only a warning is emitted) \n \
 -std=c11 generates an error on implicit function declaration (without -std only a warning is emitted) \n \
 -mmmx enabling mmx instructions \n \
@@ -137,12 +162,17 @@ this " PRODUCT " supports vector, some extended assembly and int128 \n"
 -Werror any warning is sent as an error and stops the compile \n \
 -fomit-frame-pointer omits frame pointer and uses rsp-relative addressing. Minimal stack usage \n \
 -f-no-omit-frame-pointer always keeps frame pointer (default) \n \
+-fcf-protection enable control flow protection (CET IBT + SHSTK) \n \
 -g enabling debug symbols \n \
 -O0 disabling optimization \n \
 -O or -O1 enabling optimization level 1 \n \
--O2 enabling optimization level 2 \n \
--O3 enabling optimization level 3 \n \
-chibicc [ -o <path> ] <file>\n"
+ -O2 enabling optimization level 2 \n \
+ -O3 enabling optimization level 3 \n \
+  --emit-ir Emit LLVM IR to the output file instead of assembly \n \
+  --backend-llvm Use the LLVM backend (llc) to compile LLVM IR to assembly \n \
+  -march=<cpu> Select the target CPU passed to llc as -mcpu (e.g. -march=native, -march=x86-64-v3) \n \
+  -target <triple> or --target=<triple> Override the target triple (e.g. aarch64-linux-gnu). Defaults to x86_64-pc-linux-gnu \n \
+  chibicc [ -o <path> ] <file>\n"
 
 typedef struct Type Type;
 typedef struct Node Node;
@@ -208,7 +238,10 @@ typedef struct
   // For #line directive
   char *display_name;
   int line_delta;
+  bool is_system_header;
 } File;
+
+bool is_system_include_path(char *path);
 
 // Token type
 typedef struct Token Token;
@@ -228,6 +261,7 @@ struct Token
   int line_no;      // Line number
   int line_delta;   // Line number
   int pack_align;   // Active #pragma pack value (0 means default)
+  char *pragma_visibility; // Active #pragma GCC visibility (NULL means no pragma override)
   bool at_bol;      // True if this token is at beginning of line
   bool has_space;   // True if this token follows a space character
   Hideset *hideset; // For macro expansion
@@ -238,6 +272,7 @@ noreturn void error(char *fmt, ...) __attribute__((format(printf, 1, 2)));
 noreturn void error_at(char *loc, char *fmt, ...) __attribute__((format(printf, 2, 3)));
 noreturn void error_tok(Token *tok, char *fmt, ...) __attribute__((format(printf, 2, 3)));
 void warn_tok(Token *tok, char *fmt, ...) __attribute__((format(printf, 2, 3)));
+void warn(char *fmt, ...) __attribute__((format(printf, 1, 2)));
 bool equal(Token *tok, const char *op);
 Token *skip(Token *tok, char *op, Context *ctx);
 bool consume(Token **rest, Token *tok, char *str);
@@ -293,6 +328,23 @@ struct Initializer
   Member *mem;
 };
 
+
+typedef struct BasicBlock BasicBlock;
+typedef struct {
+  BasicBlock **data;
+  int len;
+  int cap;
+} BBArray;
+
+struct BasicBlock {
+  BasicBlock *chain;
+  BasicBlock *chain_prev;
+  int id;
+  char *label;
+  BBArray prev;
+  BBArray next;
+  bool has_stmt;
+};
 
 // Variable or function
 typedef struct Obj Obj;
@@ -375,6 +427,17 @@ struct Obj
   bool force_frame_pointer;
   Type *vla_ty;
   bool is_returned_twice;
+  bool is_noinline;
+  bool is_used;
+
+  // Liveness analysis (set by analyze_liveness in liveness.c)
+  int first_use;   // Traversal index of first reference, -1 if unused
+  int last_use;    // Traversal index of last reference, -1 if unused
+  bool is_read;    // Variable is read at least once
+  bool is_written; // Variable is written at least once (lhs of assignment)
+
+  // Basic blocks (built by build_bbs in liveness.c)
+  BasicBlock *bbs;
 };
 
 // Global variable can be initialized either by a constant expression
@@ -387,6 +450,11 @@ struct Relocation
   int offset;
   char **label;
   long addend;
+  // True when `label` refers to a basic-block label (from &&label) rather
+  // than a global/function symbol.  Such relocations must be emitted as an
+  // LLVM blockaddress and require the enclosing function's name.
+  bool is_label;
+  char *func_name;
 };
 
 // AST node
@@ -641,7 +709,12 @@ typedef enum
   ND_MOVNTQ,
   ND_MOVNTPS,
   ND_SHUFPD,
+  ND_ROUNDPD,
+  ND_ROUNDSD,
+  ND_ROUNDSS,
+  ND_ROUNDPS,
   ND_VECEXTV4SI,
+  ND_VECEXTV4SF,
   ND_ADDSD,
   ND_SUBSD,
   ND_MULSD,
@@ -715,7 +788,8 @@ typedef enum
   ND_LOADLPD,
   ND_MOVMSKPD,
   ND_PACKSSWB128,
-  ND_PACKSSDW128,
+ 
+  
   ND_PACKUSWB128,
   ND_PUNPCKHBW128,
   ND_PUNPCKHWD128,
@@ -825,8 +899,18 @@ typedef enum
   ND_PTESTC128,
   ND_PTESTNZC128,
   ND_PBLENDVB128,
+  ND_PBLENDW128,
   ND_BLENDVPS,
   ND_BLENDVPD,
+  ND_BLENDPS,
+  ND_BLENDPD,
+  ND_BLENDPS256,
+  ND_BLENDPD256,
+  ND_DPPS,
+  ND_DPPD,
+  ND_INSERTPS128,
+  ND_MPSADBW128,
+  ND_MPSADBW256,
   ND_PMINSB128,
   ND_PMAXSB128,
   ND_PMINUW128,
@@ -849,6 +933,7 @@ typedef enum
   ND_PMOVZXBW128,
   ND_PMOVZXDQ128,
   ND_PMOVZXWQ128,
+  ND_PACKSSDW128,
   ND_PACKUSDW128,
   ND_MOVNTDQA,
   ND_CRC32QI,
@@ -856,6 +941,9 @@ typedef enum
   ND_CRC32SI,
   ND_CRC32DI,
   ND_PSHUFD,
+  ND_PSHUFHW,
+  ND_PSHUFLW,
+  ND_PSHUFW,
   ND_FETCHNAND,       
   ND_ADD_AND_FETCH,   
   ND_SUB_AND_FETCH,   
@@ -909,6 +997,7 @@ typedef enum
   ND_ADDCARRYX_U64,
   ND_TZCNT_U16,
   ND_BEXTR_U32,
+  ND_BEXTR_U64,
   ND_ADDFETCH,  
   ND_ORFETCH,
   ND_ANDFETCH,
@@ -924,12 +1013,16 @@ typedef enum
   ND_PCMPGTB256_MASK,
   ND_PSHUFB256,
   ND_PBLENDVB256,
+  ND_PSRLDQI128,
+  ND_PSLLDQI128,
   ND_PSRLDQI256,
   ND_PSLLDQI256,
   ND_VINSERTF128_SI256,    
   ND_SI256_SI,
   ND_SI_SI256,
+  ND_PALIGNR128,
   ND_PALIGNR256,
+  ND_PALIGNR,
   ND_VPERM2I128_SI256,
   ND_PBLENDD256,
   ND_VEXTRACTF128_SI256,
@@ -946,6 +1039,78 @@ typedef enum
   ND_PSLLDI256,
   ND_PSRLDI256,
   ND_PSRADI256,
+  ND_VECEXTV4HI,
+  ND_VECSETV4HI,
+  ND_VECSETV8HI,
+  ND_VECSETV16QI,
+  ND_VECSETV4SI,
+  ND_VECSETV2DI,
+  ND_PCMPISTRM128,
+  ND_PCMPISTRI128,
+  ND_PCMPISTRIA128,
+  ND_PCMPISTRIC128,
+  ND_PCMPISTRIO128,
+  ND_PCMPISTRIS128,
+  ND_PCMPISTRIZ128,
+  ND_PCMPESTRM128,
+  ND_PCMPESTRI128,
+  ND_PCMPESTRIA128,
+  ND_PCMPESTRIC128,
+  ND_PCMPESTRIO128,
+  ND_PCMPESTRIS128,
+  ND_PCMPESTRIZ128,
+  ND_PCLMULQDQ128,
+  ND_DPPS256,
+  ND_SHUFPD256,
+  ND_SHUFPS256,
+  ND_CMPPD,
+  ND_CMPPS,
+  ND_CMPPD256,
+  ND_CMPPS256,
+  ND_CMPSD,
+  ND_CMPSS,
+  ND_VEXTRACTF128_PD256,
+  ND_VEXTRACTF128_PS256,
+  ND_VINSERTF128_PD256,
+  ND_VINSERTF128_PS256,
+  ND_VPERM2F128_PD256,
+  ND_VPERM2F128_PS256,
+  ND_VPERM2F128_SI256,
+  ND_VPERMILPD,
+  ND_VPERMILPS,
+  ND_VPERMILPD256,
+  ND_VPERMILPS256,
+  ND_EXP2PD_MASK,
+  ND_EXP2PS_MASK,
+  ND_RCP28PD_MASK,
+  ND_RCP28PS_MASK,
+  ND_RCP28SD_ROUND,
+  ND_RCP28SS_ROUND,
+  ND_RSQRT28PD_MASK,
+  ND_RSQRT28PS_MASK,
+  ND_RSQRT28SD_ROUND,
+  ND_RSQRT28SS_ROUND,
+  ND_GATHERPFDPD,
+  ND_GATHERPFDPS,
+  ND_GATHERPFQPD,
+  ND_GATHERPFQPS,
+  ND_SCATTERPFDPD,
+  ND_SCATTERPFDPS,
+  ND_SCATTERPFQPD,
+  ND_SCATTERPFQPS,
+  ND_VPSHLD_V32HI,
+  ND_VPSHLD_V16SI,
+  ND_VPSHLD_V8DI,
+  ND_VPSHLD_V16SI_MASK,
+  ND_VPSHLD_V8DI_MASK,
+  ND_VPSHRD_V32HI,
+  ND_VPSHRD_V16SI,
+  ND_VPSHRD_V8DI,
+  ND_VPSHRD_V16SI_MASK,
+  ND_VPSHRD_V8DI_MASK,
+  ND_XABORT,
+  ND_VPCLMULQDQ_V4DI,
+  ND_VPCLMULQDQ_V8DI,
 } NodeKind;
 
 // AST node type
@@ -1038,6 +1203,19 @@ Node
   bool is_scalar_promoted;  
   bool is_tail;
   bool clobbers_rbx;
+
+  // For extended asm with --backend-llvm (LLVM path)
+  char *asm_template;
+  struct AsmOperand *asm_outputs;
+  struct AsmOperand *asm_inputs;
+  char **asm_clobbers;
+  int asm_noutputs;
+  int asm_ninputs;
+  int asm_nclobbers;
+  bool asm_is_volatile;
+
+  // Scope created for this block (ND_BLOCK only)
+  Scope *scope;
 };
 
 typedef struct
@@ -1048,16 +1226,26 @@ typedef struct
   int enum_val;
 } VarScope;
 
+typedef struct AsmOperand {
+  char *constraint;
+  Node *expr;
+  int match_index;
+  char *name;
+} AsmOperand;
+
 Node *new_cast(Node *expr, Type *ty);
 int64_t  const_expr(Token **rest, Token *tok);
 Node *conditional(Token **rest, Token *tok);
+void parse_llvm_asm(Node *node, Token **rest, Token *tok, Obj *locals, Obj *current_fn);
 Obj *parse(Token *tok);
 VarScope *find_var(Token *tok);
 Obj *find_func(char *name);
 //from COSMOPOLITAN adding function ConsumeStringLiteral
 char *ConsumeStringLiteral(Token **rest, Token *tok) ;
 int64_t  eval(Node *node);
+void mark_liveness_on_subtree(Node *node);
 bool equal_tok(Token *a, Token *b);
+Obj *get_globals(void);
 
 extern bool opt_fbuiltin;
 //
@@ -1238,8 +1426,13 @@ bool is_array(Type *ty);
 Type *new_qualified_type(Type *ty);
 Type *unqual(Type *ty);
 bool is_vector(Type *ty);
+bool has_flonum(Type *ty, int lo, int hi, int offset);
+bool has_flonum1(Type *ty);
+bool has_flonum2(Type *ty);
 bool is_int128(Type *ty);
 bool is_pointer(Type *ty);
+bool is_sret(Type *ty);
+bool has_pointer(Type *ty);
 bool is_const_expr(Node *node);
 bool contains_label(Node *node);
 
@@ -1262,11 +1455,19 @@ void print_debug_tokens(char *currentfilename, char *function, Token *tok);
 void emit_debug_info(Obj *prog);
 
 //
+// liveness.c
+//
+
+void analyze_liveness(Obj *prog);
+void build_bbs(Obj *prog);
+
+//
 // codegen.c
 //
 
 void gen_expr(Node *node);
 void codegen(Obj *prog, FILE *out);
+void emit_ir(Obj *prog, FILE *out);
 int align_to(int n, int align);
 int count(void);
 int push_tmp(void);
@@ -1293,6 +1494,7 @@ void clear_register_used();
 char *register32_to_64(char *regist);
 char *register16_to_64(char *regist);
 char *register8_to_64(char *regist);
+char *register_to_64(char *regist);
 char *register_available();  
 char *specific_register_available(char *regist); 
 bool check_register_used(char *regist);
@@ -1354,6 +1556,7 @@ void gen_builtin_nan(Node *node);
 void gen_builtin_nanl(Node *node);
 void gen_tzcnt_u16(Node *node);
 void gen_bextr_u32(Node *node);
+void gen_bextr_u64(Node *node);
 void gen_binop1(Node *node, const char *insn);
 void gen_binop2(Node *node, const char *insn);
 void gen_nothing(Node *node);
@@ -1428,10 +1631,20 @@ void gen_signbit(Node *node);
 void gen_isunordered(Node *node);
 void gen_vec_init_v2si(Node *node);
 void gen_vec_ext(Node *node);
+void gen_vec_ext_v4sf(Node *node);
+void gen_vec_set_v4hi(Node *node);
+void gen_vec_set_v8hi(Node *node);
+void gen_vec_set_v16qi(Node *node);
+void gen_vec_set_v4si(Node *node);
+void gen_vec_set_v2di(Node *node);
 void gen_psubusb256(Node *node);
 void gen_vec_init_binop(Node *node, const char *insn);
 void gen_pshufd(Node *node);
+void gen_pshufhw(Node *node);
+void gen_pshuflw(Node *node);
+void gen_pshufw(Node *node);
 void gen_shuf_binop(Node *node, const char *insn);
+void gen_round(Node *node, const char *insn);
 void gen_psll_binop(Node *node, const char *insn);
 void gen_shuffle(Node *node, const char *insn);
 void gen_maskmovq(Node *node);
@@ -1445,10 +1658,13 @@ void gen_sse_blendvpx(Node *node, const char *insn);
 void gen_pcmpgtb256_mask(Node *node);
 void gen_pshufb256(Node *node);
 void gen_avx2_256(Node *node, const char *insn);
+void gen_sse2_dqshift(Node *node, const char *insn);
 void gen_vinsertf128_si256(Node *node);
 void gen_avx2_permdi256(Node *node);
 void gen_avx2_psll_binop(Node *node, const char *insn);
+void gen_palignr128(Node *node);
 void gen_avx2_palignr256(Node *node);
+void gen_palignr(Node *node);
 void gen_vperm2i128_si256(Node *node);
 void gen_pblendd256(Node *node);
 void gen_pmulhuw256(Node *node);
@@ -1464,6 +1680,41 @@ void gen_mmx_binop1(Node *node, const char *insn);
 void gen_sse_testz(Node *node);
 void gen_sse_testc(Node *node);
 void gen_sse_testnzc(Node *node);
+void gen_blendps(Node *node, bool is256);
+void gen_blendpd(Node *node, bool is256);
+void gen_dpps(Node *node);
+void gen_dppd(Node *node);
+void gen_insertps128(Node *node);
+void gen_mpsadbw128(Node *node);
+void gen_mpsadbw256(Node *node);
+void gen_pcmpistrm128(Node *node);
+void gen_pcmpistri128(Node *node);
+void gen_pcmpestrm128(Node *node);
+void gen_pcmpestri128(Node *node);
+void gen_pclmulqdq128(Node *node);
+void gen_pcmpi_flag(Node *node, const char *flag_insn, bool is_explicit);
+void gen_dpps256(Node *node);
+void gen_shufpd256(Node *node);
+void gen_shufps256(Node *node);
+void gen_avx_cmp(Node *node, const char *insn, bool is256);
+void gen_vextractf128_pd256(Node *node);
+void gen_vextractf128_ps256(Node *node);
+void gen_vinsertf128_pd256(Node *node);
+void gen_vinsertf128_ps256(Node *node);
+void gen_vperm2f128_si256(Node *node);
+void gen_vperm2f128_pd256(Node *node);
+void gen_vperm2f128_ps256(Node *node);
+void gen_vpermilpd(Node *node);
+void gen_vpermilps(Node *node);
+void gen_vpermilpd256(Node *node);
+void gen_vpermilps256(Node *node);
+void gen_xabort(Node *node);
+void gen_vpclmulqdq_v4di(Node *node);
+void gen_avx512er_first(Node *node);
+void gen_avx512pf_void(Node *node);
+void gen_vbmi2_3(Node *node);
+void gen_vbmi2_5(Node *node);
+void gen_pblendw128(Node *node);
 
 //
 // unicode.c
@@ -1513,6 +1764,7 @@ struct Scope
   Obj *locals;
   HashMap vars;
   HashMap tags;
+  bool is_dead;
 };
 
 //
@@ -1577,6 +1829,15 @@ extern bool opt_optimize_level3;
 extern bool opt_omit_frame_pointer;
 extern bool opt_avx2;
 extern bool opt_avx;
+extern bool opt_tbm;
+extern char *opt_fvisibility;
+extern bool opt_implicit_warn;
+extern bool opt_no_implicit;
+extern bool opt_unused_warn;
+extern bool opt_unused_param_warn;
+extern bool opt_ffreestanding;
+extern bool opt_emit_ir;
+extern bool opt_backend_llvm;
 
 //
 // extended_asm.c
@@ -1602,3 +1863,7 @@ int retrieve_output_index_from_letter(char letter);
 char *retrieveVariableNumber(int index);
 char *generate_input_for_output(void);
 char *generate_return_rax(Token *retval);
+
+
+
+#endif // CHIBICC_H

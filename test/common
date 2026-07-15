@@ -136,18 +136,18 @@ Ty5 struct_test25(void) {
 }
 
 Ty6 struct_test26(void) {
-  return (Ty6){10, 20, 30};
+  return (Ty6){{10, 20, 30}};
 }
 
 typedef struct { unsigned char a[10]; } Ty20;
 typedef struct { unsigned char a[20]; } Ty21;
 
 Ty20 struct_test27(void) {
-  return (Ty20){10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
+  return (Ty20){{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}};
 }
 
 Ty21 struct_test28(void) {
-  return (Ty21){1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20};
+  return (Ty21){{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20}};
 }
 
 typedef struct {

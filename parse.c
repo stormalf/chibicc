@@ -51,6 +51,9 @@ struct VarAttr
   int destructor_priority;
   int constructor_priority;
   bool is_packed;
+  bool is_noinline;
+  bool is_used;
+  bool is_returned_twice;
 };
 
 
@@ -104,6 +107,7 @@ static Node *current_switch;
 
 static Obj *builtin_alloca;
 DebugTypedef *debug_typedefs;
+Obj *get_globals(void);
 
 extern Context *ctx;
 
@@ -178,7 +182,6 @@ static Node *parse_memcpy(Token *tok, Token **rest);
 static Node *parse_memset(Token *tok, Token **rest);
 static Node *ParseBuiltin(NodeKind kind, Token *tok, Token **rest);
 static Node *parse_overflow(NodeKind kind, Token *tok, Token **rest);
-static Node *parse_huge_val(double fval, Token *tok, Token **rest);
 
 static Token * old_style_params(Token **rest, Token *tok, Type *ty);
 static Type *old_params(Type *ty, int nbparms);
@@ -476,6 +479,7 @@ static Obj *new_var(char *name, Type *ty)
   var->name = name;
   var->ty = ty;
   var->align = ty->align;
+  var->first_use = -1;
   push_scope(name)->var = var;
   return var;
 }
@@ -506,7 +510,7 @@ static Obj *new_gvar(char *name, Type *ty)
   var->next = globals;
   var->is_static = true;
   var->is_definition = true;
-  globals = var;
+  globals = var;  
   return var;
 }
 
@@ -602,6 +606,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     SIGNED = 1 << 17,
     UNSIGNED = 1 << 18,
     INT128 = 1 << 19,
+    FLOAT128 = 1 << 20,
   };
 
   Type *ty = copy_type(ty_int);  
@@ -784,7 +789,9 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     else if (equal(tok, "double"))
       counter += DOUBLE;
     else if (equal(tok, "__int128"))
-      counter += INT128;        
+      counter += INT128;
+    else if (equal(tok, "__float128"))
+      counter += FLOAT128;
     else if (equal(tok, "signed"))
       counter |= SIGNED;
     else if (equal(tok, "unsigned"))
@@ -862,6 +869,9 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     case LONG + DOUBLE:    
       ty = copy_type(ty_ldouble);
       break;
+    case FLOAT128:
+      ty = copy_type(ty_ldouble);
+      break;
     default:
       error_tok(tok, "%s:%d: in %s: invalid type", __FILE__, __LINE__, __func__);
     }
@@ -881,6 +891,14 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     ty3->is_const = is_const;
     ty3->is_volatile = is_volatile;
     ty3->is_restrict = is_restrict;
+    // gcc bumps the alignment of an `_Atomic` type up to its own size so the
+    // access stays lock-free and never lowers to a libatomic (`__atomic_*`)
+    // libcall.  Cap at 16 bytes (x86-64 max lock-free width, enabled via
+    // `cx16`).
+    if (ty3->is_atomic && ty3->size > 0) {
+      long a = ty3->size < 16 ? ty3->size : 16;
+      if (ty3->align < a) ty3->align = a;
+    }
     return ty3;
   }
   return ty;
@@ -1267,6 +1285,8 @@ static Type *enum_specifier(Token **rest, Token *tok)
   // Read an enum-list.
   int i = 0;
   int val = 0;
+  int enum_min = 0;
+  bool enum_has_negative = false;
   while (!consume_end(rest, tok))
   {
     //tok->next = attribute_list(tok->next, ty, type_attributes);
@@ -1283,6 +1303,11 @@ static Type *enum_specifier(Token **rest, Token *tok)
       val = const_expr(&tok, tok->next);
     tok = attribute_list(tok, ty, type_attributes);
 
+    if (val < enum_min)
+      enum_min = val;
+    if (val < 0)
+      enum_has_negative = true;
+
     Member *mem = calloc(1, sizeof(Member));
     mem->name = name_tok;
     mem->offset = val;
@@ -1294,6 +1319,13 @@ static Type *enum_specifier(Token **rest, Token *tok)
     sc->enum_ty = ty;
     sc->enum_val = val++;
   }
+
+  // When every enumerator is non-negative the enum has no sign bit, so treat
+  // it as unsigned.  This matches GCC, which (with -fshort-enums) selects an
+  // unsigned underlying type, and makes bit-fields of such enums zero-extend
+  // instead of sign-extend (see suite218).
+  if (!enum_has_negative)
+    ty->is_unsigned = true;
 
   if (tag) {
     push_tag_scope(tag, ty);
@@ -1609,6 +1641,7 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
       // x = alloca(tmp)`.
       
       Obj *var = new_lvar(get_ident(ty->name), ty, NULL);
+      var->tok = ty->name_pos;
       Token *tok = ty->name;
       tok = attribute_list(tok, ty, type_attributes);
       int var_align = MAX(decl_attr.align, ty->align);
@@ -1624,6 +1657,7 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
     }
     
     Obj *var = new_lvar(get_ident(ty->name), ty, NULL);
+    var->tok = ty->name_pos;
     if (alt_align) {
       var->align = alt_align;
       var->ty->align = MAX(var->ty->align, alt_align);
@@ -2391,8 +2425,20 @@ static void write_buf(char *buf, uint64_t val, int sz)
     unreachable();
 }
 
-static Relocation *
-write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int offset)
+// Returns true if `node` (after stripping casts) is a label-value
+// expression (&&label), i.e. its address is a basic-block label that must
+// be emitted as an LLVM blockaddress rather than a global symbol.
+static bool is_label_val_expr(Node *node)
+{
+  for (; node; node = node->kind == ND_CAST ? node->lhs : NULL)
+  {
+    if (node->kind == ND_LABEL_VAL)
+      return true;
+  }
+  return false;
+}
+
+static Relocation *write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int offset)
 {
   if (ty->kind == TY_ARRAY)
   {
@@ -2480,7 +2526,9 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
             cur = cur->next = calloc(1, sizeof(Relocation));
             cur->offset = (pos + offset);
             cur->label = srel->label;
-            cur->addend = srel->addend;           
+            cur->addend = srel->addend;
+            cur->is_label = srel->is_label;
+            cur->func_name = srel->func_name;
             srel = srel->next;
             pos += ty->base ? ty->base->size : 8;
           } else {
@@ -2554,6 +2602,8 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
           rel->offset = offset;
           rel->label = srel->label;
           rel->addend = srel->addend;
+          rel->is_label = srel->is_label;
+          rel->func_name = srel->func_name;
           cur->next = rel;
           return cur->next;
         }
@@ -2568,6 +2618,14 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
   rel->offset = offset;
   rel->label = label;
   rel->addend = val;
+  // A label value (&&label) refers to a basic-block label inside the
+  // enclosing function; record it so the IR backend can emit blockaddress.
+  if (is_label_val_expr(init->expr) && current_fn)
+  {
+    rel->is_label = true;
+    rel->func_name = current_fn->asmname ? current_fn->asmname
+                                         : current_fn->name;
+  }
   cur->next = rel;
   return cur->next;
 }
@@ -2601,7 +2659,7 @@ static bool is_typename(Token *tok)
         "typedef", "enum", "static", "extern", "_Alignas", "signed", "unsigned",
         "const", "volatile", "auto", "register", "restrict", "__restrict",
         "__restrict__", "_Noreturn", "float", "double", "typeof", "inline", "__inline",
-        "_Thread_local", "__thread", "_Atomic", "_Complex", "__label__", "__typeof", "__int128"};
+        "_Thread_local", "__thread", "_Atomic", "_Complex", "__label__", "__typeof", "__int128", "__float128"};
 
     for (int i = 0; i < sizeof(kw) / sizeof(*kw); i++)
       hashmap_put(&map, kw[i], (void *)1);
@@ -2617,8 +2675,11 @@ static Node *asm_stmt(Token **rest, Token *tok)
   Node *node = new_node(ND_ASM, tok);
   tok = tok->next;
 
-  while (equal(tok, "volatile") || equal(tok, "inline")  || equal(tok, "__inline"))
+  while (equal(tok, "volatile") || equal(tok, "inline")  || equal(tok, "__inline")) {
+    if (equal(tok, "volatile"))
+      node->asm_is_volatile = true;
     tok = tok->next;
+  }
 
   SET_CTX(ctx);   
   tok = skip(tok, "(", ctx);
@@ -2632,14 +2693,22 @@ static Node *asm_stmt(Token **rest, Token *tok)
     if (current_fn)
       current_fn->force_frame_pointer = true;
 
-    node->asm_str = extended_asm(node, rest, tok, scope->locals, current_fn);
-    if (!node->asm_str)
-      error_tok(tok, "%s:%d: in %s: error during extended_asm function null returned!", __FILE__, __LINE__, __func__);
+    if (opt_emit_ir || opt_backend_llvm) {
+      node->asm_str = NULL;
+      parse_llvm_asm(node, rest, tok, scope->locals, current_fn);
+      SET_CTX(ctx);
+      *rest = skip(*rest, ";", ctx);
+    } else {
+      node->asm_str = extended_asm(node, rest, tok, scope->locals, current_fn);
+      if (!node->asm_str)
+        error_tok(tok, "%s:%d: in %s: error during extended_asm function null returned!", __FILE__, __LINE__, __func__);
+    }
     return node;
   }
   node->asm_str = tok->str;
-  SET_CTX(ctx);     
+  SET_CTX(ctx);
   *rest = skip(tok->next, ")", ctx);
+  *rest = skip(*rest, ";", ctx);
   return node;
 }
 
@@ -2658,6 +2727,9 @@ static Node *asm_stmt(Token **rest, Token *tok)
 //      | ident ":" stmt
 //      | "{" compound-stmt
 //      | expr-stmt
+
+
+
 static Node *stmt(Token **rest, Token *tok, bool chained) 
 {
 
@@ -2729,11 +2801,13 @@ static Node *stmt(Token **rest, Token *tok, bool chained)
     if (is_const_expr(node->cond)) {
       if (eval(node->cond)) {
         if (!contains_label(node->els)) {
+          mark_liveness_on_subtree(node->els);          
           *rest = tok;
           return node->then;
         }
       } else {
         if (!contains_label(node->then)) {
+          mark_liveness_on_subtree(node->then);          
           *rest = tok;
           return node->els ? node->els : new_node(ND_NULL_EXPR, tok);
         }
@@ -3037,6 +3111,7 @@ static Node *compound_stmt(Token **rest, Token *tok, Node **last)
   Node head = {0};
   Node *cur = &head;
   enter_scope();
+  node->scope = scope;
 
   //while (!equal(tok, "}"))
   for (; !equal(tok, "}"); add_type(cur)) 
@@ -3104,6 +3179,7 @@ static Node *compound_stmt2(Token **rest, Token *tok)
   Node head = {};
   Node *cur = &head;
   enter_scope();
+  node->scope = scope;
   while (!equal(tok, "}") && !equal(tok, "case") && !equal(tok, "default"))
   {
     VarAttr attr = {};
@@ -3416,7 +3492,7 @@ static int64_t eval2(Node *node, char ***label)
 
     if (node->var->is_static || node->var->is_definition) {
       if (label)
-          *label = &node->var->name;
+          *label = node->var->asmname ? &node->var->asmname : &node->var->name;
       return 0;          
     }
     
@@ -3430,7 +3506,7 @@ static int64_t eval2(Node *node, char ***label)
     if (!label) {
       error_tok(node->tok, "%s:%d: in %s: not a compile-time constant %d", __FILE__, __LINE__, __func__, node->var->ty->kind);
     }
-    *label = &node->var->name;
+    *label = node->var->asmname ? &node->var->asmname : &node->var->name;
     return 0;
   case ND_NUM:
     return node->val;
@@ -5371,8 +5447,24 @@ static Token *thing_attributes(Token *tok, void *arg) {
 
 
   if (consume(&tok, tok, "noinline") ||
-      consume(&tok, tok, "__noinline__") ||
-      consume(&tok, tok, "noclone") ||
+      consume(&tok, tok, "__noinline__")) {
+    attr->is_noinline = true;
+    return tok;
+  }
+
+  if (consume(&tok, tok, "returns_twice") ||
+      consume(&tok, tok, "__returns_twice__")) {
+    attr->is_returned_twice = true;
+    return tok;
+  }
+
+  if (consume(&tok, tok, "used") ||
+      consume(&tok, tok, "__used__")) {
+    attr->is_used = true;
+    return tok;
+  }
+
+  if (consume(&tok, tok, "noclone") ||
       consume(&tok, tok, "__noclone__") ||
       consume(&tok, tok, "const") ||
       consume(&tok, tok, "__const__") ||
@@ -6665,7 +6757,7 @@ static Node *primary(Token **rest, Token *tok)
     equal(tok, "__builtin_ia32_bsrsi") || equal(tok, "__builtin_ia32_rdpmc") ||
     equal(tok, "__builtin_ia32_bsrdi") || equal(tok, "__builtin_ia32_rdtscp") ||
     equal(tok, "__builtin_ia32_writeeflags_u64") || equal(tok, "__builtin_ia32_incsspq") ||
-    equal(tok, "__builtin_ia32_rstorssp") || equal(tok, "__builtin_ia32_clrssbsy") || 
+    equal(tok, "__builtin_ia32_xabort") || equal(tok, "__builtin_ia32_rstorssp") || equal(tok, "__builtin_ia32_clrssbsy") || 
     equal(tok, "__builtin_ia32_rsqrtss") || equal(tok, "__builtin_ia32_tzcnt_u16") || 
     equal(tok, "__builtin_ia32_si256_si") || equal(tok, "__builtin_ia32_si_si256") ||
     equal(tok, "__builtin_ia32_pd_pd256") || equal(tok, "__builtin_ia32_ps_ps256") ||
@@ -6687,12 +6779,65 @@ static Node *primary(Token **rest, Token *tok)
   if (equal(tok, "__builtin_ia32_pblendvb128") || 
       equal(tok, "__builtin_ia32_blendvpd") ||
       equal(tok, "__builtin_ia32_blendvps") ||
+      equal(tok, "__builtin_ia32_blendps") ||
+      equal(tok, "__builtin_ia32_blendpd") ||
+      equal(tok, "__builtin_ia32_blendps256") ||
+      equal(tok, "__builtin_ia32_blendpd256") ||
+      equal(tok, "__builtin_ia32_dpps") ||
+      equal(tok, "__builtin_ia32_dppd") ||
+      equal(tok, "__builtin_ia32_insertps128") ||
+      equal(tok, "__builtin_ia32_mpsadbw128") ||
+      equal(tok, "__builtin_ia32_mpsadbw256") ||
       equal(tok, "__builtin_ia32_pcmpgtb256_mask") ||
       equal(tok, "__builtin_ia32_pblendvb256") ||
       equal(tok, "__builtin_ia32_vinsertf128_si256") ||
       equal(tok, "__builtin_ia32_palignr256") ||
+      equal(tok, "__builtin_ia32_palignr128") ||
+      equal(tok, "__builtin_ia32_palignr") ||
       equal(tok, "__builtin_ia32_permti256") ||
-      equal(tok, "__builtin_ia32_pblendd256"))
+      equal(tok, "__builtin_ia32_pblendd256") ||
+      equal(tok, "__builtin_ia32_roundsd") ||
+      equal(tok, "__builtin_ia32_roundss") ||
+      equal(tok, "__builtin_ia32_pblendw128") ||
+      equal(tok, "__builtin_ia32_vec_set_v4hi") ||
+      equal(tok, "__builtin_ia32_vec_set_v8hi") ||
+      equal(tok, "__builtin_ia32_vec_set_v16qi") ||
+      equal(tok, "__builtin_ia32_vec_set_v4si") ||
+      equal(tok, "__builtin_ia32_vec_set_v2di") ||
+      equal(tok, "__builtin_ia32_pcmpistrm128") ||
+      equal(tok, "__builtin_ia32_pcmpistri128") ||
+      equal(tok, "__builtin_ia32_pcmpistria128") ||
+      equal(tok, "__builtin_ia32_pcmpistric128") ||
+      equal(tok, "__builtin_ia32_pcmpistrio128") ||
+      equal(tok, "__builtin_ia32_pcmpistris128") ||
+      equal(tok, "__builtin_ia32_pcmpistriz128") ||
+      equal(tok, "__builtin_ia32_pclmulqdq128") ||
+      equal(tok, "__builtin_ia32_dpps256") ||
+      equal(tok, "__builtin_ia32_shufpd256") ||
+      equal(tok, "__builtin_ia32_shufps256") ||
+      equal(tok, "__builtin_ia32_cmppd") ||
+      equal(tok, "__builtin_ia32_cmpps") ||
+      equal(tok, "__builtin_ia32_cmppd256") ||
+      equal(tok, "__builtin_ia32_cmpps256") ||
+      equal(tok, "__builtin_ia32_cmpsd") ||
+      equal(tok, "__builtin_ia32_cmpss") ||
+      equal(tok, "__builtin_ia32_vinsertf128_pd256") ||
+      equal(tok, "__builtin_ia32_vinsertf128_ps256") ||
+      equal(tok, "__builtin_ia32_vperm2f128_pd256") ||
+      equal(tok, "__builtin_ia32_vperm2f128_ps256") ||
+      equal(tok, "__builtin_ia32_vperm2f128_si256") ||
+      equal(tok, "__builtin_ia32_vpclmulqdq_v4di") ||
+      equal(tok, "__builtin_ia32_vpclmulqdq_v8di") ||
+      equal(tok, "__builtin_ia32_rcp28sd_round") ||
+      equal(tok, "__builtin_ia32_rcp28ss_round") ||
+      equal(tok, "__builtin_ia32_rsqrt28sd_round") ||
+      equal(tok, "__builtin_ia32_rsqrt28ss_round") ||
+      equal(tok, "__builtin_ia32_vpshrd_v32hi") ||
+      equal(tok, "__builtin_ia32_vpshrd_v16si") ||
+      equal(tok, "__builtin_ia32_vpshrd_v8di") ||
+      equal(tok, "__builtin_ia32_vpshld_v32hi") ||
+      equal(tok, "__builtin_ia32_vpshld_v16si") ||
+      equal(tok, "__builtin_ia32_vpshld_v8di"))
   {
     int builtin = builtin_enum(tok);
     if (builtin != -1) {
@@ -6709,10 +6854,93 @@ static Node *primary(Token **rest, Token *tok)
       tok = skip(tok, ",", ctx);
       node->builtin_args[2] = assign(&tok, tok);
       add_type(node->builtin_args[2]);
-      node->builtin_nargs = 3;
+      node->builtin_nargs = 3;      
       SET_CTX(ctx);       
       *rest = skip(tok, ")", ctx);
     return node;
+    }
+  }
+
+  if (equal(tok, "__builtin_ia32_exp2pd_mask") ||
+      equal(tok, "__builtin_ia32_exp2ps_mask") ||
+      equal(tok, "__builtin_ia32_rcp28pd_mask") ||
+      equal(tok, "__builtin_ia32_rcp28ps_mask") ||
+      equal(tok, "__builtin_ia32_rsqrt28pd_mask") ||
+      equal(tok, "__builtin_ia32_rsqrt28ps_mask"))
+  {
+    int builtin = builtin_enum(tok);
+    if (builtin != -1) {
+      Node *node = new_node(builtin, tok);
+      SET_CTX(ctx);
+      tok = skip(tok->next, "(", ctx);
+      node->builtin_args[0] = assign(&tok, tok);
+      add_type(node->builtin_args[0]);
+      SET_CTX(ctx);
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[1] = assign(&tok, tok);
+      add_type(node->builtin_args[1]);
+      SET_CTX(ctx);
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[2] = assign(&tok, tok);
+      add_type(node->builtin_args[2]);
+      SET_CTX(ctx);
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[3] = assign(&tok, tok);
+      add_type(node->builtin_args[3]);
+      node->builtin_nargs = 4;
+      SET_CTX(ctx);
+      *rest = skip(tok, ")", ctx);
+      return node;
+    }
+  }
+
+  if (equal(tok, "__builtin_ia32_pcmpestrm128") ||
+      equal(tok, "__builtin_ia32_pcmpestri128") ||
+      equal(tok, "__builtin_ia32_pcmpestria128") ||
+      equal(tok, "__builtin_ia32_pcmpestric128") ||
+      equal(tok, "__builtin_ia32_pcmpestrio128") ||
+      equal(tok, "__builtin_ia32_pcmpestris128") ||
+      equal(tok, "__builtin_ia32_pcmpestriz128") ||
+      equal(tok, "__builtin_ia32_gatherpfdpd") ||
+      equal(tok, "__builtin_ia32_gatherpfdps") ||
+      equal(tok, "__builtin_ia32_gatherpfqpd") ||
+      equal(tok, "__builtin_ia32_gatherpfqps") ||
+      equal(tok, "__builtin_ia32_scatterpfdpd") ||
+      equal(tok, "__builtin_ia32_scatterpfdps") ||
+      equal(tok, "__builtin_ia32_scatterpfqpd") ||
+      equal(tok, "__builtin_ia32_scatterpfqps") ||
+      equal(tok, "__builtin_ia32_vpshrd_v16si_mask") ||
+      equal(tok, "__builtin_ia32_vpshrd_v8di_mask") ||
+      equal(tok, "__builtin_ia32_vpshld_v16si_mask") ||
+      equal(tok, "__builtin_ia32_vpshld_v8di_mask"))
+  {
+    int builtin = builtin_enum(tok);
+    if (builtin != -1) {
+      Node *node = new_node(builtin, tok);
+      SET_CTX(ctx);
+      tok = skip(tok->next, "(", ctx);
+      node->builtin_args[0] = assign(&tok, tok);
+      add_type(node->builtin_args[0]);
+      SET_CTX(ctx);
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[1] = assign(&tok, tok);
+      add_type(node->builtin_args[1]);
+      SET_CTX(ctx);
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[2] = assign(&tok, tok);
+      add_type(node->builtin_args[2]);
+      SET_CTX(ctx);
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[3] = assign(&tok, tok);
+      add_type(node->builtin_args[3]);
+      SET_CTX(ctx);
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[4] = assign(&tok, tok);
+      add_type(node->builtin_args[4]);
+      node->builtin_nargs = 5;
+      SET_CTX(ctx);
+      *rest = skip(tok, ")", ctx);
+      return node;
     }
   }
 
@@ -6738,12 +6966,18 @@ static Node *primary(Token **rest, Token *tok)
         Node *mask = assign(&tok, tok);
         add_type(mask);
         node->builtin_args[0] = a;
+        add_type(node->builtin_args[0]);
         node->builtin_args[1] = second;
+        add_type(node->builtin_args[1]);
         node->builtin_args[2] = mask;
+        add_type(node->builtin_args[2]);
       } else {
         node->builtin_args[0] = a;
+        add_type(node->builtin_args[0]);
         node->builtin_args[1] = a;      
+        add_type(node->builtin_args[1]);
         node->builtin_args[2] = second; 
+        add_type(node->builtin_args[2]);
       }
       node->builtin_nargs = 3;
       SET_CTX(ctx);
@@ -6884,6 +7118,7 @@ static Node *primary(Token **rest, Token *tok)
     return node;
     }
   }
+
 
   if (equal(tok, "__builtin_ia32_vec_init_v8qi"))
   {
@@ -7205,12 +7440,20 @@ static Node *primary(Token **rest, Token *tok)
 
   if (equal(tok, "__builtin_stdc_trailing_zeros"))
   {
-    return ParseBuiltin(ND_BUILTIN_CTZLL, tok, rest);
+    Node *node = ParseBuiltin(ND_BUILTIN_CTZLL, tok, rest);
+    node->builtin_val = new_cast(node->builtin_val, ty_ulong);
+    add_type(node->builtin_val);
+    add_type(node);
+    return node;
   }
 
   if (equal(tok, "__builtin_stdc_count_ones"))
   {
-    return ParseBuiltin(ND_POPCOUNTLL, tok, rest);
+    Node *node = ParseBuiltin(ND_POPCOUNTLL, tok, rest);
+    node->builtin_val = new_cast(node->builtin_val, ty_ulong);
+    add_type(node->builtin_val);
+    add_type(node);
+    return node;
   }
 
   if (equal(tok, "__builtin_stdc_has_single_bit"))
@@ -7669,20 +7912,6 @@ static Node *primary(Token **rest, Token *tok)
     return to_assign(node);
   }
 
-  // Handle __builtin_huge_valf
-  if (equal(tok, "__builtin_huge_valf")) {
-    return parse_huge_val(HUGE_VALF, tok, rest);
-  }
-  // Handle __builtin_huge_vall
-  if (equal(tok, "__builtin_huge_vall")) {
-    return parse_huge_val(HUGE_VALL, tok, rest);
-  }
-  // Handle __builtin_huge_val
-  if (equal(tok, "__builtin_huge_val")) {
-    return parse_huge_val(HUGE_VAL, tok, rest);
-  }
-
-
   if (tok->kind == TK_IDENT)
   {
     //  Variable or enum constant
@@ -7704,7 +7933,7 @@ static Node *primary(Token **rest, Token *tok)
 
       char *name = sc->var->name;
      
-      if (is_returned_twice(name)) {
+      if (is_returned_twice(name) || (sc->var && sc->var->is_returned_twice)) {
         dont_reuse_stack = true;
         if (current_fn) {
           current_fn->force_frame_pointer = true;
@@ -7727,12 +7956,13 @@ static Node *primary(Token **rest, Token *tok)
     {
       Obj *fn = find_func(token_to_string(tok));
 
-      if (!fn && (is_c99_or_later() || opt_implicit)) {
+      if (!fn && !opt_no_implicit && (is_c99_or_later() || opt_implicit)) {
         error_tok(tok, "%s:%d: in %s: implicit declaration of function", __FILE__, __LINE__, __func__);
       }    
 
       if (!fn) {
-        warn_tok(tok, "%s:%d: in %s: implicit declaration of function", __FILE__, __LINE__, __func__);
+        if (!opt_no_implicit)
+          warn_tok(tok, "%s:%d: in %s: implicit declaration of function", __FILE__, __LINE__, __func__);
         Type *ty = func_type(ty_int);        
         ty->is_variadic = true;
         fn = new_gvar(token_to_string(tok), ty);
@@ -7839,19 +8069,23 @@ static void create_param_lvars(Type *param, char *funcname)
   //  return;
   // error_tok(param->name_pos, "parameter name omitted");
   //new_lvar(get_ident(param->name), param, funcname);
+    Obj *var;
     if (param->param_var) {
-      param->param_var->next = scope->locals;
-      scope->locals = param->param_var;
-      param->param_var->funcname = funcname;
-      param->param_var->order = order;
+      var = param->param_var;
+      var->next = scope->locals;
+      scope->locals = var;
+      var->funcname = funcname;
+      var->order = order;
       if (param->name)
-        push_scope(get_ident(param->name))->var = param->param_var;
+        push_scope(get_ident(param->name))->var = var;
     } else {
     if (!param->name)
-      new_lvar("", param, funcname);
+      var = new_lvar("", param, funcname);
     else
-    new_lvar(get_ident(param->name), param, funcname);
+      var = new_lvar(get_ident(param->name), param, funcname);
     }
+    var->is_param = true;
+    var->tok = param->name_pos;
     order++;
 
 }
@@ -8009,6 +8243,7 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   else
   {
     fn = new_gvar(name_str, ty);
+    fn->tok = ty->name_pos;
     fn->funcname = name_str;
     fn->is_function = true;
     fn->is_definition = equal(tok, "{");
@@ -8023,8 +8258,15 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   fn->section = attr->section;
   fn->is_ms_abi |= attr->is_ms_abi;
   fn->visibility = fn->visibility ?: attr->visibility;
+  if (!fn->visibility)
+    fn->visibility = tok->pragma_visibility;
   fn->is_aligned |= attr->is_aligned;
   fn->is_noreturn |= attr->is_noreturn;
+  fn->is_noinline |= attr->is_noinline;
+  fn->is_used |= attr->is_used;
+  fn->is_returned_twice |= attr->is_returned_twice;
+  if (fn->is_used)
+    fn->is_root = true;
   fn->is_destructor |= attr->is_destructor;
   fn->is_constructor |=  attr->is_constructor;
   if (attr->destructor_priority > 0)
@@ -8168,6 +8410,7 @@ static Token *global_declaration(Token *tok, Type *basety, VarAttr *attr)
   }
     
     Obj *var = new_gvar(get_ident(ty->name), ty);
+    var->tok = ty->name_pos;
     if (ty->kind == TY_FUNC)
       var->is_function = true;
     
@@ -8198,6 +8441,11 @@ static Token *global_declaration(Token *tok, Type *basety, VarAttr *attr)
       var->section = current_section;
     } 
     var->visibility = decl_attr.visibility;
+    if (!var->visibility)
+      var->visibility = tok->pragma_visibility;
+    var->is_used |= decl_attr.is_used;
+    if (var->is_used)
+      var->is_root = true;
     var->is_aligned = var->is_aligned | decl_attr.is_aligned;
     var->is_externally_visible = decl_attr.is_externally_visible;
     var->is_definition = !decl_attr.is_extern && ty->kind != TY_FUNC;
@@ -8562,6 +8810,8 @@ static Node *ParseAtomic3(NodeKind kind, Token *tok, Token **rest) {
   tok = skip(tok, ",", ctx);
   node->rhs = assign(&tok, tok);
   add_type(node->rhs);
+  if (kind != ND_STORE && kind != ND_LOAD && !is_pointer(node->ty))
+    node->rhs = new_cast(node->rhs, node->ty);
   // Check if there's a comma, indicating a memory order argument
   if (equal(tok, ",")) {
     SET_CTX(ctx); 
@@ -8777,16 +9027,6 @@ static Type *old_params(Type *ty, int nbparms) {
   return head.next;
 }
 
-static Node *parse_huge_val(double fval, Token *tok, Token **rest) {
-  Node *node = new_double(fval, tok);
-  SET_CTX(ctx);    
-  tok = skip(tok->next, "(", ctx);
-  SET_CTX(ctx); 
-  tok = skip(tok, ")", ctx);
-  *rest = tok;
-  return node;
-}
-
 static int64_t eval_sign_extend(Type *ty, uint64_t val) {
   switch (ty->size) {
   case 1: return ty->is_unsigned ? (uint8_t)val : (int64_t)(int8_t)val;
@@ -8904,7 +9144,8 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_vec_init_v8qi", ND_VECINITV8QI },    
     { "__builtin_ia32_vec_init_v2si", ND_VECINITV2SI },       
     { "__builtin_ia32_vec_ext_v2si", ND_VECEXTV2SI },       
-    { "__builtin_ia32_vec_ext_v4si", ND_VECEXTV4SI },       
+    { "__builtin_ia32_vec_ext_v4si", ND_VECEXTV4SI },
+    { "__builtin_ia32_vec_ext_v4sf", ND_VECEXTV4SF },       
     { "__builtin_ia32_emms", ND_EMMS },       
     { "__builtin_ia32_sfence", ND_SFENCE },       
     { "__builtin_ia32_lfence", ND_LFENCE },     
@@ -8998,8 +9239,12 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_pavgw", ND_PAVGW },
     { "__builtin_ia32_psadbw", ND_PSADBW },
     { "__builtin_ia32_movntq", ND_MOVNTQ },
-    { "__builtin_ia32_movntps", ND_MOVNTPS },
+    { "__builtin_ia32_movntps", ND_MOVNTPS },    
     { "__builtin_ia32_shufpd", ND_SHUFPD },    
+    { "__builtin_ia32_roundpd", ND_ROUNDPD },    
+    { "__builtin_ia32_roundsd", ND_ROUNDSD },  
+    { "__builtin_ia32_roundss", ND_ROUNDSS },    
+    { "__builtin_ia32_roundps", ND_ROUNDPS },    
     { "__builtin_ia32_addsd", ND_ADDSD },  
     { "__builtin_ia32_subsd", ND_SUBSD },  
     { "__builtin_ia32_mulsd", ND_MULSD },  
@@ -9174,8 +9419,18 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_ptestc128", ND_PTESTC128 },
     { "__builtin_ia32_ptestnzc128", ND_PTESTNZC128 },
     { "__builtin_ia32_pblendvb128", ND_PBLENDVB128 },
+    { "__builtin_ia32_pblendw128", ND_PBLENDW128 },
     { "__builtin_ia32_blendvps", ND_BLENDVPS },
     { "__builtin_ia32_blendvpd", ND_BLENDVPD },
+    { "__builtin_ia32_blendps", ND_BLENDPS },
+    { "__builtin_ia32_blendpd", ND_BLENDPD },
+    { "__builtin_ia32_blendps256", ND_BLENDPS256 },
+    { "__builtin_ia32_blendpd256", ND_BLENDPD256 },
+    { "__builtin_ia32_dpps", ND_DPPS },
+    { "__builtin_ia32_dppd", ND_DPPD },
+    { "__builtin_ia32_insertps128", ND_INSERTPS128 },
+    { "__builtin_ia32_mpsadbw128", ND_MPSADBW128 },
+    { "__builtin_ia32_mpsadbw256", ND_MPSADBW256 },
     { "__builtin_ia32_pminsb128", ND_PMINSB128 },
     { "__builtin_ia32_pmaxsb128", ND_PMAXSB128 },
     { "__builtin_ia32_pminuw128", ND_PMINUW128 },
@@ -9205,6 +9460,9 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_crc32si", ND_CRC32SI },    
     { "__builtin_ia32_crc32di", ND_CRC32DI },
     { "__builtin_ia32_pshufd", ND_PSHUFD },
+    { "__builtin_ia32_pshufhw", ND_PSHUFHW },
+    { "__builtin_ia32_pshuflw", ND_PSHUFLW },
+    { "__builtin_ia32_pshufw", ND_PSHUFW },
     { "__builtin_prefetch", ND_PREFETCH },
     { "__builtin_ia32_rdtsc", ND_RDTSC },
     { "__builtin_ia32_readeflags_u64", ND_READEFLAGS_U64 },
@@ -9258,12 +9516,16 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_pcmpgtb256_mask", ND_PCMPGTB256_MASK },
     { "__builtin_ia32_pshufb256", ND_PSHUFB256 },
     { "__builtin_ia32_pblendvb256", ND_PBLENDVB256 },
+    { "__builtin_ia32_psrldqi128", ND_PSRLDQI128 },
+    { "__builtin_ia32_pslldqi128", ND_PSLLDQI128 },
     { "__builtin_ia32_psrldqi256", ND_PSRLDQI256 },
     { "__builtin_ia32_pslldqi256", ND_PSLLDQI256 },
     { "__builtin_ia32_vinsertf128_si256", ND_VINSERTF128_SI256 },        
     { "__builtin_ia32_si256_si", ND_SI256_SI },
     { "__builtin_ia32_si_si256", ND_SI_SI256 },
     { "__builtin_ia32_palignr256", ND_PALIGNR256 },
+    { "__builtin_ia32_palignr128", ND_PALIGNR128 },
+    { "__builtin_ia32_palignr", ND_PALIGNR },
     { "__builtin_ia32_permti256", ND_VPERM2I128_SI256 },
     { "__builtin_ia32_pblendd256", ND_PBLENDD256 },
     { "__builtin_ia32_vextractf128_si256", ND_VEXTRACTF128_SI256 },
@@ -9280,6 +9542,80 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_pslldi256", ND_PSLLDI256 }, 
     { "__builtin_ia32_psrldi256", ND_PSRLDI256 },
     { "__builtin_ia32_psradi256", ND_PSRADI256 },
+    { "__builtin_ia32_vec_ext_v4hi", ND_VECEXTV4HI },
+    { "__builtin_ia32_vec_set_v4hi", ND_VECSETV4HI },
+    { "__builtin_ia32_vec_set_v8hi", ND_VECSETV8HI },
+    { "__builtin_ia32_vec_set_v16qi", ND_VECSETV16QI },
+    { "__builtin_ia32_vec_set_v4si", ND_VECSETV4SI },
+    { "__builtin_ia32_vec_set_v2di", ND_VECSETV2DI },
+    { "__builtin_ia32_pcmpistrm128", ND_PCMPISTRM128 },
+    { "__builtin_ia32_pcmpistri128", ND_PCMPISTRI128 },
+    { "__builtin_ia32_pcmpistria128", ND_PCMPISTRIA128 },
+    { "__builtin_ia32_pcmpistric128", ND_PCMPISTRIC128 },
+    { "__builtin_ia32_pcmpistrio128", ND_PCMPISTRIO128 },
+    { "__builtin_ia32_pcmpistris128", ND_PCMPISTRIS128 },
+    { "__builtin_ia32_pcmpistriz128", ND_PCMPISTRIZ128 },
+    { "__builtin_ia32_pcmpestrm128", ND_PCMPESTRM128 },
+    { "__builtin_ia32_pcmpestri128", ND_PCMPESTRI128 },
+    { "__builtin_ia32_pcmpestria128", ND_PCMPESTRIA128 },
+    { "__builtin_ia32_pcmpestric128", ND_PCMPESTRIC128 },
+    { "__builtin_ia32_pcmpestrio128", ND_PCMPESTRIO128 },
+    { "__builtin_ia32_pcmpestris128", ND_PCMPESTRIS128 },
+    { "__builtin_ia32_pcmpestriz128", ND_PCMPESTRIZ128 },
+    { "__builtin_ia32_pclmulqdq128", ND_PCLMULQDQ128 },
+    { "__builtin_ia32_dpps256", ND_DPPS256 },
+    { "__builtin_ia32_shufpd256", ND_SHUFPD256 },
+    { "__builtin_ia32_shufps256", ND_SHUFPS256 },
+    { "__builtin_ia32_cmppd", ND_CMPPD },
+    { "__builtin_ia32_cmpps", ND_CMPPS },
+    { "__builtin_ia32_cmppd256", ND_CMPPD256 },
+    { "__builtin_ia32_cmpps256", ND_CMPPS256 },
+    { "__builtin_ia32_cmpsd", ND_CMPSD },
+    { "__builtin_ia32_cmpss", ND_CMPSS },
+    { "__builtin_ia32_vextractf128_pd256", ND_VEXTRACTF128_PD256 },
+    { "__builtin_ia32_vextractf128_ps256", ND_VEXTRACTF128_PS256 },
+    { "__builtin_ia32_vinsertf128_pd256", ND_VINSERTF128_PD256 },
+    { "__builtin_ia32_vinsertf128_ps256", ND_VINSERTF128_PS256 },
+    { "__builtin_ia32_vperm2f128_pd256", ND_VPERM2F128_PD256 },
+    { "__builtin_ia32_vperm2f128_ps256", ND_VPERM2F128_PS256 },
+    { "__builtin_ia32_vperm2f128_si256", ND_VPERM2F128_SI256 },
+    { "__builtin_ia32_vpermilpd", ND_VPERMILPD },
+    { "__builtin_ia32_vpermilps", ND_VPERMILPS },
+    { "__builtin_ia32_vpermilpd256", ND_VPERMILPD256 },
+    { "__builtin_ia32_vpermilps256", ND_VPERMILPS256 },
+    { "__builtin_ia32_exp2pd_mask", ND_EXP2PD_MASK },
+    { "__builtin_ia32_exp2ps_mask", ND_EXP2PS_MASK },
+    { "__builtin_ia32_rcp28pd_mask", ND_RCP28PD_MASK },
+    { "__builtin_ia32_rcp28ps_mask", ND_RCP28PS_MASK },
+    { "__builtin_ia32_rcp28sd_round", ND_RCP28SD_ROUND },
+    { "__builtin_ia32_rcp28ss_round", ND_RCP28SS_ROUND },
+    { "__builtin_ia32_rsqrt28pd_mask", ND_RSQRT28PD_MASK },
+    { "__builtin_ia32_rsqrt28ps_mask", ND_RSQRT28PS_MASK },
+    { "__builtin_ia32_rsqrt28sd_round", ND_RSQRT28SD_ROUND },
+    { "__builtin_ia32_rsqrt28ss_round", ND_RSQRT28SS_ROUND },
+    { "__builtin_ia32_vpshrd_v32hi", ND_VPSHRD_V32HI },
+    { "__builtin_ia32_vpshrd_v16si", ND_VPSHRD_V16SI },
+    { "__builtin_ia32_vpshrd_v8di", ND_VPSHRD_V8DI },
+    { "__builtin_ia32_vpshrd_v16si_mask", ND_VPSHRD_V16SI_MASK },
+    { "__builtin_ia32_vpshrd_v8di_mask", ND_VPSHRD_V8DI_MASK },
+    { "__builtin_ia32_vpshld_v32hi", ND_VPSHLD_V32HI },
+    { "__builtin_ia32_vpshld_v16si", ND_VPSHLD_V16SI },
+    { "__builtin_ia32_vpshld_v8di", ND_VPSHLD_V8DI },
+    { "__builtin_ia32_vpshld_v16si_mask", ND_VPSHLD_V16SI_MASK },
+    { "__builtin_ia32_vpshld_v8di_mask", ND_VPSHLD_V8DI_MASK },
+    { "__builtin_ia32_bextri_u32", ND_BEXTR_U32 },
+    { "__builtin_ia32_bextri_u64", ND_BEXTR_U64 },
+    { "__builtin_ia32_xabort", ND_XABORT },
+    { "__builtin_ia32_vpclmulqdq_v4di", ND_VPCLMULQDQ_V4DI },
+    { "__builtin_ia32_vpclmulqdq_v8di", ND_VPCLMULQDQ_V8DI },
+    { "__builtin_ia32_gatherpfdpd", ND_GATHERPFDPD },
+    { "__builtin_ia32_gatherpfdps", ND_GATHERPFDPS },
+    { "__builtin_ia32_gatherpfqpd", ND_GATHERPFQPD },
+    { "__builtin_ia32_gatherpfqps", ND_GATHERPFQPS },
+    { "__builtin_ia32_scatterpfdpd", ND_SCATTERPFDPD },
+    { "__builtin_ia32_scatterpfdps", ND_SCATTERPFDPS },
+    { "__builtin_ia32_scatterpfqpd", ND_SCATTERPFQPD },
+    { "__builtin_ia32_scatterpfqps", ND_SCATTERPFQPS },
 };
 
 
@@ -9414,8 +9750,10 @@ static Node *constant_folding(int kind, Node *lhs, Node *rhs, Token *tok)
     case ND_SUB: node = new_double(a - b, tok); break;
     case ND_MUL: node = new_double(a * b, tok); break;
     case ND_DIV:
-      if (b == 0.0)
-        return NULL;
+      // Fold even division by zero into the host's IEEE result (NaN/inf with
+      // the platform's sign bit).  This mirrors what the native backend
+      // produces by emitting a real hardware division instruction, so the
+      // embedded constant matches signbit/isnan expectations on x86.
       node = new_double(a / b, tok);
       break;
     default: return NULL;
@@ -9461,4 +9799,9 @@ static Node *constant_folding(int kind, Node *lhs, Node *rhs, Token *tok)
     node->fval = (float)node->fval;
 
   return node;
+}
+
+
+Obj *get_globals(void) {
+    return globals;
 }

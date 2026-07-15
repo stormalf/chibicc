@@ -143,8 +143,23 @@ void warning_at(char *loc, char *fmt, ...)
 void warn_tok(Token *tok, char *fmt, ...)
 {
   va_list ap;
+  va_start(ap, fmt);  
+  vwarning_at(tok->file->name, tok->file->contents, tok->line_no, tok->loc, fmt, ap);
+  va_end(ap);
+  if (opt_werror)
+    exit(1);
+}
+
+void warn(char *fmt, ...)
+{
+  va_list ap;
   va_start(ap, fmt);
-  vwarning_at(tok->file->name, tok->file->contents, tok->line_no, tok->loc, fmt, ap);  
+  if (!opt_werror)
+    fprintf(stderr, PURPLE "warning:" RESET " ");
+  else
+    fprintf(stderr, RED "warning:" RESET " ");
+  vfprintf(stderr, fmt, ap);
+  fprintf(stderr, "\n");
   va_end(ap);
   if (opt_werror)
     exit(1);
@@ -328,6 +343,7 @@ static bool is_keyword(Token *tok)
         "__label__",
         "inline",
         "__int128",
+        "__float128",
     };
 
     for (int i = 0; i < sizeof(kw) / sizeof(*kw); i++)
@@ -956,15 +972,28 @@ File **get_input_files(void)
   return input_files;
 }
 
+bool is_system_include_path(char *path) {
+  if (!path)
+    return false;
+  if (strncmp(path, "/usr/include", 12) == 0 ||
+      strncmp(path, "/usr/local/include", 18) == 0 ||
+      strncmp(path, "/usr/lib/gcc", 12) == 0)
+    return true;
+  return false;
+}
+
 File *new_file(char *name, unsigned int file_no, char *contents)
 {
   File *file = calloc(1, sizeof(File));
   if (file == NULL)
     error("%s:%d: error: in %s: file is null!", __FILE__, __LINE__, __func__);
+  if (name == NULL)
+    error("%s:%d: error: in %s: name is null!", __FILE__, __LINE__, __func__);  
   file->name = name;
   file->display_name = name;
   file->file_no = file_no;
   file->contents = contents;
+  file->is_system_header = is_system_include_path(name);
   return file;
 }
 

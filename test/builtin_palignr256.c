@@ -2,10 +2,12 @@
 // Tests for __builtin_ia32_si_si256 and _mm256_alignr_epi8
 // Compile with: cc -mavx2 -o test_avx2_cast2 test_avx2_cast2.c
 
-#include <immintrin.h>
 #include "test.h"
 #include <stdint.h>
 #include <string.h>
+
+typedef long long __m128i __attribute__((__vector_size__(16), __may_alias__));
+typedef long long __m256i __attribute__((__vector_size__(32), __may_alias__));
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -44,9 +46,15 @@ static void print_m256i_i32(const char *label, __m256i v) {
 //   No instruction is emitted; it is a pure compile-time cast.
 // ---------------------------------------------------------------------------
 
+static __m256i load_m256i(const uint8_t *p) {
+    __m256i r;
+    memcpy(&r, p, 32);
+    return r;
+}
+
 static int test_builtin_ia32_si_si256(void) {
     int32_t src[8] = {10, 20, 30, 40, 50, 60, 70, 80};
-    __m256i v256 = _mm256_loadu_si256((__m256i *)src);
+    __m256i v256 = load_m256i((const uint8_t *)src);
     print_m256i_i32("  input  (256)", v256);
 
     __m128i v128 = __builtin_ia32_si_si256(v256);
@@ -83,14 +91,14 @@ static int test_mm256_alignr_epi8(void) {
     for (int i = 0; i < 16; i++) { b_bytes[i]      = 0x20 + i; }
     for (int i = 0; i < 16; i++) { b_bytes[16 + i] = 0x40 + i; }
 
-    __m256i a = _mm256_loadu_si256((__m256i *)a_bytes);
-    __m256i b = _mm256_loadu_si256((__m256i *)b_bytes);
+    __m256i a = load_m256i(a_bytes);
+    __m256i b = load_m256i(b_bytes);
     print_m256i_u8("  a      ", a);
     print_m256i_u8("  b      ", b);
 
     // VPALIGNR: result = concat(a_lane, b_lane) >> (4 bytes)
     // i.e. bytes [4..15] of b_lane followed by bytes [0..11] of a_lane
-    __m256i result = _mm256_alignr_epi8(a, b, 4);
+    __m256i result = __builtin_ia32_palignr256(a, b, 4 * 8);
     print_m256i_u8("  alignr4", result);
 
     uint8_t out[32];
@@ -142,7 +150,7 @@ static int test_mm256_alignr_epi8(void) {
 
 static int test_roundtrip(void) {
     int32_t src[8] = {-1, 0, 42, 1337, 99, 88, 77, 66};
-    __m256i v256   = _mm256_loadu_si256((__m256i *)src);
+    __m256i v256   = load_m256i((const uint8_t *)src);
 
     // Extract low 128-bit lane via __builtin_ia32_si_si256
     __m128i low    = __builtin_ia32_si_si256(v256);
@@ -169,11 +177,11 @@ static int test_alignr_imm0(void) {
     for (int i = 0; i < 32; i++) { a_bytes[i] = (uint8_t)(0xA0 + i); }
     for (int i = 0; i < 32; i++) { b_bytes[i] = (uint8_t)(0x01 + i); }
 
-    __m256i a = _mm256_loadu_si256((__m256i *)a_bytes);
-    __m256i b = _mm256_loadu_si256((__m256i *)b_bytes);
+    __m256i a = load_m256i(a_bytes);
+    __m256i b = load_m256i(b_bytes);
 
     // IMM8=0 => no shift => result == b (src)
-    __m256i result = _mm256_alignr_epi8(a, b, 0);
+    __m256i result = __builtin_ia32_palignr256(a, b, 0);
 
     uint8_t out[32];
     memcpy(out, &result, 32);
@@ -192,11 +200,11 @@ static int test_alignr_imm16(void) {
     for (int i = 0; i < 32; i++) { a_bytes[i] = (uint8_t)(0xA0 + i); }
     for (int i = 0; i < 32; i++) { b_bytes[i] = (uint8_t)(0x01 + i); }
 
-    __m256i a = _mm256_loadu_si256((__m256i *)a_bytes);
-    __m256i b = _mm256_loadu_si256((__m256i *)b_bytes);
+    __m256i a = load_m256i(a_bytes);
+    __m256i b = load_m256i(b_bytes);
 
     // IMM8=16 => shift by full lane => result == a (dst)
-    __m256i result = _mm256_alignr_epi8(a, b, 16);
+    __m256i result = __builtin_ia32_palignr256(a, b, 16 * 8);
 
     uint8_t out[32];
     memcpy(out, &result, 32);

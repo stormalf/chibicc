@@ -38,10 +38,10 @@ void print_debug_tokens(char *currentfilename, char *function, Token *tok)
     {
         if (t->len > 0)
         {
-            char tokloc[t->len + 1];
-            memset(tokloc, 0, sizeof(tokloc));
-            char *ptokloc = &tokloc[0];
-            strncpy(ptokloc, t->loc, t->len);
+    char tokloc[t->len + 1];
+    memset(tokloc, 0, sizeof(tokloc));
+    char *ptokloc = &tokloc[0];
+    strncpy(ptokloc, t->loc, t->len);
             fprintf(f, "token->kind: %s, token->len: %d, token->val: %ld, token->fval:%Lf \n", tokenkind2str(t->kind), t->len, t->val, t->fval);
             fprintf(f, "     token->str: %s, token->filename: %s, token->line_no: %d, token->at_bol:%d \n", t->str, t->filename, t->line_no, t->at_bol);
             fprintf(f, "     token->loc: %s \n", ptokloc);
@@ -479,31 +479,6 @@ static void emit_typedef_dies(DebugTypeInfo *types, DebugQualTypeInfo *quals, in
 }
 
 
-static bool has_float_in_range(Type *ty, int lo, int hi, int offset) {
-  if (ty->kind == TY_STRUCT || ty->kind == TY_UNION) {
-    for (Member *mem = ty->members; mem; mem = mem->next) {
-      int tmpoffset = offset + mem->offset;
-      if (tmpoffset + mem->ty->size <= lo) continue;
-      if (hi <= tmpoffset) break;
-      if (!has_float_in_range(mem->ty, lo, hi, tmpoffset))
-        return false;
-    }
-    return true;
-  }
-  if (ty->kind == TY_ARRAY) {
-    for (int i = 0; i < ty->array_len; i++) {
-      int tmpoffset = offset + ty->base->size * i;
-      if (tmpoffset + ty->base->size <= lo) continue;
-      if (hi <= tmpoffset) break;
-      if (!has_float_in_range(ty->base, lo, hi, tmpoffset))
-        return false;
-    }
-    return true;
-  }
-  if (ty->kind == TY_VECTOR) return true;
-  return ty->kind == TY_FLOAT || ty->kind == TY_DOUBLE;
-}
-
 static void collect_scope_debug_types(Scope *sc, DebugTypeInfo **types, int *next_type_id, DebugQualTypeInfo **quals, int *next_qual_id) {
   for (Scope *child = sc->children; child; child = child->sibling_next)
     collect_scope_debug_types(child, types, next_type_id, quals, next_qual_id);
@@ -936,30 +911,22 @@ void emit_debug_info(Obj *prog) {
     
     println("  .byte %d", !fn->is_static);
 
-    /* DWARF register numbers for System V AMD64 ABI argument registers:
-     *   Integer: rdi=5, rsi=4, rdx=1, rcx=2, r8=8, r9=9
-     *   SSE:     xmm0=17, xmm1=18, ..., xmm7=24
-     * DW_OP_regN (0x50+N) is valid at any program point, including
-     * function-entry breakpoints before the prologue saves registers
-     * to the stack.  Register-passed parameters use DW_OP_regN;
-     * stack-passed parameters fall back to DW_OP_fbreg. */
-    static const int gp_dwarf_regs[6] = {5, 4, 1, 2, 8, 9};
+    /* All parameters use DW_OP_fbreg because register parameters are
+     * saved to the stack in the function prologue before any user code
+     * runs (see codegen.c store_gp/store_fp).  GDB's prologue skipping
+     * ensures breakpoints stop after the save, so DW_OP_fbreg is always
+     * correct. */
     int gp = 0, fp = 0;
     for (Obj *var = fn->params; var; var = var->next) {
         Type *ty = var->ty;
-        int reg_idx = -1;
 
         if (!var->pass_by_stack) {
             switch (ty->kind) {
             case TY_FLOAT:
             case TY_DOUBLE:
-                if (fp < 8)
-                    reg_idx = 17 + fp;
                 fp++;
                 break;
             case TY_VECTOR:
-                if (fp < 8)
-                    reg_idx = 17 + fp;
                 fp++;
                 break;
             case TY_INT128:
@@ -969,11 +936,11 @@ void emit_debug_info(Obj *prog) {
             case TY_UNION: {
                 int sz = ty->size;
                 if (sz > 0 && sz <= 16) {
-                    int f1 = has_float_in_range(ty, 0, 8, 0);
+                    int f1 = has_flonum(ty, 0, 8, 0);
                     gp += f1 ? 0 : 1;
                     fp += f1 ? 1 : 0;
                     if (sz > 8) {
-                        int f2 = has_float_in_range(ty, 8, 16, 0);
+                        int f2 = has_flonum(ty, 8, 16, 0);
                         gp += f2 ? 0 : 1;
                         fp += f2 ? 1 : 0;
                     }
@@ -981,8 +948,6 @@ void emit_debug_info(Obj *prog) {
                 break;
             }
             default:
-                if (gp < 6)
-                    reg_idx = gp_dwarf_regs[gp];
                 gp++;
                 break;
             }
@@ -999,12 +964,10 @@ void emit_debug_info(Obj *prog) {
         println("  .uleb128 .L.loc_end_%d - .L.loc_start_%d", lbl, lbl);
         println(".L.loc_start_%d:", lbl);
 
-        if (reg_idx >= 0) {
-            println("  .byte %d", 0x50 + reg_idx);
-        } else {
+        // Parameters passed via registers are immediately saved to the
+        // stack in the function prologue, so we can always use DW_OP_fbreg.
         println("  .byte 0x91"); // DW_OP_fbreg
         println("  .sleb128 %d", var->offset);
-        }
 
         println(".L.loc_end_%d:", lbl);
     }
