@@ -633,7 +633,8 @@ cpython: git clone https://github.com/python/cpython.git
     memcached : compile OK, tests OK 
     vlc: compile OK
     sqlite: compile OK, tests OK  
-    postgres execution : compile OK, tests OK  
+    postgres execution : compile OK, tests OK
+    openssh-portable : compile OK, tests OK  
     
 
 

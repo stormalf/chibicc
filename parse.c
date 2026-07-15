@@ -891,6 +891,14 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     ty3->is_const = is_const;
     ty3->is_volatile = is_volatile;
     ty3->is_restrict = is_restrict;
+    // gcc bumps the alignment of an `_Atomic` type up to its own size so the
+    // access stays lock-free and never lowers to a libatomic (`__atomic_*`)
+    // libcall.  Cap at 16 bytes (x86-64 max lock-free width, enabled via
+    // `cx16`).
+    if (ty3->is_atomic && ty3->size > 0) {
+      long a = ty3->size < 16 ? ty3->size : 16;
+      if (ty3->align < a) ty3->align = a;
+    }
     return ty3;
   }
   return ty;

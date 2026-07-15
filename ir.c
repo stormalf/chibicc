@@ -9547,7 +9547,7 @@ void gen_ir_stmt_asm(Node *node, int indent, bool *terminated)
   for (int i = 0; i < nout; i++) {
     const char *c = node->asm_outputs[i].constraint;
     if (strchr(c, 'm')) is_mem[i] = true;
-    if (c[0] == '+') is_rw[i] = true;
+    if (c[0] == '+' || (c[0] == '=' && c[1] == '+')) is_rw[i] = true;
   }
   for (int i = 0; i < nin; i++) {
     const char *c = node->asm_inputs[i].constraint;
@@ -9575,15 +9575,15 @@ void gen_ir_stmt_asm(Node *node, int indent, bool *terminated)
     char llvm_c[72];
     if (is_mem[i]) {
       // Memory output: "=*m" (covers both =m and =*m, and +m/+*m)
-      if (c[0] == '&' || (c[0] == '+' && c[1] == '&'))
+      if (strchr(c, '&'))
         snprintf(llvm_c, sizeof(llvm_c), "=&*m");
       else
         snprintf(llvm_c, sizeof(llvm_c), "=*m");
     } else {
-      int earlyclob = (c[0] == '&' || (c[0] == '+' && c[1] == '&')) ? 1 : 0;
+      int earlyclob = (strchr(c, '&') != NULL);
       char regstr[64];
       llvm_x86_constraint(c, regstr, sizeof(regstr));
-      snprintf(llvm_c, sizeof(llvm_c), "%s%s", earlyclob ? "=&" : "=", regstr);
+       snprintf(llvm_c, sizeof(llvm_c), "%s%s", earlyclob ? "=&" : "=", regstr);
     }
     cpos += snprintf(constraints + cpos, sizeof(constraints) - cpos, "%s,", llvm_c);
 
