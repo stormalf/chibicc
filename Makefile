@@ -119,7 +119,7 @@ nginx:
 	cd ../nginx && make clean && CC=chibicc CFLAGS="-fPIC -std=c11 -g $(CHIBICC_BACKEND)" ./auto/configure --with-http_ssl_module && make -j4
 
 vim:
-	cd ../vim && make clean && CC=chibicc CFLAGS="-fPIC -std=c11 -g $(CHIBICC_BACKEND)" ./configure && make -j2 &&  make test 
+	cd ../vim && make clean && make distclean && CC=chibicc CFLAGS="-fPIC -std=c11 -g $(CHIBICC_BACKEND)" ./configure && make -j2 &&  make test 
 
 lxc:
 	cd ../lxc && rm -rf build && CC=gcc \

@@ -584,7 +584,10 @@ bool is_pointer(Type *ty) {
 }
 
 bool is_sret(Type *ty) {
-  return (ty->kind == TY_STRUCT || ty->kind == TY_UNION) && ty->size > 0;
+  // Follow the AMD64 SysV convention: an aggregate is returned in memory
+  // (through a hidden sret pointer) only when it is larger than 16 bytes
+  // (MEMORY class).  Smaller aggregates are returned in registers.
+  return (ty->kind == TY_STRUCT || ty->kind == TY_UNION) && ty->size > 16;
 }
 
 bool has_pointer(Type *ty) {

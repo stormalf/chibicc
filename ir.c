@@ -113,14 +113,90 @@ static int ir_sysv_agg_eightbytes(Type *t, const char *eb_ty[2])
     if (sse)
       eb_ty[e] = (ebsize <= 4) ? "float" : "double";
     else
-      eb_ty[e] = (ebsize <= 4) ? "i32" : "i64";
+    {
+      // Use the smallest integer width that can hold the whole eightbyte so no
+      // bytes of the aggregate are truncated (a 3-byte struct needs i32, not
+      // i16).  The callee stores this value back into the parameter slot at
+      // byte offset e*8; the slot is padded to a multiple of 8 (see
+      // ir_param_slot_size) so the store never overflows.
+      eb_ty[e] = (ebsize > 4) ? "i64"
+               : (ebsize > 2) ? "i32"
+               : (ebsize > 1) ? "i16"
+               : "i8";
+    }
   }
   return ne;
 }
 
+static void emit_llvm_aggr_type(Type *ty);
+static int ir_type_align(Type *ty);
+
+// A function is "system" (libc) when its prototype was declared in a system
+// header.  Such functions obey the AMD64 SysV ABI even when variadic, whereas
+// chibicc-compiled variadic functions read struct arguments from the stack.
 static bool ir_is_system_func(Obj *var)
 {
   return var && var->tok && var->tok->file && var->tok->file->is_system_header;
+}
+
+// Emit one or more IR parameter declarations for a struct/union value
+// parameter, following the AMD64 SysV ABI: a small aggregate (<= 16 bytes) is
+// split into one or two eightbyte scalar slots passed *by value* in registers,
+// while a larger aggregate (MEMORY class) is passed as a `byval` pointer.
+// Variadic struct parameters always use a `byval` pointer because chibicc's
+// va_arg machinery reads them from the stack.  The parameter name(s) are
+// derived deterministically from `pname` (suffixed with `.__ebN` for the
+// register slots) so the function prologue can reconstruct the aggregate.
+static void emit_ir_func_param(Type *t, const char *pname, bool variadic,
+                               bool emit_name)
+{
+  if (variadic)
+  {
+    int al = ir_type_align(t);
+    emit("ptr byval(");
+    emit_llvm_aggr_type(t);
+    emit(")");
+    if (al > 16)
+      emit(" align %d", al);
+    if (emit_name)
+      emit(" %%%s", pname);
+    return;
+  }
+  const char *eb_ty[2] = {NULL, NULL};
+  int ne = ir_sysv_agg_eightbytes(t, eb_ty);
+  if (ne == 0)
+  {
+    // Struct/union parameters are passed as a plain pointer to the aggregate
+    // (chibicc's internal convention).  Emitting them as `byval` makes LLVM
+    // copy the argument and mark it `noalias`, which interacts badly with the
+    // GEP-derived pointers chibicc uses to address the same object (the
+    // optimizer can then prove a false non-aliasing and miscompile code that
+    // reads/writes the original, e.g. the ML-KEM polynomial arithmetic).
+    emit("ptr");
+    if (emit_name)
+      emit(" %%%s", pname);
+    return;
+  }
+  for (int e = 0; e < ne; e++)
+  {
+    if (e)
+      emit(", ");
+    emit("%s", eb_ty[e]);
+    if (emit_name)
+      emit(" %%%s.__eb%d", pname, e);
+  }
+}
+
+// Emit the LLVM type of a function return value: aggregates (struct/union) are
+// emitted as their literal LLVM structure type so chibicc follows the AMD64
+// SysV convention of returning small aggregates in registers; every other type
+// goes through emit_type_str.
+static void emit_ir_ret_type(Type *ty)
+{
+  if (ty->kind == TY_STRUCT || ty->kind == TY_UNION)
+    emit_llvm_aggr_type(ty);
+  else
+    emit_type_str(ty);
 }
 
 void emit_type_str(Type *ty)
@@ -377,8 +453,10 @@ static void emit_float_const_from_data(Type *ty, unsigned char *data, long base)
 {
   if (ty->kind == TY_FLOAT)
   {
-    uint32_t i; memcpy(&i, data + base, 4);
-    emit("float 0x%08X", i);
+    float f; memcpy(&f, data + base, 4);
+    double d = (double)f;
+    uint64_t i; memcpy(&i, &d, 8);
+    emit("float 0x%016llX", (unsigned long long)i);
   }
   else if (ty->kind == TY_DOUBLE)
   {
@@ -431,6 +509,16 @@ static void emit_typed_const(Type *ty, unsigned char *data, long base, Relocatio
       }
       else
         emit_llvm_name(*r->label);
+    }
+    else if (data)
+    {
+      // A pointer initialized from an integer constant (e.g. `(T *)N`) has no
+      // relocation; the integer value is stored inline in the initializer
+      // buffer.  Recover it and emit an `inttoptr` so the value is preserved
+      // instead of being dropped to `null`.
+      emit("inttoptr (i%d ", (int)ty->size * 8);
+      emit_int_const_from_data(ty, data, base);
+      emit(" to ptr)");
     }
     else
       emit("null");
@@ -2854,63 +2942,57 @@ const char *gen_ir_funcall(Node *node, int indent)
     }
   }
 
-  // chibicc-compiled functions (those that have a body in this link,
-  // i.e. `is_definition`) always receive struct/union arguments as a byval
-  // (hidden) pointer, never by value in registers.  Keep the argument as its
-  // address so it is emitted as a `ptr` below, matching the callee's
-  // parameter convention (the LLVM stdarg setup reads such variadic struct
-  // args from the stack, not from registers).
-  //
-  // Genuine *external* libc functions that we only declare (no definition in
-  // this link) follow the AMD64 SysV ABI instead: a small aggregate (<= 16
-  // bytes) is classified into one or two eightbytes and passed *by value* in
-  // registers, while larger aggregates stay MEMORY class and are passed as a
-  // `byval` pointer.  Lower such arguments accordingly here, matching clang,
-  // so e.g. `sigqueue(pid, sig, union sigval)` delivers the right value.
-  int *agg_ne = (int *)calloc((size_t)(n > 0 ? n : 1), sizeof(int));
-  const char *agg_val[2 * 64];
-  const char *agg_ty[2 * 64];
-  memset(agg_val, 0, sizeof(agg_val));
+   // chibicc now follows the AMD64 SysV ABI for struct/union *arguments* of
+   // non-variadic functions: a small aggregate (<= 16 bytes) is split into one
+   // or two eightbyte scalar slots passed *by value* in registers, while a
+   // larger aggregate (MEMORY class) is passed as a `byval` pointer.  This makes
+   // chibicc-compiled functions callable from code generated by other compilers
+   // (and vice-versa), instead of relying on an internal "hidden pointer"
+   // convention that only worked between chibicc translation units.
+   //
+   // Variadic functions keep the internal `byval` pointer convention for every
+   // struct argument so chibicc's va_arg machinery still reads them from the
+   // stack (a variadic function receiving a small struct in registers would
+   // require reworking va_arg, which is out of scope here).
+   int *agg_ne = (int *)calloc((size_t)(n > 0 ? n : 1), sizeof(int));
+   const char *agg_val[2 * 64];
+   const char *agg_ty[2 * 64];
+   memset(agg_val, 0, sizeof(agg_val));
    memset(agg_ty, 0, sizeof(agg_ty));
-   // External calls (direct, no definition in this link) keep chibicc's
-   // internal byval-pointer convention *unless* they are genuine libc
-   // functions (prototype declared in a system header), which must obey the
-   // AMD64 SysV ABI: a small aggregate (<= 16 bytes) is passed by value as one
-   // or two eightbyte scalar slots, while larger aggregates are MEMORY class
-   // and passed as a `byval` pointer.  This matches real libc, e.g.
-   // `sigqueue(pid, sig, union sigval)` from util-linux.
-   bool is_external_call =
-       is_direct && node->lhs->var && !node->lhs->var->is_definition;
-   bool is_libc = is_external_call && ir_is_system_func(node->lhs->var);
-   if (is_libc)
-   {
-     bool is_var = node->lhs->var->ty->is_variadic;
-     int fixed_params = 0;
-     for (Type *t = node->lhs->var->ty->params; t; t = t->next)
-       fixed_params++;
-     int sret_off = sret ? 1 : 0;
-     for (int i = 0; i < n && i < 64; i++)
-     {
-       // Only variadic trailing arguments travel through `...`; fixed
-       // parameters are classified from their declared (SysV) type.
-       if (is_var && i - sret_off < fixed_params)
-         continue;
-       Type *t = arg_tys[i];
-       if (!t || (t->kind != TY_STRUCT && t->kind != TY_UNION))
-         continue;
-       const char *eb_ty[2] = {NULL, NULL};
-       int ne = ir_sysv_agg_eightbytes(t, eb_ty);
-       if (ne == 0)
-         continue;
-       for (int e = 0; e < ne; e++)
-       {
-         agg_ty[i * 2 + e] = eb_ty[e];
-         agg_val[i * 2 + e] =
-             gen_ir_load_eightbyte(arg_regs[i], e * 8, eb_ty[e], indent);
-       }
-       agg_ne[i] = ne;
-     }
-   }
+   for (int i = 0; i < n && i < 64; i++)
+    {
+      Type *t = arg_tys[i];
+      if (!t || (t->kind != TY_STRUCT && t->kind != TY_UNION))
+        continue;
+      if (is_variadic_callee)
+      {
+        // chibicc-compiled variadic functions read struct arguments from the
+        // stack (their va_arg expects a byval pointer), so keep the internal
+        // byval convention.  Genuine libc variadic functions obey the AMD64
+        // SysV ABI, where a small aggregate travelling through `...` is passed
+        // by value in registers; lower those accordingly.  Fixed parameters of
+        // a libc variadic function are classified from their declared type.
+        if (!ir_is_system_func(node->lhs->var))
+          continue;
+        int fixed_params = 0;
+        for (Type *p = node->lhs->var->ty->params; p; p = p->next)
+          fixed_params++;
+        int sret_off = sret ? 1 : 0;
+        if (i - sret_off < fixed_params)
+          continue;
+      }
+      const char *eb_ty[2] = {NULL, NULL};
+      int ne = ir_sysv_agg_eightbytes(t, eb_ty);
+      // ne == 0 means MEMORY class: a `byval` pointer is emitted at the call
+      // site (see below).  ne > 0 means the aggregate travels in registers.
+      agg_ne[i] = ne;
+      for (int e = 0; e < ne; e++)
+      {
+        agg_ty[i * 2 + e] = eb_ty[e];
+        agg_val[i * 2 + e] =
+            gen_ir_load_eightbyte(arg_regs[i], e * 8, eb_ty[e], indent);
+      }
+    }
 
    const char *reg = new_reg();
   emit_indent(indent);
@@ -2921,7 +3003,7 @@ const char *gen_ir_funcall(Node *node, int indent)
   if (sret)
     emit("void");
   else
-    emit_type_str(node->ty);
+    emit_ir_ret_type(node->ty);
 
   if (is_variadic_callee)
   {
@@ -2967,47 +3049,31 @@ const char *gen_ir_funcall(Node *node, int indent)
     if (i > 0)
       emit(", ");
     if (sret && i == 0)
-      emit("ptr sret(i8) %s", arg_regs[i]);
-    else if (arg_tys[i]->kind == TY_STRUCT || arg_tys[i]->kind == TY_UNION)
     {
-      if (is_libc && i < 64 && agg_ne[i])
-      {
-        for (int e = 0; e < agg_ne[i]; e++)
-        {
-          if (e)
-            emit(", ");
-          emit("%s %s", agg_ty[i * 2 + e], agg_val[i * 2 + e]);
-        }
-      }
-      else if (is_libc)
-      {
-        int al = ir_type_align(arg_tys[i]);
-        emit("ptr byval(");
-        emit_llvm_aggr_type(arg_tys[i]);
-        emit(")");
-        if (al > 16)
-          emit(" align %d", al);
-        emit(" %s", arg_regs[i]);
-      }
-      else if (is_variadic_callee)
-      {
-        // chibicc-compiled variadic functions receive struct/union arguments
-        // as a hidden byval pointer, matching their definition (see the
-        // parameter emission in emit_ir), so the LLVM stdarg machinery can
-        // read them from the stack.
-        int al = ir_type_align(arg_tys[i]);
-        emit("ptr byval(");
-        emit_llvm_aggr_type(arg_tys[i]);
-        emit(")");
-        if (al > 16)
-          emit(" align %d", al);
-        emit(" %s", arg_regs[i]);
-      }
-       else
-       {
-         emit("ptr %s", arg_regs[i]);
-       }
+      emit("ptr sret(");
+      emit_llvm_aggr_type(node->ty);
+      emit(") %s", arg_regs[i]);
     }
+     else if (arg_tys[i]->kind == TY_STRUCT || arg_tys[i]->kind == TY_UNION)
+     {
+       if (i < 64 && agg_ne[i] > 0)
+       {
+         for (int e = 0; e < agg_ne[i]; e++)
+         {
+           if (e)
+             emit(", ");
+           emit("%s %s", agg_ty[i * 2 + e], agg_val[i * 2 + e]);
+         }
+       }
+        else
+        {
+          // Struct/union parameters are passed as a plain pointer (chibicc's
+          // internal convention); emitting `byval` here would copy the
+          // argument and mark it `noalias`, miscompiling GEP-derived accesses
+          // to the same object (see emit_ir_func_param).
+          emit("ptr %s", arg_regs[i]);
+        }
+     }
     else
     {
       emit_type_str(arg_tys[i]);
@@ -3038,6 +3104,17 @@ const char *gen_ir_funcall(Node *node, int indent)
   free(agg_ne);
   if (sret)
     return var_ptr(node->ret_buffer);
+  // A small struct/union returned by value is delivered in registers; spill
+  // it into the call's return buffer so the rest of the code can keep treating
+  // the result as an addressable struct (chibicc's usual convention).
+  if (node->ty->kind == TY_STRUCT || node->ty->kind == TY_UNION)
+  {
+    emit_indent(indent);
+    emit("store ");
+    emit_llvm_aggr_type(node->ty);
+    emit(" %s, ptr %s\n", reg, var_ptr(node->ret_buffer));
+    return var_ptr(node->ret_buffer);
+  }
   return reg;
 }
 
@@ -8999,6 +9076,21 @@ void gen_ir_stmt_return(Node *node, int indent, bool *terminated)
       emit("ret void\n");
       is_terminated = true;
   }
+    else if (node->lhs->ty->kind == TY_STRUCT || node->lhs->ty->kind == TY_UNION)
+    {
+      // Small aggregate returned in registers (AMD64 SysV): load the value
+      // from its return slot as the LLVM aggregate type and return it directly.
+      const char *loaded = new_reg();
+      emit_indent(indent);
+      emit("%s = load ", loaded);
+      emit_llvm_aggr_type(node->lhs->ty);
+      emit(", ptr %s\n", val);
+      emit_indent(indent);
+      emit("ret ");
+      emit_llvm_aggr_type(node->lhs->ty);
+      emit(" %s\n", loaded);
+      is_terminated = true;
+    }
     else
     {
       // The ND_RETURN node itself has no type set; use the enclosing
@@ -9878,10 +9970,17 @@ static long ir_param_slot_size(Type *ty)
     return 8;
   if (ty->kind == TY_STRUCT || ty->kind == TY_UNION)
   {
-    // Struct/union parameters are copied by value into their slot (see the
-    // memcpy in emit_func), so the slot must hold the whole aggregate, not
-    // just a pointer to it.
-    return ty->size > 0 ? ty->size : 1;
+    // Struct/union parameters are materialised into their slot (see the
+    // memcpy / eightbyte stores in emit_func), so the slot must hold the whole
+    // aggregate.  Round the slot up to a multiple of 8: when the aggregate is
+    // passed by value in registers its eightbytes are stored back with the
+    // full register width (i64/i32/...), and the padding keeps those stores
+    // from overflowing the slot (matching the 8-byte stack slots the AMD64
+    // SysV ABI uses for register-class arguments).
+    long sz = ty->size > 0 ? ty->size : 1;
+    if (sz % 8)
+      sz += 8 - (sz % 8);
+    return sz;
   }
   return ty->size;
 }
@@ -10041,7 +10140,7 @@ static void emit_func(Obj *fn)
   if (sret)
     emit("void");
   else
-    emit_type_str(fn->ty->return_ty);
+    emit_ir_ret_type(fn->ty->return_ty);
   emit(" ");
   emit_llvm_name(ir_sym(fn));
   emit("(");
@@ -10061,12 +10160,16 @@ static void emit_func(Obj *fn)
                               ? fn->params->name
                               : format("_p%d", llvm_obj_id(fn->params));
       sret_reg = format("%%%s", pname);
-      emit("ptr sret(i8) %%%s", pname);
+      emit("ptr sret(");
+      emit_llvm_aggr_type(fn->ty->return_ty);
+      emit(") %%%s", pname);
     }
     else
     {
       sret_reg = "%_agg_result";
-      emit("ptr sret(i8) %s", sret_reg);
+      emit("ptr sret(");
+      emit_llvm_aggr_type(fn->ty->return_ty);
+      emit(") %s", sret_reg);
     }
   }
 
@@ -10081,19 +10184,14 @@ static void emit_func(Obj *fn)
       emit(", ");
     first_param = false;
 
-    if (fn->ty->is_variadic && (param->ty->kind == TY_STRUCT || param->ty->kind == TY_UNION))
-    {
-      int al = ir_type_align(param->ty);
-      emit("ptr byval(");
-      emit_llvm_aggr_type(param->ty);
-      emit(")");
-      if (al > 16)
-        emit(" align %d", al);
-    }
-    else
-      emit_type_str(param->ty);
     const char *pname = param->name && param->name[0] ? param->name : format("_p%d", llvm_obj_id(param));
-    emit(" %%%s", pname);
+    if (param->ty->kind == TY_STRUCT || param->ty->kind == TY_UNION)
+      emit_ir_func_param(param->ty, pname, fn->ty->is_variadic, true);
+    else
+    {
+      emit_type_str(param->ty);
+      emit(" %%%s", pname);
+    }
   }
   if (fn->ty->is_variadic)
   {
@@ -10132,15 +10230,32 @@ static void emit_func(Obj *fn)
     if (!param->name || !param->name[0])
       continue;
     const char *pname = param->name && param->name[0] ? param->name : format("_p%d", llvm_obj_id(param));
+    bool vp = fn->ty->is_variadic &&
+              (param->ty->kind == TY_STRUCT || param->ty->kind == TY_UNION);
     if (param->ty->kind == TY_STRUCT || param->ty->kind == TY_UNION)
     {
-      // Struct/union parameters arrive as a hidden `ptr` (the AMD64 SysV
-      // by-value ABI) but we want the parameter slot to hold the struct
-      // itself, like a local variable.  Copy it in at entry so field access
-      // and `&param` address the slot directly (no load-ptr-then-gep, which
-      // llc miscompiles when the parameter's address is also taken).
-      emit("  call void @llvm.memcpy.p0.p0.i64(ptr %s, ptr %%%s, i64 %ld, i1 false)\n",
-           var_ptr(param), pname, param->ty->size);
+      // Struct/union parameters follow the AMD64 SysV ABI: a small aggregate
+      // is delivered in one or two register slots (eightbytes) while a larger
+      // one (MEMORY class) arrives as a `byval` pointer.  Variadic struct
+      // parameters, however, are always received as a `byval` pointer (the
+      // definition emits them that way and chibicc's va_arg reads them from
+      // the stack), so reconstruct them with a memcpy regardless of size.
+      const char *eb_ty[2] = {NULL, NULL};
+      int ne = vp ? 0 : ir_sysv_agg_eightbytes(param->ty, eb_ty);
+      if (ne == 0)
+      {
+        emit("  call void @llvm.memcpy.p0.p0.i64(ptr %s, ptr %%%s, i64 %ld, i1 false)\n",
+             var_ptr(param), pname, param->ty->size);
+      }
+      else
+      {
+        for (int e = 0; e < ne; e++)
+        {
+          const char *gep = new_reg();
+          emit("  %s = getelementptr i8, ptr %s, i64 %d\n", gep, var_ptr(param), e * 8);
+          emit("  store %s %%%s.__eb%d, ptr %s\n", eb_ty[e], pname, e, gep);
+        }
+      }
     }
     else
     {
@@ -10173,7 +10288,7 @@ static void emit_func(Obj *fn)
       }
       else
       {
-        emit_type_str(rty);
+        emit_ir_ret_type(rty);
         emit(" ");
         if (is_pointer(rty))
           emit("null\n");
@@ -10365,14 +10480,17 @@ void emit_ir(Obj *prog, FILE *out)
       emit("void (ptr");
     else
     {
-      emit_type_str(fn->ty->return_ty);
+      emit_ir_ret_type(fn->ty->return_ty);
       emit(" (");
     }
     int n = 0;
     for (Type *t = fn->ty->params; t; t = t->next)
     {
       if (n) emit(", ");
-      emit_type_str(t);
+      if (t->kind == TY_STRUCT || t->kind == TY_UNION)
+        emit_ir_func_param(t, "", false, false);
+      else
+        emit_type_str(t);
       n++;
     }
     if (fn->ty->is_variadic)
@@ -10386,14 +10504,17 @@ void emit_ir(Obj *prog, FILE *out)
     else
     {
       emit(", ");
-      emit_type_str(fn->ty->return_ty);
+      emit_ir_ret_type(fn->ty->return_ty);
       emit(" (");
     }
     n = 0;
     for (Type *t = fn->ty->params; t; t = t->next)
     {
       if (n) emit(", ");
-      emit_type_str(t);
+      if (t->kind == TY_STRUCT || t->kind == TY_UNION)
+        emit_ir_func_param(t, "", false, false);
+      else
+        emit_type_str(t);
       n++;
     }
     if (fn->ty->is_variadic)
@@ -10435,67 +10556,30 @@ void emit_ir(Obj *prog, FILE *out)
     if (sret)
       emit("void");
     else
-      emit_type_str(fn->ty->return_ty);
+      emit_ir_ret_type(fn->ty->return_ty);
     emit(" ");
     emit_llvm_name(ir_sym(fn));
     emit("(");
 
     if (sret)
-      emit("ptr sret(i8)");
+    {
+      emit("ptr sret(");
+      emit_llvm_aggr_type(fn->ty->return_ty);
+      emit(")");
+    }
 
      Type *ptype = fn->ty->params;
      for (Type *t = ptype; t; t = t->next)
      {
         if (sret || t != ptype)
           emit(", ");
-        // Genuine libc functions (prototype in a system header) obey the
-        // AMD64 SysV ABI: a small aggregate (<= 16 bytes) is passed by value
-        // as one or two eightbyte scalar slots, while larger aggregates are
-        // MEMORY class and passed as a `byval` pointer.  Declare the parameter
-        // this way so the signature matches the call sites (which lower
-        // struct/union arguments the same way) and the real libc implementation
-        // is called correctly, e.g. `sigqueue(pid_t, int, union sigval)`.
-        // chibicc-compiled functions (including those defined in another
-        // translation unit) keep the internal convention instead: a plain
-        // `ptr` for non-variadic parameters and a `byval` pointer for variadic
-        // ones, matching their definitions.
+        // All non-variadic struct/union parameters follow the AMD64 SysV ABI
+        // (small aggregates split into register slots, larger ones byval), so
+        // a `declare`d function matches both its definitions and its call
+        // sites regardless of whether it is libc, chibicc-compiled, or written
+        // in another language.  Variadic struct parameters stay `byval`.
         if (t->kind == TY_STRUCT || t->kind == TY_UNION)
-        {
-          if (ir_is_system_func(fn))
-          {
-            const char *eb_ty[2] = {NULL, NULL};
-            int ne = ir_sysv_agg_eightbytes(t, eb_ty);
-            if (ne == 0)
-            {
-              int al = ir_type_align(t);
-              emit("ptr byval(");
-              emit_llvm_aggr_type(t);
-              emit(")");
-              if (al > 16)
-                emit(" align %d", al);
-            }
-            else
-            {
-              for (int e = 0; e < ne; e++)
-              {
-                if (e)
-                  emit(", ");
-                emit("%s", eb_ty[e]);
-              }
-            }
-          }
-          else if (fn->ty->is_variadic)
-          {
-            int al = ir_type_align(t);
-            emit("ptr byval(");
-            emit_llvm_aggr_type(t);
-            emit(")");
-            if (al > 16)
-              emit(" align %d", al);
-          }
-          else
-            emit("ptr");
-        }
+          emit_ir_func_param(t, "", fn->ty->is_variadic, false);
         else
           emit_type_str(t);
      }
