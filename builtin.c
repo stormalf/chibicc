@@ -618,6 +618,46 @@ void gen_builtin_floor(Node *node) {
     println("  roundsd $1, %%xmm0, %%xmm0");
 }
 
+void gen_builtin_ceilf(Node *node) {
+    gen_expr(node->builtin_val);
+    println("  roundss $2, %%xmm0, %%xmm0");
+}
+
+void gen_builtin_floorf(Node *node) {
+    gen_expr(node->builtin_val);
+    println("  roundss $1, %%xmm0, %%xmm0");
+}
+
+void gen_builtin_ceill(Node *node) {
+    gen_expr(node->builtin_val);
+    // push long double arg from st0 if needed, apply ceil via x87
+    // set rounding mode to UP (RC=10b, bits 11:10 of CW), call frndint, restore
+    println("  subw $2, %%sp");
+    println("  fnstcw (%%sp)");
+    println("  movw (%%sp), %%ax");
+    println("  andw $0xF3FF, %%ax");
+    println("  orw  $0x0800, %%ax");  // RC=10b (toward +inf)
+    println("  movw %%ax, 2(%%sp)");
+    println("  fldcw 2(%%sp)");
+    println("  frndint");
+    println("  fldcw (%%sp)");
+    println("  addw $2, %%sp");
+}
+
+void gen_builtin_floorl(Node *node) {
+    gen_expr(node->builtin_val);
+    println("  subw $2, %%sp");
+    println("  fnstcw (%%sp)");
+    println("  movw (%%sp), %%ax");
+    println("  andw $0xF3FF, %%ax");
+    println("  orw  $0x0400, %%ax");  // RC=01b (toward -inf)
+    println("  movw %%ax, 2(%%sp)");
+    println("  fldcw 2(%%sp)");
+    println("  frndint");
+    println("  fldcw (%%sp)");
+    println("  addw $2, %%sp");
+}
+
 void gen_builtin_frame_address(Node *node) {
     int c = count();
 

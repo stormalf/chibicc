@@ -18,7 +18,7 @@
  *   diff -u reference.txt under_test.txt
  */
 
-#include <stdio.h>
+#include "test.h"
 #include <stdint.h>
 #include <string.h>
 #include <math.h>

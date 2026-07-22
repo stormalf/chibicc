@@ -503,8 +503,12 @@ typedef enum
   ND_BUILTIN_BSWAP32, //builtin bswap32
   ND_BUILTIN_BSWAP64, //builtin bswap64,
   ND_BUILTIN_FRAME_ADDRESS, // builtin frame address
-  ND_BUILTIN_CEIL, // builtin ceil
-  ND_BUILTIN_FLOOR, // builtin floor
+  ND_BUILTIN_CEIL,  // builtin ceil (double)
+  ND_BUILTIN_FLOOR, // builtin floor (double)
+  ND_BUILTIN_CEILF, // builtin ceilf (float)
+  ND_BUILTIN_FLOORF,// builtin floorf (float)
+  ND_BUILTIN_CEILL, // builtin ceill (long double)
+  ND_BUILTIN_FLOORL,// builtin floorl (long double)
   ND_STDC_BIT_CEIL, // builtin stdc bit ceil
   ND_EMMS,
   ND_SFENCE,
@@ -1486,6 +1490,10 @@ void gen_builtin_bswap32(Node *node);
 void gen_builtin_bswap64(Node *node);
 void gen_builtin_ceil(Node *node);
 void gen_builtin_floor(Node *node);
+void gen_builtin_ceilf(Node *node);
+void gen_builtin_floorf(Node *node);
+void gen_builtin_ceill(Node *node);
+void gen_builtin_floorl(Node *node);
 void gen_builtin_frame_address(Node *node);
 void gen_builtin_expect(Node *node);
 void gen_builtin_abort(Node *node);

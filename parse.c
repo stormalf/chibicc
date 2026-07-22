@@ -6907,6 +6907,22 @@ static Node *primary(Token **rest, Token *tok)
       return ParseBuiltin(ND_BUILTIN_FLOOR, tok, rest);
   }
 
+  if (equal(tok, "__builtin_ceilf")) {
+      return ParseBuiltin(ND_BUILTIN_CEILF, tok, rest);
+  }
+
+  if (equal(tok, "__builtin_floorf")) {
+      return ParseBuiltin(ND_BUILTIN_FLOORF, tok, rest);
+  }
+
+  if (equal(tok, "__builtin_ceill")) {
+      return ParseBuiltin(ND_BUILTIN_CEILL, tok, rest);
+  }
+
+  if (equal(tok, "__builtin_floorl")) {
+      return ParseBuiltin(ND_BUILTIN_FLOORL, tok, rest);
+  }
+
   if (equal(tok, "__builtin_bswap16")) {
       return ParseBuiltin(ND_BUILTIN_BSWAP16, tok, rest);
   }
@@ -9226,6 +9242,10 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_unpckhps", ND_UNPCKHPS },    
     { "__builtin_ceil", ND_BUILTIN_CEIL },
     { "__builtin_floor", ND_BUILTIN_FLOOR },
+    { "__builtin_ceilf", ND_BUILTIN_CEILF },
+    { "__builtin_floorf", ND_BUILTIN_FLOORF },
+    { "__builtin_ceill", ND_BUILTIN_CEILL },
+    { "__builtin_floorl", ND_BUILTIN_FLOORL },
     { "__builtin_stdc_bit_ceil", ND_STDC_BIT_CEIL },
 
     { "__builtin_ia32_unpcklps", ND_UNPCKLPS },         
