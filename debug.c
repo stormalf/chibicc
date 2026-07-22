@@ -38,10 +38,10 @@ void print_debug_tokens(char *currentfilename, char *function, Token *tok)
     {
         if (t->len > 0)
         {
-            char tokloc[t->len + 1];
-            memset(tokloc, 0, sizeof(tokloc));
-            char *ptokloc = &tokloc[0];
-            strncpy(ptokloc, t->loc, t->len);
+    char tokloc[t->len + 1];
+    memset(tokloc, 0, sizeof(tokloc));
+    char *ptokloc = &tokloc[0];
+    strncpy(ptokloc, t->loc, t->len);
             fprintf(f, "token->kind: %s, token->len: %d, token->val: %ld, token->fval:%Lf \n", tokenkind2str(t->kind), t->len, t->val, t->fval);
             fprintf(f, "     token->str: %s, token->filename: %s, token->line_no: %d, token->at_bol:%d \n", t->str, t->filename, t->line_no, t->at_bol);
             fprintf(f, "     token->loc: %s \n", ptokloc);
@@ -118,7 +118,6 @@ static bool is_builtin_debug_type(Type *ty) {
   switch (ty->kind) {
   case TY_VOID:
   case TY_BOOL:
-  case TY_ENUM:
   case TY_CHAR:
   case TY_SHORT:
   case TY_INT:
@@ -146,9 +145,6 @@ static bool emit_builtin_type_ref(Type *ty, int c) {
     return true;
   case TY_BOOL:
     println("  .long .L.type_bool%d - .L.debug_info%d", c, c);
-    return true;
-  case TY_ENUM:
-    println("  .long .L.type_int%d - .L.debug_info%d", c, c);
     return true;
   case TY_CHAR:
     if (ty->is_unsigned) {
@@ -234,7 +230,7 @@ static void collect_debug_type(Type *ty, DebugTypeInfo **types, int *next_id,
     return;
 
   if (ty->kind != TY_PTR && ty->kind != TY_ARRAY && ty->kind != TY_STRUCT &&
-      ty->kind != TY_UNION)
+      ty->kind != TY_UNION && ty->kind != TY_ENUM)
     return;
 
   if (find_debug_type(*types, ty))
@@ -276,7 +272,7 @@ static void emit_unqualified_type_ref(Type *ty, DebugTypeInfo *types, int c) {
   // referencing a typedef DIE so debuggers see the typedef name
   // (e.g. "PyObject" instead of "struct _object").
   if (!debug_typedef_emit_inner &&
-      (ty->kind == TY_STRUCT || ty->kind == TY_UNION)) {
+      (ty->kind == TY_STRUCT || ty->kind == TY_UNION || ty->kind == TY_ENUM)) {
     DebugTypedef *td = find_debug_typedef_by_type(ty);
     if (td) {
       println("  .long .L.type_typedef_%s_%d - .L.debug_info%d", td->name, c, c);
@@ -316,8 +312,6 @@ static void emit_type_ref(Type *ty, DebugTypeInfo *types, DebugQualTypeInfo *qua
 
 static void emit_struct_name(Type *ty, int id) {
   Token *tag = ty ? ty->tag_name : NULL;
-  if (!tag && ty)
-    tag = ty->name;
 
   if (tag) {
     println("  .string \"%.*s\"", tag->len, tag->loc);
@@ -385,6 +379,30 @@ static void emit_custom_type_die(DebugTypeInfo *entry, DebugTypeInfo *types, int
       emit_unqualified_type_ref(mem->ty, types, c);
       println("  .uleb128 %d", ty->kind == TY_UNION ? 0 : mem->offset);
     }
+    }
+    println("  .byte 0");
+    return;
+  }
+  case TY_ENUM: {
+    if (ty->size < 0) {
+      println("  .uleb128 23");                 // Abbrev: incomplete enum
+      emit_struct_name(ty, entry->id);
+      println("  .byte 1");                     // DW_AT_declaration
+      return;
+    }
+    if (ty->tag_name) {
+      println("  .uleb128 20");                   // Abbrev: DW_TAG_enumeration_type (named)
+      println("  .string \"%.*s\"", ty->tag_name->len, ty->tag_name->loc); // DW_AT_name
+    } else {
+      println("  .uleb128 22");                   // Abbrev: DW_TAG_enumeration_type (anonymous)
+    }
+    println("  .uleb128 %ld", ty->size);        // DW_AT_byte_size
+    println("  .uleb128 %d", ty->is_unsigned ? 7 : 5); // DW_AT_encoding: 5=signed, 7=unsigned
+    emit_unqualified_type_ref(ty_int, types, c); // DW_AT_type: underlying int type
+    for (Member *mem = ty->members; mem; mem = mem->next) {
+      println("  .uleb128 21");                 // Abbrev: DW_TAG_enumerator
+      emit_member_name(mem, 0);
+      println("  .sleb128 %d", mem->offset);    // DW_AT_const_value
     }
     println("  .byte 0");
     return;
@@ -484,6 +502,31 @@ static bool has_float_in_range(Type *ty, int lo, int hi, int offset) {
   }
   if (ty->kind == TY_VECTOR) return true;
   return ty->kind == TY_FLOAT || ty->kind == TY_DOUBLE;
+}
+
+static void collect_scope_debug_types(Scope *sc, DebugTypeInfo **types, int *next_type_id, DebugQualTypeInfo **quals, int *next_qual_id) {
+  for (Scope *child = sc->children; child; child = child->sibling_next)
+    collect_scope_debug_types(child, types, next_type_id, quals, next_qual_id);
+  for (Obj *var = sc->locals; var; var = var->next)
+    if (!var->is_param)
+      collect_debug_type(var->ty, types, next_type_id, quals, next_qual_id);
+}
+
+static void emit_scope_locals(Scope *sc, DebugTypeInfo *types, DebugQualTypeInfo *quals, int c, int *label_count) {
+  for (Scope *child = sc->children; child; child = child->sibling_next)
+    emit_scope_locals(child, types, quals, c, label_count);
+  for (Obj *var = sc->locals; var; var = var->next) {
+    if (var->is_param || !var->name) continue;
+    println("  .uleb128 4");
+    println("  .string \"%s\"", var->name);
+    emit_type_ref(var->ty, types, quals, c);
+    int lbl = (*label_count)++;
+    println("  .uleb128 .L.loc_end_%d - .L.loc_start_%d", lbl, lbl);
+    println(".L.loc_start_%d:", lbl);
+    println("  .byte 0x91");
+    println("  .sleb128 %d", var->offset);
+    println(".L.loc_end_%d:", lbl);
+  }
 }
 
 void emit_debug_info(Obj *prog) {
@@ -740,6 +783,56 @@ void emit_debug_info(Obj *prog) {
   println("  .byte 0");
   println("  .byte 0");
 
+  // Abbrev 20: DW_TAG_enumeration_type (complete)
+  println("  .uleb128 20");
+  println("  .uleb128 0x04");                // DW_TAG_enumeration_type
+  println("  .byte 1");                       // DW_CHILDREN_yes
+  println("  .uleb128 0x3");                  // DW_AT_name
+  println("  .uleb128 0x8");                  // DW_FORM_string
+  println("  .uleb128 0xb");                  // DW_AT_byte_size
+  println("  .uleb128 0xf");                  // DW_FORM_udata
+  println("  .uleb128 0x3e");                 // DW_AT_encoding
+  println("  .uleb128 0xb");                  // DW_FORM_data1
+  println("  .uleb128 0x49");                 // DW_AT_type
+  println("  .uleb128 0x13");                 // DW_FORM_ref4
+  println("  .byte 0");
+  println("  .byte 0");
+
+  // Abbrev 21: DW_TAG_enumerator
+  println("  .uleb128 21");
+  println("  .uleb128 0x28");                // DW_TAG_enumerator
+  println("  .byte 0");                       // DW_CHILDREN_no
+  println("  .uleb128 0x3");                  // DW_AT_name
+  println("  .uleb128 0x8");                  // DW_FORM_string
+  println("  .uleb128 0x1c");                 // DW_AT_const_value
+  println("  .uleb128 0xd");                  // DW_FORM_sdata
+  println("  .byte 0");
+  println("  .byte 0");
+
+  // Abbrev 22: DW_TAG_enumeration_type (anonymous, no name)
+  println("  .uleb128 22");
+  println("  .uleb128 0x04");                // DW_TAG_enumeration_type
+  println("  .byte 1");                       // DW_CHILDREN_yes
+  println("  .uleb128 0xb");                  // DW_AT_byte_size
+  println("  .uleb128 0xf");                  // DW_FORM_udata
+  println("  .uleb128 0x3e");                 // DW_AT_encoding
+  println("  .uleb128 0xb");                  // DW_FORM_data1
+  println("  .uleb128 0x49");                 // DW_AT_type
+  println("  .uleb128 0x13");                 // DW_FORM_ref4
+  println("  .byte 0");
+  println("  .byte 0");
+
+  // Abbrev 23: DW_TAG_enumeration_type (incomplete/declaration)
+  println("  .uleb128 23");
+  println("  .uleb128 0x04");                // DW_TAG_enumeration_type
+  println("  .byte 0");                       // DW_CHILDREN_no
+  println("  .uleb128 0x3");                  // DW_AT_name
+  println("  .uleb128 0x8");                  // DW_FORM_string
+  println("  .uleb128 0x3c");                 // DW_AT_declaration
+  println("  .uleb128 0xc");                  // DW_FORM_flag
+  println("  .byte 0");
+  println("  .byte 0");
+
   println("  .byte 0");                       // End of abbrevs
 
   println("  .section .debug_info,\"\",@progbits");
@@ -789,9 +882,8 @@ void emit_debug_info(Obj *prog) {
     for (Obj *var = fn->params; var; var = var->next)
       collect_debug_type(var->ty, &types, &next_type_id, &quals, &next_qual_id);
 
-    for (Obj *var = fn->locals; var; var = var->next)
-      if (!var->is_param)
-        collect_debug_type(var->ty, &types, &next_type_id, &quals, &next_qual_id);
+    if (fn->ty && fn->ty->scopes)
+      collect_scope_debug_types(fn->ty->scopes, &types, &next_type_id, &quals, &next_qual_id);
   }
 
   for (Obj *var = prog; var; var = var->next) {
@@ -844,30 +936,22 @@ void emit_debug_info(Obj *prog) {
     
     println("  .byte %d", !fn->is_static);
 
-    /* DWARF register numbers for System V AMD64 ABI argument registers:
-     *   Integer: rdi=5, rsi=4, rdx=1, rcx=2, r8=8, r9=9
-     *   SSE:     xmm0=17, xmm1=18, ..., xmm7=24
-     * DW_OP_regN (0x50+N) is valid at any program point, including
-     * function-entry breakpoints before the prologue saves registers
-     * to the stack.  Register-passed parameters use DW_OP_regN;
-     * stack-passed parameters fall back to DW_OP_fbreg. */
-    static const int gp_dwarf_regs[6] = {5, 4, 1, 2, 8, 9};
+    /* All parameters use DW_OP_fbreg because register parameters are
+     * saved to the stack in the function prologue before any user code
+     * runs (see codegen.c store_gp/store_fp).  GDB's prologue skipping
+     * ensures breakpoints stop after the save, so DW_OP_fbreg is always
+     * correct. */
     int gp = 0, fp = 0;
     for (Obj *var = fn->params; var; var = var->next) {
         Type *ty = var->ty;
-        int reg_idx = -1;
 
         if (!var->pass_by_stack) {
             switch (ty->kind) {
             case TY_FLOAT:
             case TY_DOUBLE:
-                if (fp < 8)
-                    reg_idx = 17 + fp;
                 fp++;
                 break;
             case TY_VECTOR:
-                if (fp < 8)
-                    reg_idx = 17 + fp;
                 fp++;
                 break;
             case TY_INT128:
@@ -889,8 +973,6 @@ void emit_debug_info(Obj *prog) {
                 break;
             }
             default:
-                if (gp < 6)
-                    reg_idx = gp_dwarf_regs[gp];
                 gp++;
                 break;
             }
@@ -907,30 +989,17 @@ void emit_debug_info(Obj *prog) {
         println("  .uleb128 .L.loc_end_%d - .L.loc_start_%d", lbl, lbl);
         println(".L.loc_start_%d:", lbl);
 
-        if (reg_idx >= 0) {
-            println("  .byte %d", 0x50 + reg_idx);
-        } else {
+        // Parameters passed via registers are immediately saved to the
+        // stack in the function prologue, so we can always use DW_OP_fbreg.
         println("  .byte 0x91"); // DW_OP_fbreg
         println("  .sleb128 %d", var->offset);
-        }
 
         println(".L.loc_end_%d:", lbl);
     }
 
-    for (Obj *var = fn->locals; var; var = var->next) {
-        if (var->is_param || !var->name) continue;
-        println("  .uleb128 4");
-        println("  .string \"%s\"", var->name);
-        
-        emit_type_ref(var->ty, types, quals, c);
+    if (fn->ty && fn->ty->scopes)
+        emit_scope_locals(fn->ty->scopes, types, quals, c, &label_count);
 
-        int lbl = label_count++;
-        println("  .uleb128 .L.loc_end_%d - .L.loc_start_%d", lbl, lbl);
-        println(".L.loc_start_%d:", lbl);
-        println("  .byte 0x91"); // DW_OP_fbreg
-        println("  .sleb128 %d", var->offset);
-        println(".L.loc_end_%d:", lbl);
-    }
 
     println("  .byte 0"); // End of children
   }

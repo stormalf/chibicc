@@ -305,13 +305,13 @@ _mm512_set1_epi16 (short __A)
 // #define _mm512_setr4_ps(e0,e1,e2,e3)					      \
 //   _mm512_set4_ps(e3,e2,e1,e0)
 
-// extern __inline __m512
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm512_setzero_ps (void)
-// {
-//   return __extension__ (__m512){ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-// 				 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
-// }
+extern __inline __m512
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm512_setzero_ps (void)
+{
+  return __extension__ (__m512){ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+				 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
+}
 
 // extern __inline __m512
 // __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
@@ -320,26 +320,26 @@ _mm512_set1_epi16 (short __A)
 //   return _mm512_setzero_ps ();
 // }
 
-// extern __inline __m512d
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm512_setzero_pd (void)
-// {
-//   return __extension__ (__m512d) { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
-// }
+extern __inline __m512d
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm512_setzero_pd (void)
+{
+  return __extension__ (__m512d) { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
+}
 
-// extern __inline __m512i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm512_setzero_epi32 (void)
-// {
-//   return __extension__ (__m512i)(__v8di){ 0, 0, 0, 0, 0, 0, 0, 0 };
-// }
+extern __inline __m512i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm512_setzero_epi32 (void)
+{
+  return __extension__ (__m512i)(__v8di){ 0, 0, 0, 0, 0, 0, 0, 0 };
+}
 
-// extern __inline __m512i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm512_setzero_si512 (void)
-// {
-//   return __extension__ (__m512i)(__v8di){ 0, 0, 0, 0, 0, 0, 0, 0 };
-// }
+extern __inline __m512i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm512_setzero_si512 (void)
+{
+  return __extension__ (__m512i)(__v8di){ 0, 0, 0, 0, 0, 0, 0, 0 };
+}
 
 // extern __inline __m512d
 // __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))

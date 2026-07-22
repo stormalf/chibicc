@@ -431,8 +431,10 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals, Obj *curre
                 tmp_asm = subst_asm(template, tmp, asmExt->output[i]->variableNumber);
                 free(tmp);
             }else {
-                  tmp_asm = subst_asm(template, asmExt->output[i]->reg, asmExt->output[i]->variableNumber);                         
-                }
+                if (!asmExt->output[i]->variableNumber)
+                  error("%s:%d: error: in %s: variableNumber is null! template=%s i=%d", __FILE__, __LINE__, __func__, template, i);
+                tmp_asm = subst_asm(template, asmExt->output[i]->reg, asmExt->output[i]->variableNumber);                         
+            }
         }
             
         //special case %b0 %h0
@@ -760,6 +762,20 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 asmExt->output[nbOutput]->regw = register_word(asmExt->output[nbOutput]->reg64);
                 asmExt->output[nbOutput]->letter = 'r';       
                 asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);       
+            }
+            else if (!strncmp(tok->str, "+&r", tok->len) )
+            {
+                asmExt->output[nbOutput]->isRegister = true;
+                asmExt->output[nbOutput]->prefix = "+";
+                asmExt->output[nbOutput]->reg = specific_register_available("%r9");
+                if (!asmExt->output[nbOutput]->reg)
+                    error("%s:%d: error: in %s: reg is null!", __FILE__,  __LINE__, __func__);
+                asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg;
+                asmExt->output[nbOutput]->regh = register_higher(asmExt->output[nbOutput]->reg64);
+                asmExt->output[nbOutput]->regl = register_lower(asmExt->output[nbOutput]->reg64);
+                asmExt->output[nbOutput]->regw = register_word(asmExt->output[nbOutput]->reg64);
+                asmExt->output[nbOutput]->letter = 'r';
+                asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
             }
 
             else if (!strncmp(tok->str, "=m", tok->len) || !strncmp(tok->str, "+m", tok->len))
@@ -2129,6 +2145,12 @@ char *subst_asm(char *template, char *output_str, char *input_str)
 // generic string replace function
 char *string_replace(char *str, char *oldstr, char *newstr)
 {
+    if (!oldstr)
+        error("%s:%d: error: in %s: oldstr is null ", __FILE__, __LINE__, __func__);
+    if (!newstr )
+        return oldstr;
+    if (!str)
+        error("%s:%d: error: in %s: str is null ", __FILE__, __LINE__, __func__);
     size_t cap = 10000;
     char bstr[10000];
     memset(bstr, 0, sizeof(bstr));
@@ -2552,16 +2574,8 @@ static char *arith_opcode(char op, int size)
 // TODO we can have an issue here if several functions with same name. Probably need to find in a better way to avoid this issue.
 void update_offset(char *funcname, Obj *locals)
 {
-    //printf(" function %s \n", funcname);
     Obj *fn = find_func(funcname);
     if (fn) {
-        //fixing ====ISS-161 issue with some locals missing in fn->locals
-        //if (!fn->locals)
-        fn->locals = locals;
-
-        // During parsing we may call this before the function is fully marked as
-        // a definition. Force offset assignment so inline asm can use (%rbp)-relative
-        // slots for locals/params.
         bool saved_def = fn->is_definition;
         fn->is_definition = true;
         fn->is_function = true;
@@ -2580,7 +2594,6 @@ void update_offset(char *funcname, Obj *locals)
     Type dummy_ty = {0};
     dummy_fn.is_function = true;
     dummy_fn.is_definition = true;
-    dummy_fn.locals = locals;
     dummy_fn.ty = &dummy_ty;
     assign_lvar_offsets(&dummy_fn);
 }

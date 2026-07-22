@@ -31,6 +31,7 @@ bool opt_mmx;
 bool opt_crc32;
 bool opt_g;
 bool opt_implicit;
+bool opt_no_implicit;
 bool opt_werror;
 bool opt_omit_frame_pointer = false;
 bool opt_optimize = false;
@@ -39,6 +40,10 @@ bool opt_optimize_level2 = false;
 bool opt_optimize_level3 = false;
 bool opt_avx2;
 bool opt_avx;
+bool opt_tbm;
+char *opt_fvisibility;
+bool opt_implicit_warn;
+bool opt_ffreestanding;
 
 static FileType opt_x;
 static StringArray opt_include;
@@ -65,6 +70,7 @@ static bool opt_nostdinc;
 static bool opt_nostdlib;
 static bool opt_v;
 static bool opt_fstack_protector;
+bool opt_cf_protection;
 static bool no_omit_frame_pointer_arg;
 
 static StringArray ld_extra_args;
@@ -375,7 +381,7 @@ static void parse_args(int argc, char **argv)
     }
 
 
-    if (!strcmp(argv[i], "-msse3")) {
+    if (!strcmp(argv[i], "-msse3") || !strcmp(argv[i], "-mssse3")) {
       opt_sse3 = true;
       continue;
     }
@@ -402,6 +408,11 @@ static void parse_args(int argc, char **argv)
 
     if (!strcmp(argv[i], "-mavx")) {
       opt_avx = true;
+      continue;
+    }
+
+    if (!strcmp(argv[i], "-mtbm")) {
+      opt_tbm = true;
       continue;
     }
 
@@ -691,6 +702,7 @@ static void parse_args(int argc, char **argv)
     if (!strcmp(argv[i], "-fpie") || !strcmp(argv[i], "-fPIE") || !strcmp(argv[i], "-pie"))
     {
       opt_fpie = true;
+      opt_fpic = true;
       strarray_push(&ld_extra_args, "-pie");
       continue;
     }
@@ -729,7 +741,6 @@ static void parse_args(int argc, char **argv)
     if (!strcmp(argv[i], "-static"))
     {
       opt_static = true;
-      strarray_push(&ld_extra_args, "-static");
       continue;
     }
 
@@ -747,32 +758,20 @@ static void parse_args(int argc, char **argv)
       continue;
     }
 
-    if (!strncmp(argv[i], "-L", 2))
-    {
-      //strarray_push(&ld_extra_args, "-L");
-      char *tmp = argv[i];
-      check_parms_length(tmp);
-      strarray_push(&ld_extra_args, tmp);
-      continue;
-    }
-
     if (!strcmp(argv[i], "-L"))
     {
       strarray_push(&ld_extra_args, "-L");
       char *tmp = argv[++i];
       check_parms_length(tmp);
       strarray_push(&ld_extra_args, tmp);
-      // strarray_push(&ld_extra_args, argv[++i]);
       continue;
     }
 
     if (!strncmp(argv[i], "-L", 2))
     {
-      strarray_push(&ld_extra_args, "-L");
-      char *tmp = argv[i] + 2;
+      char *tmp = argv[i];
       check_parms_length(tmp);
       strarray_push(&ld_extra_args, tmp);
-      // strarray_push(&ld_extra_args, argv[i] + 2);
       continue;
     }
 
@@ -807,7 +806,7 @@ static void parse_args(int argc, char **argv)
     }
 
 
-    if (!strcmp(argv[i], "Wl,-rpath,") || !strcmp(argv[i], "-rpath"))
+    if (!strcmp(argv[i], "-Wl,-rpath,") || !strcmp(argv[i], "-rpath"))
     {
       char *tmp = argv[++i];
       check_parms_length(tmp);
@@ -827,6 +826,17 @@ static void parse_args(int argc, char **argv)
       opt_implicit = true;
       continue;
     } 
+
+    if (!strcmp(argv[i], "-Wimplicit-function-declaration")) {
+      opt_implicit_warn = true;
+      continue;
+    }
+
+    if (!strcmp(argv[i], "-Wno-implicit-function-declaration")) {
+      opt_implicit_warn = false;
+      opt_no_implicit = true;
+      continue;
+    }
 
     if (!strcmp(argv[i], "-Werror")) {
       opt_werror = true;
@@ -922,6 +932,16 @@ static void parse_args(int argc, char **argv)
       continue;
     }
 
+    if (!strcmp(argv[i], "-fcf-protection")) {
+      opt_cf_protection = true;
+      continue;
+    }
+
+    if (!strncmp(argv[i], "-fvisibility=", 13)) {
+      opt_fvisibility = argv[i] + 13;
+      continue;
+    }
+
     if (!strcmp(argv[i], "-print-search-dirs")) {  
       printf("install: %s/bin\n", LIBDIR);   
       printf("programs: =%s/bin\n", LIBDIR);
@@ -945,6 +965,11 @@ static void parse_args(int argc, char **argv)
     }
     strarray_push(&include_paths, path);
     continue;
+    }
+
+    if (!strcmp(argv[i], "-ffreestanding")) {
+      opt_ffreestanding = true;
+      continue;
     }
 
     if (!strcmp(argv[i], "-Werror=invalid-command-line-argument")) {
@@ -977,7 +1002,6 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-fcx-limited-range") ||
         !strcmp(argv[i], "-funsafe-math-optimizations") ||  
         !strcmp(argv[i], "-funroll-loops") ||
-        !strcmp(argv[i], "-ffreestanding") ||
         !strcmp(argv[i], "-funwind-tables") ||   
         !strcmp(argv[i], "-fno-stack-protector") ||
         !strcmp(argv[i], "-fno-strict-aliasing") ||
@@ -990,8 +1014,6 @@ static void parse_args(int argc, char **argv)
         !strcmp(argv[i], "-pedantic") ||
         !strcmp(argv[i], "-pedantic-errors") ||         
         !strcmp(argv[i], "-mno-red-zone") ||
-        !strcmp(argv[i], "-fvisibility=default") ||
-        !strcmp(argv[i], "-fvisibility=hidden") ||
         !strcmp(argv[i], "-Wsign-compare") ||
         !strcmp(argv[i], "-Wundef") ||
         !strcmp(argv[i], "-Wpointer-arith") ||
@@ -1131,16 +1153,17 @@ char *extract_filename(char *tmpl)
 
 char * extract_path(char* tmpl)
 {
-    char* parent = calloc(1, sizeof(char) * 300);
+    char* parent = calloc(1, MAX_PATH_LENGTH);
     int parentLen;
     char* last = strrchr(tmpl, '/');
 
     if (last != NULL) {
 
         parentLen = strlen(tmpl) - strlen(last + 1);
-        if (parentLen > 300)
+        if (parentLen >= MAX_PATH_LENGTH)
           error("%s:%d: error: in %s: no enough size for parent in getParent function %d expected ", __FILE__, __LINE__, __func__, parentLen);
-        strncpy(parent, tmpl, parentLen);
+        memcpy(parent, tmpl, parentLen);
+        parent[parentLen] = '\0';
     } 
 
 return parent;
@@ -1534,7 +1557,10 @@ static void run_linker(StringArray *inputs, char *output)
   strarray_push(&arr, "-m");
   strarray_push(&arr, "elf_x86_64");
   strarray_push(&arr, "--allow-multiple-definition");
+  strarray_push(&arr, "--eh-frame-hdr");
 
+  if (opt_static)
+    strarray_push(&arr, "-static");
 
   //for some projects like POSTGRES it seems that the specific path for the project 
   //should be defined first
@@ -1543,11 +1569,7 @@ static void run_linker(StringArray *inputs, char *output)
     strarray_push(&arr, ld_extra_args.data[i]);
   }
 
-  if (opt_shared) {
-    opt_nostdlib = false;
-  } else if (opt_fstack_protector) {
-      opt_nostdlib = false;
-  }
+
 
   //enabling verbose mode for linker in case of debug
   // if (isDebug)
@@ -1555,10 +1577,8 @@ static void run_linker(StringArray *inputs, char *output)
 
   char *libpath = find_libpath();
   char *gcc_libpath = find_gcc_libpath();
-  if (opt_shared && !opt_fpic)
-    strarray_push(&ld_extra_args, "-fPIC");
-  // Only add startup files if not using -nostdlib
-  if (!opt_nostdlib) {
+  // Only add startup files if not using -nostdlib or -ffreestanding
+  if (!opt_nostdlib && !opt_ffreestanding) {
     if (opt_shared)
     {
       strarray_push(&arr, format("%s/crti.o", libpath));
@@ -1635,7 +1655,8 @@ static void run_linker(StringArray *inputs, char *output)
       strarray_push(&arr, format("%s/crtend.o", gcc_libpath));
   }
 
-  strarray_push(&arr, format("%s/crtn.o", libpath));
+  if (!opt_ffreestanding)
+    strarray_push(&arr, format("%s/crtn.o", libpath));
   strarray_push(&arr, NULL);
 
   // if (isDebug)

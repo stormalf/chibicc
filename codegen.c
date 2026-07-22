@@ -26,6 +26,14 @@ bool dont_reuse_stack = false;
 extern bool opt_omit_frame_pointer;
 extern bool opt_fbuiltin;
 extern bool opt_optimize_level3;
+extern bool opt_cf_protection;
+extern char *opt_fvisibility;
+
+// Forward declarations for scope tree walkers
+static int scope_lvar_align(Scope *sc, int align);
+static int scope_max_offset(Scope *sc, int bottom);
+static void scope_zero_init(Scope *sc, Obj *fn);
+static void scope_assign_offsets(Scope *sc, int *bottom, char *ptr, int stack_align, bool omit_fp);
 
 void gen_expr(Node *node);
 static void gen_stmt(Node *node);
@@ -43,6 +51,7 @@ int get_align(Obj *var) {
 static int cmp_ctor(const void *a, const void *b);
 static void emit_constructors(void);
 static void emit_destructors(void); 
+static void emit_gnu_property_note(void);
 
 
 static int last_loc_line = -1;
@@ -93,17 +102,6 @@ bool is_omit_fp(Obj *fn) {
   if (fn->force_frame_pointer) {  return false; }
 
   if (fn->stack_align > 16) { return false; }
-
-  // Support for omit-fp with alignment > 8 is currently broken/incomplete.
-  // Fall back to frame pointer if any local/param needs more than 8-byte alignment.
-  for (Obj *var = fn->locals; var; var = var->next) {
-    if (get_align(var) > 8)
-      return false;
-  }
-  for (Obj *var = fn->params; var; var = var->next) {
-    if (get_align(var) > 8)
-      return false;
-  }
 
   return true;
 }
@@ -232,7 +230,23 @@ void popv(int reg) {
 }
 
 
+void push_zmm(void) {
+  println("  sub $64, %%rsp");
+  println("  vmovdqu64 %%zmm0, (%%rsp)");
+  depth += 8;
+}
+
+void pop_zmm(int reg) {
+  println("  vmovdqu64 (%%rsp), %%zmm%d", reg);
+  println("  add $64, %%rsp");
+  depth -= 8;
+}
+
 void push_vec(Type *ty) {
+  if (ty->size > 32) {
+    push_zmm();
+    return;
+  }
   if (vec_use_ymm(ty)) {
     println("  sub $32, %%rsp");
     println("  vmovdqu %%ymm0, (%%rsp)");
@@ -243,6 +257,10 @@ void push_vec(Type *ty) {
 }
 
 void pop_vec(Type *ty, int reg) {
+  if (ty->size > 32) {
+    pop_zmm(reg);
+    return;
+  }
   if (vec_use_ymm(ty)) {
     println("  vmovdqu (%%rsp), %%ymm%d", reg);
     println("  add $32, %%rsp");
@@ -326,13 +344,14 @@ int align_to(int n, int align)
 }
 
 static void print_visibility(Obj *obj) {
-  if (obj->visibility) {
-    if (!strcmp(obj->visibility, "hidden")) {
+  char *vis = obj->visibility ? obj->visibility : opt_fvisibility;
+  if (vis) {
+    if (!strcmp(vis, "hidden")) {
       println("  .hidden\t%s", sym(obj));
-    } else if (!strcmp(obj->visibility, "protected")) {
+    } else if (!strcmp(vis, "protected")) {
       println("  .protected %s", sym(obj));
     }
-  } 
+  }
   if (obj->is_static) {
     println("  .local\t%s", sym(obj));
   } else {
@@ -851,7 +870,12 @@ void load(Type *ty)
   switch (ty->kind)
   {
   case TY_VECTOR: {
-    if (vec_use_ymm(ty)) {
+    if (ty->size > 32) {
+      if (ty->align < 64)
+        println("  vmovdqu64 (%%rax), %%zmm0");
+      else
+        println("  vmovdqa64 (%%rax), %%zmm0");
+    } else if (vec_use_ymm(ty)) {
       if (ty->align < 32) {
         if (ty->base->kind == TY_FLOAT || ty->base->kind == TY_DOUBLE)
           println("  vmovups (%%rax), %%ymm0");
@@ -937,7 +961,12 @@ static void store(Type *ty)
   switch (ty->kind)
   {
   case TY_VECTOR:
-    if (vec_use_ymm(ty)) {
+    if (ty->size > 32) {
+      if (ty->align < 64)
+        println("  vmovdqu64 %%zmm0, (%%rdi)");
+      else
+        println("  vmovdqa64 %%zmm0, (%%rdi)");
+    } else if (vec_use_ymm(ty)) {
       if (ty->align < 32) {
         if (ty->base->kind == TY_FLOAT || ty->base->kind == TY_DOUBLE)
           println("  vmovups %%ymm0, (%%rdi)");
@@ -1396,7 +1425,9 @@ static void place_stack_args(Node *args)
     println("  movsd %%xmm0, %d(%%rsp)", args->stack_offset);
     break;
   case TY_VECTOR:
-    if (vec_use_ymm(args->ty))
+    if (args->ty->size > 32)
+      println("  vmovdqu64 %%zmm0, %d(%%rsp)", args->stack_offset);
+    else if (vec_use_ymm(args->ty))
       println("  vmovdqu %%ymm0, %d(%%rsp)", args->stack_offset);
     else
       println("  movdqu %%xmm0, %d(%%rsp)", args->stack_offset);
@@ -3485,6 +3516,10 @@ void gen_expr(Node *node)
   case ND_LDMXCSR: gen_single_addr_binop(node, "ldmxcsr"); return;
   case ND_SHUFPS: gen_shuf_binop(node, "shufps"); return;
   case ND_SHUFPD: gen_shuf_binop(node, "shufpd"); return;
+  case ND_ROUNDPD: gen_shuf_binop(node, "roundpd"); return;
+  case ND_ROUNDSD: gen_round(node, "roundsd"); return;
+  case ND_ROUNDSS: gen_round(node, "roundss"); return;
+  case ND_ROUNDPS: gen_shuf_binop(node, "roundps"); return;
   case ND_SHUFFLE: gen_shuffle(node, "shufps"); return;
   case ND_CVTPI2PS: gen_cvtpi2ps(node); return;   
   case ND_CVTPS2PI:  gen_cvt_mmx_binop3(node, "cvtps2pi"); return;
@@ -3508,9 +3543,11 @@ void gen_expr(Node *node)
   case ND_VECINITV2SI: gen_vec_init_v2si(node); return;
   case ND_VECEXTV16QI:
   case ND_VECEXTV8HI: 
+  case ND_VECEXTV4HI:
   case ND_VECEXTV2SI:
    case ND_VECEXTV2DI: 
   case ND_VECEXTV4SI: gen_vec_ext(node); return;
+  case ND_VECEXTV4SF: gen_vec_ext_v4sf(node); return;
   case ND_PACKSSWB:   gen_mmx_binop(node, "packsswb", false); return;
   case ND_PACKSSDW:   gen_mmx_binop(node, "packssdw", false); return;
   case ND_PACKUSWB:   gen_mmx_binop(node, "packuswb", false); return;
@@ -3566,6 +3603,81 @@ void gen_expr(Node *node)
   case ND_PCMPEQD:    gen_mmx_binop(node, "pcmpeqd", false);  return;     
   case ND_PCMPGTD:    gen_mmx_binop(node, "pcmpgtd", false);  return;           
   case ND_VECINITV4HI: gen_vec_init_binop(node, "pinsrw"); return;
+  case ND_VECSETV4HI: gen_vec_set_v4hi(node); return;
+  case ND_VECSETV8HI: gen_vec_set_v8hi(node); return;
+  case ND_VECSETV16QI: gen_vec_set_v16qi(node); return;
+  case ND_VECSETV4SI: gen_vec_set_v4si(node); return;
+  case ND_VECSETV2DI: gen_vec_set_v2di(node); return;
+  case ND_PCMPISTRM128: gen_pcmpistrm128(node); return;
+  case ND_PCMPISTRI128: gen_pcmpistri128(node); return;
+  case ND_PCMPISTRIA128: gen_pcmpi_flag(node, "seta", false); return;
+  case ND_PCMPISTRIC128: gen_pcmpi_flag(node, "setc", false); return;
+  case ND_PCMPISTRIO128: gen_pcmpi_flag(node, "seto", false); return;
+  case ND_PCMPISTRIS128: gen_pcmpi_flag(node, "sets", false); return;
+  case ND_PCMPISTRIZ128: gen_pcmpi_flag(node, "sete", false); return;
+  case ND_PCMPESTRM128: gen_pcmpestrm128(node); return;
+  case ND_PCMPESTRI128: gen_pcmpestri128(node); return;
+  case ND_PCMPESTRIA128: gen_pcmpi_flag(node, "seta", true); return;
+  case ND_PCMPESTRIC128: gen_pcmpi_flag(node, "setc", true); return;
+  case ND_PCMPESTRIO128: gen_pcmpi_flag(node, "seto", true); return;
+  case ND_PCMPESTRIS128: gen_pcmpi_flag(node, "sets", true); return;
+  case ND_PCMPESTRIZ128: gen_pcmpi_flag(node, "sete", true); return;
+  case ND_PCLMULQDQ128: gen_pclmulqdq128(node); return;
+  case ND_DPPS256: gen_dpps256(node); return;
+  case ND_SHUFPD256: gen_shufpd256(node); return;
+  case ND_SHUFPS256: gen_shufps256(node); return;
+  case ND_CMPPD: gen_avx_cmp(node, "cmppd", false); return;
+  case ND_CMPPS: gen_avx_cmp(node, "cmpps", false); return;
+  case ND_CMPPD256: gen_avx_cmp(node, "vcmppd", true); return;
+  case ND_CMPPS256: gen_avx_cmp(node, "vcmpps", true); return;
+  case ND_CMPSD: gen_avx_cmp(node, "cmpsd", false); return;
+  case ND_CMPSS: gen_avx_cmp(node, "cmpss", false); return;
+  case ND_VEXTRACTF128_PD256: gen_vextractf128_pd256(node); return;
+  case ND_VEXTRACTF128_PS256: gen_vextractf128_ps256(node); return;
+  case ND_VINSERTF128_PD256: gen_vinsertf128_pd256(node); return;
+  case ND_VINSERTF128_PS256: gen_vinsertf128_ps256(node); return;
+  case ND_VPERM2F128_PD256: gen_vperm2f128_pd256(node); return;
+  case ND_VPERM2F128_PS256: gen_vperm2f128_ps256(node); return;
+  case ND_VPERM2F128_SI256: gen_vperm2f128_si256(node); return;
+  case ND_VPERMILPD: gen_vpermilpd(node); return;
+  case ND_VPERMILPS: gen_vpermilps(node); return;
+  case ND_VPERMILPD256: gen_vpermilpd256(node); return;
+  case ND_VPERMILPS256: gen_vpermilps256(node); return;
+  case ND_GATHERPFDPD:
+  case ND_GATHERPFDPS:
+  case ND_GATHERPFQPD:
+  case ND_GATHERPFQPS:
+  case ND_SCATTERPFDPD:
+  case ND_SCATTERPFDPS:
+  case ND_SCATTERPFQPD:
+  case ND_SCATTERPFQPS:
+    gen_avx512pf_void(node); return;
+  case ND_EXP2PD_MASK:
+  case ND_EXP2PS_MASK:
+  case ND_RCP28PD_MASK:
+  case ND_RCP28PS_MASK:
+  case ND_RCP28SD_ROUND:
+  case ND_RCP28SS_ROUND:
+  case ND_RSQRT28PD_MASK:
+  case ND_RSQRT28PS_MASK:
+  case ND_RSQRT28SD_ROUND:
+  case ND_RSQRT28SS_ROUND:
+    gen_avx512er_first(node); return;
+  case ND_XABORT: gen_xabort(node); return;
+  case ND_VPCLMULQDQ_V4DI: gen_vpclmulqdq_v4di(node); return;
+  case ND_VPCLMULQDQ_V8DI: gen_vpclmulqdq_v4di(node); return;
+  case ND_VPSHRD_V32HI:
+  case ND_VPSHRD_V16SI:
+  case ND_VPSHRD_V8DI:
+  case ND_VPSHLD_V32HI:
+  case ND_VPSHLD_V16SI:
+  case ND_VPSHLD_V8DI:
+    gen_vbmi2_3(node); return;
+  case ND_VPSHRD_V16SI_MASK:
+  case ND_VPSHRD_V8DI_MASK:
+  case ND_VPSHLD_V16SI_MASK:
+  case ND_VPSHLD_V8DI_MASK:
+    gen_vbmi2_5(node); return;
   case ND_VECINITV8QI: gen_vec_init_binop(node, "pinsrb"); return;
   case ND_ADDSS: gen_sse_binop1(node, "addss", false);  return;    
   case ND_SUBSS: gen_sse_binop1(node, "subss", false);  return;    
@@ -3804,8 +3916,18 @@ void gen_expr(Node *node)
   case ND_PTESTNZC128: gen_sse_testnzc(node); return;  
   case ND_PBLENDVB128: gen_sse_pblendvb128(node); return;
   case ND_PBLENDVB256: gen_pblendvb256(node); return;
+  case ND_PBLENDW128: gen_pblendw128(node); return;
   case ND_BLENDVPS: gen_sse_blendvpx(node, "blendvps"); return;
   case ND_BLENDVPD: gen_sse_blendvpx(node, "blendvpd"); return;
+  case ND_BLENDPS: gen_blendps(node, false); return;
+  case ND_BLENDPD: gen_blendpd(node, false); return;
+  case ND_BLENDPS256: gen_blendps(node, true); return;
+  case ND_BLENDPD256: gen_blendpd(node, true); return;
+  case ND_DPPS: gen_dpps(node); return;
+  case ND_DPPD: gen_dppd(node); return;
+  case ND_INSERTPS128: gen_insertps128(node); return;
+  case ND_MPSADBW128: gen_mpsadbw128(node); return;
+  case ND_MPSADBW256: gen_mpsadbw256(node); return;
   case ND_PMINSB128: gen_sse_binop3(node, "pminsb", false); return; 
   case ND_PMAXSB128: gen_sse_binop3(node, "pmaxsb", false); return; 
   case ND_PMINUW128: gen_sse_binop3(node, "pminuw", false); return; 
@@ -3835,6 +3957,9 @@ void gen_expr(Node *node)
   case ND_CRC32SI: gen_crc32si(node); return;
   case ND_CRC32DI: gen_crc32di(node); return;
   case ND_PSHUFD: gen_pshufd(node); return;
+  case ND_PSHUFHW: gen_pshufhw(node); return;
+  case ND_PSHUFLW: gen_pshuflw(node); return;
+  case ND_PSHUFW: gen_pshufw(node); return;
   case ND_PREFETCH: gen_prefetch(node); return;
   case ND_RDTSC: gen_rdtsc(node); return;
   case ND_READEFLAGS_U64: gen_readeflags_u64(node); return;
@@ -3884,6 +4009,7 @@ void gen_expr(Node *node)
   case ND_ADDCARRYX_U64: gen_addcarryx_u64(node); return;
   case ND_TZCNT_U16: gen_tzcnt_u16(node); return;
   case ND_BEXTR_U32: gen_bextr_u32(node); return;
+  case ND_BEXTR_U64: gen_bextr_u64(node); return;
   case ND_FPCLASSIFY: gen_fpclassify(node->fpc); return;
   case ND_ISUNORDERED: gen_isunordered(node); return;
   case ND_SIGNBIT:
@@ -3892,6 +4018,8 @@ void gen_expr(Node *node)
   case ND_PSUBUSB256: gen_psubusb256(node); return;
   case ND_PCMPGTB256_MASK: gen_pcmpgtb256_mask(node); return;
   case ND_PSHUFB256: gen_pshufb256(node); return;
+  case ND_PSRLDQI128: gen_sse2_dqshift(node, "psrldq"); return;
+  case ND_PSLLDQI128: gen_sse2_dqshift(node, "pslldq"); return;
   case ND_PSRLDQI256: gen_avx2_256(node, "vpsrldq"); return;
   case ND_PSLLDQI256: gen_avx2_256(node, "vpslldq"); return;
   case ND_VINSERTF128_SI256: gen_vinsertf128_si256(node); return;
@@ -3899,7 +4027,9 @@ void gen_expr(Node *node)
   case ND_SI_SI256: gen_si256(node); return;  
   case ND_PD256_PD: gen_si256(node); return;
   case ND_PS256_PS: gen_si256(node); return;
+  case ND_PALIGNR128: gen_palignr128(node); return;
   case ND_PALIGNR256: gen_avx2_palignr256(node); return;
+  case ND_PALIGNR: gen_palignr(node); return;
   case ND_VPERM2I128_SI256: gen_vperm2i128_si256(node); return;
   case ND_PSRLQI256: gen_avx2_psll_binop(node, "vpsrlq"); return;
   case ND_PSLLQI256: gen_avx2_psll_binop(node, "vpsllq"); return;
@@ -3918,11 +4048,12 @@ if (node->lhs && (is_vector(node->lhs->ty) || (node->rhs && is_vector(node->rhs-
   gen_vector_op(node);
   return;
 }
-  //managing INT128
-  if (is_int128(node->lhs->ty)) {
-    gen_int128_op(node);
-    return;
-  } 
+
+//managing INT128
+if (is_int128(node->lhs->ty)) {
+  gen_int128_op(node);
+  return;
+} 
 
 switch (node->lhs->ty->kind)
 {
@@ -4369,8 +4500,6 @@ static void emit_data(Obj *prog)
 {
   for (Obj *var = prog; var; var = var->next)
   {
-    if (var->ty->size != 0)
-      println("  .zero %ld", labs(var->ty->size));
     if (var->alias_name)
       println("  .set %s, %s", sym(var), var->alias_name);
     if (var->is_weak)
@@ -4504,6 +4633,9 @@ static void store_fp(int r, int offset, int sz, char *ptr)
     // 256-bit vector arguments/returns use YMM registers in the SysV ABI.
     println("  vmovdqu %%ymm%d, %d(%s)", r, offset, ptr);
     return;
+  case 64:
+    println("  vmovdqu64 %%zmm%d, %d(%s)", r, offset, ptr);
+    return;
   }
   
   // Handle wide FP/vector objects (32, 64, ...)
@@ -4599,10 +4731,18 @@ static void emit_text(Obj *prog)
     if (!fn->is_live)
       continue;
 
-    if (fn->is_static)
+    if (fn->is_static) {
       println("  .local %s", sym(fn));
-    else 
+    } else {
+      char *vis = fn->visibility ? fn->visibility : opt_fvisibility;
+      if (vis) {
+        if (!strcmp(vis, "hidden"))
+          println("  .hidden\t%s", sym(fn));
+        else if (!strcmp(vis, "protected"))
+          println("  .protected %s", sym(fn));
+      }
       println("  .globl %s", sym(fn));
+    }
 
     // Respect section attribute if set
     if (fn->section)
@@ -4611,6 +4751,7 @@ static void emit_text(Obj *prog)
       println("  .section .text,\"ax\",@progbits");
     println("  .type %s, @function", sym(fn));
 
+    println("  .p2align 4");
     println("  .loc %d %d", fn->file_no, fn->line_no);
     println("%s:", sym(fn));
 
@@ -4620,6 +4761,9 @@ static void emit_text(Obj *prog)
     bool use_rbx = (fn->stack_align > 16);
     lvar_ptr = use_rbx ? "%rbx" : "%rbp";
     
+    // CET IBT: endbr64 must be first instruction
+    if (opt_cf_protection)
+      println("  endbr64");
 
     // Prologue
     long reserved_pos = ftell(output_file);
@@ -4629,19 +4773,19 @@ static void emit_text(Obj *prog)
     if (!is_omit_fp(fn)) {
       println("  push %%rbp");
       println("  .cfi_def_cfa_offset 16");
-      println("  .cfi_offset %%rbp, -16");    
+      println("  .cfi_offset 6, -16");    
       println("  mov %%rsp, %%rbp");
       println("  .cfi_def_cfa_register %%rbp");  
     }
-  
+   
     if (use_rbx) {
       println("  push %%rbx");
 
       if (is_omit_fp(fn)) {
         println("  .cfi_def_cfa_offset 16");
-        println("  .cfi_offset %%rbx, -16");
+        println("  .cfi_offset 3, -16");
       } else {
-        println("  .cfi_offset %%rbx, -24");
+        println("  .cfi_offset 3, -24");
       }
 
       println("  mov %%rsp, %%rbx");
@@ -4669,16 +4813,8 @@ static void emit_text(Obj *prog)
       else
         println("  mov %%rsp, %d(%s)", fn->alloca_bottom->offset, lvar_ptr);
     }
-    //issue with postgres and local variables not initialized!
-    for (Obj *var = fn->locals; var; var = var->next) {     
-        if (!var->init && !var->is_param &&
-            (var->ty->kind == TY_STRUCT ||
-            var->ty->kind == TY_UNION ||
-            var->ty->kind == TY_ARRAY ||
-            is_vector(var->ty))) {
-            gen_mem_zero(var->offset, var->ty->size);
-        }
-    }
+    if (fn->ty && fn->ty->scopes)
+        scope_zero_init(fn->ty->scopes, fn);
 
 
     // Save arg registers if function is variadic
@@ -4894,60 +5030,117 @@ void codegen(Obj *prog, FILE *out)
     println(".L.debug_line0:");
   }
   println("  .section  .note.GNU-stack,\"\",@progbits");
+  emit_gnu_property_note();
+  println("  .ident \"chibicc %s\"", VERSION);
   //print offset for each variable
   if (isDebug)
     print_offset(prog);
 }
 
 
+// Emit .note.gnu.property for CET (IBT + SHSTK)
+static void emit_gnu_property_note(void) {
+  if (!opt_cf_protection)
+    return;
+  println("  .section .note.gnu.property,\"a\"");
+  println("  .align 8");
+  println("  .long 1f - 0f");
+  println("  .long 4f - 1f");
+  println("  .long 5");
+  println("0:");
+  println("  .string \"GNU\"");
+  println("1:");
+  println("  .align 8");
+  println("  .long 0xc0000002");
+  println("  .long 3f - 2f");
+  println("2:");
+  println("  .long 0x3");
+  println("3:");
+  println("  .align 8");
+  println("4:");
+}
 
-// Print offset.
+//printing offset for each variable in a scope
+static void print_offset_scope(Scope *sc, Obj *fn) {
+  for (Scope *child = sc->children; child; child = child->sibling_next)
+    print_offset_scope(child, fn);
+  for (Obj *var = sc->locals; var; var = var->next) {
+    printf("=====fn_name=%s var_name=%s offset=%d stack_size=%d var_alignment=%d\n", sym(fn), sym(var), var->offset, fn->stack_size, var->align );
+    if (!var->funcname)
+      var->funcname = sym(fn);
+  }
+}
+
+//printing offset for each variable
 static void print_offset(Obj *prog)
 {
   for (Obj *fn = prog; fn; fn = fn->next)
   {
-
-      
     for (Obj *var = fn->params; var; var = var->next)
     {
     printf("=====fn_name=%s var_name=%s offset=%d stack_size=%d var_alignment=%d\n", sym(fn), sym(var), var->offset, fn->stack_size, var->stack_align );
     }
-    for (Obj *var = fn->locals; var; var = var->next)
-    {
-      printf("=====fn_name=%s var_name=%s offset=%d stack_size=%d var_alignment=%d\n", sym(fn), sym(var), var->offset, fn->stack_size, var->align );
-      //update the function name if it's missing
-      if (!var->funcname)
-        var->funcname = sym(fn);
-    }
-
+    if (fn->ty && fn->ty->scopes)
+      print_offset_scope(fn->ty->scopes, fn);
   }
 }
 
-static int get_lvar_align(Obj *fn, int align) {
-  for (Obj *var = fn->locals; var; var = var->next)
+//assigning offsets to local variables
+static void scope_assign_offsets(Scope *sc, int *bottom, char *ptr, int stack_align, bool omit_fp) {
+  for (Scope *child = sc->children; child; child = child->sibling_next)
+    scope_assign_offsets(child, bottom, ptr, stack_align, omit_fp);
+  for (Obj *var = sc->locals; var; var = var->next) {
+    int align = get_align(var);
+    if (var->offset) continue;
+    int size = var->ty->size;
+    if (stack_align > 16)
+      size = align_to(size, stack_align);
+    *bottom = align_to(*bottom, align) + size;
+    var->offset = -*bottom;
+    if (omit_fp)
+      var->offset -= 8;
+    var->ptr = ptr;
+  }
+}
+
+//calculating the alignment of local variables
+static int scope_lvar_align(Scope *sc, int align) {
+  for (Scope *child = sc->children; child; child = child->sibling_next)
+    align = scope_lvar_align(child, align);
+  for (Obj *var = sc->locals; var; var = var->next)
     align = MAX(align, get_align(var));
   return align;
 }
 
-static int assign_lvar_offsets2(Obj *fn, int bottom, char *ptr) {
-  for (Obj *var = fn->locals; var; var = var->next) {
-    int align = get_align(var);
-
-    if (var->offset) {
-      // Skip variables that already have an offset
-      continue;
+//calculating the maximum offset of local variables
+static int scope_max_offset(Scope *sc, int bottom) {
+  for (Scope *child = sc->children; child; child = child->sibling_next)
+    bottom = scope_max_offset(child, bottom);
+  for (Obj *var = sc->locals; var; var = var->next) {
+    if (var->offset && !var->is_param) {
+      int limit = -var->offset;
+      if (limit > bottom) bottom = limit;
     }
-
-    int size = var->ty->size;
-    if (fn->stack_align > 16)
-      size = align_to(size, fn->stack_align);
-
-    bottom = align_to(bottom, align) + size;
-    var->offset = -bottom;
-    var->ptr = ptr;
   }
-  return align_to(bottom, 16);
+  return bottom;
 }
+
+//initializing local variables
+static void scope_zero_init(Scope *sc, Obj *fn) {
+  for (Scope *child = sc->children; child; child = child->sibling_next)
+    scope_zero_init(child, fn);
+  for (Obj *var = sc->locals; var; var = var->next) {
+    if (!var->init && !var->is_param &&
+        (var->ty->kind == TY_STRUCT ||
+         var->ty->kind == TY_UNION ||
+         var->ty->kind == TY_ARRAY ||
+         is_vector(var->ty))) {
+      gen_mem_zero(var->offset, var->ty->size);
+    }
+  }
+}
+
+
 
 
 void assign_lvar_offsets(Obj *prog) {
@@ -4955,11 +5148,10 @@ void assign_lvar_offsets(Obj *prog) {
     if (!fn->is_function || !fn->is_definition)
       continue;
 
-    fn->stack_align = get_lvar_align(fn, 16);
+    fn->stack_align = scope_lvar_align(fn->ty ? fn->ty->scopes : NULL, 16);
     bool omit_fp = is_omit_fp(fn);
 
     int bottom = fn->stack_size;
-    if (omit_fp) bottom -= 8;
     if (bottom < 0) bottom = 0;
 
     int gp = 0, fp = 0;
@@ -4967,19 +5159,12 @@ void assign_lvar_offsets(Obj *prog) {
     int stack = 0;
     int param_idx = 0;
 
-    // If variables already have offsets (assigned during parsing for inline asm),
-    // ensure 'bottom' reflects the space they occupy.
-    for (Obj *var = fn->locals; var; var = var->next) {
-      if (var->offset && !var->is_param) {
-        int limit = -var->offset; // offsets are negative
-        if (limit > bottom) bottom = limit;
-      }
-    }
+    if (fn->ty && fn->ty->scopes)
+      bottom = scope_max_offset(fn->ty->scopes, bottom);
 
     for (Obj *var = fn->params; var; var = var->next) {      
       var->is_param = true;
       var->nbparm = param_idx++;
-      if (var->offset) continue;
 
       Type *ty = var->ty;
       if (!ty) error("%s:%d: in %s: type is null!", __FILE__, __LINE__, __func__);
@@ -5000,22 +5185,28 @@ void assign_lvar_offsets(Obj *prog) {
       }
 
       // Passed on stack
-      var->pass_by_stack = true;
       int align = (ty->kind == TY_STRUCT || ty->kind == TY_UNION) ? MAX(ty->align, 8) :
                   (ty->kind == TY_LDOUBLE || ty->kind == TY_INT128 || ty->kind == TY_VECTOR) ? 16 : 8;
       max_align = MAX(max_align, align);
-      
       stack = align_to(stack, align);
-      if (omit_fp) {
-        var->offset = stack + 8;
-        var->ptr = "%rsp";
-      } else {
-      var->offset = stack + 16;
-      var->ptr = "%rbp";
-      }
 
       int size = (ty->kind == TY_STRUCT || ty->kind == TY_UNION) ? align_to(ty->size, align) :
                  (ty->kind == TY_LDOUBLE || ty->kind == TY_INT128 || ty->kind == TY_VECTOR) ? 16 : 8;
+
+      // Only assign offset/ptr if not already set (may have been set by a prior
+      // call from extended_asm.c). We must still accumulate 'stack' so that
+      // overflow_arg_area is computed correctly for variadic functions.
+      if (!var->offset) {
+        var->pass_by_stack = true;
+        if (omit_fp) {
+          var->offset = stack + 8;
+          var->ptr = "%rsp";
+        } else {
+          var->offset = stack + 16;
+          var->ptr = "%rbp";
+        }
+      }
+
       stack += size;
     }
 
@@ -5023,7 +5214,10 @@ void assign_lvar_offsets(Obj *prog) {
       fn->overflow_arg_area = stack + 16;
 
     char *base = omit_fp ? "%rsp" : (fn->stack_align > 16) ? "%rbx" : "%rbp";
-    fn->stack_size = assign_lvar_offsets2(fn, bottom, base);
+    if (fn->ty && fn->ty->scopes)
+      scope_assign_offsets(fn->ty->scopes, &bottom, base, fn->stack_align, omit_fp);
+
+    fn->stack_size = align_to(bottom, 16);
     if (omit_fp)
       fn->stack_size += 8;
   }

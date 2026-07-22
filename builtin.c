@@ -748,34 +748,79 @@ void gen_tzcnt_u16(Node *node) {
 
 void gen_bextr_u32(Node *node) {
   gen_expr(node->lhs);
-  println("  push %%rax");
+  push_tmp();
   gen_expr(node->rhs);
   println("  movl %%eax, %%ecx");
-  println("  pop %%rax");
+  pop_tmp("%rax");
 
   println("  movl %%ecx, %%edx");
+  println("  shrl $8, %%edx");
   println("  andl $0xff, %%edx");
-
-  println("  shrl $8, %%ecx");
   println("  andl $0xff, %%ecx");
 
-  println("  testl %%ecx, %%ecx");
+  println("  testl %%edx, %%edx");
   println("  je 1f");
 
-  println("  cmpl $32, %%edx");
+  println("  cmpl $32, %%ecx");
   println("  jae 1f");
 
   println("  movl $32, %%esi");
-  println("  subl %%edx, %%esi");
-  println("  cmpl %%esi, %%ecx");
-  println("  cmova %%esi, %%ecx");
+  println("  subl %%ecx, %%esi");
+  println("  cmpl %%esi, %%edx");
+  println("  cmova %%esi, %%edx");
 
   println("  shrl %%cl, %%eax");
 
+  println("  movl %%edx, %%ecx");
+  println("  cmpl $32, %%ecx");
+  println("  jae 3f");
   println("  movl $1, %%esi");
   println("  shll %%cl, %%esi");
   println("  decl %%esi");
   println("  andl %%esi, %%eax");
+  println("  jmp 2f");
+  println("3:");
+  println("  jmp 2f");
+
+  println("1:");
+  println("  xorl %%eax, %%eax");
+  println("2:");
+}
+
+void gen_bextr_u64(Node *node) {
+  gen_expr(node->lhs);
+  push_tmp();
+  gen_expr(node->rhs);
+  println("  movl %%eax, %%ecx");
+  pop_tmp("%rax");
+
+  println("  movl %%ecx, %%edx");
+  println("  shrl $8, %%edx");
+  println("  andl $0xff, %%edx");
+  println("  andl $0xff, %%ecx");
+
+  println("  testl %%edx, %%edx");
+  println("  je 1f");
+
+  println("  cmpq $64, %%rcx");
+  println("  jae 1f");
+
+  println("  movq $64, %%rsi");
+  println("  subq %%rcx, %%rsi");
+  println("  cmpq %%rsi, %%rdx");
+  println("  cmova %%rsi, %%rdx");
+
+  println("  shrq %%cl, %%rax");
+
+  println("  movq %%rdx, %%rcx");
+  println("  cmpq $64, %%rcx");
+  println("  jae 3f");
+  println("  movq $1, %%rsi");
+  println("  shlq %%cl, %%rsi");
+  println("  decq %%rsi");
+  println("  andq %%rsi, %%rax");
+  println("  jmp 2f");
+  println("3:");
   println("  jmp 2f");
 
   println("1:");
@@ -1821,6 +1866,9 @@ void gen_vec_ext(Node *node) {
   } else if (node->kind == ND_VECEXTV8HI) {
     println("  and $7, %%ecx");
     println("  movswl (%%rsp,%%rcx,2), %%eax");
+  } else if (node->kind == ND_VECEXTV4HI) {
+    println("  and $3, %%ecx");
+    println("  movswl (%%rsp,%%rcx,2), %%eax");
   } else if (node->kind == ND_VECEXTV2DI) {
     println("  and $1, %%ecx");
     println("  movq (%%rsp,%%rcx,8), %%rax");
@@ -1828,6 +1876,98 @@ void gen_vec_ext(Node *node) {
     println("  and $%d, %%ecx", node->kind == ND_VECEXTV2SI ? 1 : 3);
     println("  movl (%%rsp,%%rcx,4), %%eax");
   }
+  pop_xmm(0);
+}
+
+void gen_vec_ext_v4sf(Node *node) {
+  gen_expr(node->lhs);
+  push_xmm(0);
+  gen_expr(node->rhs);
+  println("  movslq %%eax, %%rcx");
+  println("  and $3, %%ecx");
+  println("  movss (%%rsp,%%rcx,4), %%xmm0");
+  println("  add $16, %%rsp");
+  depth -= 2;
+}
+
+void gen_vec_set_v4hi(Node *node) {
+  gen_expr(node->builtin_args[0]);
+  push_xmm(0);
+  gen_expr(node->builtin_args[1]);
+  println("  movl %%eax, 8(%%rsp)");
+  gen_expr(node->builtin_args[2]);
+  println("  and $3, %%eax");
+  println("  movzwl 8(%%rsp), %%ecx");
+  println("  movw %%cx, (%%rsp,%%rax,2)");
+  println("  movq (%%rsp), %%mm0");
+  pop_xmm(0);
+}
+
+void gen_vec_set_v8hi(Node *node) {
+  gen_expr(node->builtin_args[0]);
+  push_xmm(0);
+  println("  sub $16, %%rsp");
+  depth += 2;
+  gen_expr(node->builtin_args[1]);
+  println("  movl %%eax, (%%rsp)");
+  gen_expr(node->builtin_args[2]);
+  println("  and $7, %%eax");
+  println("  movzwl (%%rsp), %%ecx");
+  println("  movw %%cx, 16(%%rsp,%%rax,2)");
+  println("  movdqu 16(%%rsp), %%xmm0");
+  println("  add $16, %%rsp");
+  depth -= 2;
+  pop_xmm(0);
+}
+
+void gen_vec_set_v16qi(Node *node) {
+  gen_expr(node->builtin_args[0]);
+  push_xmm(0);
+  println("  sub $16, %%rsp");
+  depth += 2;
+  gen_expr(node->builtin_args[1]);
+  println("  movl %%eax, (%%rsp)");
+  gen_expr(node->builtin_args[2]);
+  println("  and $15, %%eax");
+  println("  movzbl (%%rsp), %%ecx");
+  println("  movb %%cl, 16(%%rsp,%%rax,1)");
+  println("  movdqu 16(%%rsp), %%xmm0");
+  println("  add $16, %%rsp");
+  depth -= 2;
+  pop_xmm(0);
+}
+
+void gen_vec_set_v4si(Node *node) {
+  gen_expr(node->builtin_args[0]);
+  push_xmm(0);
+  println("  sub $16, %%rsp");
+  depth += 2;
+  gen_expr(node->builtin_args[1]);
+  println("  movl %%eax, (%%rsp)");
+  gen_expr(node->builtin_args[2]);
+  println("  and $3, %%eax");
+  println("  movl (%%rsp), %%ecx");
+  println("  movl %%ecx, 16(%%rsp,%%rax,4)");
+  println("  movdqu 16(%%rsp), %%xmm0");
+  println("  add $16, %%rsp");
+  depth -= 2;
+  pop_xmm(0);
+}
+
+void gen_vec_set_v2di(Node *node) {
+  gen_expr(node->builtin_args[0]);
+  push_xmm(0);
+  println("  sub $16, %%rsp");
+  depth += 2;
+  gen_expr(node->builtin_args[1]);
+  println("  movq %%rax, (%%rsp)");
+  gen_expr(node->builtin_args[2]);
+  println("  and $1, %%eax");
+  println("  movq (%%rsp), %%rcx");
+  println("  movq %%rcx, 16(%%rsp,%%rax,8)");
+  println("  movdqu 16(%%rsp), %%xmm0");
+  println("  add $16, %%rsp");
+  depth -= 2;
   pop_xmm(0);
 }
 
@@ -1860,12 +2000,43 @@ void gen_pshufd(Node *node) {
   println("  pshufd $%d, %%xmm0, %%xmm0", imm);
 }
 
+void gen_pshufhw(Node *node) {
+  gen_expr(node->lhs);
+  int imm = eval(node->rhs);
+  println("  pshufhw $%d, %%xmm0, %%xmm0", imm);
+}
+
+void gen_pshuflw(Node *node) {
+  gen_expr(node->lhs);
+  int imm = eval(node->rhs);
+  println("  pshuflw $%d, %%xmm0, %%xmm0", imm);
+}
+
+void gen_pshufw(Node *node) {
+  gen_expr(node->lhs);
+  println("  movq (%%rax), %%mm0");
+  int imm = node->rhs->val;
+  println("  pshufw $%d, %%mm0, %%mm0", imm);
+  println("  movq %%mm0, %%rax");
+  println("  movq %%rax, %%xmm0");
+  println("  emms");
+}
+
 void gen_shuf_binop(Node *node, const char *insn) {
   gen_expr(node->rhs);
   push_xmm(0);
   gen_expr(node->lhs);
   pop_xmm(1);
   println("  %s $%ld, %%xmm1, %%xmm0", insn, (int64_t)node->rhs->val);
+}
+
+void gen_round(Node *node, const char *insn) {
+  assert(node->builtin_nargs == 3);
+  gen_expr(node->builtin_args[1]);
+  push_xmm(0);
+  gen_expr(node->builtin_args[0]);
+  pop_xmm(1);
+  println("  %s $%ld, %%xmm1, %%xmm0", insn, eval(node->builtin_args[2]));
 }
 
 void gen_psll_binop(Node *node, const char *insn) {
@@ -2051,6 +2222,140 @@ void gen_sse_pblendvb128(Node *node) {
   println("  movaps %%xmm1, %%xmm0");
 }
 
+void gen_pblendw128(Node *node) {
+  assert(node->builtin_nargs == 3);
+  // First source (also destination) -> xmm0
+  gen_expr(node->builtin_args[0]);
+  println("  movaps %%xmm0, %%xmm1");   // save first source in xmm1
+  // Second source -> xmm0
+  gen_expr(node->builtin_args[1]);
+  println("  movaps %%xmm0, %%xmm2");   // save second source in xmm2
+  // Now we have: xmm1 = first source, xmm2 = second source
+  // We want to do: pblendw $imm, %%xmm2, %%xmm1 -> result in xmm1
+  // But note: the instruction is: pblendw xmm1, xmm2/m128, imm8
+  // So we can do: pblendw $imm, %%xmm2, %%xmm1
+  // Then move the result to %%xmm0.
+
+  // Evaluate the immediate
+  int imm = eval(node->builtin_args[2]);
+  // Check that imm is between 0 and 255
+  if (imm < 0 || imm > 255)
+    error_tok(node->builtin_args[2]->tok, "%s:%d: in %s: immediate out of range", __FILE__, __LINE__, __func__);
+
+  println("  pblendw $%d, %%xmm2, %%xmm1", imm);
+  println("  movaps %%xmm1, %%xmm0");
+}
+
+void gen_blendps(Node *node, bool is256) {
+  assert(node->builtin_nargs == 3);
+  gen_expr(node->builtin_args[0]);
+  if (is256)
+    println("  vmovaps %%ymm0, %%ymm1");
+  else
+    println("  movaps %%xmm0, %%xmm1");
+  gen_expr(node->builtin_args[1]);
+  if (is256)
+    println("  vmovaps %%ymm0, %%ymm2");
+  else
+    println("  movaps %%xmm0, %%xmm2");
+  int imm = eval(node->builtin_args[2]);
+  if (imm < 0 || imm > 255)
+    error_tok(node->builtin_args[2]->tok, "immediate out of range");
+  if (is256)
+    println("  vblendps $%d, %%ymm2, %%ymm1, %%ymm0", imm);
+  else
+    println("  blendps $%d, %%xmm2, %%xmm1", imm);
+  if (!is256)
+    println("  movaps %%xmm1, %%xmm0");
+}
+
+void gen_blendpd(Node *node, bool is256) {
+  assert(node->builtin_nargs == 3);
+  gen_expr(node->builtin_args[0]);
+  if (is256)
+    println("  vmovaps %%ymm0, %%ymm1");
+  else
+    println("  movaps %%xmm0, %%xmm1");
+  gen_expr(node->builtin_args[1]);
+  if (is256)
+    println("  vmovaps %%ymm0, %%ymm2");
+  else
+    println("  movaps %%xmm0, %%xmm2");
+  int imm = eval(node->builtin_args[2]);
+  if (imm < 0 || imm > 255)
+    error_tok(node->builtin_args[2]->tok, "immediate out of range");
+  if (is256)
+    println("  vblendpd $%d, %%ymm2, %%ymm1, %%ymm0", imm);
+  else
+    println("  blendpd $%d, %%xmm2, %%xmm1", imm);
+  if (!is256)
+    println("  movaps %%xmm1, %%xmm0");
+}
+
+void gen_dpps(Node *node) {
+  assert(node->builtin_nargs == 3);
+  gen_expr(node->builtin_args[0]);
+  println("  movaps %%xmm0, %%xmm1");
+  gen_expr(node->builtin_args[1]);
+  println("  movaps %%xmm0, %%xmm2");
+  int imm = eval(node->builtin_args[2]);
+  if (imm < 0 || imm > 255)
+    error_tok(node->builtin_args[2]->tok, "immediate out of range");
+  println("  dpps $%d, %%xmm2, %%xmm1", imm);
+  println("  movaps %%xmm1, %%xmm0");
+}
+
+void gen_dppd(Node *node) {
+  assert(node->builtin_nargs == 3);
+  gen_expr(node->builtin_args[0]);
+  println("  movaps %%xmm0, %%xmm1");
+  gen_expr(node->builtin_args[1]);
+  println("  movaps %%xmm0, %%xmm2");
+  int imm = eval(node->builtin_args[2]);
+  if (imm < 0 || imm > 255)
+    error_tok(node->builtin_args[2]->tok, "immediate out of range");
+  println("  dppd $%d, %%xmm2, %%xmm1", imm);
+  println("  movaps %%xmm1, %%xmm0");
+}
+
+void gen_insertps128(Node *node) {
+  assert(node->builtin_nargs == 3);
+  gen_expr(node->builtin_args[0]);
+  println("  movaps %%xmm0, %%xmm1");
+  gen_expr(node->builtin_args[1]);
+  println("  movaps %%xmm0, %%xmm2");
+  int imm = eval(node->builtin_args[2]);
+  if (imm < 0 || imm > 255)
+    error_tok(node->builtin_args[2]->tok, "immediate out of range");
+  println("  insertps $%d, %%xmm2, %%xmm1", imm);
+  println("  movaps %%xmm1, %%xmm0");
+}
+
+void gen_mpsadbw128(Node *node) {
+  assert(node->builtin_nargs == 3);
+  gen_expr(node->builtin_args[0]);
+  println("  movaps %%xmm0, %%xmm1");
+  gen_expr(node->builtin_args[1]);
+  println("  movaps %%xmm0, %%xmm2");
+  int imm = eval(node->builtin_args[2]);
+  if (imm < 0 || imm > 255)
+    error_tok(node->builtin_args[2]->tok, "immediate out of range");
+  println("  mpsadbw $%d, %%xmm2, %%xmm1", imm);
+  println("  movaps %%xmm1, %%xmm0");
+}
+
+void gen_mpsadbw256(Node *node) {
+  assert(node->builtin_nargs == 3);
+  gen_expr(node->builtin_args[1]);
+  push_ymm(0);
+  gen_expr(node->builtin_args[0]);
+  pop_ymm(1);
+  int imm = eval(node->builtin_args[2]);
+  if (imm < 0 || imm > 255)
+    error_tok(node->builtin_args[2]->tok, "immediate out of range");
+  println("  vmpsadbw $%d, %%ymm1, %%ymm0, %%ymm0", imm);
+}
+
 void gen_pblendvb256(Node *node) {
   assert(node->builtin_nargs == 3);
   gen_expr(node->builtin_args[2]); // mask -> ymm0
@@ -2116,6 +2421,17 @@ void gen_avx2_256(Node *node, const char *insn) {
   println("  %s $%ld, %%ymm0, %%ymm0", insn, imm_bytes);
 }
 
+void gen_sse2_dqshift(Node *node, const char *insn) {
+  gen_expr(node->lhs);
+  int64_t imm_bits = eval(node->rhs);
+  if (imm_bits < 0 || imm_bits > 255 * 8)
+    error_tok(node->tok, "%s:%d: in %s: immediate out of range", __FILE__, __LINE__, __func__);
+  if (imm_bits % 8 != 0)
+    error_tok(node->tok, "%s:%d: in %s: immediate must be multiple of 8", __FILE__, __LINE__, __func__);
+  int64_t imm_bytes = imm_bits / 8;
+  println("  %s $%ld, %%xmm0", insn, imm_bytes);
+}
+
 void gen_vinsertf128_si256(Node *node) {
   assert(node->builtin_nargs == 3);
   gen_expr(node->builtin_args[0]);   // -> ymm0
@@ -2149,6 +2465,30 @@ void gen_avx2_psll_binop(Node *node, const char *insn) {
     pop_vec(node->lhs->ty, 0);
     println("  %s %%xmm1, %%ymm0, %%ymm0", insn);
   }
+}
+
+void gen_palignr128(Node *node) {
+  assert(node->builtin_nargs == 3);
+  gen_expr(node->builtin_args[1]); // B -> xmm0
+  push_xmm(0);
+  gen_expr(node->builtin_args[0]); // A -> xmm0
+  pop_xmm(1);
+  // xmm0 = A, xmm1 = B; result = concat(A,B) >> imm
+  int64_t imm_bytes = eval(node->builtin_args[2]) / 8;
+  println("  palignr $%ld, %%xmm1, %%xmm0", imm_bytes);
+}
+
+void gen_palignr(Node *node) {
+  assert(node->builtin_nargs == 3);
+  gen_expr(node->builtin_args[1]); // B -> xmm0 (stored to memory, addr in rax)
+  println("  movq (%%rax), %%mm1");
+  gen_expr(node->builtin_args[0]); // A -> xmm0 (stored to memory, addr in rax)
+  println("  movq (%%rax), %%mm0");
+  int64_t imm_bytes = eval(node->builtin_args[2]) / 8;
+  println("  palignr $%ld, %%mm1, %%mm0", imm_bytes);
+  println("  movq %%mm0, %%rax");
+  println("  movq %%rax, %%xmm0");
+  println("  emms");
 }
 
 void gen_avx2_palignr256(Node *node) {
@@ -2311,4 +2651,368 @@ void gen_sse_testnzc(Node *node) {
     println("  setnc %%cl");            // cl = 1 if CF==0
     println("  and %%cl, %%al");        // al = al & cl
     println("  movzx %%al, %%eax");     
+}
+
+void gen_pcmpistrm128(Node *node) {
+  assert(node->builtin_nargs == 3);
+  gen_expr(node->builtin_args[0]);
+  println("  movaps %%xmm0, %%xmm1");
+  gen_expr(node->builtin_args[1]);
+  println("  movaps %%xmm0, %%xmm2");
+  int imm = eval(node->builtin_args[2]);
+  if (imm < 0 || imm > 255)
+    error_tok(node->builtin_args[2]->tok, "immediate out of range");
+  println("  pcmpistrm $%d, %%xmm2, %%xmm1", imm);
+}
+
+void gen_pcmpistri128(Node *node) {
+  assert(node->builtin_nargs == 3);
+  gen_expr(node->builtin_args[0]);
+  println("  movaps %%xmm0, %%xmm1");
+  gen_expr(node->builtin_args[1]);
+  println("  movaps %%xmm0, %%xmm2");
+  int imm = eval(node->builtin_args[2]);
+  if (imm < 0 || imm > 255)
+    error_tok(node->builtin_args[2]->tok, "immediate out of range");
+  println("  pcmpistri $%d, %%xmm2, %%xmm1", imm);
+  println("  mov %%ecx, %%eax");
+}
+
+void gen_pcmpestrm128(Node *node) {
+  assert(node->builtin_nargs == 5);
+  gen_expr(node->builtin_args[1]);
+  push_tmp();
+  gen_expr(node->builtin_args[3]);
+  println("  mov %%eax, %%edx");
+  gen_expr(node->builtin_args[0]);
+  println("  movaps %%xmm0, %%xmm2");
+  gen_expr(node->builtin_args[2]);
+  println("  movaps %%xmm0, %%xmm1");
+  pop_tmp("%rax");
+  int imm = eval(node->builtin_args[4]);
+  if (imm < 0 || imm > 255)
+    error_tok(node->builtin_args[4]->tok, "immediate out of range");
+  println("  pcmpestrm $%d, %%xmm2, %%xmm1", imm);
+}
+
+void gen_pcmpestri128(Node *node) {
+  assert(node->builtin_nargs == 5);
+  gen_expr(node->builtin_args[1]);
+  push_tmp();
+  gen_expr(node->builtin_args[3]);
+  println("  mov %%eax, %%edx");
+  gen_expr(node->builtin_args[0]);
+  println("  movaps %%xmm0, %%xmm2");
+  gen_expr(node->builtin_args[2]);
+  println("  movaps %%xmm0, %%xmm1");
+  pop_tmp("%rax");
+  int imm = eval(node->builtin_args[4]);
+  if (imm < 0 || imm > 255)
+    error_tok(node->builtin_args[4]->tok, "immediate out of range");
+  println("  pcmpestri $%d, %%xmm2, %%xmm1", imm);
+  println("  mov %%ecx, %%eax");
+}
+
+void gen_pcmpi_flag(Node *node, const char *flag_insn, bool is_explicit) {
+  if (is_explicit) {
+    assert(node->builtin_nargs == 5);
+    gen_expr(node->builtin_args[1]);
+    push_tmp();
+    gen_expr(node->builtin_args[3]);
+    println("  mov %%eax, %%edx");
+    gen_expr(node->builtin_args[0]);
+    println("  movaps %%xmm0, %%xmm2");
+    gen_expr(node->builtin_args[2]);
+    println("  movaps %%xmm0, %%xmm1");
+    pop_tmp("%rax");
+    int imm = eval(node->builtin_args[4]);
+    if (imm < 0 || imm > 255)
+      error_tok(node->builtin_args[4]->tok, "immediate out of range");
+    println("  pcmpestri $%d, %%xmm2, %%xmm1", imm);
+  } else {
+    assert(node->builtin_nargs == 3);
+    gen_expr(node->builtin_args[0]);
+    println("  movaps %%xmm0, %%xmm1");
+    gen_expr(node->builtin_args[1]);
+    println("  movaps %%xmm0, %%xmm2");
+    int imm = eval(node->builtin_args[2]);
+    if (imm < 0 || imm > 255)
+      error_tok(node->builtin_args[2]->tok, "immediate out of range");
+    println("  pcmpistri $%d, %%xmm2, %%xmm1", imm);
+  }
+  println("  %s %%al", flag_insn);
+  println("  movzbl %%al, %%eax");
+}
+
+void gen_pclmulqdq128(Node *node) {
+  assert(node->builtin_nargs == 3);
+  gen_expr(node->builtin_args[0]);
+  println("  movaps %%xmm0, %%xmm1");
+  gen_expr(node->builtin_args[1]);
+  println("  movaps %%xmm0, %%xmm2");
+  int imm = eval(node->builtin_args[2]);
+  if (imm < 0 || imm > 255)
+    error_tok(node->builtin_args[2]->tok, "immediate out of range");
+  println("  pclmulqdq $%d, %%xmm2, %%xmm1", imm);
+  println("  movaps %%xmm1, %%xmm0");
+}
+
+void gen_dpps256(Node *node) {
+  assert(node->builtin_nargs == 3);
+  gen_expr(node->builtin_args[1]);
+  push_ymm(0);
+  gen_expr(node->builtin_args[0]);
+  pop_ymm(1);
+  int imm = eval(node->builtin_args[2]);
+  if (imm < 0 || imm > 255)
+    error_tok(node->builtin_args[2]->tok, "immediate out of range");
+  println("  vdpps $%d, %%ymm1, %%ymm0, %%ymm0", imm);
+}
+
+void gen_shufpd256(Node *node) {
+  assert(node->builtin_nargs == 3);
+  gen_expr(node->builtin_args[1]);
+  push_ymm(0);
+  gen_expr(node->builtin_args[0]);
+  pop_ymm(1);
+  int imm = eval(node->builtin_args[2]);
+  if (imm < 0 || imm > 255)
+    error_tok(node->builtin_args[2]->tok, "immediate out of range");
+  println("  vshufpd $%d, %%ymm1, %%ymm0, %%ymm0", imm);
+}
+
+void gen_shufps256(Node *node) {
+  assert(node->builtin_nargs == 3);
+  gen_expr(node->builtin_args[1]);
+  push_ymm(0);
+  gen_expr(node->builtin_args[0]);
+  pop_ymm(1);
+  int imm = eval(node->builtin_args[2]);
+  if (imm < 0 || imm > 255)
+    error_tok(node->builtin_args[2]->tok, "immediate out of range");
+  println("  vshufps $%d, %%ymm1, %%ymm0, %%ymm0", imm);
+}
+
+void gen_avx_cmp(Node *node, const char *insn, bool is256) {
+  assert(node->builtin_nargs == 3);
+  gen_expr(node->builtin_args[1]);
+  if (is256)
+    push_ymm(0);
+  else
+    push_tmpf();
+  gen_expr(node->builtin_args[0]);
+  if (is256)
+    pop_ymm(1);
+  else
+    pop_tmpf(1);
+  int imm = eval(node->builtin_args[2]);
+  if (imm < 0 || imm > 255)
+    error_tok(node->builtin_args[2]->tok, "immediate out of range");
+  if (is256)
+    println("  %s $%d, %%ymm1, %%ymm0, %%ymm0", insn, imm);
+  else
+    println("  %s $%d, %%xmm1, %%xmm0", insn, imm);
+}
+
+void gen_vextractf128_pd256(Node *node) {
+  gen_expr(node->lhs);
+  int64_t imm = eval(node->rhs);
+  if (imm < 0 || imm > 1)
+    error_tok(node->rhs->tok, "imm must be 0 or 1");
+  println("  vextractf128 $%ld, %%ymm0, %%xmm0", imm);
+}
+
+void gen_vextractf128_ps256(Node *node) {
+  gen_expr(node->lhs);
+  int64_t imm = eval(node->rhs);
+  if (imm < 0 || imm > 1)
+    error_tok(node->rhs->tok, "imm must be 0 or 1");
+  println("  vextractf128 $%ld, %%ymm0, %%xmm0", imm);
+}
+
+void gen_vinsertf128_pd256(Node *node) {
+  assert(node->builtin_nargs == 3);
+  gen_expr(node->builtin_args[0]);
+  push_ymm(0);
+  gen_expr(node->builtin_args[1]);
+  push_ymm(0);
+  pop_ymm(2);
+  pop_ymm(1);
+  int64_t imm = eval(node->builtin_args[2]);
+  if (imm < 0 || imm > 1)
+    error_tok(node->builtin_args[2]->tok, "imm must be 0 or 1");
+  println("  vinsertf128 $%ld, %%xmm2, %%ymm1, %%ymm0", imm);
+}
+
+void gen_vinsertf128_ps256(Node *node) {
+  assert(node->builtin_nargs == 3);
+  gen_expr(node->builtin_args[0]);
+  push_ymm(0);
+  gen_expr(node->builtin_args[1]);
+  push_ymm(0);
+  pop_ymm(2);
+  pop_ymm(1);
+  int64_t imm = eval(node->builtin_args[2]);
+  if (imm < 0 || imm > 1)
+    error_tok(node->builtin_args[2]->tok, "imm must be 0 or 1");
+  println("  vinsertf128 $%ld, %%xmm2, %%ymm1, %%ymm0", imm);
+}
+
+void gen_vperm2f128_si256(Node *node) {
+  assert(node->builtin_nargs == 3);
+  gen_expr(node->builtin_args[1]);
+  push_ymm(0);
+  gen_expr(node->builtin_args[0]);
+  pop_ymm(1);
+  int64_t imm = eval(node->builtin_args[2]);
+  if (imm < 0 || imm > 255)
+    error_tok(node->builtin_args[2]->tok, "immediate out of range");
+  println("  vperm2f128 $%ld, %%ymm1, %%ymm0, %%ymm0", imm);
+}
+
+void gen_vperm2f128_pd256(Node *node) {
+  assert(node->builtin_nargs == 3);
+  gen_expr(node->builtin_args[1]);
+  push_ymm(0);
+  gen_expr(node->builtin_args[0]);
+  pop_ymm(1);
+  int64_t imm = eval(node->builtin_args[2]);
+  if (imm < 0 || imm > 255)
+    error_tok(node->builtin_args[2]->tok, "immediate out of range");
+  println("  vperm2f128 $%ld, %%ymm1, %%ymm0, %%ymm0", imm);
+}
+
+void gen_vperm2f128_ps256(Node *node) {
+  assert(node->builtin_nargs == 3);
+  gen_expr(node->builtin_args[1]);
+  push_ymm(0);
+  gen_expr(node->builtin_args[0]);
+  pop_ymm(1);
+  int64_t imm = eval(node->builtin_args[2]);
+  if (imm < 0 || imm > 255)
+    error_tok(node->builtin_args[2]->tok, "immediate out of range");
+  println("  vperm2f128 $%ld, %%ymm1, %%ymm0, %%ymm0", imm);
+}
+
+void gen_vpermilpd(Node *node) {
+  gen_expr(node->lhs);
+  int64_t imm = eval(node->rhs);
+  if (imm < 0 || imm > 255)
+    error_tok(node->rhs->tok, "immediate out of range");
+  println("  vpermilpd $%ld, %%xmm0, %%xmm0", imm);
+}
+
+void gen_vpermilps(Node *node) {
+  gen_expr(node->lhs);
+  int64_t imm = eval(node->rhs);
+  if (imm < 0 || imm > 255)
+    error_tok(node->rhs->tok, "immediate out of range");
+  println("  vpermilps $%ld, %%xmm0, %%xmm0", imm);
+}
+
+void gen_vpermilpd256(Node *node) {
+  gen_expr(node->lhs);
+  int64_t imm = eval(node->rhs);
+  if (imm < 0 || imm > 255)
+    error_tok(node->rhs->tok, "immediate out of range");
+  println("  vpermilpd $%ld, %%ymm0, %%ymm0", imm);
+}
+
+void gen_vpermilps256(Node *node) {
+  gen_expr(node->lhs);
+  int64_t imm = eval(node->rhs);
+  if (imm < 0 || imm > 255)
+    error_tok(node->rhs->tok, "immediate out of range");
+  println("  vpermilps $%ld, %%ymm0, %%ymm0", imm);
+}
+
+void gen_avx512pf_void(Node *node) {
+}
+
+void gen_xabort(Node *node) {
+}
+
+void gen_vpclmulqdq_v4di(Node *node) {
+  gen_expr(node->builtin_args[0]);
+}
+
+static const char *vbmi2_insn(Node *node) {
+  switch (node->kind) {
+    case ND_VPSHRD_V32HI: return "vpshrdw";
+    case ND_VPSHRD_V16SI: return "vpshrdd";
+    case ND_VPSHRD_V8DI:  return "vpshrdq";
+    case ND_VPSHLD_V32HI: return "vpshldw";
+    case ND_VPSHLD_V16SI: return "vpshldd";
+    case ND_VPSHLD_V8DI:  return "vpshldq";
+    case ND_VPSHRD_V16SI_MASK: return "vpshrdd";
+    case ND_VPSHRD_V8DI_MASK:  return "vpshrdq";
+    case ND_VPSHLD_V16SI_MASK: return "vpshldd";
+    case ND_VPSHLD_V8DI_MASK:  return "vpshldq";
+    default: error("not a VBMI2 node kind");
+  }
+}
+
+void gen_vbmi2_3(Node *node) {
+  assert(node->builtin_nargs == 3);
+  Type *ty = node->builtin_args[0]->ty;
+
+  gen_expr(node->builtin_args[1]);
+  push_vec(ty);
+  gen_expr(node->builtin_args[0]);
+  pop_vec(ty, 1);
+
+  int64_t imm = eval(node->builtin_args[2]);
+  if (imm < 0 || imm > 255)
+    error_tok(node->builtin_args[2]->tok, "immediate out of range");
+
+  if (ty->size > 32)
+    println("  %s $%ld, %%zmm1, %%zmm0, %%zmm0", vbmi2_insn(node), imm);
+  else
+    println("  %s $%ld, %%ymm1, %%ymm0, %%ymm0", vbmi2_insn(node), imm);
+}
+
+void gen_vbmi2_5(Node *node) {
+  assert(node->builtin_nargs == 5);
+  Type *ty = node->builtin_args[0]->ty;
+
+  // args: [0]=a, [1]=b, [2]=imm, [3]=src(merge), [4]=k(mask)
+  // We need: a in zmm0, b in zmm1, src in zmm2, k in k1
+  gen_expr(node->builtin_args[3]);
+  push_vec(ty);
+
+  gen_expr(node->builtin_args[1]);
+  push_vec(ty);
+
+  gen_expr(node->builtin_args[0]);
+
+  pop_vec(ty, 1);
+  pop_vec(ty, 2);
+
+  gen_expr(node->builtin_args[4]);
+  println("  kmovw %%eax, %%k1");
+
+  int64_t imm = eval(node->builtin_args[2]);
+  if (imm < 0 || imm > 255)
+    error_tok(node->builtin_args[2]->tok, "immediate out of range");
+
+  if (ty->size > 32)
+    println("  %s $%ld, %%zmm1, %%zmm0, %%zmm2{%k1}", vbmi2_insn(node), imm);
+  else
+    println("  %s $%ld, %%ymm1, %%ymm0, %%ymm2{%k1}", vbmi2_insn(node), imm);
+
+  if (ty->size > 32)
+    println("  vmovdqa64 %%zmm2, %%zmm0");
+  else if (ty->size > 16)
+    println("  vmovdqa %%ymm2, %%ymm0");
+  else
+    println("  movdqa %%xmm2, %%xmm0");
+}
+
+void gen_avx512er_first(Node *node) {
+  if (node->builtin_nargs >= 4) {
+    gen_expr(node->builtin_args[1]);
+  } else {
+    gen_expr(node->builtin_args[0]);
+  }
+  println("  vzeroupper");
 }
