@@ -1,5 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 #define _GNU_SOURCE
+#ifndef CHIBICC_H
+#define CHIBICC_H
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
@@ -730,8 +732,7 @@ typedef enum
   ND_LOADHPD,
   ND_LOADLPD,
   ND_MOVMSKPD,
-  ND_PACKSSWB128,
-  ND_PACKSSDW128,
+  ND_PACKSSWB128,  
   ND_PACKUSWB128,
   ND_PUNPCKHBW128,
   ND_PUNPCKHWD128,
@@ -757,8 +758,10 @@ typedef enum
   ND_PSLLDI128,
   ND_PSLLQI128,
   ND_PSRAWI128,
+  ND_PSRAWI256,
   ND_PSRADI128,
   ND_PSRLWI128,
+  ND_PSRLWI256,
   ND_PSRLDI128,
   ND_PSRLQI128,
   ND_PSLLW128,
@@ -775,6 +778,7 @@ typedef enum
   ND_PMINSW128,
   ND_PMINUB128,
   ND_PMOVMSKB128,
+  ND_PMOVMSKB256,
   ND_PMULHUW128,
   ND_MASKMOVDQU,
   ND_PAVGB128,
@@ -875,6 +879,7 @@ typedef enum
   ND_PMOVZXBW128,
   ND_PMOVZXDQ128,
   ND_PMOVZXWQ128,
+  ND_PACKSSDW128,
   ND_PACKUSDW128,
   ND_MOVNTDQA,
   ND_CRC32QI,
@@ -972,10 +977,12 @@ typedef enum
   ND_ANDNOTSI256,
   ND_VECEXTV2DI,
   ND_PMULHUW256,
+  ND_PMADDWD256,
   ND_PD256_PD,
   ND_PS256_PS,
   ND_PSRLQI256,
   ND_PSLLQI256,
+  ND_PSLLWI256,
   ND_PERMDI256,
   ND_PSLLDI256,
   ND_PSRLDI256,
@@ -1052,6 +1059,24 @@ typedef enum
   ND_XABORT,
   ND_VPCLMULQDQ_V4DI,
   ND_VPCLMULQDQ_V8DI,
+   ND_PAVGB256,
+   ND_PAVGW256,
+   ND_PERMVARSI256,
+   ND_VECEXTV8SI,
+   ND_PUNPCKHBW256,
+   ND_PUNPCKHWD256,
+   ND_PUNPCKHDQ256,
+   ND_PUNPCKHQDQ256,
+   ND_PUNPCKLBW256,
+   ND_PUNPCKLWD256,
+   ND_PUNPCKLDQ256,
+   ND_PUNPCKLQDQ256,
+   ND_PSADBW256,
+   ND_PACKSSWB256,
+   ND_PACKSSDW256,
+   ND_PACKUSWB256,
+   ND_PACKUSDW256,
+   ND_PMULHW256,
 } NodeKind;
 
 // AST node type
@@ -1144,6 +1169,8 @@ Node
   bool is_scalar_promoted;  
   bool is_tail;
   bool clobbers_rbx;
+  bool asm_is_volatile;
+  Scope *scope;
 };
 
 typedef struct
@@ -1344,8 +1371,13 @@ bool is_array(Type *ty);
 Type *new_qualified_type(Type *ty);
 Type *unqual(Type *ty);
 bool is_vector(Type *ty);
+bool has_flonum(Type *ty, int lo, int hi, int offset);
+bool has_flonum1(Type *ty);
+bool has_flonum2(Type *ty);
 bool is_int128(Type *ty);
 bool is_pointer(Type *ty);
+bool is_sret(Type *ty);
+bool has_pointer(Type *ty);
 bool is_const_expr(Node *node);
 bool contains_label(Node *node);
 
@@ -1572,7 +1604,15 @@ void gen_palignr(Node *node);
 void gen_vperm2i128_si256(Node *node);
 void gen_pblendd256(Node *node);
 void gen_pmulhuw256(Node *node);
+void gen_pmaddwd256(Node *node);
+void gen_avx2_pmovmskb256(Node *node);
 void gen_andnotsi256(Node *node);
+void gen_punpck256(Node *node, const char *insn);
+void gen_psadbw256(Node *node);
+void gen_pack256(Node *node, const char *insn);
+void gen_mulhw256(Node *node);
+void gen_pavg256(Node *node, const char *insn);
+void gen_permvarsi256(Node *node);
 void gen_vextractf128_si256(Node *node);
 void gen_si256(Node *node);
 void gen_cvt_mmx_binop(Node *node, const char *insn);
@@ -1762,3 +1802,7 @@ int retrieve_output_index_from_letter(char letter);
 char *retrieveVariableNumber(int index);
 char *generate_input_for_output(void);
 char *generate_return_rax(Token *retval);
+
+
+
+#endif // CHIBICC_H

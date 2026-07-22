@@ -817,13 +817,15 @@ static MacroArg *read_macro_arg_one(Token **rest, Token *tok, bool read_rest)
 {
   Token head = {};
   Token *cur = &head;
-  int level = 0;
+  int paren = 0;
+  int brace = 0;
+  int bracket = 0;
 
   for (;;)
   {
-    if (level == 0 && equal(tok, ")"))
+    if (paren == 0 && brace == 0 && bracket == 0 && equal(tok, ")"))
       break;
-    if (level == 0 && !read_rest && equal(tok, ","))
+    if (paren == 0 && brace == 0 && bracket == 0 && !read_rest && equal(tok, ","))
       break;
 
     if (tok->kind == TK_EOF)
@@ -831,9 +833,17 @@ static MacroArg *read_macro_arg_one(Token **rest, Token *tok, bool read_rest)
     
 
     if (equal(tok, "("))
-      level++;
+      paren++;
     else if (equal(tok, ")"))
-      level--;
+      paren--;
+    else if (equal(tok, "{"))
+      brace++;
+    else if (equal(tok, "}"))
+      brace--;
+    else if (equal(tok, "["))
+      bracket++;
+    else if (equal(tok, "]"))
+      bracket--;
     cur = cur->next = copy_token(tok);
     tok = tok->next;
   }
@@ -1390,35 +1400,18 @@ static Token *stdver_macro(Token *tok) {
   switch (current_std) {
   case STD_C89:
   case STD_GNU89:
-    tok->val = 0;
-    break; // __STDC_VERSION__ not defined
-
+    return new_num_token(0, tok);
   case STD_C99:
   case STD_GNU99:
-    tok->val = 199901L;
-    break;
-
+    return new_num_token(199901L, tok);
   case STD_C11:
   case STD_GNU11:
-    tok->val = 201112L;
-    break;
-
+    return new_num_token(201112L, tok);
   case STD_C17:
   case STD_GNU17:
-    tok->val = 201710L;
-    break;
-
-  case STD_C23:
-    tok->val = 202311L;
-    break;
-
-  default:
-    unreachable();
+    return new_num_token(201710L, tok);
   }
-
-  tok->kind = TK_NUM;
-  tok->ty = ty_long;
-  return tok;  
+  return new_num_token(0, tok);
 }
 
 

@@ -92,21 +92,6 @@ int multiple1(), multiple2();
 
 int add_all(int n, ...);
 
-typedef struct
-{
-  int gp_offset;
-  int fp_offset;
-  void *overflow_arg_area;
-  unsigned int remaining;
-  void *reg_save_area;
-} __va_elem;
-
-typedef __va_elem va_list[1];
-
-int add_all(int n, ...);
-int sprintf(char *buf, char *fmt, ...);
-int vsprintf(char *buf, char *fmt, va_list ap);
-
 char *fmt(char *buf, char *fmt, ...)
 {
   va_list ap;

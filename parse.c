@@ -889,6 +889,14 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     ty3->is_const = is_const;
     ty3->is_volatile = is_volatile;
     ty3->is_restrict = is_restrict;
+    // gcc bumps the alignment of an `_Atomic` type up to its own size so the
+    // access stays lock-free and never lowers to a libatomic (`__atomic_*`)
+    // libcall.  Cap at 16 bytes (x86-64 max lock-free width, enabled via
+    // `cx16`).
+    if (ty3->is_atomic && ty3->size > 0) {
+      long a = ty3->size < 16 ? ty3->size : 16;
+      if (ty3->align < a) ty3->align = a;
+    }
     return ty3;
   }
   return ty;
@@ -1073,20 +1081,36 @@ static Type *array_dimensions(Token **rest, Token *tok, Type *ty)
 }
 
 
-static void pointer_qualifiers(Token **rest, Token *tok, Type *ty) {
+// pointer_qualifiers parses a sequence of cvr/atomic qualifiers attached to a
+// pointer and returns the (possibly freshly allocated) qualified type.  We use
+// new_qualified_type so the resulting node carries a proper `origin` pointing
+// at the unqualified type; mutating `ty` in place left `origin` NULL, which
+// made the debug metadata emitter recurse infinitely on a `T* restrict` type.
+// The requested qualifiers are applied only to the new node, never to the
+// original, so the base type stays unqualified.
+static Type *pointer_qualifiers(Token **rest, Token *tok, Type *ty) {
+  bool is_atomic = false, is_const = false, is_volatile = false, is_restrict = false;
   for (;; tok = tok->next) {
     if (equal(tok, "_Atomic"))
-      ty->is_atomic = true;
+      is_atomic = true;
     else if (equal(tok, "const"))
-      ty->is_const = true;
+      is_const = true;
     else if (equal(tok, "volatile"))
-      ty->is_volatile = true;
+      is_volatile = true;
     else if (equal(tok, "restrict") || equal(tok, "__restrict") || equal(tok, "__restrict__"))
-      ty->is_restrict = true;
+      is_restrict = true;
     else
       break;
   }
   *rest = tok;
+  if (is_atomic || is_const || is_volatile || is_restrict) {
+    ty = new_qualified_type(ty);
+    ty->is_atomic = is_atomic;
+    ty->is_const = is_const;
+    ty->is_volatile = is_volatile;
+    ty->is_restrict = is_restrict;
+  }
+  return ty;
 }
 
 
@@ -1130,7 +1154,7 @@ static Type *pointers(Token **rest, Token *tok, Type *ty)
     for (;;) {
 
       tok = attribute_list(tok, ty, type_attributes);
-       pointer_qualifiers(&tok, tok, ty);
+       ty = pointer_qualifiers(&tok, tok, ty);
        if (equal(tok, "_Complex")) {
          tok = tok->next;
        } else {
@@ -1267,14 +1291,26 @@ static Type *enum_specifier(Token **rest, Token *tok)
 
     if (!ty)
       error_tok(tok, "%s:%d: in %s: ty is null!", __FILE__, __LINE__, __func__);  
+    ty->tag_name = tag;
+    ty->name = tag;
+    push_tag_scope(tag, ty);
     return ty;
   }
   SET_CTX(ctx); 
   tok = skip(tok, "{", ctx);
 
+  // Reuse a previously forward-declared (incomplete) enum of the same tag.
+  if (tag) {
+    Type *prev = find_tag(tag);
+    if (prev && prev->kind == TY_ENUM)
+      ty = prev;
+  }
+
   // Read an enum-list.
   int i = 0;
   int val = 0;
+  int enum_min = 0;
+  bool enum_has_negative = false;
   while (!consume_end(rest, tok))
   {
     //tok->next = attribute_list(tok->next, ty, type_attributes);
@@ -1291,6 +1327,11 @@ static Type *enum_specifier(Token **rest, Token *tok)
       val = const_expr(&tok, tok->next);
     tok = attribute_list(tok, ty, type_attributes);
 
+    if (val < enum_min)
+      enum_min = val;
+    if (val < 0)
+      enum_has_negative = true;
+
     Member *mem = calloc(1, sizeof(Member));
     mem->name = name_tok;
     mem->offset = val;
@@ -1302,6 +1343,13 @@ static Type *enum_specifier(Token **rest, Token *tok)
     sc->enum_ty = ty;
     sc->enum_val = val++;
   }
+
+  // When every enumerator is non-negative the enum has no sign bit, so treat
+  // it as unsigned.  This matches GCC, which (with -fshort-enums) selects an
+  // unsigned underlying type, and makes bit-fields of such enums zero-extend
+  // instead of sign-extend (see suite218).
+  if (!enum_has_negative)
+    ty->is_unsigned = true;
 
   if (tag) {
     push_tag_scope(tag, ty);
@@ -1617,6 +1665,7 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
       // x = alloca(tmp)`.
       
       Obj *var = new_lvar(get_ident(ty->name), ty, NULL);
+      var->tok = ty->name_pos;
       Token *tok = ty->name;
       tok = attribute_list(tok, ty, type_attributes);
       int var_align = MAX(decl_attr.align, ty->align);
@@ -1632,6 +1681,7 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
     }
     
     Obj *var = new_lvar(get_ident(ty->name), ty, NULL);
+    var->tok = ty->name_pos;
     if (alt_align) {
       var->align = alt_align;
       var->ty->align = MAX(var->ty->align, alt_align);
@@ -2008,6 +2058,7 @@ static void struct_initializer1(Token **rest, Token *tok, Initializer *init)
 {
   SET_CTX(ctx);          
   tok = skip(tok, "{", ctx);
+
 
   Member *mem = init->ty->members;
   bool first = true;
@@ -2399,8 +2450,8 @@ static void write_buf(char *buf, uint64_t val, int sz)
     unreachable();
 }
 
-static Relocation *
-write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int offset)
+
+static Relocation *write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int offset)
 {
   if (ty->kind == TY_ARRAY)
   {
@@ -2625,8 +2676,11 @@ static Node *asm_stmt(Token **rest, Token *tok)
   Node *node = new_node(ND_ASM, tok);
   tok = tok->next;
 
-  while (equal(tok, "volatile") || equal(tok, "inline")  || equal(tok, "__inline"))
+  while (equal(tok, "volatile") || equal(tok, "inline")  || equal(tok, "__inline")) {
+    if (equal(tok, "volatile"))
+      node->asm_is_volatile = true;
     tok = tok->next;
+  }
 
   SET_CTX(ctx);   
   tok = skip(tok, "(", ctx);
@@ -3045,6 +3099,7 @@ static Node *compound_stmt(Token **rest, Token *tok, Node **last)
   Node head = {0};
   Node *cur = &head;
   enter_scope();
+  node->scope = scope;
 
   //while (!equal(tok, "}"))
   for (; !equal(tok, "}"); add_type(cur)) 
@@ -3112,6 +3167,7 @@ static Node *compound_stmt2(Token **rest, Token *tok)
   Node head = {};
   Node *cur = &head;
   enter_scope();
+  node->scope = scope;
   while (!equal(tok, "}") && !equal(tok, "case") && !equal(tok, "default"))
   {
     VarAttr attr = {};
@@ -3424,7 +3480,7 @@ static int64_t eval2(Node *node, char ***label)
 
     if (node->var->is_static || node->var->is_definition) {
       if (label)
-          *label = &node->var->name;
+          *label = node->var->asmname ? &node->var->asmname : &node->var->name;
       return 0;          
     }
     
@@ -3438,7 +3494,7 @@ static int64_t eval2(Node *node, char ***label)
     if (!label) {
       error_tok(node->tok, "%s:%d: in %s: not a compile-time constant %d", __FILE__, __LINE__, __func__, node->var->ty->kind);
     }
-    *label = &node->var->name;
+    *label = node->var->asmname ? &node->var->asmname : &node->var->name;
     return 0;
   case ND_NUM:
     return node->val;
@@ -6149,6 +6205,10 @@ static Node *funcall(Token **rest, Token *tok, Node *fn)
     //can't be done later because param_ty will be set to the next value
     //if param_ty is null it means that it's a variadic argument.
     if (!param_ty){
+      // Mark the argument as variadic (float->double promotion) without
+      // mutating the shared function type, which would corrupt the
+      // original declaration's signature.
+      arg->ty = copy_type(arg->ty);
       arg->ty->is_variadic = true;      
     }
 
@@ -6665,7 +6725,7 @@ static Node *primary(Token **rest, Token *tok)
     equal(tok, "__builtin_ia32_cvttps2dq") || equal(tok, "__builtin_ia32_cvtps2pd") || 
     equal(tok, "__builtin_ia32_cvtsd2si") || equal(tok, "__builtin_ia32_cvtsd2si64") || 
     equal(tok, "__builtin_ia32_cvttsd2si") || equal(tok, "__builtin_ia32_cvttsd2si64") ||
-    equal(tok, "__builtin_ia32_movmskpd") || equal(tok, "__builtin_ia32_pmovmskb128") || 
+    equal(tok, "__builtin_ia32_movmskpd") || equal(tok, "__builtin_ia32_pmovmskb128") || equal(tok, "__builtin_ia32_pmovmskb256") || 
     equal(tok, "__builtin_ia32_cvtss2si64") || equal(tok, "__builtin_ia32_cvtps2pi") || 
     equal(tok, "__builtin_ia32_cvttps2pi") || equal(tok, "__builtin_ia32_cvttpd2pi") || 
     equal(tok, "__builtin_ia32_cvtpi2pd") ||  equal(tok, "__builtin_ia32_cvtpd2pi") ||
@@ -6898,12 +6958,18 @@ static Node *primary(Token **rest, Token *tok)
         Node *mask = assign(&tok, tok);
         add_type(mask);
         node->builtin_args[0] = a;
+        add_type(node->builtin_args[0]);
         node->builtin_args[1] = second;
+        add_type(node->builtin_args[1]);
         node->builtin_args[2] = mask;
+        add_type(node->builtin_args[2]);
       } else {
         node->builtin_args[0] = a;
+        add_type(node->builtin_args[0]);
         node->builtin_args[1] = a;      
+        add_type(node->builtin_args[1]);
         node->builtin_args[2] = second; 
+        add_type(node->builtin_args[2]);
       }
       node->builtin_nargs = 3;
       SET_CTX(ctx);
@@ -7366,12 +7432,20 @@ static Node *primary(Token **rest, Token *tok)
 
   if (equal(tok, "__builtin_stdc_trailing_zeros"))
   {
-    return ParseBuiltin(ND_BUILTIN_CTZLL, tok, rest);
+    Node *node = ParseBuiltin(ND_BUILTIN_CTZLL, tok, rest);
+    node->builtin_val = new_cast(node->builtin_val, ty_ulong);
+    add_type(node->builtin_val);
+    add_type(node);
+    return node;
   }
 
   if (equal(tok, "__builtin_stdc_count_ones"))
   {
-    return ParseBuiltin(ND_POPCOUNTLL, tok, rest);
+    Node *node = ParseBuiltin(ND_POPCOUNTLL, tok, rest);
+    node->builtin_val = new_cast(node->builtin_val, ty_ulong);
+    add_type(node->builtin_val);
+    add_type(node);
+    return node;
   }
 
   if (equal(tok, "__builtin_stdc_has_single_bit"))
@@ -7987,19 +8061,23 @@ static void create_param_lvars(Type *param, char *funcname)
   //  return;
   // error_tok(param->name_pos, "parameter name omitted");
   //new_lvar(get_ident(param->name), param, funcname);
+    Obj *var;
     if (param->param_var) {
-      param->param_var->next = scope->locals;
-      scope->locals = param->param_var;
-      param->param_var->funcname = funcname;
-      param->param_var->order = order;
+      var = param->param_var;
+      var->next = scope->locals;
+      scope->locals = var;
+      var->funcname = funcname;
+      var->order = order;
       if (param->name)
-        push_scope(get_ident(param->name))->var = param->param_var;
+        push_scope(get_ident(param->name))->var = var;
     } else {
     if (!param->name)
-      new_lvar("", param, funcname);
+      var = new_lvar("", param, funcname);
     else
-    new_lvar(get_ident(param->name), param, funcname);
+      var = new_lvar(get_ident(param->name), param, funcname);
     }
+    var->is_param = true;
+    var->tok = param->name_pos;
     order++;
 
 }
@@ -8062,7 +8140,7 @@ static void mark_live(Obj *var)
 static bool is_volatile(Type *ty) {
   if (!ty) return false;
   if (ty->is_volatile) return true;
-  if (ty->kind == TY_ARRAY || ty->kind == TY_VLA)
+  if (is_array(ty))
     return is_volatile(ty->base);
   if (ty->kind == TY_STRUCT || ty->kind == TY_UNION) {
     for (Member *mem = ty->members; mem; mem = mem->next) {
@@ -8131,8 +8209,8 @@ static void mark_tail_calls(Node *node, Obj *fn) {
 
 static Token *function(Token *tok, Type *basety, VarAttr *attr)
 {
-
   Type *ty = declarator(&tok, tok, basety);
+
   
   tok = attribute_list(tok, attr, thing_attributes); 
   if (!ty)
@@ -8148,6 +8226,11 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
     // Redeclaration
     if (!fn->is_function)
       error_tok(tok, "%s:%d: in %s: redeclared as a different kind of symbol", __FILE__, __LINE__, __func__);
+    // Skip the type-compatibility check for an old-style definition, whose
+    // parameter types are not yet resolved here and will be taken from a
+    // preceding prototype (C11 6.7.6.3p15).
+    if (!ty->is_oldstyle && !is_compatible(fn->ty, ty))
+      error_tok(ty->name_pos, "%s:%d: in %s: conflicting types for %s", __FILE__, __LINE__, __func__, name_str);
     if (fn->is_definition && equal(tok, "{"))
       error_tok(tok, "%s:%d: in %s: redefinition of %s", __FILE__, __LINE__, __func__, name_str);
     if (!fn->is_static && attr->is_static)
@@ -8157,6 +8240,7 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   else
   {
     fn = new_gvar(name_str, ty);
+    fn->tok = ty->name_pos;
     fn->funcname = name_str;
     fn->is_function = true;
     fn->is_definition = equal(tok, "{");
@@ -8323,6 +8407,7 @@ static Token *global_declaration(Token *tok, Type *basety, VarAttr *attr)
   }
     
     Obj *var = new_gvar(get_ident(ty->name), ty);
+    var->tok = ty->name_pos;
     if (ty->kind == TY_FUNC)
       var->is_function = true;
     
@@ -8722,6 +8807,8 @@ static Node *ParseAtomic3(NodeKind kind, Token *tok, Token **rest) {
   tok = skip(tok, ",", ctx);
   node->rhs = assign(&tok, tok);
   add_type(node->rhs);
+  if (kind != ND_STORE && kind != ND_LOAD && !is_pointer(node->ty))
+    node->rhs = new_cast(node->rhs, node->ty);
   // Check if there's a comma, indicating a memory order argument
   if (equal(tok, ",")) {
     SET_CTX(ctx); 
@@ -9247,6 +9334,7 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_psubusb128", ND_PSUBUSB128 },    
     { "__builtin_ia32_psubusw128", ND_PSUBUSW128 },              
     { "__builtin_ia32_pmaddwd128", ND_PMADDWD128 },  
+    { "__builtin_ia32_pmaddwd256", ND_PMADDWD256 },  
     { "__builtin_ia32_pmulhw128", ND_PMULHW128 },      
     { "__builtin_ia32_pmuludq", ND_PMULUDQ },          
     { "__builtin_ia32_pmuludq128", ND_PMULUDQ128 },          
@@ -9254,8 +9342,10 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_pslldi128", ND_PSLLDI128 },    
     { "__builtin_ia32_psllqi128", ND_PSLLQI128 },     
     { "__builtin_ia32_psrawi128", ND_PSRAWI128 },          
+    { "__builtin_ia32_psrawi256", ND_PSRAWI256 },          
     { "__builtin_ia32_psradi128", ND_PSRADI128 },     
     { "__builtin_ia32_psrlwi128", ND_PSRLWI128 },    
+    { "__builtin_ia32_psrlwi256", ND_PSRLWI256 },    
     { "__builtin_ia32_psrldi128", ND_PSRLDI128 },       
     { "__builtin_ia32_psrlqi128", ND_PSRLQI128 }, 
     { "__builtin_ia32_psllw128", ND_PSLLW128 },   
@@ -9272,10 +9362,29 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_pminsw128", ND_PMINSW128 },   
     { "__builtin_ia32_pminub128", ND_PMINUB128 }, 
     { "__builtin_ia32_pmovmskb128", ND_PMOVMSKB128 },  
+    { "__builtin_ia32_pmovmskb256", ND_PMOVMSKB256 },  
     { "__builtin_ia32_pmulhuw128", ND_PMULHUW128 }, 
     { "__builtin_ia32_maskmovdqu", ND_MASKMOVDQU },     
     { "__builtin_ia32_pavgb128", ND_PAVGB128 },   
     { "__builtin_ia32_pavgw128", ND_PAVGW128 },   
+    { "__builtin_ia32_pavgb256", ND_PAVGB256 },   
+    { "__builtin_ia32_pavgw256", ND_PAVGW256 },   
+    { "__builtin_ia32_permvarsi256", ND_PERMVARSI256 },   
+    { "__builtin_ia32_vec_ext_v8si", ND_VECEXTV8SI },   
+    { "__builtin_ia32_punpckhbw256", ND_PUNPCKHBW256 },
+    { "__builtin_ia32_punpckhwd256", ND_PUNPCKHWD256 },
+    { "__builtin_ia32_punpckhdq256", ND_PUNPCKHDQ256 },
+    { "__builtin_ia32_punpckhqdq256", ND_PUNPCKHQDQ256 },
+    { "__builtin_ia32_punpcklbw256", ND_PUNPCKLBW256 },
+    { "__builtin_ia32_punpcklwd256", ND_PUNPCKLWD256 },
+    { "__builtin_ia32_punpckldq256", ND_PUNPCKLDQ256 },
+    { "__builtin_ia32_punpcklqdq256", ND_PUNPCKLQDQ256 },
+    { "__builtin_ia32_psadbw256", ND_PSADBW256 },
+    { "__builtin_ia32_packsswb256", ND_PACKSSWB256 },
+    { "__builtin_ia32_packssdw256", ND_PACKSSDW256 },
+    { "__builtin_ia32_packuswb256", ND_PACKUSWB256 },
+    { "__builtin_ia32_packusdw256", ND_PACKUSDW256 },
+    { "__builtin_ia32_pmulhw256", ND_PMULHW256 },
     { "__builtin_ia32_psadbw128", ND_PSADBW128 }, 
     { "__builtin_ia32_movnti", ND_MOVNTI },   
     { "__builtin_ia32_movnti64", ND_MOVNTI64 },   
@@ -9448,6 +9557,7 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_ps_ps256", ND_PS256_PS },
     { "__builtin_ia32_psrlqi256", ND_PSRLQI256 },
     { "__builtin_ia32_psllqi256", ND_PSLLQI256 },
+    { "__builtin_ia32_psllwi256", ND_PSLLWI256 },
     { "__builtin_ia32_permdi256", ND_PERMDI256 },
     { "__builtin_ia32_pslldi256", ND_PSLLDI256 }, 
     { "__builtin_ia32_psrldi256", ND_PSRLDI256 },
@@ -9660,8 +9770,10 @@ static Node *constant_folding(int kind, Node *lhs, Node *rhs, Token *tok)
     case ND_SUB: node = new_double(a - b, tok); break;
     case ND_MUL: node = new_double(a * b, tok); break;
     case ND_DIV:
-      if (b == 0.0)
-        return NULL;
+      // Fold even division by zero into the host's IEEE result (NaN/inf with
+      // the platform's sign bit).  This mirrors what the native backend
+      // produces by emitting a real hardware division instruction, so the
+      // embedded constant matches signbit/isnan expectations on x86.
       node = new_double(a / b, tok);
       break;
     default: return NULL;
