@@ -4,6 +4,8 @@ void gen_builtin_alloca(Node *node)
 {
   int align = node->val > 16 ? node->val : 16;
   Obj *fn = get_current_fn();
+  if (fn->stack_align > 16)
+    align = MAX(align, fn->stack_align);
 
   if (!fn->alloca_bottom) {
     println("  mov %%rsp, %%rax");
@@ -605,6 +607,15 @@ void gen_builtin_bswap32(Node *node) {
 void gen_builtin_bswap64(Node *node) {
     gen_expr(node->builtin_val);
     println("  bswap %%rax");
+}
+void gen_builtin_ceil(Node *node) {
+    gen_expr(node->builtin_val);
+    println("  roundsd $2, %%xmm0, %%xmm0");
+}
+
+void gen_builtin_floor(Node *node) {
+    gen_expr(node->builtin_val);
+    println("  roundsd $1, %%xmm0, %%xmm0");
 }
 
 void gen_builtin_frame_address(Node *node) {

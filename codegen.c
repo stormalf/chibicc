@@ -1519,19 +1519,19 @@ static int push_args(Node *node)
   int total_stack_bytes = stack_offset;
   int stack_units = (total_stack_bytes + 7) / 8;
 
-  if ((depth + stack_units) % 2 != 0)
-  {
-    stack_units++;
+  if (max_align > 16) {
+    int align_units = max_align / 8;
+    int total_units = depth + stack_units;
+    int extra = (align_units - (total_units % align_units)) % align_units;
+    stack_units += extra;
+  } else {
+    if ((depth + stack_units) % 2 != 0)
+      stack_units++;
   }
 
   if (stack_units > 0) {
     println("  sub $%d, %%rsp", stack_units * 8);
     depth += stack_units;
-  }
-
-  if (max_align > 16) {
-    println("  # REALIGNING STACK TO %d", max_align);
-    println("  and $-%d, %%rsp", max_align);
   }
 
   place_stack_args(node->args); // evaluate + store stack-passed args to rsp slots
@@ -3216,7 +3216,9 @@ void gen_expr(Node *node)
   case ND_BUILTIN_BSWAP16: gen_builtin_bswap16(node); return;
   case ND_BUILTIN_BSWAP32: gen_builtin_bswap32(node); return;
   case ND_BUILTIN_BSWAP64: gen_builtin_bswap64(node); return;
-  case ND_STDC_BIT_CEIL: gen_builtin_stdc_bit_ceil(node); return;
+  case ND_BUILTIN_CEIL: gen_builtin_ceil(node); return;
+      case ND_BUILTIN_FLOOR: gen_builtin_floor(node); return;
+      case ND_STDC_BIT_CEIL: gen_builtin_stdc_bit_ceil(node); return;
   case ND_BUILTIN_FRAME_ADDRESS: gen_builtin_frame_address(node); return;
   case ND_POPCOUNTL:
   case ND_POPCOUNTLL: gen_builtin_single(node, "popcnt", "rax"); return;
@@ -4923,13 +4925,14 @@ static void emit_text(Obj *prog)
     assert(tmp_stack.depth == 0);
     long cur_pos = ftell(output_file);
     fseek(output_file, reserved_pos, SEEK_SET);
-    //println("  sub $%d, %%rsp", align_to(tmp_stack.bottom, 16));
     if (is_omit_fp(fn)) {
       println("  sub $%d, %%rsp", tmp_stack.bottom);
       println("  .cfi_def_cfa_offset %d", tmp_stack.bottom + 8);
     }
-    else
-      println("  sub $%d, %%rsp", align_to(tmp_stack.bottom, 16));
+    else {
+      int sub_align = (fn->stack_align > 16) ? fn->stack_align : 16;
+      println("  sub $%d, %%rsp", align_to(tmp_stack.bottom, sub_align));
+    }
     fseek(output_file, cur_pos, SEEK_SET);
 
     // [https://www.sigbus.info/n1570#5.1.2.2.3p1] The C spec defines
@@ -5083,7 +5086,7 @@ static void scope_zero_init(Scope *sc, Obj *fn) {
     if (!var->init && !var->is_param &&
         (var->ty->kind == TY_STRUCT ||
          var->ty->kind == TY_UNION ||
-         var->ty->kind == TY_ARRAY ||
+         is_array(var->ty) ||
          is_vector(var->ty))) {
       gen_mem_zero(var->offset, var->ty->size);
     }

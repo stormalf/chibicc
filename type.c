@@ -1167,6 +1167,8 @@ void add_type(Node *node)
   case ND_BUILTIN_HUGE_VALF:
     node->ty = ty_float;
     return;
+  case ND_BUILTIN_CEIL:
+  case ND_BUILTIN_FLOOR:    
   case ND_BUILTIN_NAN:    
   case ND_BUILTIN_INF:
   case ND_BUILTIN_HUGE_VAL:

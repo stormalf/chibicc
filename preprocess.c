@@ -1837,7 +1837,7 @@ void init_macros(void)
   //define_macro("__GNUC__", "9");
   define_macro("__GNUC__", "5");
   define_macro("__GNUC_MINOR__", "1");
-  define_macro("__GNUC_PATCHLEVEL__ ", "1");
+  define_macro("__GNUC_PATCHLEVEL__", "1");
   //define_macro("HAVE_ATTRIBUTE_PACKED", "1");
   define_macro("linux", "1");
   define_macro("unix", "1");
@@ -1887,7 +1887,7 @@ void init_macros(void)
   define_macro("__ORDER_BIG_ENDIAN__", "4321");
   define_macro("__BYTE_ORDER__", "__ORDER_LITTLE_ENDIAN__");
   define_macro("USE_BUILTINS", "1");
-  define_macro("_Pragma(message) ", "");
+  define_macro("_Pragma(message)", "");
 
   add_builtin("__STDC_VERSION__", stdver_macro);
   add_builtin("__FILE__", file_macro);

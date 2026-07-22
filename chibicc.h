@@ -503,6 +503,8 @@ typedef enum
   ND_BUILTIN_BSWAP32, //builtin bswap32
   ND_BUILTIN_BSWAP64, //builtin bswap64,
   ND_BUILTIN_FRAME_ADDRESS, // builtin frame address
+  ND_BUILTIN_CEIL, // builtin ceil
+  ND_BUILTIN_FLOOR, // builtin floor
   ND_STDC_BIT_CEIL, // builtin stdc bit ceil
   ND_EMMS,
   ND_SFENCE,
@@ -1482,6 +1484,8 @@ void gen_builtin_clzl(Node *node);
 void gen_builtin_bswap16(Node *node);
 void gen_builtin_bswap32(Node *node);
 void gen_builtin_bswap64(Node *node);
+void gen_builtin_ceil(Node *node);
+void gen_builtin_floor(Node *node);
 void gen_builtin_frame_address(Node *node);
 void gen_builtin_expect(Node *node);
 void gen_builtin_abort(Node *node);
@@ -1802,7 +1806,7 @@ int retrieve_output_index_from_letter(char letter);
 char *retrieveVariableNumber(int index);
 char *generate_input_for_output(void);
 char *generate_return_rax(Token *retval);
-
+char *register_to_64(char *regist);
 
 
 #endif // CHIBICC_H

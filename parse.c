@@ -6582,6 +6582,748 @@ static Node *primary(Token **rest, Token *tok)
     return node;
   }
 
+
+  if (equal(tok, "__builtin_reg_class"))
+  {
+    SET_CTX(ctx);      
+    tok = skip(tok->next, "(", ctx);
+    Type *ty = typename(&tok, tok);
+    SET_CTX(ctx);      
+    *rest = skip(tok, ")", ctx);
+
+    if (is_integer(ty) || ty->kind == TY_PTR)
+      return new_num(0, start);
+    if (ty->kind == TY_FLOAT || ty->kind == TY_DOUBLE || ty->kind == TY_VECTOR)
+      return new_num(1, start);
+    return new_num(2, start);
+  }
+
+
+  if (equal(tok, "__atomic_is_lock_free")) {
+    Node *node = new_node(ND_ATOMIC_IS_LOCK_FREE, tok);
+    SET_CTX(ctx);
+    tok = skip(tok->next, "(", ctx);
+    node->lhs = assign(&tok, tok);
+    SET_CTX(ctx);
+    if (consume(&tok, tok, ",")) {
+      node->rhs = assign(&tok, tok);
+    }
+    SET_CTX(ctx);
+    *rest = skip(tok, ")", ctx);
+    return node;
+  }
+
+  if (equal(tok, "__builtin_compare_and_swap"))
+  {
+    Node *node = new_node(ND_CAS, tok);
+    SET_CTX(ctx);     
+    tok = skip(tok->next, "(", ctx);
+    node->cas_addr = assign(&tok, tok);
+    SET_CTX(ctx);     
+    tok = skip(tok, ",", ctx);
+    node->cas_old = assign(&tok, tok);
+    SET_CTX(ctx); 
+    tok = skip(tok, ",", ctx);
+    node->cas_new = assign(&tok, tok);
+    SET_CTX(ctx); 
+    *rest = skip(tok, ")", ctx);
+    return node;
+  }
+
+
+  if (equal(tok, "__builtin_atomic_exchange"))
+  {
+    Node *node = new_node(ND_EXCH, tok);
+    SET_CTX(ctx); 
+    tok = skip(tok->next, "(", ctx);
+    node->lhs = assign(&tok, tok);
+    add_type(node->lhs);
+    SET_CTX(ctx);     
+    tok = skip(tok, ",", ctx);
+    node->rhs = assign(&tok, tok);
+    add_type(node->rhs);
+    SET_CTX(ctx);       
+    *rest = skip(tok, ")", ctx);
+    return node;
+  }
+
+  if (equal(tok, "__sync_val_compare_and_swap")) {
+    Node *node = new_node(ND_CAS_N, tok);
+    SET_CTX(ctx); 
+    tok = skip(tok->next, "(", ctx);
+    node->cas_addr = assign(&tok, tok);
+    add_type(node->cas_addr);
+    SET_CTX(ctx);     
+    tok = skip(tok, ",", ctx);
+    node->cas_old = assign(&tok, tok);
+    add_type(node->cas_old);
+    SET_CTX(ctx);     
+    tok = skip(tok, ",", ctx);
+    node->cas_new = assign(&tok, tok);
+    add_type(node->cas_new);
+    SET_CTX(ctx);       
+    *rest = skip(tok, ")", ctx);
+    return node;
+  }
+
+
+  // Extend the parser to recognize __sync_synchronize()
+  if (equal(tok, "__sync_synchronize")) {
+      Node *node = new_node(ND_SYNC, tok);
+      SET_CTX(ctx);     
+      *rest = skip(tok->next, "(", ctx);
+      SET_CTX(ctx);     
+      *rest = skip(*rest, ")", ctx);
+      return node;
+  }
+
+  if (equal(tok, "__builtin_memcpy") && equal(tok->next, "(")) {
+      return parse_memcpy(tok, rest);
+  }
+
+  if (equal(tok, "__builtin_memset") && equal(tok->next, "(")) {
+      return parse_memset(tok, rest);
+  }
+
+  if (equal(tok, "__builtin_huge_valf")) {
+    Node *node = new_node(ND_BUILTIN_HUGE_VALF, tok); 
+    node->ty = ty_float;
+    node->fval = INFINITY;
+    SET_CTX(ctx); 
+    tok = skip(tok->next, "(", ctx);
+    SET_CTX(ctx); 
+    *rest = skip(tok, ")", ctx);
+    return node;
+  }
+
+  if (equal(tok, "__builtin_inf")) {
+    Node *node = new_node(ND_BUILTIN_INF, tok); 
+    node->ty = ty_double;
+    node->fval = INFINITY;
+    SET_CTX(ctx); 
+    tok = skip(tok->next, "(", ctx);
+    SET_CTX(ctx); 
+    *rest = skip(tok, ")",  ctx);
+    return node;
+  }
+  if (equal(tok, "__builtin_huge_val")) {
+    Node *node = new_node(ND_BUILTIN_HUGE_VAL, tok); 
+    node->ty = ty_double;
+    node->fval = INFINITY;
+    SET_CTX(ctx); 
+    tok = skip(tok->next, "(", ctx);
+    SET_CTX(ctx); 
+    *rest = skip(tok, ")",  ctx);
+    return node;
+  }
+
+  if (equal(tok, "__builtin_huge_vall")) {
+    Node *node = new_node(ND_BUILTIN_HUGE_VALL, tok);
+    node->ty = ty_ldouble;
+    node->fval = INFINITY; 
+    SET_CTX(ctx); 
+    tok = skip(tok->next, "(", ctx);
+    SET_CTX(ctx); 
+    *rest = skip(tok, ")", ctx);
+    return node;
+  }
+
+    if (equal(tok, "__builtin_fpclassify")) {
+      Node *node = new_node(ND_FPCLASSIFY, tok);
+      node->fpc = calloc(1, sizeof(FpClassify));
+      node->ty = ty_int;
+      SET_CTX(ctx);
+      tok = skip(tok->next, "(", ctx);
+      for (int i = 0; i < 5; ++i) {
+        node->fpc->args[i] = const_expr(&tok, tok);
+        SET_CTX(ctx);
+        tok = skip(tok, ",", ctx);
+      }
+      node->fpc->node = expr(&tok, tok);
+      add_type(node->fpc->node);
+      if (!is_flonum(node->fpc->node->ty)) {        
+        error_tok(tok, "%s:%d: in %s: need floating point", __FILE__, __LINE__, __func__);
+      }
+      SET_CTX(ctx);
+      *rest = skip(tok, ")", ctx);
+      return node;
+    }
+
+  if (equal(tok, "__builtin_inff")) {
+    Node *node = new_node(ND_BUILTIN_INFF, tok);
+    node->ty = ty_float;    
+    node->fval = INFINITY;     
+    SET_CTX(ctx); 
+    tok = skip(tok->next, "(", ctx);
+    SET_CTX(ctx); 
+    *rest = skip(tok, ")", ctx);    
+    return node;
+  }
+
+  if (equal(tok, "__builtin_nan")) {
+    Node *node = new_node(ND_BUILTIN_NAN, tok);
+    node->ty = ty_double;
+    node->fval = NAN;
+    SET_CTX(ctx); 
+    tok = skip(tok->next, "(", ctx);
+    if (tok->kind == TK_STR)
+      tok = tok->next; 
+    SET_CTX(ctx); 
+    *rest = skip(tok, ")", ctx);
+    return node;
+  }
+
+    if (equal(tok, "__builtin_nanf")) {
+    Node *node = new_node(ND_BUILTIN_NANF, tok);
+    node->ty = ty_float;
+    node->fval = NAN;
+    SET_CTX(ctx); 
+    tok = skip(tok->next, "(", ctx);
+    if (tok->kind == TK_STR)
+      tok = tok->next;
+    SET_CTX(ctx);       
+    *rest = skip(tok, ")", ctx);
+    return node;
+  }
+
+  if (equal(tok, "__builtin_nanl")) {
+  Node *node = new_node(ND_BUILTIN_NANL, tok);
+  node->ty = ty_ldouble;
+  node->fval = NAN;
+  SET_CTX(ctx); 
+  tok = skip(tok->next, "(", ctx);
+  if (tok->kind == TK_STR)
+    tok = tok->next;
+  SET_CTX(ctx); 
+  *rest = skip(tok, ")", ctx);
+  return node;
+}
+  if (equal(tok, "__builtin_isnan"))
+  {
+    return ParseBuiltin(ND_BUILTIN_ISNAN, tok, rest);
+  }
+
+  if (equal(tok, "__builtin_clz"))
+  {
+    return ParseBuiltin(ND_BUILTIN_CLZ, tok, rest);
+  }
+
+  if (equal(tok, "__builtin_clzl"))
+  {
+    return ParseBuiltin(ND_BUILTIN_CLZL, tok, rest);
+  }
+
+  if (equal(tok, "__builtin_clzll"))
+  {
+    return ParseBuiltin(ND_BUILTIN_CLZLL, tok, rest);
+  }
+
+  if (equal(tok, "__builtin_stdc_leading_zeros"))
+  {
+    return ParseBuiltin(ND_BUILTIN_CLZLL, tok, rest);
+  }
+
+
+  if (equal(tok, "__builtin_ctz"))
+  {
+    return ParseBuiltin(ND_BUILTIN_CTZ, tok, rest);
+  }
+
+
+  if (equal(tok, "__builtin_ctzl"))
+  {
+    return ParseBuiltin(ND_BUILTIN_CTZL, tok, rest);
+  }
+
+
+  if (equal(tok, "__builtin_ctzll"))
+  {
+    return ParseBuiltin(ND_BUILTIN_CTZLL, tok, rest);
+  }
+
+  if (equal(tok, "__builtin_stdc_trailing_zeros"))
+  {
+    Node *node = ParseBuiltin(ND_BUILTIN_CTZLL, tok, rest);
+    node->builtin_val = new_cast(node->builtin_val, ty_ulong);
+    add_type(node->builtin_val);
+    add_type(node);
+    return node;
+  }
+
+  if (equal(tok, "__builtin_stdc_count_ones"))
+  {
+    Node *node = ParseBuiltin(ND_POPCOUNTLL, tok, rest);
+    node->builtin_val = new_cast(node->builtin_val, ty_ulong);
+    add_type(node->builtin_val);
+    add_type(node);
+    return node;
+  }
+
+  if (equal(tok, "__builtin_stdc_has_single_bit"))
+  {
+    Node *node = ParseBuiltin(ND_POPCOUNTLL, tok, rest);
+    node->builtin_val = new_cast(node->builtin_val, ty_ulong);
+    add_type(node->builtin_val);
+    add_type(node);
+    Node *one = new_num(1, tok);
+    one = new_cast(one, node->ty);
+    add_type(one);
+    return new_binary(ND_EQ, node, one, tok);
+    
+  }
+
+  if (equal(tok, "__builtin_stdc_bit_width"))
+  {
+    Token *start = tok;
+    SET_CTX(ctx); 
+    tok = skip(tok->next, "(", ctx);
+    Node *arg = assign(&tok, tok);
+    SET_CTX(ctx);      
+    *rest = skip(tok, ")", ctx);
+
+    add_type(arg);
+    Obj *var = new_lvar("", ty_ulong, NULL);
+    Node *init = new_unary(ND_EXPR_STMT, new_binary(ND_ASSIGN, new_var_node(var, start), new_cast(arg, ty_ulong), start), start);
+    
+    Node *clz = new_node(ND_BUILTIN_CLZLL, start);
+    clz->builtin_val = new_var_node(var, start);
+    
+    Node *cond_node = new_node(ND_COND, start);
+    cond_node->cond = to_bool(new_var_node(var, start));
+    cond_node->then = new_binary(ND_SUB, new_num(64, start), clz, start);
+    cond_node->els = new_num(0, start);
+    
+    Node *node = new_node(ND_STMT_EXPR, start);
+    node->body = init;
+    init->next = new_unary(ND_EXPR_STMT, cond_node, start);
+    return node;
+  }
+
+  if (equal(tok, "__builtin_ceil")) {
+      return ParseBuiltin(ND_BUILTIN_CEIL, tok, rest);
+  }
+
+  if (equal(tok, "__builtin_floor")) {
+      return ParseBuiltin(ND_BUILTIN_FLOOR, tok, rest);
+  }
+
+  if (equal(tok, "__builtin_bswap16")) {
+      return ParseBuiltin(ND_BUILTIN_BSWAP16, tok, rest);
+  }
+
+  if (equal(tok, "__builtin_bswap32")) {
+      return ParseBuiltin(ND_BUILTIN_BSWAP32, tok, rest);
+  }
+
+  if (equal(tok, "__builtin_bswap64")) {
+      return ParseBuiltin(ND_BUILTIN_BSWAP64, tok, rest);
+  }
+
+  if (equal(tok, "__builtin_popcount")) {
+      Node *node = ParseBuiltin(ND_POPCOUNT, tok, rest);
+      node->builtin_val = new_cast(node->builtin_val, ty_uint);
+      return node;
+  }
+
+  if (equal(tok, "__builtin_popcountl")) {
+      Node *node = ParseBuiltin(ND_POPCOUNTL, tok, rest);
+      node->builtin_val = new_cast(node->builtin_val, ty_ulong);
+      add_type(node);
+      add_type(node->builtin_val);
+      return node;
+  }
+
+  if (equal(tok, "__builtin_popcountll")) {
+      Node *node = ParseBuiltin(ND_POPCOUNTLL, tok, rest);
+      node->builtin_val = new_cast(node->builtin_val, ty_ullong);
+      add_type(node);
+      add_type(node->builtin_val);      
+      return node;
+  }
+
+
+  if (equal(tok, "__builtin_isunordered")) {
+    Node *node = new_node(ND_ISUNORDERED, tok);
+    SET_CTX(ctx); 
+    tok = skip(tok->next, "(", ctx);
+    node->lhs = assign(&tok, tok); 
+    add_type(node->lhs);
+    SET_CTX(ctx); 
+    tok = skip(tok, ",", ctx);
+    node->rhs = assign(&tok, tok); 
+    add_type(node->rhs);
+    SET_CTX(ctx); 
+    *rest = skip(tok, ")", ctx);    
+    return node;
+  }
+
+  if (equal(tok, "__builtin_signbit")) {
+    Node *node = new_node(ND_SIGNBIT, tok);
+    SET_CTX(ctx); 
+    tok = skip(tok->next, "(", ctx);
+    node->lhs = assign(&tok, tok); 
+    add_type(node->lhs);
+    SET_CTX(ctx); 
+    *rest = skip(tok, ")", ctx);    
+    return node;
+  }
+
+  if (equal(tok, "__builtin_signbitf")) {
+    Node *node = new_node(ND_SIGNBITF, tok);
+    SET_CTX(ctx); 
+    tok = skip(tok->next, "(", ctx);
+    node->lhs = assign(&tok, tok); 
+    add_type(node->lhs);
+    SET_CTX(ctx); 
+    *rest = skip(tok, ")", ctx);    
+    return node;
+  }
+
+  if (equal(tok, "__builtin_signbitl")) {
+    Node *node = new_node(ND_SIGNBITL, tok);
+    SET_CTX(ctx); 
+    tok = skip(tok->next, "(", ctx);
+    node->lhs = assign(&tok, tok); 
+    add_type(node->lhs);
+    SET_CTX(ctx); 
+    *rest = skip(tok, ")", ctx);    
+    return node;
+  }
+
+  if (equal(tok, "__builtin_expect")) {
+    Node *node = new_node(ND_EXPECT, tok);
+    SET_CTX(ctx); 
+    tok = skip(tok->next, "(", ctx);
+    node->lhs = assign(&tok, tok); 
+    add_type(node->lhs);
+    SET_CTX(ctx); 
+    tok = skip(tok, ",", ctx);
+    node->rhs = assign(&tok, tok); 
+    add_type(node->rhs);
+    SET_CTX(ctx); 
+    *rest = skip(tok, ")", ctx);    
+    return node;
+  }
+
+  if (equal(tok, "__builtin_assume_aligned")) {
+    SET_CTX(ctx);
+    tok = skip(tok->next, "(", ctx);
+
+    Node *node = assign(&tok, tok);
+    add_type(node);
+
+    SET_CTX(ctx);
+    tok = skip(tok, ",", ctx);
+    assign(&tok, tok);
+
+    if (consume(&tok, tok, ",")) {
+      assign(&tok, tok);
+    }
+
+    SET_CTX(ctx);
+    *rest = skip(tok, ")", ctx);
+    return node;
+  }
+
+  if (equal(tok, "__builtin_abort")) {
+      Node *node = new_node(ND_ABORT, tok); 
+      SET_CTX(ctx); 
+      tok = skip(tok->next, "(", ctx);  
+      SET_CTX(ctx);   
+      *rest = skip(tok, ")", ctx);
+      return node; 
+  }
+
+
+  if (equal(tok, "__builtin_return_address")) {
+    if (current_fn)
+      current_fn->force_frame_pointer = true;
+    Node *node = new_node(ND_RETURN_ADDR, tok);
+    SET_CTX(ctx); 
+    tok = skip(tok->next, "(", ctx);
+    node->lhs = assign(&tok, tok); 
+    add_type(node->lhs);
+
+    SET_CTX(ctx); 
+    *rest = skip(tok, ")", ctx);
+    return node;
+  }
+
+  if (equal(tok, "__builtin_frame_address"))
+  {
+    Node *node = new_node(ND_BUILTIN_FRAME_ADDRESS, tok);
+    add_type(node);
+    SET_CTX(ctx); 
+    tok = skip(tok->next, "(", ctx);
+    node->lhs = assign(&tok, tok);
+    add_type(node->lhs);
+
+    // Always force a frame pointer when __builtin_frame_address is used,
+    // matching GCC behaviour: frame_address(0) returns %rbp, not %rsp.
+    // Walking the frame chain (level >= 1) only works when every function
+    // in the chain has a real frame pointer.
+    if (current_fn)
+      current_fn->force_frame_pointer = true;
+
+    SET_CTX(ctx); 
+    *rest = skip(tok, ")", ctx);
+    return node;
+  }
+
+  if (equal(tok, "__builtin_add_overflow")) {
+    return parse_overflow(ND_BUILTIN_ADD_OVERFLOW, tok, rest);
+  }
+
+  if (equal(tok, "__builtin_uadd_overflow")) {
+    return parse_overflow(ND_UADD_OVERFLOW, tok, rest);
+  }
+
+  if (equal(tok, "__builtin_uaddll_overflow")) {
+    return parse_overflow(ND_UADDLL_OVERFLOW, tok, rest);
+  }
+
+  if (equal(tok, "__builtin_uaddl_overflow")) {
+    return parse_overflow(ND_UADDL_OVERFLOW, tok, rest);
+  }
+  if (equal(tok, "__builtin_umul_overflow")) {
+    return parse_overflow(ND_UMUL_OVERFLOW, tok, rest);
+  }
+
+  if (equal(tok, "__builtin_umulll_overflow")) {
+    return parse_overflow(ND_UMULLL_OVERFLOW, tok, rest);
+  }
+
+  if (equal(tok, "__builtin_umull_overflow")) {
+    return parse_overflow(ND_UMULL_OVERFLOW, tok, rest);
+  }
+
+
+
+  if (equal(tok, "__builtin_sub_overflow")) {
+    return parse_overflow(ND_BUILTIN_SUB_OVERFLOW, tok, rest);
+  }
+
+  if (equal(tok, "__builtin_mul_overflow")) {
+    return parse_overflow(ND_BUILTIN_MUL_OVERFLOW, tok, rest);
+  }
+
+  if (equal(tok, "__builtin_unreachable")) {
+    Node *node = new_node(ND_UNREACHABLE, tok);
+    SET_CTX(ctx); 
+    tok = skip(tok->next, "(", ctx);
+    SET_CTX(ctx);     
+    *rest = skip(tok, ")", ctx);
+    return node;
+  }
+
+
+  if (equal(tok, "__builtin_atomic_exchange_n") || equal(tok, "__atomic_exchange_n")) {
+    return ParseAtomic3(ND_EXCH_N, tok, rest);
+  }
+
+  if (equal(tok, "__builtin_atomic_compare_exchange") || equal(tok, "__atomic_compare_exchange")) {
+    return ParseAtomicCompareExchangeN(ND_CMPEXCH, tok, rest);
+  }
+
+
+  if (equal(tok, "__builtin_atomic_compare_exchange_n") || equal(tok, "__atomic_compare_exchange_n")) {
+    return ParseAtomicCompareExchangeN(ND_CMPEXCH_N, tok, rest);
+  }
+
+  if (equal(tok, "__builtin_atomic_load") || equal(tok, "__atomic_load")) {
+    return ParseAtomic3(ND_LOAD, tok, rest);
+  }
+  if (equal(tok, "__builtin_atomic_store") || equal(tok, "__atomic_store")) {
+    return ParseAtomic3(ND_STORE, tok, rest);
+  }
+  if (equal(tok, "__builtin_atomic_load_n") || equal(tok, "__atomic_load_n")) {
+    return ParseAtomic2(ND_LOAD_N, tok, rest);
+  }
+  if (equal(tok, "__builtin_atomic_store_n") || equal(tok, "__atomic_store_n")) {
+    return ParseAtomic3(ND_STORE_N, tok, rest);
+  }
+  if (equal(tok, "__builtin_atomic_fetch_add")) {
+    return ParseAtomicFetch(ND_FETCHADD, tok, rest);
+  }
+  if (equal(tok, "__atomic_fetch_add")) {
+    return ParseAtomic3(ND_FETCHADD, tok, rest);
+  }
+  if (equal(tok, "__atomic_add_fetch")) {
+    return ParseAtomic3(ND_ADDFETCH, tok, rest);
+  }
+  if (equal(tok, "__atomic_fetch_sub")) {
+    return ParseAtomic3(ND_FETCHSUB, tok, rest);
+  }  
+  if (equal(tok, "__atomic_sub_fetch")) {
+    return ParseAtomic3(ND_SUBFETCH, tok, rest);
+  }
+  if (equal(tok, "__builtin_atomic_fetch_sub")) {
+    return ParseAtomicFetch(ND_FETCHSUB, tok, rest);
+  }
+  if (equal(tok, "__builtin_atomic_fetch_xor")) {
+    return ParseAtomicFetch(ND_FETCHXOR, tok, rest);
+  }
+  if (equal(tok, "__atomic_fetch_xor")) {
+    return ParseAtomic3(ND_FETCHXOR, tok, rest);
+  }  
+  if (equal(tok, "__atomic_xor_fetch")) {
+    return ParseAtomic3(ND_XORFETCH, tok, rest);
+  }
+  if (equal(tok, "__builtin_atomic_fetch_and")) {
+    return ParseAtomicFetch(ND_FETCHAND, tok, rest);
+  }
+  if (equal(tok, "__atomic_fetch_and")) {
+    return ParseAtomic3(ND_FETCHAND, tok, rest);
+  }  
+  if (equal(tok, "__atomic_and_fetch")) {
+    return ParseAtomic3(ND_ANDFETCH, tok, rest);
+  }    
+  if (equal(tok, "__builtin_atomic_fetch_or")) {
+    return ParseAtomicFetch(ND_FETCHOR, tok, rest);
+  }
+  if (equal(tok, "__atomic_fetch_or")) {
+    return ParseAtomic3(ND_FETCHOR, tok, rest);
+  }  
+  if (equal(tok, "__atomic_or_fetch")) {
+    return ParseAtomic3(ND_ORFETCH, tok, rest);
+  }    
+  if (equal(tok, "__builtin_atomic_test_and_set")) {
+    return ParseAtomic2(ND_TESTANDSETA, tok, rest);
+  }
+
+  if (equal(tok, "__atomic_test_and_set")) {
+    return ParseAtomic2(ND_TESTANDSETA, tok, rest);
+  }
+
+  if (equal(tok, "__atomic_clear")) {
+    return ParseAtomicClear(ND_CLEAR, tok, rest);
+  }
+
+  if (equal(tok, "__sync_add_and_fetch")) {
+      return ParseAtomic3(ND_ADD_AND_FETCH, tok, rest);
+  }
+
+  if (equal(tok, "__sync_sub_and_fetch")) {
+      return ParseAtomic3(ND_SUB_AND_FETCH, tok, rest);
+  }
+  if (equal(tok, "__sync_bool_compare_and_swap")) {
+      return ParseSyncBoolCAS(ND_BOOL_CAS, tok, rest);
+  }
+
+  if (equal(tok, "__builtin_atomic_fetch_nand") || equal(tok, "__atomic_fetch_nand"))
+    return ParseAtomicBitwise(ND_FETCHNAND, tok, rest);
+
+  if (equal(tok, "__atomic_nand_fetch"))
+    return ParseAtomicBitwise(ND_NANDFETCH, tok, rest);
+
+  if (equal(tok, "__builtin_atomic_clear")) {
+    return ParseAtomic2(ND_CLEAR, tok, rest);
+  }
+
+  if (equal(tok, "__atomic_thread_fence")) {
+    return ParseAtomicFence(ND_MEMBARRIER, tok, rest);
+  }
+
+  if (equal(tok, "__atomic_signal_fence")) {
+    return ParseAtomicFence(ND_MEMBARRIER, tok, rest);
+  }
+
+  if (equal(tok, "__sync_lock_test_and_set")) {
+    Node *node = new_node(ND_TESTANDSET, tok);
+    SET_CTX(ctx); 
+    tok = skip(tok->next,  "(", ctx);
+    node->lhs = assign(&tok, tok);
+    add_type(node->lhs);
+    node->ty = node->lhs->ty->base;
+    SET_CTX(ctx); 
+    tok = skip(tok,  ",", ctx);
+    node->rhs = assign(&tok, tok);
+    add_type(node->rhs);
+    SET_CTX(ctx);     
+    *rest = skip(tok,  ")", ctx);
+    return node;
+  }
+  if (equal(tok, "__sync_lock_release")) {
+    Node *node = new_node(ND_RELEASE, tok);
+    SET_CTX(ctx);     
+    tok = skip(tok->next, "(", ctx);
+    node->lhs = assign(&tok, tok);
+    add_type(node->lhs);
+    node->ty = node->lhs->ty->base;
+    SET_CTX(ctx);      
+    *rest = skip(tok, ")", ctx);
+    return node;
+  }
+
+
+  if (equal(tok, "__sync_fetch_and_add"))
+      return ParseSyncFetch(ND_FETCHADD, tok, rest);
+
+  if (equal(tok, "__sync_add_and_fetch"))
+      return ParseSyncFetch(ND_ADDFETCH, tok, rest);
+
+  if (equal(tok, "__sync_fetch_and_sub"))
+      return ParseSyncFetch(ND_FETCHSUB, tok, rest);
+
+  if (equal(tok, "__sync_sub_and_fetch"))
+      return ParseSyncFetch(ND_SUBFETCH, tok, rest);
+
+  if (equal(tok, "__sync_fetch_and_or"))
+      return ParseSyncFetch(ND_FETCHOR, tok, rest);
+
+  if (equal(tok, "__sync_or_and_fetch"))
+    return ParseSyncFetch(ND_ORFETCH, tok, rest);
+
+  if (equal(tok, "__sync_fetch_and_and"))
+      return ParseSyncFetch(ND_FETCHAND, tok, rest);
+
+  if (equal(tok, "__sync_and_and_fetch"))
+    return ParseSyncFetch(ND_ANDFETCH, tok, rest);
+    
+  if (equal(tok, "__sync_fetch_and_xor"))
+      return ParseSyncFetch(ND_FETCHXOR, tok, rest);
+
+  if (equal(tok, "__sync_xor_and_fetch"))
+    return ParseSyncFetch(ND_XORFETCH, tok, rest);    
+
+  if (equal(tok, "__sync_fetch_and_nand"))
+      return ParseSyncFetch(ND_FETCHNAND, tok, rest);
+
+  if (equal(tok, "__sync_nand_and_fetch"))
+    return ParseSyncFetch(ND_NANDFETCH, tok, rest);       
+
+  if (equal(tok, "__builtin_atomic_fetch_op"))
+  {
+    SET_CTX(ctx); 
+    tok = skip(tok->next, "(", ctx);
+    Node *obj = new_unary(ND_DEREF, assign(&tok, tok), tok);
+    SET_CTX(ctx); 
+    tok = skip(tok, ",", ctx);
+    Node *val = assign(&tok, tok);
+    add_type(val);    
+    SET_CTX(ctx); 
+    tok = skip(tok, ",", ctx);
+    Node *node;
+    if (equal(tok, "0"))
+      node = new_add(obj, val, tok, false);
+    else if (equal(tok, "1"))
+      node = new_sub(obj, val, tok, false);
+    else if (equal(tok, "2"))
+      node = new_binary(ND_BITOR, obj, val, tok);
+    else if (equal(tok, "3"))
+      node = new_binary(ND_BITXOR, obj, val, tok);
+    else if (equal(tok, "4"))
+      node = new_binary(ND_BITAND, obj, val, tok);
+    else
+      error_tok(tok, "%s:%d: in %s: invalid fetch operator", __FILE__, __LINE__, __func__);
+
+    node->atomic_fetch = true;
+    SET_CTX(ctx);     
+    *rest = skip(tok->next, ")", ctx);
+    return to_assign(node);
+  }
+
+
   if (equal(tok, "__builtin_rotateleft32")) {
     SET_CTX(ctx);
     tok = skip(tok->next, "(", ctx);
@@ -7153,6 +7895,7 @@ static Node *primary(Token **rest, Token *tok)
   }
 
 
+
   //managing lots of  builtin_ia32 that needs two args
   // defined in builtin_table[]
   int builtin = builtin_enum(tok);
@@ -7171,738 +7914,6 @@ static Node *primary(Token **rest, Token *tok)
     return node;
   }
 
-
-  if (equal(tok, "__builtin_reg_class"))
-  {
-    SET_CTX(ctx);      
-    tok = skip(tok->next, "(", ctx);
-    Type *ty = typename(&tok, tok);
-    SET_CTX(ctx);      
-    *rest = skip(tok, ")", ctx);
-
-    if (is_integer(ty) || ty->kind == TY_PTR)
-      return new_num(0, start);
-    if (ty->kind == TY_FLOAT || ty->kind == TY_DOUBLE || ty->kind == TY_VECTOR)
-      return new_num(1, start);
-    return new_num(2, start);
-  }
-
-
-  if (equal(tok, "__atomic_is_lock_free")) {
-    Node *node = new_node(ND_ATOMIC_IS_LOCK_FREE, tok);
-    SET_CTX(ctx);
-    tok = skip(tok->next, "(", ctx);
-    node->lhs = assign(&tok, tok);
-    SET_CTX(ctx);
-    if (consume(&tok, tok, ",")) {
-      node->rhs = assign(&tok, tok);
-    }
-    SET_CTX(ctx);
-    *rest = skip(tok, ")", ctx);
-    return node;
-  }
-
-  if (equal(tok, "__builtin_compare_and_swap"))
-  {
-    Node *node = new_node(ND_CAS, tok);
-    SET_CTX(ctx);     
-    tok = skip(tok->next, "(", ctx);
-    node->cas_addr = assign(&tok, tok);
-    SET_CTX(ctx);     
-    tok = skip(tok, ",", ctx);
-    node->cas_old = assign(&tok, tok);
-    SET_CTX(ctx); 
-    tok = skip(tok, ",", ctx);
-    node->cas_new = assign(&tok, tok);
-    SET_CTX(ctx); 
-    *rest = skip(tok, ")", ctx);
-    return node;
-  }
-
-
-  if (equal(tok, "__builtin_atomic_exchange"))
-  {
-    Node *node = new_node(ND_EXCH, tok);
-    SET_CTX(ctx); 
-    tok = skip(tok->next, "(", ctx);
-    node->lhs = assign(&tok, tok);
-    add_type(node->lhs);
-    SET_CTX(ctx);     
-    tok = skip(tok, ",", ctx);
-    node->rhs = assign(&tok, tok);
-    add_type(node->rhs);
-    SET_CTX(ctx);       
-    *rest = skip(tok, ")", ctx);
-    return node;
-  }
-
-  if (equal(tok, "__sync_val_compare_and_swap")) {
-    Node *node = new_node(ND_CAS_N, tok);
-    SET_CTX(ctx); 
-    tok = skip(tok->next, "(", ctx);
-    node->cas_addr = assign(&tok, tok);
-    add_type(node->cas_addr);
-    SET_CTX(ctx);     
-    tok = skip(tok, ",", ctx);
-    node->cas_old = assign(&tok, tok);
-    add_type(node->cas_old);
-    SET_CTX(ctx);     
-    tok = skip(tok, ",", ctx);
-    node->cas_new = assign(&tok, tok);
-    add_type(node->cas_new);
-    SET_CTX(ctx);       
-    *rest = skip(tok, ")", ctx);
-    return node;
-  }
-
-
-  // Extend the parser to recognize __sync_synchronize()
-  if (equal(tok, "__sync_synchronize")) {
-      Node *node = new_node(ND_SYNC, tok);
-      SET_CTX(ctx);     
-      *rest = skip(tok->next, "(", ctx);
-      SET_CTX(ctx);     
-      *rest = skip(*rest, ")", ctx);
-      return node;
-  }
-
-  if (equal(tok, "__builtin_memcpy") && equal(tok->next, "(")) {
-      return parse_memcpy(tok, rest);
-  }
-
-  if (equal(tok, "__builtin_memset") && equal(tok->next, "(")) {
-      return parse_memset(tok, rest);
-  }
-
-  if (equal(tok, "__builtin_huge_valf")) {
-    Node *node = new_node(ND_BUILTIN_HUGE_VALF, tok); 
-    node->ty = ty_float;
-    node->fval = INFINITY;
-    SET_CTX(ctx); 
-    tok = skip(tok->next, "(", ctx);
-    SET_CTX(ctx); 
-    *rest = skip(tok, ")", ctx);
-    return node;
-  }
-
-  if (equal(tok, "__builtin_inf")) {
-    Node *node = new_node(ND_BUILTIN_INF, tok); 
-    node->ty = ty_double;
-    node->fval = INFINITY;
-    SET_CTX(ctx); 
-    tok = skip(tok->next, "(", ctx);
-    SET_CTX(ctx); 
-    *rest = skip(tok, ")",  ctx);
-    return node;
-  }
-  if (equal(tok, "__builtin_huge_val")) {
-    Node *node = new_node(ND_BUILTIN_HUGE_VAL, tok); 
-    node->ty = ty_double;
-    node->fval = INFINITY;
-    SET_CTX(ctx); 
-    tok = skip(tok->next, "(", ctx);
-    SET_CTX(ctx); 
-    *rest = skip(tok, ")",  ctx);
-    return node;
-  }
-
-  if (equal(tok, "__builtin_huge_vall")) {
-    Node *node = new_node(ND_BUILTIN_HUGE_VALL, tok);
-    node->ty = ty_ldouble;
-    node->fval = INFINITY; 
-    SET_CTX(ctx); 
-    tok = skip(tok->next, "(", ctx);
-    SET_CTX(ctx); 
-    *rest = skip(tok, ")", ctx);
-    return node;
-  }
-
-    if (equal(tok, "__builtin_fpclassify")) {
-      Node *node = new_node(ND_FPCLASSIFY, tok);
-      node->fpc = calloc(1, sizeof(FpClassify));
-      node->ty = ty_int;
-      SET_CTX(ctx);
-      tok = skip(tok->next, "(", ctx);
-      for (int i = 0; i < 5; ++i) {
-        node->fpc->args[i] = const_expr(&tok, tok);
-        SET_CTX(ctx);
-        tok = skip(tok, ",", ctx);
-      }
-      node->fpc->node = expr(&tok, tok);
-      add_type(node->fpc->node);
-      if (!is_flonum(node->fpc->node->ty)) {        
-        error_tok(tok, "%s:%d: in %s: need floating point", __FILE__, __LINE__, __func__);
-      }
-      SET_CTX(ctx);
-      *rest = skip(tok, ")", ctx);
-      return node;
-    }
-
-  if (equal(tok, "__builtin_inff")) {
-    Node *node = new_node(ND_BUILTIN_INFF, tok);
-    node->ty = ty_float;    
-    node->fval = INFINITY;     
-    SET_CTX(ctx); 
-    tok = skip(tok->next, "(", ctx);
-    SET_CTX(ctx); 
-    *rest = skip(tok, ")", ctx);    
-    return node;
-  }
-
-  if (equal(tok, "__builtin_nan")) {
-    Node *node = new_node(ND_BUILTIN_NAN, tok);
-    node->ty = ty_double;
-    node->fval = NAN;
-    SET_CTX(ctx); 
-    tok = skip(tok->next, "(", ctx);
-    if (tok->kind == TK_STR)
-      tok = tok->next; 
-    SET_CTX(ctx); 
-    *rest = skip(tok, ")", ctx);
-    return node;
-  }
-
-    if (equal(tok, "__builtin_nanf")) {
-    Node *node = new_node(ND_BUILTIN_NANF, tok);
-    node->ty = ty_float;
-    node->fval = NAN;
-    SET_CTX(ctx); 
-    tok = skip(tok->next, "(", ctx);
-    if (tok->kind == TK_STR)
-      tok = tok->next;
-    SET_CTX(ctx);       
-    *rest = skip(tok, ")", ctx);
-    return node;
-  }
-
-  if (equal(tok, "__builtin_nanl")) {
-  Node *node = new_node(ND_BUILTIN_NANL, tok);
-  node->ty = ty_ldouble;
-  node->fval = NAN;
-  SET_CTX(ctx); 
-  tok = skip(tok->next, "(", ctx);
-  if (tok->kind == TK_STR)
-    tok = tok->next;
-  SET_CTX(ctx); 
-  *rest = skip(tok, ")", ctx);
-  return node;
-}
-  if (equal(tok, "__builtin_isnan"))
-  {
-    return ParseBuiltin(ND_BUILTIN_ISNAN, tok, rest);
-  }
-
-  if (equal(tok, "__builtin_clz"))
-  {
-    return ParseBuiltin(ND_BUILTIN_CLZ, tok, rest);
-  }
-
-  if (equal(tok, "__builtin_clzl"))
-  {
-    return ParseBuiltin(ND_BUILTIN_CLZL, tok, rest);
-  }
-
-  if (equal(tok, "__builtin_clzll"))
-  {
-    return ParseBuiltin(ND_BUILTIN_CLZLL, tok, rest);
-  }
-
-  if (equal(tok, "__builtin_stdc_leading_zeros"))
-  {
-    return ParseBuiltin(ND_BUILTIN_CLZLL, tok, rest);
-  }
-
-
-  if (equal(tok, "__builtin_ctz"))
-  {
-    return ParseBuiltin(ND_BUILTIN_CTZ, tok, rest);
-  }
-
-
-  if (equal(tok, "__builtin_ctzl"))
-  {
-    return ParseBuiltin(ND_BUILTIN_CTZL, tok, rest);
-  }
-
-
-  if (equal(tok, "__builtin_ctzll"))
-  {
-    return ParseBuiltin(ND_BUILTIN_CTZLL, tok, rest);
-  }
-
-  if (equal(tok, "__builtin_stdc_trailing_zeros"))
-  {
-    Node *node = ParseBuiltin(ND_BUILTIN_CTZLL, tok, rest);
-    node->builtin_val = new_cast(node->builtin_val, ty_ulong);
-    add_type(node->builtin_val);
-    add_type(node);
-    return node;
-  }
-
-  if (equal(tok, "__builtin_stdc_count_ones"))
-  {
-    Node *node = ParseBuiltin(ND_POPCOUNTLL, tok, rest);
-    node->builtin_val = new_cast(node->builtin_val, ty_ulong);
-    add_type(node->builtin_val);
-    add_type(node);
-    return node;
-  }
-
-  if (equal(tok, "__builtin_stdc_has_single_bit"))
-  {
-    Node *node = ParseBuiltin(ND_POPCOUNTLL, tok, rest);
-    node->builtin_val = new_cast(node->builtin_val, ty_ulong);
-    add_type(node->builtin_val);
-    add_type(node);
-    Node *one = new_num(1, tok);
-    one = new_cast(one, node->ty);
-    add_type(one);
-    return new_binary(ND_EQ, node, one, tok);
-    
-  }
-
-  if (equal(tok, "__builtin_stdc_bit_width"))
-  {
-    Token *start = tok;
-    SET_CTX(ctx); 
-    tok = skip(tok->next, "(", ctx);
-    Node *arg = assign(&tok, tok);
-    SET_CTX(ctx);      
-    *rest = skip(tok, ")", ctx);
-
-    add_type(arg);
-    Obj *var = new_lvar("", ty_ulong, NULL);
-    Node *init = new_unary(ND_EXPR_STMT, new_binary(ND_ASSIGN, new_var_node(var, start), new_cast(arg, ty_ulong), start), start);
-    
-    Node *clz = new_node(ND_BUILTIN_CLZLL, start);
-    clz->builtin_val = new_var_node(var, start);
-    
-    Node *cond_node = new_node(ND_COND, start);
-    cond_node->cond = to_bool(new_var_node(var, start));
-    cond_node->then = new_binary(ND_SUB, new_num(64, start), clz, start);
-    cond_node->els = new_num(0, start);
-    
-    Node *node = new_node(ND_STMT_EXPR, start);
-    node->body = init;
-    init->next = new_unary(ND_EXPR_STMT, cond_node, start);
-    return node;
-  }
-
-  if (equal(tok, "__builtin_bswap16")) {
-      return ParseBuiltin(ND_BUILTIN_BSWAP16, tok, rest);
-  }
-
-  if (equal(tok, "__builtin_bswap32")) {
-      return ParseBuiltin(ND_BUILTIN_BSWAP32, tok, rest);
-  }
-
-  if (equal(tok, "__builtin_bswap64")) {
-      return ParseBuiltin(ND_BUILTIN_BSWAP64, tok, rest);
-  }
-
-  if (equal(tok, "__builtin_popcount")) {
-      Node *node = ParseBuiltin(ND_POPCOUNT, tok, rest);
-      node->builtin_val = new_cast(node->builtin_val, ty_uint);
-      return node;
-  }
-
-  if (equal(tok, "__builtin_popcountl")) {
-      Node *node = ParseBuiltin(ND_POPCOUNTL, tok, rest);
-      node->builtin_val = new_cast(node->builtin_val, ty_ulong);
-      add_type(node);
-      add_type(node->builtin_val);
-      return node;
-  }
-
-  if (equal(tok, "__builtin_popcountll")) {
-      Node *node = ParseBuiltin(ND_POPCOUNTLL, tok, rest);
-      node->builtin_val = new_cast(node->builtin_val, ty_ullong);
-      add_type(node);
-      add_type(node->builtin_val);      
-      return node;
-  }
-
-
-  if (equal(tok, "__builtin_isunordered")) {
-    Node *node = new_node(ND_ISUNORDERED, tok);
-    SET_CTX(ctx); 
-    tok = skip(tok->next, "(", ctx);
-    node->lhs = assign(&tok, tok); 
-    add_type(node->lhs);
-    SET_CTX(ctx); 
-    tok = skip(tok, ",", ctx);
-    node->rhs = assign(&tok, tok); 
-    add_type(node->rhs);
-    SET_CTX(ctx); 
-    *rest = skip(tok, ")", ctx);    
-    return node;
-  }
-
-  if (equal(tok, "__builtin_signbit")) {
-    Node *node = new_node(ND_SIGNBIT, tok);
-    SET_CTX(ctx); 
-    tok = skip(tok->next, "(", ctx);
-    node->lhs = assign(&tok, tok); 
-    add_type(node->lhs);
-    SET_CTX(ctx); 
-    *rest = skip(tok, ")", ctx);    
-    return node;
-  }
-
-  if (equal(tok, "__builtin_signbitf")) {
-    Node *node = new_node(ND_SIGNBITF, tok);
-    SET_CTX(ctx); 
-    tok = skip(tok->next, "(", ctx);
-    node->lhs = assign(&tok, tok); 
-    add_type(node->lhs);
-    SET_CTX(ctx); 
-    *rest = skip(tok, ")", ctx);    
-    return node;
-  }
-
-  if (equal(tok, "__builtin_signbitl")) {
-    Node *node = new_node(ND_SIGNBITL, tok);
-    SET_CTX(ctx); 
-    tok = skip(tok->next, "(", ctx);
-    node->lhs = assign(&tok, tok); 
-    add_type(node->lhs);
-    SET_CTX(ctx); 
-    *rest = skip(tok, ")", ctx);    
-    return node;
-  }
-
-  if (equal(tok, "__builtin_expect")) {
-    Node *node = new_node(ND_EXPECT, tok);
-    SET_CTX(ctx); 
-    tok = skip(tok->next, "(", ctx);
-    node->lhs = assign(&tok, tok); 
-    add_type(node->lhs);
-    SET_CTX(ctx); 
-    tok = skip(tok, ",", ctx);
-    node->rhs = assign(&tok, tok); 
-    add_type(node->rhs);
-    SET_CTX(ctx); 
-    *rest = skip(tok, ")", ctx);    
-    return node;
-  }
-
-  if (equal(tok, "__builtin_assume_aligned")) {
-    SET_CTX(ctx);
-    tok = skip(tok->next, "(", ctx);
-
-    Node *node = assign(&tok, tok);
-    add_type(node);
-
-    SET_CTX(ctx);
-    tok = skip(tok, ",", ctx);
-    assign(&tok, tok);
-
-    if (consume(&tok, tok, ",")) {
-      assign(&tok, tok);
-    }
-
-    SET_CTX(ctx);
-    *rest = skip(tok, ")", ctx);
-    return node;
-  }
-
-  if (equal(tok, "__builtin_abort")) {
-      Node *node = new_node(ND_ABORT, tok); 
-      SET_CTX(ctx); 
-      tok = skip(tok->next, "(", ctx);  
-      SET_CTX(ctx);   
-      *rest = skip(tok, ")", ctx);
-      return node; 
-  }
-
-
-  if (equal(tok, "__builtin_return_address")) {
-    if (current_fn)
-      current_fn->force_frame_pointer = true;
-    Node *node = new_node(ND_RETURN_ADDR, tok);
-    SET_CTX(ctx); 
-    tok = skip(tok->next, "(", ctx);
-    node->lhs = assign(&tok, tok); 
-    add_type(node->lhs);
-
-    SET_CTX(ctx); 
-    *rest = skip(tok, ")", ctx);
-    return node;
-  }
-
-  if (equal(tok, "__builtin_frame_address"))
-  {
-    Node *node = new_node(ND_BUILTIN_FRAME_ADDRESS, tok);
-    add_type(node);
-    SET_CTX(ctx); 
-    tok = skip(tok->next, "(", ctx);
-    node->lhs = assign(&tok, tok);
-    add_type(node->lhs);
-
-    // Always force a frame pointer when __builtin_frame_address is used,
-    // matching GCC behaviour: frame_address(0) returns %rbp, not %rsp.
-    // Walking the frame chain (level >= 1) only works when every function
-    // in the chain has a real frame pointer.
-    if (current_fn)
-      current_fn->force_frame_pointer = true;
-
-    SET_CTX(ctx); 
-    *rest = skip(tok, ")", ctx);
-    return node;
-  }
-
-  if (equal(tok, "__builtin_add_overflow")) {
-    return parse_overflow(ND_BUILTIN_ADD_OVERFLOW, tok, rest);
-  }
-
-  if (equal(tok, "__builtin_uadd_overflow")) {
-    return parse_overflow(ND_UADD_OVERFLOW, tok, rest);
-  }
-
-  if (equal(tok, "__builtin_uaddll_overflow")) {
-    return parse_overflow(ND_UADDLL_OVERFLOW, tok, rest);
-  }
-
-  if (equal(tok, "__builtin_uaddl_overflow")) {
-    return parse_overflow(ND_UADDL_OVERFLOW, tok, rest);
-  }
-  if (equal(tok, "__builtin_umul_overflow")) {
-    return parse_overflow(ND_UMUL_OVERFLOW, tok, rest);
-  }
-
-  if (equal(tok, "__builtin_umulll_overflow")) {
-    return parse_overflow(ND_UMULLL_OVERFLOW, tok, rest);
-  }
-
-  if (equal(tok, "__builtin_umull_overflow")) {
-    return parse_overflow(ND_UMULL_OVERFLOW, tok, rest);
-  }
-
-
-
-  if (equal(tok, "__builtin_sub_overflow")) {
-    return parse_overflow(ND_BUILTIN_SUB_OVERFLOW, tok, rest);
-  }
-
-  if (equal(tok, "__builtin_mul_overflow")) {
-    return parse_overflow(ND_BUILTIN_MUL_OVERFLOW, tok, rest);
-  }
-
-  if (equal(tok, "__builtin_unreachable")) {
-    Node *node = new_node(ND_UNREACHABLE, tok);
-    SET_CTX(ctx); 
-    tok = skip(tok->next, "(", ctx);
-    SET_CTX(ctx);     
-    *rest = skip(tok, ")", ctx);
-    return node;
-  }
-
-
-  if (equal(tok, "__builtin_atomic_exchange_n") || equal(tok, "__atomic_exchange_n")) {
-    return ParseAtomic3(ND_EXCH_N, tok, rest);
-  }
-
-  if (equal(tok, "__builtin_atomic_compare_exchange") || equal(tok, "__atomic_compare_exchange")) {
-    return ParseAtomicCompareExchangeN(ND_CMPEXCH, tok, rest);
-  }
-
-
-  if (equal(tok, "__builtin_atomic_compare_exchange_n") || equal(tok, "__atomic_compare_exchange_n")) {
-    return ParseAtomicCompareExchangeN(ND_CMPEXCH_N, tok, rest);
-  }
-
-  if (equal(tok, "__builtin_atomic_load") || equal(tok, "__atomic_load")) {
-    return ParseAtomic3(ND_LOAD, tok, rest);
-  }
-  if (equal(tok, "__builtin_atomic_store") || equal(tok, "__atomic_store")) {
-    return ParseAtomic3(ND_STORE, tok, rest);
-  }
-  if (equal(tok, "__builtin_atomic_load_n") || equal(tok, "__atomic_load_n")) {
-    return ParseAtomic2(ND_LOAD_N, tok, rest);
-  }
-  if (equal(tok, "__builtin_atomic_store_n") || equal(tok, "__atomic_store_n")) {
-    return ParseAtomic3(ND_STORE_N, tok, rest);
-  }
-  if (equal(tok, "__builtin_atomic_fetch_add")) {
-    return ParseAtomicFetch(ND_FETCHADD, tok, rest);
-  }
-  if (equal(tok, "__atomic_fetch_add")) {
-    return ParseAtomic3(ND_FETCHADD, tok, rest);
-  }
-  if (equal(tok, "__atomic_add_fetch")) {
-    return ParseAtomic3(ND_ADDFETCH, tok, rest);
-  }
-  if (equal(tok, "__atomic_fetch_sub")) {
-    return ParseAtomic3(ND_FETCHSUB, tok, rest);
-  }  
-  if (equal(tok, "__atomic_sub_fetch")) {
-    return ParseAtomic3(ND_SUBFETCH, tok, rest);
-  }
-  if (equal(tok, "__builtin_atomic_fetch_sub")) {
-    return ParseAtomicFetch(ND_FETCHSUB, tok, rest);
-  }
-  if (equal(tok, "__builtin_atomic_fetch_xor")) {
-    return ParseAtomicFetch(ND_FETCHXOR, tok, rest);
-  }
-  if (equal(tok, "__atomic_fetch_xor")) {
-    return ParseAtomic3(ND_FETCHXOR, tok, rest);
-  }  
-  if (equal(tok, "__atomic_xor_fetch")) {
-    return ParseAtomic3(ND_XORFETCH, tok, rest);
-  }
-  if (equal(tok, "__builtin_atomic_fetch_and")) {
-    return ParseAtomicFetch(ND_FETCHAND, tok, rest);
-  }
-  if (equal(tok, "__atomic_fetch_and")) {
-    return ParseAtomic3(ND_FETCHAND, tok, rest);
-  }  
-  if (equal(tok, "__atomic_and_fetch")) {
-    return ParseAtomic3(ND_ANDFETCH, tok, rest);
-  }    
-  if (equal(tok, "__builtin_atomic_fetch_or")) {
-    return ParseAtomicFetch(ND_FETCHOR, tok, rest);
-  }
-  if (equal(tok, "__atomic_fetch_or")) {
-    return ParseAtomic3(ND_FETCHOR, tok, rest);
-  }  
-  if (equal(tok, "__atomic_or_fetch")) {
-    return ParseAtomic3(ND_ORFETCH, tok, rest);
-  }    
-  if (equal(tok, "__builtin_atomic_test_and_set")) {
-    return ParseAtomic2(ND_TESTANDSETA, tok, rest);
-  }
-
-  if (equal(tok, "__atomic_test_and_set")) {
-    return ParseAtomic2(ND_TESTANDSETA, tok, rest);
-  }
-
-  if (equal(tok, "__atomic_clear")) {
-    return ParseAtomicClear(ND_CLEAR, tok, rest);
-  }
-
-  if (equal(tok, "__sync_add_and_fetch")) {
-      return ParseAtomic3(ND_ADD_AND_FETCH, tok, rest);
-  }
-
-  if (equal(tok, "__sync_sub_and_fetch")) {
-      return ParseAtomic3(ND_SUB_AND_FETCH, tok, rest);
-  }
-  if (equal(tok, "__sync_bool_compare_and_swap")) {
-      return ParseSyncBoolCAS(ND_BOOL_CAS, tok, rest);
-  }
-
-  if (equal(tok, "__builtin_atomic_fetch_nand") || equal(tok, "__atomic_fetch_nand"))
-    return ParseAtomicBitwise(ND_FETCHNAND, tok, rest);
-
-  if (equal(tok, "__atomic_nand_fetch"))
-    return ParseAtomicBitwise(ND_NANDFETCH, tok, rest);
-
-  if (equal(tok, "__builtin_atomic_clear")) {
-    return ParseAtomic2(ND_CLEAR, tok, rest);
-  }
-
-  if (equal(tok, "__atomic_thread_fence")) {
-    return ParseAtomicFence(ND_MEMBARRIER, tok, rest);
-  }
-
-  if (equal(tok, "__atomic_signal_fence")) {
-    return ParseAtomicFence(ND_MEMBARRIER, tok, rest);
-  }
-
-  if (equal(tok, "__sync_lock_test_and_set")) {
-    Node *node = new_node(ND_TESTANDSET, tok);
-    SET_CTX(ctx); 
-    tok = skip(tok->next,  "(", ctx);
-    node->lhs = assign(&tok, tok);
-    add_type(node->lhs);
-    node->ty = node->lhs->ty->base;
-    SET_CTX(ctx); 
-    tok = skip(tok,  ",", ctx);
-    node->rhs = assign(&tok, tok);
-    add_type(node->rhs);
-    SET_CTX(ctx);     
-    *rest = skip(tok,  ")", ctx);
-    return node;
-  }
-  if (equal(tok, "__sync_lock_release")) {
-    Node *node = new_node(ND_RELEASE, tok);
-    SET_CTX(ctx);     
-    tok = skip(tok->next, "(", ctx);
-    node->lhs = assign(&tok, tok);
-    add_type(node->lhs);
-    node->ty = node->lhs->ty->base;
-    SET_CTX(ctx);      
-    *rest = skip(tok, ")", ctx);
-    return node;
-  }
-
-
-  if (equal(tok, "__sync_fetch_and_add"))
-      return ParseSyncFetch(ND_FETCHADD, tok, rest);
-
-  if (equal(tok, "__sync_add_and_fetch"))
-      return ParseSyncFetch(ND_ADDFETCH, tok, rest);
-
-  if (equal(tok, "__sync_fetch_and_sub"))
-      return ParseSyncFetch(ND_FETCHSUB, tok, rest);
-
-  if (equal(tok, "__sync_sub_and_fetch"))
-      return ParseSyncFetch(ND_SUBFETCH, tok, rest);
-
-  if (equal(tok, "__sync_fetch_and_or"))
-      return ParseSyncFetch(ND_FETCHOR, tok, rest);
-
-  if (equal(tok, "__sync_or_and_fetch"))
-    return ParseSyncFetch(ND_ORFETCH, tok, rest);
-
-  if (equal(tok, "__sync_fetch_and_and"))
-      return ParseSyncFetch(ND_FETCHAND, tok, rest);
-
-  if (equal(tok, "__sync_and_and_fetch"))
-    return ParseSyncFetch(ND_ANDFETCH, tok, rest);
-    
-  if (equal(tok, "__sync_fetch_and_xor"))
-      return ParseSyncFetch(ND_FETCHXOR, tok, rest);
-
-  if (equal(tok, "__sync_xor_and_fetch"))
-    return ParseSyncFetch(ND_XORFETCH, tok, rest);    
-
-  if (equal(tok, "__sync_fetch_and_nand"))
-      return ParseSyncFetch(ND_FETCHNAND, tok, rest);
-
-  if (equal(tok, "__sync_nand_and_fetch"))
-    return ParseSyncFetch(ND_NANDFETCH, tok, rest);       
-
-  if (equal(tok, "__builtin_atomic_fetch_op"))
-  {
-    SET_CTX(ctx); 
-    tok = skip(tok->next, "(", ctx);
-    Node *obj = new_unary(ND_DEREF, assign(&tok, tok), tok);
-    SET_CTX(ctx); 
-    tok = skip(tok, ",", ctx);
-    Node *val = assign(&tok, tok);
-    add_type(val);    
-    SET_CTX(ctx); 
-    tok = skip(tok, ",", ctx);
-    Node *node;
-    if (equal(tok, "0"))
-      node = new_add(obj, val, tok, false);
-    else if (equal(tok, "1"))
-      node = new_sub(obj, val, tok, false);
-    else if (equal(tok, "2"))
-      node = new_binary(ND_BITOR, obj, val, tok);
-    else if (equal(tok, "3"))
-      node = new_binary(ND_BITXOR, obj, val, tok);
-    else if (equal(tok, "4"))
-      node = new_binary(ND_BITAND, obj, val, tok);
-    else
-      error_tok(tok, "%s:%d: in %s: invalid fetch operator", __FILE__, __LINE__, __func__);
-
-    node->atomic_fetch = true;
-    SET_CTX(ctx);     
-    *rest = skip(tok->next, ")", ctx);
-    return to_assign(node);
-  }
 
   if (tok->kind == TK_IDENT)
   {
@@ -9213,6 +9224,8 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_movlhps", ND_MOVLHPS },         
     { "__builtin_ia32_movhlps", ND_MOVHLPS },         
     { "__builtin_ia32_unpckhps", ND_UNPCKHPS },    
+    { "__builtin_ceil", ND_BUILTIN_CEIL },
+    { "__builtin_floor", ND_BUILTIN_FLOOR },
     { "__builtin_stdc_bit_ceil", ND_STDC_BIT_CEIL },
 
     { "__builtin_ia32_unpcklps", ND_UNPCKLPS },         

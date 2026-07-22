@@ -369,10 +369,16 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals, Obj *curre
             else
                 snprintf(reg, sizeof(reg), "%%%s", name);
 
-            if (!check_register_used(reg))
-                add_register_used(reg);
+            // Normalize to the 64-bit name: GCC clobbers are commonly written
+            // with a 32-bit sub-register (e.g. "%ebx"), but callee_save and the
+            // clobbers_rbx check use the 64-bit name ("%rbx"). Without this, a
+            // clobbered callee-saved register would never be preserved,
+            // corrupting the caller's value.
+            char *reg64 = register_to_64(reg);
+            if (!check_register_used(reg64))
+                add_register_used(reg64);
 
-            if (!strncmp(reg, "%rbx", 4))
+            if (!strncmp(reg64, "%rbx", 4))
                 node->clobbers_rbx = true;
 
             tok = tok->next;
