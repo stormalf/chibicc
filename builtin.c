@@ -918,6 +918,10 @@ void gen_fetchadd(Node *node) {
   }
   pop_tmp("%rdi");
   println("  lock xadd %s, (%%rdi)", reg_ax(node->ty->size));
+  if (node->ty->size == 1)
+    println("  movzbl %%al, %%eax");
+  else if (node->ty->size == 2)
+    println("  movzwl %%ax, %%eax");
 }
 
 void gen_add_fetch(Node *node) {
@@ -950,6 +954,10 @@ void gen_add_fetch(Node *node) {
   println("  lock xadd %s, (%%rdi)", reg_ax(node->ty->size));
   println("  add %s, %s", reg_ax(node->ty->size), reg_dx(node->ty->size));
   println("  mov %%rdx, %%rax");
+  if (node->ty->size == 1)
+    println("  movzbl %%al, %%eax");
+  else if (node->ty->size == 2)
+    println("  movzwl %%ax, %%eax");
 }
 
 void gen_sub_fetch(Node *node) {
@@ -982,6 +990,10 @@ void gen_sub_fetch(Node *node) {
   println("  neg %s", reg_ax(node->ty->size));
   println("  lock xadd %s, (%%rdi)", reg_ax(node->ty->size));
   println("  sub %s, %s", reg_dx(node->ty->size), reg_ax(node->ty->size));
+  if (node->ty->size == 1)
+    println("  movzbl %%al, %%eax");
+  else if (node->ty->size == 2)
+    println("  movzwl %%ax, %%eax");
 }
 
 void gen_fetchsub(Node *node) {
@@ -1009,6 +1021,10 @@ void gen_fetchsub(Node *node) {
   pop_tmp("%rdi");
   println("  neg %s", reg_ax(node->ty->size));
   println("  lock xadd %s, (%%rdi)", reg_ax(node->ty->size));
+  if (node->ty->size == 1)
+    println("  movzbl %%al, %%eax");
+  else if (node->ty->size == 2)
+    println("  movzwl %%ax, %%eax");
 }
 
 void gen_crc32qi(Node *node) {
@@ -1414,6 +1430,10 @@ void gen_add_and_fetch(Node *node) {
   println("  mov %%rax, %%rcx");           
   println("  lock xadd %s, (%%rdi)", reg_ax(sz));
   println("  add %%rcx, %%rax");
+  if (sz == 1)
+    println("  movzbl %%al, %%eax");
+  else if (sz == 2)
+    println("  movzwl %%ax, %%eax");
  }
 
 void gen_sub_and_fetch(Node *node) {
@@ -1449,6 +1469,10 @@ void gen_sub_and_fetch(Node *node) {
   println("  neg %s", reg_ax(sz));               
   println("  lock xadd %s, (%%rdi)", reg_ax(sz));
   println("  sub %s, %s", reg_cx(sz), reg_ax(sz));      
+  if (sz == 1)
+    println("  movzbl %%al, %%eax");
+  else if (sz == 2)
+    println("  movzwl %%ax, %%eax");
 }
 
 void gen_fetchnand(Node *node) {

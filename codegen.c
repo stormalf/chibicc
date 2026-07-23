@@ -1731,7 +1731,10 @@ static void HandleAtomicArithmetic(Node *node, const char *op, bool return_new) 
     println("  mov %s, %s", reg_dx(node->ty->size), reg_ax(node->ty->size));
   else
     println("  mov %s, %s", reg_di(node->ty->size), reg_ax(node->ty->size));
-
+  if (node->ty->size == 1)
+    println("  movzbl %%al, %%eax");
+  else if (node->ty->size == 2)
+    println("  movzwl %%ax, %%eax");
 }
 
 static void gen_int128_op(Node *node) {
@@ -3261,6 +3264,10 @@ void gen_expr(Node *node)
     }
     pop_tmp("%rdi");
     println("  xchg %s, (%%rdi)", reg_ax(sz));
+    if (sz == 1)
+      println("  movzbl %%al, %%eax");
+    else if (sz == 2)
+      println("  movzwl %%ax, %%eax");
     return;
   }
   case ND_EXCH_N:
@@ -3291,6 +3298,10 @@ void gen_expr(Node *node)
     }
     pop_tmp("%rdi");
     println("  xchg %s, (%%rdi)", reg_ax(node->ty->size));
+    if (node->ty->size == 1)
+      println("  movzbl %%al, %%eax");
+    else if (node->ty->size == 2)
+      println("  movzwl %%ax, %%eax");
     if (node->ty->kind == TY_FLOAT)
          println("  movd %%eax, %%xmm0");
     else if (node->ty->kind == TY_DOUBLE)
@@ -3319,6 +3330,10 @@ void gen_expr(Node *node)
     println("  mov $1, %%eax");    
     pop_tmp("%rdi");
     println("  xchg %s, (%%rdi)", reg_ax(node->ty->size));
+    if (node->ty->size == 1)
+      println("  movzbl %%al, %%eax");
+    else if (node->ty->size == 2)
+      println("  movzwl %%ax, %%eax");
     return;
   }
   case ND_LOAD: {
