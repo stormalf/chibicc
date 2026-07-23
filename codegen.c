@@ -3343,11 +3343,17 @@ void gen_expr(Node *node)
     if (node->ty->size == 16) {
       println("  mov 8(%%rax), %%rdx");
       println("  mov (%%rax), %%rax");
-    } else {
-      println(" mov (%%rax), %s", reg_ax(node->ty->size));
+    } else if (node->ty->size == 1) {
+      println("  movzbl (%%rax), %%eax");
+    } else if (node->ty->size == 2) {
+      println("  movzwl (%%rax), %%eax");
+    } else if (node->ty->size == 4) {
+      println("  mov (%%rax), %%eax");
       if (node->ty->kind == TY_FLOAT)
          println("  movd %%eax, %%xmm0");
-      else if (node->ty->kind == TY_DOUBLE)
+    } else if (node->ty->size == 8) {
+      println("  mov (%%rax), %%rax");
+      if (node->ty->kind == TY_DOUBLE)
          println("  movq %%rax, %%xmm0");
     }
     if (node->memorder) {

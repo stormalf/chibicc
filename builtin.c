@@ -594,9 +594,8 @@ void gen_builtin_clzl(Node *node) {
 
 void gen_builtin_bswap16(Node *node) {
     gen_expr(node->builtin_val);
-    println("  mov %%ax, %%dx");
-    println("  rol $8, %%dx");
-    println("  mov %%dx, %%ax");
+    println("  movzwl %%ax, %%eax");
+    println("  rol $8, %%ax");
 }
 
 void gen_builtin_bswap32(Node *node) {
