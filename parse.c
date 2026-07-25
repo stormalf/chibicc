@@ -1512,6 +1512,7 @@ static Node *compute_vla_size(Type *ty, Token *tok)
     // Allocate a runtime variable to hold the struct/union size.
     ty->vla_size = new_lvar("", ty_ulong, NULL);
     ty->vla_size->vla_ty = ty;
+    ty->vla_size->is_read = true;
     Node *sz = new_num(0, tok);
 
     for (Member *mem = ty->members; mem; mem = mem->next) {
@@ -1538,6 +1539,7 @@ static Node *compute_vla_size(Type *ty, Token *tok)
   if (!ty->vla_size) {
     ty->vla_size = new_lvar("", ty_ulong, NULL);
     ty->vla_size->vla_ty = ty;
+    ty->vla_size->is_read = true;
   }
 
   if (ty->vla_len)
@@ -1581,6 +1583,7 @@ static void need_alloca_bottom(void) {
   //opt_omit_frame_pointer = false;
   current_fn->force_frame_pointer = true;
   current_fn->alloca_bottom = new_lvar("__alloca_size__", pointer_to(ty_char), current_fn->name);
+  current_fn->alloca_bottom->is_read = true;    
 }
 
 static Node *new_alloca(Node *sz, int align)
@@ -1666,6 +1669,8 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
       // x = alloca(tmp)`.
       
       Obj *var = new_lvar(get_ident(ty->name), ty, NULL);
+      var->is_read = true;
+      var->is_written = true;
       var->tok = ty->name_pos;
       Token *tok = ty->name;
       tok = attribute_list(tok, ty, type_attributes);
@@ -1682,6 +1687,8 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
     }
     
     Obj *var = new_lvar(get_ident(ty->name), ty, NULL);
+    var->is_read = true;
+    var->is_written = true;    
     var->tok = ty->name_pos;
     if (alt_align) {
       var->align = alt_align;
@@ -3714,9 +3721,17 @@ static Node *atomic_op(Node *binary, bool return_old) {
   Node *cur = &head;
 
   Obj *addr = new_lvar("", pointer_to(binary->lhs->ty), NULL);
+  addr->is_read = true;
+  addr->is_written = true;
   Obj *val = new_lvar("", binary->rhs->ty, NULL);
+  val->is_read = true;
+  val->is_written = true;  
   Obj *old = new_lvar("", binary->lhs->ty, NULL);
+  old->is_read = true;
+  old->is_written = true;   
   Obj *new = new_lvar("", binary->lhs->ty, NULL);
+  new->is_read = true;
+  new->is_written = true; 
 
   cur = cur->next =
     new_unary(ND_EXPR_STMT,
@@ -3807,6 +3822,8 @@ static Node *to_assign(Node *binary)
   if (binary->lhs->kind == ND_MEMBER)
   {
     Obj *var = new_lvar("", pointer_to(binary->lhs->lhs->ty), NULL);
+    var->is_read = true;
+    var->is_written = true;     
     Node *expr1 = new_binary(ND_ASSIGN, new_var_node(var, tok),
                              new_unary(ND_ADDR, binary->lhs->lhs, tok), tok);
 
@@ -3830,6 +3847,8 @@ static Node *to_assign(Node *binary)
 
   // Convert `A op= B` to ``tmp = &A, *tmp = *tmp op B`.
   Obj *var = new_lvar("", pointer_to(binary->lhs->ty), NULL);
+  var->is_read = true;
+  var->is_written = true;   
   Node *expr1 = new_binary(ND_ASSIGN, new_var_node(var, tok),
                            new_unary(ND_ADDR, binary->lhs, tok), tok);
 
@@ -3908,6 +3927,8 @@ Node *conditional(Token **rest, Token *tok)
     // [GNU] Compile `a ?: b` as `tmp = a, tmp ? tmp : b`.
     add_type(cond);
     Obj *var = new_lvar("", cond->ty, NULL);
+    var->is_read = true;
+    var->is_written = true;
     Node *lhs = new_binary(ND_ASSIGN, new_var_node(var, tok), cond, tok);
     Node *rhs = new_node(ND_COND, tok);
     //commit 2e138bb from slimcc
@@ -8415,6 +8436,7 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   if (ty->is_variadic) {
     fn->va_area = new_lvar("__va_area__", array_of(ty_char, 208), name_str);
     fn->va_area->align = 16;
+    fn->va_area->is_read = true;    
   }
 
 

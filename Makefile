@@ -70,9 +70,11 @@ test-stage2: $(TESTS:test/%=stage2/test/%)
 	TEST_JOBS="$(TEST_JOBS)" TEST_TIMEOUT="$(TEST_TIMEOUT)" ./test/run_tests.sh $(addprefix ./,$^)
 	test/driver.sh ./stage2/$(OBJECT)
 
-projects-all: projects projects-oth lxc cpython openssl php-src
+projects-all: projects projects-oth lxc php-src projects-slow
 
-projects-oth: openssh-portable sqlite vim nmap memcached git curl 
+projects-slow: openssh-portable sqlite openssl cpython
+
+projects-oth: nmap memcached git curl vim
 
 projects: zlib util-linux nginx vlc 
 
@@ -149,4 +151,4 @@ uninstall:
 	rm -f $(PREFIX)/bin/chibicc
 	rm -f $(PREFIX)/include/x86_64-linux-gnu/chibicc/*
 
-.PHONY: test clean test-stage2 libchibicc projects projects-all  projects-oth test-all install uninstall test_spe
+.PHONY: test clean test-stage2 libchibicc projects projects-all  projects-oth test-all install uninstall test_spe projects-slow
