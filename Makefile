@@ -123,7 +123,7 @@ openssh-portable:
 	cd ../openssh-portable && make clean && CC=chibicc CFLAGS="-std=c11 -g" ./configure && make -j2 && make tests
 
 sqlite:
-	cd ../sqlite && CC=chibicc CFLAGS="-fPIC -std=c11 -g" ./configure && make clean && make -j2 && make test
+	cd ../sqlite && CC=chibicc CFLAGS="-fPIC -std=c11 -g" ./configure && make clean && make -j2 && make test TSTRNNR_OPTS="--jobs 1"
 
 php-src:
 	cd ../php-src && CC=chibicc CFLAGS="-fPIC -std=c11 -g" ./buildconf && ./configure && make clean && make -j2 && make test

@@ -5064,6 +5064,8 @@ static void scope_assign_offsets(Scope *sc, int *bottom, char *ptr, int stack_al
   for (Scope *child = sc->children; child; child = child->sibling_next)
     scope_assign_offsets(child, bottom, ptr, stack_align, omit_fp);
   for (Obj *var = sc->locals; var; var = var->next) {
+    if (!var->is_read && !var->is_written && !var->is_address_used && !var->is_used && (!var->ty || !var->ty->is_volatile))
+     continue;
     int align = get_align(var);
     if (var->offset) continue;
     int size = var->ty->size;
@@ -5081,8 +5083,11 @@ static void scope_assign_offsets(Scope *sc, int *bottom, char *ptr, int stack_al
 static int scope_lvar_align(Scope *sc, int align) {
   for (Scope *child = sc->children; child; child = child->sibling_next)
     align = scope_lvar_align(child, align);
-  for (Obj *var = sc->locals; var; var = var->next)
+  for (Obj *var = sc->locals; var; var = var->next) {
+    if (!var->is_read && !var->is_written && !var->is_address_used && !var->is_used && (!var->ty || !var->ty->is_volatile))
+     continue;
     align = MAX(align, get_align(var));
+  }
   return align;
 }
 
@@ -5091,6 +5096,8 @@ static int scope_max_offset(Scope *sc, int bottom) {
   for (Scope *child = sc->children; child; child = child->sibling_next)
     bottom = scope_max_offset(child, bottom);
   for (Obj *var = sc->locals; var; var = var->next) {
+    if (!var->is_read && !var->is_written && !var->is_address_used && !var->is_used && (!var->ty || !var->ty->is_volatile))
+     continue;
     if (var->offset && !var->is_param) {
       int limit = -var->offset;
       if (limit > bottom) bottom = limit;
@@ -5104,6 +5111,8 @@ static void scope_zero_init(Scope *sc, Obj *fn) {
   for (Scope *child = sc->children; child; child = child->sibling_next)
     scope_zero_init(child, fn);
   for (Obj *var = sc->locals; var; var = var->next) {
+    if (!var->is_read && !var->is_written && !var->is_address_used && !var->is_used && (!var->ty || !var->ty->is_volatile))
+      continue;
     if (!var->init && !var->is_param &&
         (var->ty->kind == TY_STRUCT ||
          var->ty->kind == TY_UNION ||

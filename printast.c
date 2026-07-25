@@ -484,6 +484,10 @@ static void PrintObj(FILE *f, int l, const char *s, Obj *o) {
   PrintBool(f, l + 2, "is_prototyped: ", o->is_prototyped);
   PrintBool(f, l + 2, "is_address_used: ", o->is_address_used);
   PrintBool(f, l + 2, "is_param: ", o->is_param);
+  PrintBool(f, l + 2, "is_read: ", o->is_read);
+  PrintBool(f, l + 2, "is_written: ", o->is_written);
+  PrintBool(f, l + 2, "is_read: ", o->is_used);
+  PrintBool(f, l + 2, "is_read: ", o->is_unused);
   PrintLine(f, l, "}");
 }
 

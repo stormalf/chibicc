@@ -53,6 +53,7 @@ struct VarAttr
   bool is_packed;
   bool is_noinline;
   bool is_used;
+  bool is_unused;
   bool is_returned_twice;
 };
 
@@ -4315,15 +4316,37 @@ static Node *cast(Token **rest, Token *tok)
       tok = tok->next;
     
     Type *tmp =  typename(&tok, tok);
+    bool has_vector_attr = tmp->is_vector && !is_vector(tmp);
+    int vector_size = tmp->vector_size;
     tok = attribute_list(start->next, tmp, type_attributes);
     start->next = tok;
     Type *ty = typename(&tok, tok);
+    if (has_vector_attr) {
+      int len = vector_size / ty->size;
+      ty = vector_of(ty, len);
+    }
     SET_CTX(ctx);         
     tok = skip(tok, ")", ctx);
     
     // compound literal
-    if (equal(tok, "{"))
-      return unary(rest, start);
+    if (equal(tok, "{")) {
+      if (scope->parent == NULL) {
+        Obj *var = new_anon_gvar(ty);
+        var->is_compound_lit = true;
+        gvar_initializer(&tok, tok, var);
+        *rest = tok;
+        return new_var_node(var, start);
+      } else {
+        Obj *var = new_lvar("", ty, NULL);
+        var->is_compound_lit = true;
+        var->is_read = true;
+        var->is_written = true;
+        Node *lhs = lvar_initializer(&tok, tok, var);
+        Node *rhs = new_var_node(var, tok);
+        *rest = tok;
+        return new_binary(ND_COMMA, lhs, rhs, start);
+      }
+    }
 
     // type cast
     Node *node = new_cast(cast(rest, tok), ty);
@@ -5452,6 +5475,13 @@ static Token *thing_attributes(Token *tok, void *arg) {
     return tok;
   }
 
+  if (consume(&tok, tok, "unused") ||
+      consume(&tok, tok, "__unused__")) {
+    attr->is_unused = true;
+    return tok;
+  }
+
+
   if (consume(&tok, tok, "noclone") ||
       consume(&tok, tok, "__noclone__") ||
       consume(&tok, tok, "const") ||
@@ -5998,7 +6028,11 @@ static Node *new_inc_dec(Node *node, Token *tok, int addend) {
 
   if (is_bitfield(node)) {
     Obj *tmp = new_lvar("", node->ty, NULL);
+    tmp->is_read = true;
+    tmp->is_written = true;
     Obj *ptr = new_lvar("", pointer_to(node->lhs->ty), NULL);
+    ptr->is_read = true;
+    ptr->is_written = true;
 
     Node *expr = new_binary(ND_ASSIGN, new_var_node(ptr, tok),
                              new_unary(ND_ADDR, node->lhs, tok), tok);
@@ -6021,7 +6055,11 @@ static Node *new_inc_dec(Node *node, Token *tok, int addend) {
   }
 
   Obj *tmp = new_lvar("", node->ty, NULL);
+  tmp->is_read = true;
+  tmp->is_written = true;
   Obj *ptr = new_lvar("", pointer_to(node->ty), NULL);
+  ptr->is_read = true;
+  ptr->is_written = true;  
 
   Node *expr = new_binary(ND_ASSIGN, new_var_node(ptr, tok),
                           new_unary(ND_ADDR, node, tok), tok);
@@ -6073,6 +6111,8 @@ static Node *postfix(Token **rest, Token *tok)
     {
       Obj *var = new_lvar("", ty, NULL);
       var->is_compound_lit = true;
+      var->is_read = true;
+      var->is_written = true;
       Node *lhs = lvar_initializer(&tok, tok, var);
       Node *rhs = new_var_node(var, tok);
       node = new_binary(ND_COMMA, lhs, rhs, start);
@@ -6254,8 +6294,11 @@ static Node *funcall(Token **rest, Token *tok, Node *fn)
 
   // If a function returns a struct, it is caller's responsibility
   // to allocate a space for the return value.
-  if (node->ty->kind == TY_STRUCT || node->ty->kind == TY_UNION)
+  if (node->ty->kind == TY_STRUCT || node->ty->kind == TY_UNION) {
     node->ret_buffer = new_lvar("", node->ty, NULL);
+    node->ret_buffer->is_read = true;
+    node->ret_buffer->is_written = true;
+  }
   return node;
 }
 
@@ -6397,6 +6440,8 @@ static Node *primary(Token **rest, Token *tok)
       Node *expr = stmt->lhs;
       if (expr->ty->kind == TY_STRUCT || expr->ty->kind == TY_UNION) {
         Obj *var = new_lvar("", expr->ty, NULL);
+        var->is_read = true;
+        var->is_written = true;        
         expr = new_binary(ND_ASSIGN, new_var_node(var, tok),
                           expr, tok);
         add_type(expr);
@@ -6883,6 +6928,9 @@ static Node *primary(Token **rest, Token *tok)
 
     add_type(arg);
     Obj *var = new_lvar("", ty_ulong, NULL);
+    var->is_read = true;
+    var->is_written = true;        
+
     Node *init = new_unary(ND_EXPR_STMT, new_binary(ND_ASSIGN, new_var_node(var, start), new_cast(arg, ty_ulong), start), start);
     
     Node *clz = new_node(ND_BUILTIN_CLZLL, start);
@@ -8098,8 +8146,11 @@ static void create_param_lvars(Type *param, char *funcname)
       if (param->name)
         push_scope(get_ident(param->name))->var = var;
     } else {
-    if (!param->name)
+    if (!param->name) {
       var = new_lvar("", param, funcname);
+      var->is_read = true;
+      var->is_written = true;        
+    }
     else
       var = new_lvar(get_ident(param->name), param, funcname);
     }
@@ -8289,6 +8340,7 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   fn->is_noinline |= attr->is_noinline;
   fn->is_used |= attr->is_used;
   fn->is_returned_twice |= attr->is_returned_twice;
+  fn->is_unused |= attr->is_unused;
   if (fn->is_used)
     fn->is_root = true;
   fn->is_destructor |= attr->is_destructor;
@@ -8343,8 +8395,11 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   // A buffer for a struct/union return value is passed
   // as the hidden first parameter.
   Type *rty = ty->return_ty;
-  if ((rty->kind == TY_STRUCT || rty->kind == TY_UNION) && rty->size > 16)
-    new_lvar("", pointer_to(rty), name_str);
+  if ((rty->kind == TY_STRUCT || rty->kind == TY_UNION) && rty->size > 16) {
+    Obj *var = new_lvar("", pointer_to(rty), name_str);
+    var->is_read = true;
+    var->is_written = true;        
+  }
 
   fn->params = scope->locals;
   //to fix issue with complex vla in parameters
@@ -8475,6 +8530,7 @@ static Token *global_declaration(Token *tok, Type *basety, VarAttr *attr)
     var->is_definition = !decl_attr.is_extern && ty->kind != TY_FUNC;
     var->is_static = decl_attr.is_static;
     var->is_tls = decl_attr.is_tls;
+    var->is_unused = var->is_unused | decl_attr.is_unused;
     if (decl_attr.align)
       var->align = MAX(var->align, decl_attr.align);
 
@@ -8601,6 +8657,209 @@ static void declare_builtin_functions(void)
   declare3("memset", pvoid, pvoid, ty_int, ty_ulong);
 }
 
+static void mark_liveness_on_node(Node *node, bool is_lhs) {
+  if (!node) return;
+
+  switch (node->kind) {
+  case ND_VAR:
+    if (!node->var || node->var->is_function)
+      return;
+    node->var->is_read = true;
+    if (is_lhs)
+      node->var->is_written = true;
+    return;
+  case ND_MEMBER:
+    mark_liveness_on_node(node->lhs, is_lhs);
+    return;
+  case ND_DEREF:
+    mark_liveness_on_node(node->lhs, false);
+    return;
+  case ND_ASSIGN:
+    mark_liveness_on_node(node->rhs, false);
+    mark_liveness_on_node(node->lhs, true);
+    return;
+  case ND_ADDR:
+    mark_var_address_taken(node->lhs);
+    mark_liveness_on_node(node->lhs, false);
+    return;
+  case ND_FUNCALL:
+    mark_liveness_on_node(node->lhs, false);
+    for (Node *a = node->args; a; a = a->next)
+      mark_liveness_on_node(a, false);
+    if (node->ret_buffer)
+      node->ret_buffer->is_written = true;
+    return;
+  case ND_RETURN:
+    mark_liveness_on_node(node->lhs, false);
+    return;
+  case ND_COND:
+    mark_liveness_on_node(node->cond, false);
+    mark_liveness_on_node(node->then, false);
+    mark_liveness_on_node(node->els, false);
+    return;
+  case ND_BLOCK:
+  case ND_STMT_EXPR:
+    for (Node *n = node->body; n; n = n->next)
+      mark_liveness_on_node(n, false);
+    return;
+  case ND_IF:
+    mark_liveness_on_node(node->cond, false);
+    mark_liveness_on_node(node->then, false);
+    mark_liveness_on_node(node->els, false);
+    return;
+  case ND_FOR:
+    mark_liveness_on_node(node->init, false);
+    mark_liveness_on_node(node->cond, false);
+    mark_liveness_on_node(node->inc, false);
+    mark_liveness_on_node(node->then, false);
+    return;
+  case ND_DO:
+    mark_liveness_on_node(node->then, false);
+    mark_liveness_on_node(node->cond, false);
+    return;
+  case ND_SWITCH:
+    mark_liveness_on_node(node->cond, false);
+    mark_liveness_on_node(node->then, false);
+    return;
+  case ND_CASE:
+  case ND_LABEL:
+    mark_liveness_on_node(node->lhs, false);
+    return;
+  case ND_EXPR_STMT:
+    mark_liveness_on_node(node->lhs, false);
+    return;
+  case ND_COMMA:
+    mark_liveness_on_node(node->lhs, false);
+    mark_liveness_on_node(node->rhs, false);
+    return;
+  case ND_CAST:
+    mark_liveness_on_node(node->lhs, false);
+    return;
+  case ND_GOTO:
+  case ND_GOTO_EXPR:
+  case ND_LABEL_VAL:
+  case ND_NULL_EXPR:
+  case ND_NUM:
+    return;
+  case ND_VLA_PTR:
+    if (node->var && !node->var->is_function)
+      node->var->is_read = true;
+    return;
+  case ND_MEMZERO:
+    if (node->var)
+      node->var->is_written = true;
+    return;
+  case ND_ASM:
+    return;
+  case ND_FPCLASSIFY:
+    if (node->fpc && node->fpc->node)
+      mark_liveness_on_node(node->fpc->node, false);
+    return;
+  default:
+    if (node->lhs)
+      mark_liveness_on_node(node->lhs, false);
+    if (node->rhs)
+      mark_liveness_on_node(node->rhs, false);
+    for (int i = 0; i < MAX_BUILTIN_ARGS; i++)
+      if (node->builtin_args[i])
+        mark_liveness_on_node(node->builtin_args[i], false);
+    // Handle builtin memcpy/memset operands
+    if (node->builtin_dest)
+      mark_liveness_on_node(node->builtin_dest, false);
+    if (node->builtin_src)
+      mark_liveness_on_node(node->builtin_src, false);
+    if (node->builtin_size)
+      mark_liveness_on_node(node->builtin_size, false);
+    if (node->builtin_val)
+      mark_liveness_on_node(node->builtin_val, false);
+    // Handle atomic/CAS operands
+    if (node->cas_addr)
+      mark_liveness_on_node(node->cas_addr, false);
+    if (node->cas_old)
+      mark_liveness_on_node(node->cas_old, false);
+    if (node->cas_new)
+      mark_liveness_on_node(node->cas_new, false);
+    if (node->cas_ptr)
+      mark_liveness_on_node(node->cas_ptr, false);
+    if (node->cas_expected)
+      mark_liveness_on_node(node->cas_expected, false);
+    if (node->cas_desired)
+      mark_liveness_on_node(node->cas_desired, false);
+    if (node->cas_weak)
+      mark_liveness_on_node(node->cas_weak, false);
+    if (node->cas_success)
+      mark_liveness_on_node(node->cas_success, false);
+    if (node->cas_failure)
+      mark_liveness_on_node(node->cas_failure, false);
+    if (node->atomic_addr && !node->atomic_addr->is_function)
+      node->atomic_addr->is_address_used = true;
+    if (node->atomic_addr && !node->atomic_addr->is_function) {
+      node->atomic_addr->is_read = true;
+      node->atomic_addr->is_written = true;
+    }
+    if (node->atomic_expr)
+      mark_liveness_on_node(node->atomic_expr, false);
+    break;
+  }
+}
+
+static void emit_unused_scope_warnings(Scope *sc) {
+  for (Scope *child = sc->children; child; child = child->sibling_next)
+    emit_unused_scope_warnings(child);
+  for (Obj *var = sc->locals; var; var = var->next) {
+    if (var->is_param)
+      continue;
+    if (!var->tok || !var->name || !var->name[0])
+      continue;
+    if (!var->is_read && !var->is_written && !var->is_address_used && !var->is_used && !var->is_unused) {
+      if (opt_wunused_variable && (var->ty && !var->ty->origin) && !(var->tok->file && var->tok->file->is_system_header))
+        warn_tok(var->tok, "unused variable '%s'", var->name);
+    }
+  }
+}
+
+static void emit_unused_warnings(Obj *fn) {
+  if (!fn->name)
+    return;
+  for (Obj *p = fn->params; p; p = p->next) {
+    if (!p->name || !p->tok)
+      continue;
+    if (!p->is_read && !p->is_unused) {
+      if (opt_wunused_parameter && (p->ty && !p->ty->origin) && !(p->tok->file && p->tok->file->is_system_header))
+        warn_tok(p->tok, "unused parameter '%s'", p->name);
+    }
+  }
+  if (fn->ty && fn->ty->scopes)
+    emit_unused_scope_warnings(fn->ty->scopes);
+}
+
+static void mark_liveness_on_locals(Obj *prog) {
+  for (Obj *fn = prog; fn; fn = fn->next) {
+    if (!fn->is_function || !fn->is_definition)
+      continue;
+    mark_liveness_on_node(fn->body, false);
+
+    emit_unused_warnings(fn);
+
+    // Internal variables used directly by codegen (not via AST ND_VAR nodes)
+    // must be kept live so they get stack slots.
+    if (fn->alloca_bottom) {
+      fn->alloca_bottom->is_read = true;
+      fn->alloca_bottom->is_written = true;
+    }
+    if (fn->va_area) {
+      fn->va_area->is_read = true;
+      fn->va_area->is_written = true;
+    }
+
+    for (Obj *p = fn->params; p; p = p->next) {
+      p->is_read = true;
+      if (!p->ty->is_const)
+        p->is_written = true;
+    }
+  }
+}
+
 // program = (typedef | function-definition | global-variable)*
 Obj *parse(Token *tok)
 {
@@ -8683,6 +8942,8 @@ Obj *parse(Token *tok)
     // Global variable
     tok = global_declaration(tok, basety, &attr);
   }
+
+  mark_liveness_on_locals(globals);
 
   for (Obj *var = globals; var; var = var->next)
     if (var->is_root || var->is_address_used)

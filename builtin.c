@@ -2185,11 +2185,19 @@ static void get_mask_values(Node *mask_node, int *vals, int expected_len) {
     error_tok(mask_node->tok, "%s:%d: error: in %s : shuffle mask must be a constant vector initializer! %d", __FILE__, __LINE__, __func__,  mask_node->kind);
 
   Initializer *init = mask_node->var->init;
+  if (!mask_node->var->ty || !mask_node->var->ty->base)
+    error_tok(mask_node->tok, "%s:%d: error: in %s : shuffle mask type has no base type!", __FILE__, __LINE__, __func__);
   int len = mask_node->var->ty->array_len;
+  int elem_size = mask_node->var->ty->base->size;
+  int expand = elem_size / 4;
 
   for (int i = 0; i < len; i++) {
     Initializer *elem = init->children[i];
-    vals[i] = get_const_int_from_node(elem->expr);
+    if (!elem) continue;
+    int val = get_const_int_from_node(elem->expr);
+    for (int j = 0; j < expand; j++)
+      if (i * expand + j < expected_len)
+        vals[i * expand + j] = val * expand + j;
   }
 }
 
@@ -2250,7 +2258,7 @@ void gen_shuffle(Node *node, const char *insn) {
   gen_expr(node->builtin_args[1]);
   println("  movaps %%xmm0, %%xmm1");
   println("  movaps %%xmm2, %%xmm0");
-  int mask[4];
+  int mask[4] = {0};
   get_mask_values(node->builtin_args[2], mask, 4);
   int imm1, imm2;
   if (decompose_shuffle_mask_from_vals(mask, &imm1, &imm2)) {

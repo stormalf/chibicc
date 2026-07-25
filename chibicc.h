@@ -134,6 +134,12 @@ this " PRODUCT " supports vector, some extended assembly and int128 \n"
 -nostdinc Do not use the standard system header files when compiling \n \
 -ffreestanding  Compile for a freestanding environment; implies no CRT startup files\n \
 -fvisibility=default|hidden|protected  Set default symbol visibility\n \
+ -Wall  Enable all warnings (currently: -Wunused-variable)\n \
+ -Wextra  Enable extra warnings (currently: -Wunused-parameter)\n \
+ -Wunused-parameter  Warn about unused function parameters\n \
+ -Wno-unused-parameter  Suppress unused parameter diagnostics\n \
+ -Wunused-variable  Warn about unused local variables\n \
+ -Wno-unused-variable  Suppress unused variable diagnostics\n \
 -Wimplicit-function-declaration  Warn about implicit function declarations\n \
 -Wno-implicit-function-declaration  Suppress implicit function declaration diagnostics\n \
 -std=c99 generates an error on implicit function declaration (without -std only a warning is emitted) \n \
@@ -218,7 +224,10 @@ typedef struct
   // For #line directive
   char *display_name;
   int line_delta;
+  bool is_system_header;
 } File;
+
+bool is_system_include_path(char *path);
 
 // Token type
 typedef struct Token Token;
@@ -388,6 +397,9 @@ struct Obj
   bool is_returned_twice;
   bool is_noinline;
   bool is_used;
+  bool is_unused;
+  bool is_read;
+  bool is_written;
 };
 
 // Global variable can be initialized either by a constant expression
@@ -1789,6 +1801,10 @@ extern char *opt_fvisibility;
 extern bool opt_implicit_warn;
 extern bool opt_no_implicit;
 extern bool opt_ffreestanding;
+extern bool opt_wall;
+extern bool opt_wextra;
+extern bool opt_wunused_parameter;
+extern bool opt_wunused_variable;
 
 //
 // extended_asm.c

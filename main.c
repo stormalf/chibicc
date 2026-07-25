@@ -44,6 +44,10 @@ bool opt_tbm;
 char *opt_fvisibility;
 bool opt_implicit_warn;
 bool opt_ffreestanding;
+bool opt_wall;
+bool opt_wextra;
+bool opt_wunused_parameter;
+bool opt_wunused_variable;
 
 static FileType opt_x;
 static StringArray opt_include;
@@ -838,6 +842,38 @@ static void parse_args(int argc, char **argv)
       continue;
     }
 
+    if (!strcmp(argv[i], "-Wall")) {
+      opt_wall = true;
+      opt_wunused_variable = true;
+      continue;
+    }
+
+    if (!strcmp(argv[i], "-Wextra")) {
+      opt_wextra = true;
+      opt_wunused_parameter = true;
+      continue;
+    }
+
+    if (!strcmp(argv[i], "-Wunused-parameter")) {
+      opt_wunused_parameter = true;
+      continue;
+    }
+
+    if (!strcmp(argv[i], "-Wno-unused-parameter")) {
+      opt_wunused_parameter = false;
+      continue;
+    }
+
+    if (!strcmp(argv[i], "-Wunused-variable")) {
+      opt_wunused_variable = true;
+      continue;
+    }
+
+    if (!strcmp(argv[i], "-Wno-unused-variable")) {
+      opt_wunused_variable = false;
+      continue;
+    }
+
     if (!strcmp(argv[i], "-Werror")) {
       opt_werror = true;
       continue;
@@ -982,13 +1018,10 @@ static void parse_args(int argc, char **argv)
 
     // These options are ignored for now.
     if (!strcmp(argv[i], "-P") || 
-        !strcmp(argv[i], "-Wall") || 
-        !strcmp(argv[i], "-Wextra") || 
         !strcmp(argv[i], "-Wpedantic") || 
         !strcmp(argv[i], "-Wno-switch") || 
         !strcmp(argv[i], "-Wno-clobbered") ||
         !strcmp(argv[i], "-Wno-unused-variable") ||
-        !strcmp(argv[i], "-Wno-unused-parameter") ||  
         !strcmp(argv[i], "-Wno-sign-compare") ||
         !strcmp(argv[i], "-Wno-format-y2k") || 
         !strcmp(argv[i], "-Wmissing-prototypes") ||
