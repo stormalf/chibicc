@@ -583,6 +583,7 @@ cpython: git clone https://github.com/python/cpython.git
     - some basic debug information (dwarf information)
     - adding support on __m256 avx2
     - adding support __Float32
+    - adding support for warnings (unused variables, unused parameters)
 
  
 ## TODO
