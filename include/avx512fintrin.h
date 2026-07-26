@@ -257,89 +257,89 @@ _mm512_set1_epi16 (short __A)
 // 						 (__mmask16) -1);
 // }
 
-// /* Create the vector [A B C D A B C D A B C D A B C D].  */
-// extern __inline __m512i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm512_set4_epi32 (int __A, int __B, int __C, int __D)
-// {
-//   return __extension__ (__m512i)(__v16si)
-// 	 { __D, __C, __B, __A, __D, __C, __B, __A,
-// 	   __D, __C, __B, __A, __D, __C, __B, __A };
-// }
+/* Create the vector [A B C D A B C D A B C D A B C D].  */
+extern __inline __m512i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm512_set4_epi32 (int __A, int __B, int __C, int __D)
+{
+  return __extension__ (__m512i)(__v16si)
+	 { __D, __C, __B, __A, __D, __C, __B, __A,
+	   __D, __C, __B, __A, __D, __C, __B, __A };
+}
 
-// extern __inline __m512i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm512_set4_epi64 (long long __A, long long __B, long long __C,
-// 		   long long __D)
-// {
-//   return __extension__ (__m512i) (__v8di)
-// 	 { __D, __C, __B, __A, __D, __C, __B, __A };
-// }
+extern __inline __m512i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm512_set4_epi64 (long long __A, long long __B, long long __C,
+		   long long __D)
+{
+  return __extension__ (__m512i) (__v8di)
+	 { __D, __C, __B, __A, __D, __C, __B, __A };
+}
 
-// extern __inline __m512d
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm512_set4_pd (double __A, double __B, double __C, double __D)
-// {
-//   return __extension__ (__m512d)
-// 	 { __D, __C, __B, __A, __D, __C, __B, __A };
-// }
+extern __inline __m512d
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm512_set4_pd (double __A, double __B, double __C, double __D)
+{
+  return __extension__ (__m512d)
+	 { __D, __C, __B, __A, __D, __C, __B, __A };
+}
 
-// extern __inline __m512
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm512_set4_ps (float __A, float __B, float __C, float __D)
-// {
-//   return __extension__ (__m512)
-// 	 { __D, __C, __B, __A, __D, __C, __B, __A,
-// 	   __D, __C, __B, __A, __D, __C, __B, __A };
-// }
+extern __inline __m512
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm512_set4_ps (float __A, float __B, float __C, float __D)
+{
+  return __extension__ (__m512)
+	 { __D, __C, __B, __A, __D, __C, __B, __A,
+	   __D, __C, __B, __A, __D, __C, __B, __A };
+}
 
-// #define _mm512_setr4_epi64(e0,e1,e2,e3)					      \
-//   _mm512_set4_epi64(e3,e2,e1,e0)
+#define _mm512_setr4_epi64(e0,e1,e2,e3)					      \
+  _mm512_set4_epi64(e3,e2,e1,e0)
 
-// #define _mm512_setr4_epi32(e0,e1,e2,e3)					      \
-//   _mm512_set4_epi32(e3,e2,e1,e0)
+#define _mm512_setr4_epi32(e0,e1,e2,e3)					      \
+  _mm512_set4_epi32(e3,e2,e1,e0)
 
-// #define _mm512_setr4_pd(e0,e1,e2,e3)					      \
-//   _mm512_set4_pd(e3,e2,e1,e0)
+#define _mm512_setr4_pd(e0,e1,e2,e3)					      \
+  _mm512_set4_pd(e3,e2,e1,e0)
 
-// #define _mm512_setr4_ps(e0,e1,e2,e3)					      \
-//   _mm512_set4_ps(e3,e2,e1,e0)
+#define _mm512_setr4_ps(e0,e1,e2,e3)					      \
+  _mm512_set4_ps(e3,e2,e1,e0)
 
-// extern __inline __m512
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm512_setzero_ps (void)
-// {
-//   return __extension__ (__m512){ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-// 				 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
-// }
+extern __inline __m512
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm512_setzero_ps (void)
+{
+  return __extension__ (__m512){ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+				 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
+}
 
-// extern __inline __m512
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm512_setzero (void)
-// {
-//   return _mm512_setzero_ps ();
-// }
+extern __inline __m512
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm512_setzero (void)
+{
+  return _mm512_setzero_ps ();
+}
 
-// extern __inline __m512d
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm512_setzero_pd (void)
-// {
-//   return __extension__ (__m512d) { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
-// }
+extern __inline __m512d
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm512_setzero_pd (void)
+{
+  return __extension__ (__m512d) { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
+}
 
-// extern __inline __m512i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm512_setzero_epi32 (void)
-// {
-//   return __extension__ (__m512i)(__v8di){ 0, 0, 0, 0, 0, 0, 0, 0 };
-// }
+extern __inline __m512i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm512_setzero_epi32 (void)
+{
+  return __extension__ (__m512i)(__v8di){ 0, 0, 0, 0, 0, 0, 0, 0 };
+}
 
-// extern __inline __m512i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm512_setzero_si512 (void)
-// {
-//   return __extension__ (__m512i)(__v8di){ 0, 0, 0, 0, 0, 0, 0, 0 };
-// }
+extern __inline __m512i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm512_setzero_si512 (void)
+{
+  return __extension__ (__m512i)(__v8di){ 0, 0, 0, 0, 0, 0, 0, 0 };
+}
 
 // extern __inline __m512d
 // __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
@@ -480,12 +480,12 @@ _mm512_set1_epi16 (short __A)
 // 						     (__mmask8) __U);
 // }
 
-// extern __inline __m512i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm512_load_epi64 (void const *__P)
-// {
-//   return *(__m512i *) __P;
-// }
+extern __inline __m512i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm512_load_epi64 (void const *__P)
+{
+  return *(__m512i *) __P;
+}
 
 // extern __inline __m512i
 // __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
@@ -506,12 +506,12 @@ _mm512_set1_epi16 (short __A)
 // 							(__mmask8) __U);
 // }
 
-// extern __inline void
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm512_store_epi64 (void *__P, __m512i __A)
-// {
-//   *(__m512i *) __P = __A;
-// }
+extern __inline void
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm512_store_epi64 (void *__P, __m512i __A)
+{
+  *(__m512i *) __P = __A;
+}
 
 // extern __inline void
 // __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
@@ -540,19 +540,19 @@ _mm512_set1_epi16 (short __A)
 // 						     (__mmask16) __U);
 // }
 
-// extern __inline __m512i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm512_load_si512 (void const *__P)
-// {
-//   return *(__m512i *) __P;
-// }
+extern __inline __m512i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm512_load_si512 (void const *__P)
+{
+  return *(__m512i *) __P;
+}
 
-// extern __inline __m512i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm512_load_epi32 (void const *__P)
-// {
-//   return *(__m512i *) __P;
-// }
+extern __inline __m512i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm512_load_epi32 (void const *__P)
+{
+  return *(__m512i *) __P;
+}
 
 // extern __inline __m512i
 // __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
@@ -573,19 +573,19 @@ _mm512_set1_epi16 (short __A)
 // 							(__mmask16) __U);
 // }
 
-// extern __inline void
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm512_store_si512 (void *__P, __m512i __A)
-// {
-//   *(__m512i *) __P = __A;
-// }
+extern __inline void
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm512_store_si512 (void *__P, __m512i __A)
+{
+  *(__m512i *) __P = __A;
+}
 
-// extern __inline void
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm512_store_epi32 (void *__P, __m512i __A)
-// {
-//   *(__m512i *) __P = __A;
-// }
+extern __inline void
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm512_store_epi32 (void *__P, __m512i __A)
+{
+  *(__m512i *) __P = __A;
+}
 
 // extern __inline void
 // __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
@@ -595,12 +595,12 @@ _mm512_set1_epi16 (short __A)
 // 					(__mmask16) __U);
 // }
 
-// extern __inline __m512i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm512_mullo_epi32 (__m512i __A, __m512i __B)
-// {
-//   return (__m512i) ((__v16su) __A * (__v16su) __B);
-// }
+extern __inline __m512i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm512_mullo_epi32 (__m512i __A, __m512i __B)
+{
+  return (__m512i) ((__v16su) __A * (__v16su) __B);
+}
 
 // extern __inline __m512i
 // __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
@@ -732,12 +732,12 @@ _mm512_set1_epi16 (short __A)
 // 						  (__mmask16) __U);
 // }
 
-// extern __inline __m512i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm512_add_epi64 (__m512i __A, __m512i __B)
-// {
-//   return (__m512i) ((__v8du) __A + (__v8du) __B);
-// }
+extern __inline __m512i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm512_add_epi64 (__m512i __A, __m512i __B)
+{
+  return (__m512i) ((__v8du) __A + (__v8du) __B);
+}
 
 // extern __inline __m512i
 // __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
@@ -760,12 +760,12 @@ _mm512_set1_epi16 (short __A)
 // 						 (__mmask8) __U);
 // }
 
-// extern __inline __m512i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm512_sub_epi64 (__m512i __A, __m512i __B)
-// {
-//   return (__m512i) ((__v8du) __A - (__v8du) __B);
-// }
+extern __inline __m512i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm512_sub_epi64 (__m512i __A, __m512i __B)
+{
+  return (__m512i) ((__v8du) __A - (__v8du) __B);
+}
 
 // extern __inline __m512i
 // __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
@@ -884,12 +884,12 @@ _mm512_set1_epi16 (short __A)
 // 						 (__mmask8) __U);
 // }
 
-// extern __inline __m512i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm512_add_epi32 (__m512i __A, __m512i __B)
-// {
-//   return (__m512i) ((__v16su) __A + (__v16su) __B);
-// }
+extern __inline __m512i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm512_add_epi32 (__m512i __A, __m512i __B)
+{
+  return (__m512i) ((__v16su) __A + (__v16su) __B);
+}
 
 // extern __inline __m512i
 // __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
@@ -943,12 +943,12 @@ _mm512_set1_epi16 (short __A)
 // 						  __M);
 // }
 
-// extern __inline __m512i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm512_sub_epi32 (__m512i __A, __m512i __B)
-// {
-//   return (__m512i) ((__v16su) __A - (__v16su) __B);
-// }
+extern __inline __m512i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm512_sub_epi32 (__m512i __A, __m512i __B)
+{
+  return (__m512i) ((__v16su) __A - (__v16su) __B);
+}
 
 // extern __inline __m512i
 // __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))

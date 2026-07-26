@@ -23,17 +23,6 @@
 // Scope for local variables, global variables, typedefs
 // or enum constants
 
-// Represents a block scope.
-typedef struct Scope Scope;
-struct Scope
-{
-  Scope *next;
-
-  // C has two block scopes; one is for variables/typedefs and
-  // the other is for struct/union/enum tags.
-  HashMap vars;
-  HashMap tags;
-};
 typedef struct VarAttr VarAttr;
 // Variable attributes such as typedef or extern.
 struct VarAttr
@@ -62,6 +51,10 @@ struct VarAttr
   int destructor_priority;
   int constructor_priority;
   bool is_packed;
+  bool is_noinline;
+  bool is_used;
+  bool is_unused;
+  bool is_returned_twice;
 };
 
 
@@ -91,9 +84,6 @@ static int order = 0;
 static bool is_old_style = false;
 static Type * current_type;
 static VarAttr * current_attr;
-// All local variable instances created during parsing are
-// accumulated to this list.
-static Obj *locals;
 static char* current_section;
 
 // Likewise, global variables are accumulated to this list.
@@ -192,7 +182,6 @@ static Node *parse_memcpy(Token *tok, Token **rest);
 static Node *parse_memset(Token *tok, Token **rest);
 static Node *ParseBuiltin(NodeKind kind, Token *tok, Token **rest);
 static Node *parse_overflow(NodeKind kind, Token *tok, Token **rest);
-static Node *parse_huge_val(double fval, Token *tok, Token **rest);
 
 static Token * old_style_params(Token **rest, Token *tok, Type *ty);
 static Type *old_params(Type *ty, int nbparms);
@@ -234,41 +223,36 @@ static int align_down(int n, int align)
 
 static void enter_scope(void)
 {
-
   Scope *sc = calloc(1, sizeof(Scope));
   if (sc == NULL)
     error("%s:%d: in %s: sc pointer is null!", __FILE__, __LINE__, __func__);
-  sc->next = scope;
+  sc->parent = scope;
+  // Link as first child of parent
+  sc->sibling_next = scope->children;
+  scope->children = sc;
   scope = sc;
 }
 
 static void leave_scope(void)
 {
-  scope = scope->next;
+  scope = scope->parent;
 }
 
 // Find a variable by name.
 VarScope *find_var(Token *tok)
 {
-
-  for (Scope *sc = scope; sc; sc = sc->next)
+  for (Scope *sc = scope; sc; sc = sc->parent)
   {
-
     VarScope *sc2 = hashmap_get2(&sc->vars, tok->loc, tok->len);
-
     if (sc2)
       return sc2;
-   
   }
-  
-
-
   return NULL;
 }
 
 static Type *find_tag(Token *tok)
 {
-  for (Scope *sc = scope; sc; sc = sc->next)
+  for (Scope *sc = scope; sc; sc = sc->parent)
   {
     Type *ty = hashmap_get2(&sc->tags, tok->loc, tok->len);
     if (ty)
@@ -501,7 +485,6 @@ static Obj *new_var(char *name, Type *ty)
 
 static Obj *new_lvar(char *name, Type *ty, char *funcname)
 {
-
   Obj *var = new_var(name, ty);
   var->is_local = true;
   var->order = order;
@@ -512,11 +495,11 @@ static Obj *new_lvar(char *name, Type *ty, char *funcname)
   var->funcname = funcname;
   if (var->ty->kind == TY_PTR) {
     var->ty->is_pointer = true;
-    var->ty->pointertype = ty->base;   
-    var->ty->size = ty->size; 
+    var->ty->pointertype = ty->base;
+    var->ty->size = ty->size;
   }
-  var->next = locals;
-  locals = var;
+  var->next = scope->locals;
+  scope->locals = var;
   return var;
 }
 
@@ -622,6 +605,7 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     SIGNED = 1 << 17,
     UNSIGNED = 1 << 18,
     INT128 = 1 << 19,
+    FLOAT128 = 1 << 20,
   };
 
   Type *ty = copy_type(ty_int);  
@@ -804,7 +788,9 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     else if (equal(tok, "double"))
       counter += DOUBLE;
     else if (equal(tok, "__int128"))
-      counter += INT128;        
+      counter += INT128;
+    else if (equal(tok, "__float128"))
+      counter += FLOAT128;
     else if (equal(tok, "signed"))
       counter |= SIGNED;
     else if (equal(tok, "unsigned"))
@@ -882,6 +868,9 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     case LONG + DOUBLE:    
       ty = copy_type(ty_ldouble);
       break;
+    case FLOAT128:
+      ty = copy_type(ty_ldouble);
+      break;
     default:
       error_tok(tok, "%s:%d: in %s: invalid type", __FILE__, __LINE__, __func__);
     }
@@ -901,6 +890,14 @@ static Type *declspec(Token **rest, Token *tok, VarAttr *attr)
     ty3->is_const = is_const;
     ty3->is_volatile = is_volatile;
     ty3->is_restrict = is_restrict;
+    // gcc bumps the alignment of an `_Atomic` type up to its own size so the
+    // access stays lock-free and never lowers to a libatomic (`__atomic_*`)
+    // libcall.  Cap at 16 bytes (x86-64 max lock-free width, enabled via
+    // `cx16`).
+    if (ty3->is_atomic && ty3->size > 0) {
+      long a = ty3->size < 16 ? ty3->size : 16;
+      if (ty3->align < a) ty3->align = a;
+    }
     return ty3;
   }
   return ty;
@@ -928,8 +925,8 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
   enter_scope();
   while (!equal(tok, ")"))
   {
-
-    tok = attribute_list(tok, ty, type_attributes);
+    Type param_attr = {};
+    tok = attribute_list(tok, &param_attr, type_attributes);
     if (cur != &head) {
       if (equal(tok, ";")) {
         SET_CTX(ctx); 
@@ -949,7 +946,7 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
       tok = skip(tok, ",", ctx);
     }
     }
-    tok = attribute_list(tok, ty, type_attributes);
+    tok = attribute_list(tok, &param_attr, type_attributes);
     if (equal(tok, "..."))
     {
       is_variadic = true;
@@ -984,6 +981,8 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
 
     ty2 = declarator(&tok, tok, ty2);
     tok = attribute_list(tok, ty2, type_attributes);
+    if (param_attr.is_unused)
+      ty2->is_unused = true;
 
     if (!ty2)
       error_tok(tok, "%s:%d: in %s: ty2 is null", __FILE__, __LINE__, __func__);
@@ -1024,7 +1023,7 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
 
   leave_scope();
 
-  if (cur == &head)
+  if (cur == &head && has_ellipsis)
     is_variadic = true;
   ty = func_type(ty);
   tok = attribute_list(tok, ty, type_attributes);
@@ -1085,20 +1084,36 @@ static Type *array_dimensions(Token **rest, Token *tok, Type *ty)
 }
 
 
-static void pointer_qualifiers(Token **rest, Token *tok, Type *ty) {
+// pointer_qualifiers parses a sequence of cvr/atomic qualifiers attached to a
+// pointer and returns the (possibly freshly allocated) qualified type.  We use
+// new_qualified_type so the resulting node carries a proper `origin` pointing
+// at the unqualified type; mutating `ty` in place left `origin` NULL, which
+// made the debug metadata emitter recurse infinitely on a `T* restrict` type.
+// The requested qualifiers are applied only to the new node, never to the
+// original, so the base type stays unqualified.
+static Type *pointer_qualifiers(Token **rest, Token *tok, Type *ty) {
+  bool is_atomic = false, is_const = false, is_volatile = false, is_restrict = false;
   for (;; tok = tok->next) {
     if (equal(tok, "_Atomic"))
-      ty->is_atomic = true;
+      is_atomic = true;
     else if (equal(tok, "const"))
-      ty->is_const = true;
+      is_const = true;
     else if (equal(tok, "volatile"))
-      ty->is_volatile = true;
+      is_volatile = true;
     else if (equal(tok, "restrict") || equal(tok, "__restrict") || equal(tok, "__restrict__"))
-      ty->is_restrict = true;
+      is_restrict = true;
     else
       break;
   }
   *rest = tok;
+  if (is_atomic || is_const || is_volatile || is_restrict) {
+    ty = new_qualified_type(ty);
+    ty->is_atomic = is_atomic;
+    ty->is_const = is_const;
+    ty->is_volatile = is_volatile;
+    ty->is_restrict = is_restrict;
+  }
+  return ty;
 }
 
 
@@ -1142,7 +1157,7 @@ static Type *pointers(Token **rest, Token *tok, Type *ty)
     for (;;) {
 
       tok = attribute_list(tok, ty, type_attributes);
-       pointer_qualifiers(&tok, tok, ty);
+       ty = pointer_qualifiers(&tok, tok, ty);
        if (equal(tok, "_Complex")) {
          tok = tok->next;
        } else {
@@ -1279,14 +1294,26 @@ static Type *enum_specifier(Token **rest, Token *tok)
 
     if (!ty)
       error_tok(tok, "%s:%d: in %s: ty is null!", __FILE__, __LINE__, __func__);  
+    ty->tag_name = tag;
+    ty->name = tag;
+    push_tag_scope(tag, ty);
     return ty;
   }
   SET_CTX(ctx); 
   tok = skip(tok, "{", ctx);
 
+  // Reuse a previously forward-declared (incomplete) enum of the same tag.
+  if (tag) {
+    Type *prev = find_tag(tag);
+    if (prev && prev->kind == TY_ENUM)
+      ty = prev;
+  }
+
   // Read an enum-list.
   int i = 0;
   int val = 0;
+  int enum_min = 0;
+  bool enum_has_negative = false;
   while (!consume_end(rest, tok))
   {
     //tok->next = attribute_list(tok->next, ty, type_attributes);
@@ -1295,6 +1322,7 @@ static Type *enum_specifier(Token **rest, Token *tok)
       tok = skip(tok, ",", ctx);
     }
 
+    Token *name_tok = tok;
     char *name = get_ident(tok);
     tok = tok->next;
     tok = attribute_list(tok, ty, type_attributes);
@@ -1302,13 +1330,35 @@ static Type *enum_specifier(Token **rest, Token *tok)
       val = const_expr(&tok, tok->next);
     tok = attribute_list(tok, ty, type_attributes);
 
+    if (val < enum_min)
+      enum_min = val;
+    if (val < 0)
+      enum_has_negative = true;
+
+    Member *mem = calloc(1, sizeof(Member));
+    mem->name = name_tok;
+    mem->offset = val;
+    mem->ty = ty_int;
+    mem->next = ty->members;
+    ty->members = mem;
+
     VarScope *sc = push_scope(name);
     sc->enum_ty = ty;
     sc->enum_val = val++;
   }
 
-  if (tag)
+  // When every enumerator is non-negative the enum has no sign bit, so treat
+  // it as unsigned.  This matches GCC, which (with -fshort-enums) selects an
+  // unsigned underlying type, and makes bit-fields of such enums zero-extend
+  // instead of sign-extend (see suite218).
+  if (!enum_has_negative)
+    ty->is_unsigned = true;
+
+  if (tag) {
     push_tag_scope(tag, ty);
+    ty->tag_name = tag;
+    ty->name = tag;
+  }
   if (!ty)
     error_tok(tok, "%s:%d: in %s: ty is null!", __FILE__, __LINE__, __func__);    
   return ty;
@@ -1441,8 +1491,8 @@ static Node *compute_vla_size(Type *ty, Token *tok)
     // First time we see this vla_size in the current function: register it.
     if (!ty->vla_size->funcname) {
       ty->vla_size->funcname = current_fn->funcname;
-      ty->vla_size->next = locals;
-      locals = ty->vla_size;
+      ty->vla_size->next = scope->locals;
+      scope->locals = ty->vla_size;
     } else if (strcmp(ty->vla_size->funcname, current_fn->funcname)) {
       // Came from a different function – reset so we reallocate below.
       ty->vla_size = NULL;
@@ -1464,6 +1514,7 @@ static Node *compute_vla_size(Type *ty, Token *tok)
     // Allocate a runtime variable to hold the struct/union size.
     ty->vla_size = new_lvar("", ty_ulong, NULL);
     ty->vla_size->vla_ty = ty;
+    ty->vla_size->is_read = true;
     Node *sz = new_num(0, tok);
 
     for (Member *mem = ty->members; mem; mem = mem->next) {
@@ -1490,6 +1541,7 @@ static Node *compute_vla_size(Type *ty, Token *tok)
   if (!ty->vla_size) {
     ty->vla_size = new_lvar("", ty_ulong, NULL);
     ty->vla_size->vla_ty = ty;
+    ty->vla_size->is_read = true;
   }
 
   if (ty->vla_len)
@@ -1533,6 +1585,7 @@ static void need_alloca_bottom(void) {
   //opt_omit_frame_pointer = false;
   current_fn->force_frame_pointer = true;
   current_fn->alloca_bottom = new_lvar("__alloca_size__", pointer_to(ty_char), current_fn->name);
+  current_fn->alloca_bottom->is_read = true;    
 }
 
 static Node *new_alloca(Node *sz, int align)
@@ -1618,6 +1671,9 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
       // x = alloca(tmp)`.
       
       Obj *var = new_lvar(get_ident(ty->name), ty, NULL);
+      var->is_read = true;
+      var->is_written = true;
+      var->tok = ty->name_pos;
       Token *tok = ty->name;
       tok = attribute_list(tok, ty, type_attributes);
       int var_align = MAX(decl_attr.align, ty->align);
@@ -1633,6 +1689,9 @@ static Node *declaration(Token **rest, Token *tok, Type *basety, VarAttr *attr)
     }
     
     Obj *var = new_lvar(get_ident(ty->name), ty, NULL);
+    var->is_read = true;
+    var->is_written = true;    
+    var->tok = ty->name_pos;
     if (alt_align) {
       var->align = alt_align;
       var->ty->align = MAX(var->ty->align, alt_align);
@@ -2009,6 +2068,7 @@ static void struct_initializer1(Token **rest, Token *tok, Initializer *init)
 {
   SET_CTX(ctx);          
   tok = skip(tok, "{", ctx);
+
 
   Member *mem = init->ty->members;
   bool first = true;
@@ -2400,8 +2460,8 @@ static void write_buf(char *buf, uint64_t val, int sz)
     unreachable();
 }
 
-static Relocation *
-write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int offset)
+
+static Relocation *write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int offset)
 {
   if (ty->kind == TY_ARRAY)
   {
@@ -2610,7 +2670,7 @@ static bool is_typename(Token *tok)
         "typedef", "enum", "static", "extern", "_Alignas", "signed", "unsigned",
         "const", "volatile", "auto", "register", "restrict", "__restrict",
         "__restrict__", "_Noreturn", "float", "double", "typeof", "inline", "__inline",
-        "_Thread_local", "__thread", "_Atomic", "_Complex", "__label__", "__typeof", "__int128"};
+        "_Thread_local", "__thread", "_Atomic", "_Complex", "__label__", "__typeof", "__int128", "__float128"};
 
     for (int i = 0; i < sizeof(kw) / sizeof(*kw); i++)
       hashmap_put(&map, kw[i], (void *)1);
@@ -2626,8 +2686,11 @@ static Node *asm_stmt(Token **rest, Token *tok)
   Node *node = new_node(ND_ASM, tok);
   tok = tok->next;
 
-  while (equal(tok, "volatile") || equal(tok, "inline")  || equal(tok, "__inline"))
+  while (equal(tok, "volatile") || equal(tok, "inline")  || equal(tok, "__inline")) {
+    if (equal(tok, "volatile"))
+      node->asm_is_volatile = true;
     tok = tok->next;
+  }
 
   SET_CTX(ctx);   
   tok = skip(tok, "(", ctx);
@@ -2641,7 +2704,7 @@ static Node *asm_stmt(Token **rest, Token *tok)
     if (current_fn)
       current_fn->force_frame_pointer = true;
 
-    node->asm_str = extended_asm(node, rest, tok, locals, current_fn);
+    node->asm_str = extended_asm(node, rest, tok, scope->locals, current_fn);
     if (!node->asm_str)
       error_tok(tok, "%s:%d: in %s: error during extended_asm function null returned!", __FILE__, __LINE__, __func__);
     return node;
@@ -3046,6 +3109,7 @@ static Node *compound_stmt(Token **rest, Token *tok, Node **last)
   Node head = {0};
   Node *cur = &head;
   enter_scope();
+  node->scope = scope;
 
   //while (!equal(tok, "}"))
   for (; !equal(tok, "}"); add_type(cur)) 
@@ -3113,6 +3177,7 @@ static Node *compound_stmt2(Token **rest, Token *tok)
   Node head = {};
   Node *cur = &head;
   enter_scope();
+  node->scope = scope;
   while (!equal(tok, "}") && !equal(tok, "case") && !equal(tok, "default"))
   {
     VarAttr attr = {};
@@ -3425,7 +3490,7 @@ static int64_t eval2(Node *node, char ***label)
 
     if (node->var->is_static || node->var->is_definition) {
       if (label)
-          *label = &node->var->name;
+          *label = node->var->asmname ? &node->var->asmname : &node->var->name;
       return 0;          
     }
     
@@ -3439,7 +3504,7 @@ static int64_t eval2(Node *node, char ***label)
     if (!label) {
       error_tok(node->tok, "%s:%d: in %s: not a compile-time constant %d", __FILE__, __LINE__, __func__, node->var->ty->kind);
     }
-    *label = &node->var->name;
+    *label = node->var->asmname ? &node->var->asmname : &node->var->name;
     return 0;
   case ND_NUM:
     return node->val;
@@ -3658,9 +3723,17 @@ static Node *atomic_op(Node *binary, bool return_old) {
   Node *cur = &head;
 
   Obj *addr = new_lvar("", pointer_to(binary->lhs->ty), NULL);
+  addr->is_read = true;
+  addr->is_written = true;
   Obj *val = new_lvar("", binary->rhs->ty, NULL);
+  val->is_read = true;
+  val->is_written = true;  
   Obj *old = new_lvar("", binary->lhs->ty, NULL);
+  old->is_read = true;
+  old->is_written = true;   
   Obj *new = new_lvar("", binary->lhs->ty, NULL);
+  new->is_read = true;
+  new->is_written = true; 
 
   cur = cur->next =
     new_unary(ND_EXPR_STMT,
@@ -3751,6 +3824,8 @@ static Node *to_assign(Node *binary)
   if (binary->lhs->kind == ND_MEMBER)
   {
     Obj *var = new_lvar("", pointer_to(binary->lhs->lhs->ty), NULL);
+    var->is_read = true;
+    var->is_written = true;     
     Node *expr1 = new_binary(ND_ASSIGN, new_var_node(var, tok),
                              new_unary(ND_ADDR, binary->lhs->lhs, tok), tok);
 
@@ -3774,6 +3849,8 @@ static Node *to_assign(Node *binary)
 
   // Convert `A op= B` to ``tmp = &A, *tmp = *tmp op B`.
   Obj *var = new_lvar("", pointer_to(binary->lhs->ty), NULL);
+  var->is_read = true;
+  var->is_written = true;   
   Node *expr1 = new_binary(ND_ASSIGN, new_var_node(var, tok),
                            new_unary(ND_ADDR, binary->lhs, tok), tok);
 
@@ -3852,6 +3929,8 @@ Node *conditional(Token **rest, Token *tok)
     // [GNU] Compile `a ?: b` as `tmp = a, tmp ? tmp : b`.
     add_type(cond);
     Obj *var = new_lvar("", cond->ty, NULL);
+    var->is_read = true;
+    var->is_written = true;
     Node *lhs = new_binary(ND_ASSIGN, new_var_node(var, tok), cond, tok);
     Node *rhs = new_node(ND_COND, tok);
     //commit 2e138bb from slimcc
@@ -4260,15 +4339,37 @@ static Node *cast(Token **rest, Token *tok)
       tok = tok->next;
     
     Type *tmp =  typename(&tok, tok);
+    bool has_vector_attr = tmp->is_vector && !is_vector(tmp);
+    int vector_size = tmp->vector_size;
     tok = attribute_list(start->next, tmp, type_attributes);
     start->next = tok;
     Type *ty = typename(&tok, tok);
+    if (has_vector_attr) {
+      int len = vector_size / ty->size;
+      ty = vector_of(ty, len);
+    }
     SET_CTX(ctx);         
     tok = skip(tok, ")", ctx);
     
     // compound literal
-    if (equal(tok, "{"))
-      return unary(rest, start);
+    if (equal(tok, "{")) {
+      if (scope->parent == NULL) {
+        Obj *var = new_anon_gvar(ty);
+        var->is_compound_lit = true;
+        gvar_initializer(&tok, tok, var);
+        *rest = tok;
+        return new_var_node(var, start);
+      } else {
+        Obj *var = new_lvar("", ty, NULL);
+        var->is_compound_lit = true;
+        var->is_read = true;
+        var->is_written = true;
+        Node *lhs = lvar_initializer(&tok, tok, var);
+        Node *rhs = new_var_node(var, tok);
+        *rest = tok;
+        return new_binary(ND_COMMA, lhs, rhs, start);
+      }
+    }
 
     // type cast
     Node *node = new_cast(cast(rest, tok), ty);
@@ -4679,6 +4780,11 @@ static Token *type_attributes(Token *tok, void *arg)
   if (consume(&tok, tok, "deprecated") || consume(&tok, tok, "__deprecated__") ||
       consume(&tok, tok, "may_alias") ||  consume(&tok, tok, "__may_alias__") ||
       consume(&tok, tok, "__transparent_union__") || consume(&tok, tok, "transparent_union")) {
+    return tok;
+  }
+
+  if (consume(&tok, tok, "unused") || consume(&tok, tok, "__unused__")) {
+    ty->is_unused = true;
     return tok;
   }
   
@@ -5380,8 +5486,31 @@ static Token *thing_attributes(Token *tok, void *arg) {
 
 
   if (consume(&tok, tok, "noinline") ||
-      consume(&tok, tok, "__noinline__") ||
-      consume(&tok, tok, "noclone") ||
+      consume(&tok, tok, "__noinline__")) {
+    attr->is_noinline = true;
+    return tok;
+  }
+
+  if (consume(&tok, tok, "returns_twice") ||
+      consume(&tok, tok, "__returns_twice__")) {
+    attr->is_returned_twice = true;
+    return tok;
+  }
+
+  if (consume(&tok, tok, "used") ||
+      consume(&tok, tok, "__used__")) {
+    attr->is_used = true;
+    return tok;
+  }
+
+  if (consume(&tok, tok, "unused") ||
+      consume(&tok, tok, "__unused__")) {
+    attr->is_unused = true;
+    return tok;
+  }
+
+
+  if (consume(&tok, tok, "noclone") ||
       consume(&tok, tok, "__noclone__") ||
       consume(&tok, tok, "const") ||
       consume(&tok, tok, "__const__") ||
@@ -5927,7 +6056,11 @@ static Node *new_inc_dec(Node *node, Token *tok, int addend) {
 
   if (is_bitfield(node)) {
     Obj *tmp = new_lvar("", node->ty, NULL);
+    tmp->is_read = true;
+    tmp->is_written = true;
     Obj *ptr = new_lvar("", pointer_to(node->lhs->ty), NULL);
+    ptr->is_read = true;
+    ptr->is_written = true;
 
     Node *expr = new_binary(ND_ASSIGN, new_var_node(ptr, tok),
                              new_unary(ND_ADDR, node->lhs, tok), tok);
@@ -5950,7 +6083,11 @@ static Node *new_inc_dec(Node *node, Token *tok, int addend) {
   }
 
   Obj *tmp = new_lvar("", node->ty, NULL);
+  tmp->is_read = true;
+  tmp->is_written = true;
   Obj *ptr = new_lvar("", pointer_to(node->ty), NULL);
+  ptr->is_read = true;
+  ptr->is_written = true;  
 
   Node *expr = new_binary(ND_ASSIGN, new_var_node(ptr, tok),
                           new_unary(ND_ADDR, node, tok), tok);
@@ -5991,7 +6128,7 @@ static Node *postfix(Token **rest, Token *tok)
     SET_CTX(ctx);     
     tok = skip(tok, ")", ctx);
 
-    if (scope->next == NULL)
+    if (scope->parent == NULL)
     {
       Obj *var = new_anon_gvar(ty);
       var->is_compound_lit = true;
@@ -6002,6 +6139,8 @@ static Node *postfix(Token **rest, Token *tok)
     {
       Obj *var = new_lvar("", ty, NULL);
       var->is_compound_lit = true;
+      var->is_read = true;
+      var->is_written = true;
       Node *lhs = lvar_initializer(&tok, tok, var);
       Node *rhs = new_var_node(var, tok);
       node = new_binary(ND_COMMA, lhs, rhs, start);
@@ -6134,6 +6273,10 @@ static Node *funcall(Token **rest, Token *tok, Node *fn)
     //can't be done later because param_ty will be set to the next value
     //if param_ty is null it means that it's a variadic argument.
     if (!param_ty){
+      // Mark the argument as variadic (float->double promotion) without
+      // mutating the shared function type, which would corrupt the
+      // original declaration's signature.
+      arg->ty = copy_type(arg->ty);
       arg->ty->is_variadic = true;      
     }
 
@@ -6150,6 +6293,11 @@ static Node *funcall(Token **rest, Token *tok, Node *fn)
       // If parameter type is omitted (e.g. in "..."), float
       // arguments are promoted to double.
       arg = new_cast(arg, ty_double);
+    } else if (arg->ty->kind == TY_BOOL || arg->ty->kind == TY_CHAR || arg->ty->kind == TY_SHORT)
+    {
+      // Integer promotions for variadic arguments:
+      // char, short, _Bool are promoted to int
+      arg = new_cast(arg, ty_int);
     } else if (is_array(arg->ty))
         arg = new_cast(arg, pointer_to(arg->ty->base));
     else if (arg->ty->kind == TY_FUNC)
@@ -6174,8 +6322,11 @@ static Node *funcall(Token **rest, Token *tok, Node *fn)
 
   // If a function returns a struct, it is caller's responsibility
   // to allocate a space for the return value.
-  if (node->ty->kind == TY_STRUCT || node->ty->kind == TY_UNION)
+  if (node->ty->kind == TY_STRUCT || node->ty->kind == TY_UNION) {
     node->ret_buffer = new_lvar("", node->ty, NULL);
+    node->ret_buffer->is_read = true;
+    node->ret_buffer->is_written = true;
+  }
   return node;
 }
 
@@ -6317,6 +6468,8 @@ static Node *primary(Token **rest, Token *tok)
       Node *expr = stmt->lhs;
       if (expr->ty->kind == TY_STRUCT || expr->ty->kind == TY_UNION) {
         Obj *var = new_lvar("", expr->ty, NULL);
+        var->is_read = true;
+        var->is_written = true;        
         expr = new_binary(ND_ASSIGN, new_var_node(var, tok),
                           expr, tok);
         add_type(expr);
@@ -6498,452 +6651,6 @@ static Node *primary(Token **rest, Token *tok)
     tok = skip(tok, ",", ctx);
     Node *node = assign(&tok, tok);
     SET_CTX(ctx);
-    *rest = skip(tok, ")", ctx);
-    return node;
-  }
-
-  if (equal(tok, "__builtin_rotateleft32")) {
-    SET_CTX(ctx);
-    tok = skip(tok->next, "(", ctx);
-    Node *x = assign(&tok, tok);
-    SET_CTX(ctx);
-    tok = skip(tok, ",", ctx);
-    Node *y = assign(&tok, tok);
-    SET_CTX(ctx);
-    *rest = skip(tok, ")", ctx);
-
-    Node *x_u = new_cast(x, ty_uint);
-    Node *y_u = new_cast(y, ty_uint);
-    Node *mask1 = new_num(31, start);
-    Node *mask2 = new_num(31, start);
-
-    Node *y_mask1 = new_binary(ND_BITAND, y_u, mask1, start);
-    Node *y_mask2 = new_binary(ND_BITAND, y_u, mask2, start);
-    Node *left = new_binary(ND_SHL, x_u, y_mask1, start);
-
-    Node *sub = new_binary(ND_SUB, new_num(32, start), y_mask2, start);
-    Node *sub_mask = new_binary(ND_BITAND, sub, new_num(31, start), start);
-    Node *right = new_binary(ND_SHR, x_u, sub_mask, start);
-
-    return new_binary(ND_BITOR, left, right, start);
-  }
-
-  if (equal(tok, "__builtin_rotateleft64")) {
-    SET_CTX(ctx);
-    tok = skip(tok->next, "(", ctx);
-    Node *x = assign(&tok, tok);
-    SET_CTX(ctx);
-    tok = skip(tok, ",", ctx);
-    Node *y = assign(&tok, tok);
-    SET_CTX(ctx);
-    *rest = skip(tok, ")", ctx);
-
-    Node *x_u = new_cast(x, ty_ulong);
-    Node *y_u = new_cast(y, ty_ulong);
-    Node *mask1 = new_num(63, start);
-    Node *mask2 = new_num(63, start);
-
-    Node *y_mask1 = new_binary(ND_BITAND, y_u, mask1, start);
-    Node *y_mask2 = new_binary(ND_BITAND, y_u, mask2, start);
-    Node *left = new_binary(ND_SHL, x_u, y_mask1, start);
-
-    Node *sub = new_binary(ND_SUB, new_num(64, start), y_mask2, start);
-    Node *sub_mask = new_binary(ND_BITAND, sub, new_num(63, start), start);
-    Node *right = new_binary(ND_SHR, x_u, sub_mask, start);
-
-    return new_binary(ND_BITOR, left, right, start);
-  }
-
-
- if (equal(tok, "__builtin_offsetof") || equal(tok, "offsetof")) {
-    SET_CTX(ctx);     
-    tok = skip(tok->next, "(", ctx);
-    Type *ty = typename(&tok, tok);
-    SET_CTX(ctx);       
-    tok = skip(tok, ",", ctx);
-
-    Node *node = NULL;
-    int offset = 0;
-    do {
-      Member *mem;
-      do {
-        mem = struct_designator(&tok, tok, ty);
-        offset += mem->offset;
-        ty = mem->ty;
-      } while (!mem->name);
-      SET_CTX(ctx);   
-      for (; ty->base && consume(&tok, tok, "["); tok = skip(tok, "]", ctx)) {
-        ty = ty->base;
-        Node *expr = conditional(&tok, tok);
-        if (!node)
-          node = new_binary(ND_MUL, expr, new_long(ty->size, tok), tok);
-        else
-          node = new_binary(ND_ADD, node, new_binary(ND_MUL, expr, new_long(ty->size, tok), tok), tok);
-      }
-    } while (consume(&tok, tok, "."));
-    SET_CTX(ctx);   
-    *rest = skip(tok, ")", ctx);
-    if (!node)
-      return new_ulong(offset, tok);
-    return new_binary(ND_ADD, node, new_ulong(offset, tok), tok);
-  }
-
-
-
-  //trying to fix ===== some builtin functions linked to mmx/emms
-  if (equal(tok, "__builtin_ia32_emms") ||  equal(tok, "__builtin_ia32_rdtsc") ||
-      equal(tok, "__builtin_ia32_readeflags_u64") || equal(tok, "__builtin_ia32_rdsspq") ||
-      equal(tok, "__builtin_ia32_saveprevssp") || equal(tok, "__builtin_ia32_setssbsy") ||
-      equal(tok, "__builtin_ia32_xbegin") || equal(tok, "__builtin_ia32_xend") ||
-      equal(tok, "__builtin_ia32_serialize") || equal(tok, "__builtin_ia32_xsusldtrk") ||
-      equal(tok, "__builtin_ia32_xresldtrk") || equal(tok, "__builtin_ia32_clui") ||
-      equal(tok, "__builtin_ia32_stui") || equal(tok, "__builtin_ia32_testui") ||
-      equal(tok, "__builtin_ia32_wbnoinvd") || equal(tok, "__builtin_ia32_xtest") ||
-      equal(tok, "__builtin_ia32_wbinvd") || equal(tok, "__builtin_ia32_rdpid") ||
-      equal(tok, "__builtin_ia32_slwpcb") || equal(tok, "__builtin_ia32_rdpkru") ||
-      equal(tok, "__builtin_ia32_rdfsbase32") || equal(tok, "__builtin_ia32_rdfsbase64") ||
-      equal(tok, "__builtin_ia32_rdgsbase32") || equal(tok, "__builtin_ia32_rdgsbase64") ||      
-      equal(tok, "__builtin_ia32_vzeroall") || equal(tok, "__builtin_ia32_vzeroupper") ||
-      equal(tok, "__builtin_ia32_femms") ||
-      equal(tok, "__builtin_ia32_sfence") || equal(tok, "__builtin_ia32_pause") ||
-      equal(tok, "__builtin_ia32_lfence") || equal(tok, "__builtin_ia32_mfence")) 
-  {
-    int builtin = builtin_enum(tok);
-    if (builtin != -1) {
-      Node *node = new_node(builtin, tok);
-      SET_CTX(ctx);      
-      tok = skip(tok->next, "(", ctx);
-      SET_CTX(ctx); 
-      *rest = skip(tok, ")", ctx);    
-      return node;
-    }
-  }
-
-  if (equal(tok, "__builtin_ia32_stmxcsr")) {
-    int builtin = builtin_enum(tok);
-    if (builtin != -1) {
-      Node *node = new_node(builtin, tok);    
-      SET_CTX(ctx); 
-      tok = skip(tok->next, "(", ctx);
-      if (!equal(tok, ")")) {
-        node->lhs = assign(&tok, tok); 
-        add_type(node->lhs);
-      }
-      SET_CTX(ctx); 
-      *rest = skip(tok, ")", ctx);    
-      return node;
-    }
-  }
-
-  if (equal(tok, "__builtin_ia32_cvtss2si") || equal(tok, "__builtin_ia32_cvttss2si") ||
-    equal(tok, "__builtin_ia32_cvttss2si64") || equal(tok, "__builtin_ia32_movmskps") ||
-    equal(tok, "__builtin_ia32_ldmxcsr") ||  equal(tok, "__builtin_ia32_sqrtpd") ||
-    equal(tok, "__builtin_ia32_sqrtsd") ||  equal(tok, "__builtin_ia32_movq128") ||
-    equal(tok, "__builtin_ia32_cvtdq2pd") || equal(tok, "__builtin_ia32_cvtdq2ps") ||
-    equal(tok, "__builtin_ia32_cvtpd2dq") || equal(tok, "__builtin_ia32_cvtpd2ps") ||
-    equal(tok, "__builtin_ia32_cvttpd2dq") || equal(tok, "__builtin_ia32_cvtps2dq") || 
-    equal(tok, "__builtin_ia32_cvttps2dq") || equal(tok, "__builtin_ia32_cvtps2pd") || 
-    equal(tok, "__builtin_ia32_cvtsd2si") || equal(tok, "__builtin_ia32_cvtsd2si64") || 
-    equal(tok, "__builtin_ia32_cvttsd2si") || equal(tok, "__builtin_ia32_cvttsd2si64") ||
-    equal(tok, "__builtin_ia32_movmskpd") || equal(tok, "__builtin_ia32_pmovmskb128") || 
-    equal(tok, "__builtin_ia32_cvtss2si64") || equal(tok, "__builtin_ia32_cvtps2pi") || 
-    equal(tok, "__builtin_ia32_cvttps2pi") || equal(tok, "__builtin_ia32_cvttpd2pi") || 
-    equal(tok, "__builtin_ia32_cvtpi2pd") ||  equal(tok, "__builtin_ia32_cvtpd2pi") ||
-    equal(tok, "__builtin_ia32_sqrtss") || equal(tok, "__builtin_ia32_rcpss") || 
-    equal(tok, "__builtin_ia32_rcpps") || equal(tok, "__builtin_ia32_rsqrtps") ||
-    equal(tok, "__builtin_ia32_clflush") || equal(tok, "_mm_clflush") ||
-    equal(tok, "__builtin_ia32_pmovmskb") || equal(tok, "__builtin_ia32_sqrtps") || 
-    equal(tok, "__builtin_parity") || equal(tok, "__builtin_parityl") ||
-    equal(tok, "__builtin_parityll") || equal(tok, "__builtin_ia32_movshdup") ||
-    equal(tok, "__builtin_ia32_movsldup") || equal(tok, "__builtin_ia32_lddqu") ||
-    equal(tok, "__builtin_ia32_pabsb128") || equal(tok, "__builtin_ia32_pabsw128") || 
-    equal(tok, "__builtin_ia32_pabsd128") || equal(tok, "__builtin_ia32_pabsb") || 
-    equal(tok, "__builtin_ia32_pabsw") || equal(tok, "__builtin_ia32_pabsd") ||
-    equal(tok, "__builtin_ia32_phminposuw128") || equal(tok, "__builtin_ia32_pmovsxbd128") ||
-    equal(tok, "__builtin_ia32_pmovsxwd128") || equal(tok, "__builtin_ia32_pmovsxbq128") || 
-    equal(tok, "__builtin_ia32_pmovsxdq128") || equal(tok, "__builtin_ia32_pmovsxwq128") ||
-    equal(tok, "__builtin_ia32_pmovsxbw128") || equal(tok, "__builtin_ia32_pmovzxbd128") ||
-    equal(tok, "__builtin_ia32_pmovzxwd128") || equal(tok, "__builtin_ia32_pmovzxbq128") || 
-    equal(tok, "__builtin_ia32_pmovzxdq128") || equal(tok, "__builtin_ia32_pmovzxwq128") ||
-    equal(tok, "__builtin_ia32_pmovzxbw128") || equal(tok, "__builtin_ia32_movntdqa") ||
-    equal(tok, "__builtin_ia32_bsrsi") || equal(tok, "__builtin_ia32_rdpmc") ||
-    equal(tok, "__builtin_ia32_bsrdi") || equal(tok, "__builtin_ia32_rdtscp") ||
-    equal(tok, "__builtin_ia32_writeeflags_u64") || equal(tok, "__builtin_ia32_incsspq") ||
-    equal(tok, "__builtin_ia32_rstorssp") || equal(tok, "__builtin_ia32_clrssbsy") || 
-    equal(tok, "__builtin_ia32_rsqrtss") || equal(tok, "__builtin_ia32_tzcnt_u16") || 
-    equal(tok, "__builtin_ia32_si256_si") || equal(tok, "__builtin_ia32_si_si256") ||
-    equal(tok, "__builtin_ia32_pd_pd256") || equal(tok, "__builtin_ia32_ps_ps256") ||
-    equal(tok, "__builtin_stdc_bit_ceil")) {
-    int builtin = builtin_enum(tok);
-    if (builtin != -1) {
-      Node *node = new_node(builtin, tok);    
-      SET_CTX(ctx); 
-      tok = skip(tok->next, "(", ctx);
-      node->lhs = assign(&tok, tok);
-      add_type(node->lhs);
-      SET_CTX(ctx); 
-      *rest = skip(tok, ")", ctx);
-      return node;
-    }
-
-  }
-   
-  if (equal(tok, "__builtin_ia32_pblendvb128") || 
-      equal(tok, "__builtin_ia32_blendvpd") ||
-      equal(tok, "__builtin_ia32_blendvps") ||
-      equal(tok, "__builtin_ia32_pcmpgtb256_mask") ||
-      equal(tok, "__builtin_ia32_pblendvb256") ||
-      equal(tok, "__builtin_ia32_vinsertf128_si256") ||
-      equal(tok, "__builtin_ia32_palignr256") ||
-      equal(tok, "__builtin_ia32_permti256") ||
-      equal(tok, "__builtin_ia32_pblendd256"))
-  {
-    int builtin = builtin_enum(tok);
-    if (builtin != -1) {
-      Node *node = new_node(builtin, tok);
-      SET_CTX(ctx); 
-      tok = skip(tok->next, "(", ctx);
-      node->builtin_args[0] = assign(&tok, tok);
-      add_type(node->builtin_args[0]);
-      SET_CTX(ctx); 
-      tok = skip(tok, ",", ctx);
-      node->builtin_args[1] = assign(&tok, tok);
-      add_type(node->builtin_args[1]);
-      SET_CTX(ctx); 
-      tok = skip(tok, ",", ctx);
-      node->builtin_args[2] = assign(&tok, tok);
-      add_type(node->builtin_args[2]);
-      node->builtin_nargs = 3;
-      SET_CTX(ctx);       
-      *rest = skip(tok, ")", ctx);
-    return node;
-    }
-  }
-
-
-  //builtin shuffle can have two forms : 
-  //builtin_shuffle(a, b, mask) or
-  //builtin_shuffle(a, mask)  where B defaults to A
-  if (equal(tok, "__builtin_shuffle")) {
-    int builtin = builtin_enum(tok);
-    if (builtin != -1) {
-      Node *node = new_node(builtin, tok);
-      SET_CTX(ctx);
-      tok = skip(tok->next, "(", ctx);
-      Node *a = assign(&tok, tok);
-      add_type(a);
-      SET_CTX(ctx);
-      tok = skip(tok, ",", ctx);
-      Node *second = assign(&tok, tok);
-      add_type(second);
-      SET_CTX(ctx);
-      if (equal(tok, ",")) {
-        tok = tok->next;
-        Node *mask = assign(&tok, tok);
-        add_type(mask);
-        node->builtin_args[0] = a;
-        node->builtin_args[1] = second;
-        node->builtin_args[2] = mask;
-      } else {
-        node->builtin_args[0] = a;
-        node->builtin_args[1] = a;      
-        node->builtin_args[2] = second; 
-      }
-      node->builtin_nargs = 3;
-      SET_CTX(ctx);
-      *rest = skip(tok, ")", ctx);
-      return node;
-    }
-  }
-
-
-  if (equal(tok, "__builtin_ia32_maskmovq"))
-  {   
-    int builtin = builtin_enum(tok);
-    if (builtin != -1) {
-      Node *node = new_node(builtin, tok);
-      SET_CTX(ctx); 
-      tok = skip(tok->next, "(", ctx);
-      node->builtin_args[0] = assign(&tok, tok);
-      add_type(node->builtin_args[0]);
-      SET_CTX(ctx); 
-      tok = skip(tok, ",", ctx);
-      node->builtin_args[1] = assign(&tok, tok);
-      add_type(node->builtin_args[1]);
-      SET_CTX(ctx); 
-      tok = skip(tok, ",", ctx);
-      node->builtin_args[2] = assign(&tok, tok);
-      add_type(node->builtin_args[2]);
-      node->builtin_nargs = 3;
-      SET_CTX(ctx);       
-      *rest = skip(tok, ")", ctx);
-    return node;
-    }
-  }
-
-  if (equal(tok, "__builtin_ia32_monitor") || equal(tok, "__builtin_ia32_mwait")) {
-    int builtin = builtin_enum(tok);
-    if (builtin != -1) {
-        Node *node = new_node(builtin, tok);
-        SET_CTX(ctx); 
-        tok = skip(tok->next, "(", ctx);
-        node->builtin_args[0] = assign(&tok, tok);
-        add_type(node->builtin_args[0]);
-        tok = skip(tok, ",", ctx);
-        node->builtin_args[1] = assign(&tok, tok);
-        add_type(node->builtin_args[1]);
-        if (builtin == ND_MONITOR) { // third argument only for monitor
-            tok = skip(tok, ",", ctx);
-            node->builtin_args[2] = assign(&tok, tok);
-            add_type(node->builtin_args[2]);
-            node->builtin_nargs = 3;
-        } else {
-            node->builtin_nargs = 2;
-        }
-        SET_CTX(ctx);       
-        *rest = skip(tok, ")", ctx);
-        return node;
-    }
-  }
-
-  
-    
-  if (equal(tok, "__builtin_ia32_maskmovdqu") || equal(tok, "__builtin_prefetch"))
-  {
-    int builtin = builtin_enum(tok);
-    if (builtin != -1) {
-      Node *node = new_node(builtin, tok);
-      SET_CTX(ctx); 
-      tok = skip(tok->next, "(", ctx);
-      node->builtin_args[0] = assign(&tok, tok);
-      add_type(node->builtin_args[0]);
-      int nargs = 1;
-      while (equal(tok, ",")) {
-          tok = tok->next;
-          if (nargs < 16) {
-              node->builtin_args[nargs] = assign(&tok, tok);
-              add_type(node->builtin_args[nargs]);
-              nargs++;
-          } else {
-              error_tok(tok, "too many arguments to builtin");
-          }
-      }
-      node->builtin_nargs = nargs;
-      SET_CTX(ctx);       
-      *rest = skip(tok, ")", ctx);
-    return node;
-    }
-  }
-    
-
-  if (equal(tok, "__builtin_ia32_vec_init_v4hi") || equal(tok, "__builtin_ia32_sbb_u32") || 
-    equal(tok, "__builtin_ia32_addcarryx_u32") || equal(tok, "__builtin_ia32_sbb_u64") || 
-    equal(tok, "__builtin_ia32_addcarryx_u64"))
-  {
-    int builtin = builtin_enum(tok);
-    if (builtin != -1) {
-      Node *node = new_node(builtin, tok);
-      SET_CTX(ctx); 
-      tok = skip(tok->next, "(", ctx);
-      node->builtin_args[0] = assign(&tok, tok);
-      add_type(node->builtin_args[0]);
-      SET_CTX(ctx); 
-      tok = skip(tok, ",", ctx);
-      node->builtin_args[1] = assign(&tok, tok);
-      add_type(node->builtin_args[1]);
-      SET_CTX(ctx); 
-      tok = skip(tok, ",", ctx);
-      node->builtin_args[2] = assign(&tok, tok);
-      add_type(node->builtin_args[2]);
-      SET_CTX(ctx); 
-      tok = skip(tok, ",", ctx);
-      node->builtin_args[3] = assign(&tok, tok);
-      add_type(node->builtin_args[3]);
-      node->builtin_nargs = 4;
-      SET_CTX(ctx);       
-      *rest = skip(tok, ")", ctx);
-    return node;
-    }
-  }
-
-     
-  if (equal(tok, "__builtin_ia32_shufps") || equal(tok, "__builtin_ia32_shufpd"))
-  {
-    int builtin = builtin_enum(tok);
-    if (builtin != -1) {
-      Node *node = new_node(builtin, tok);
-      SET_CTX(ctx); 
-      tok = skip(tok->next, "(", ctx);
-      node->lhs = assign(&tok, tok);
-      add_type(node->lhs);
-      SET_CTX(ctx); 
-      tok = skip(tok, ",", ctx);
-      node->rhs = assign(&tok, tok);
-      add_type(node->rhs);
-      SET_CTX(ctx); 
-      tok = skip(tok, ",", ctx);
-      node->rhs->val = const_expr(&tok, tok);
-      SET_CTX(ctx);       
-      *rest = skip(tok, ")", ctx);
-    return node;
-    }
-  }
-
-  if (equal(tok, "__builtin_ia32_vec_init_v8qi"))
-  {
-    int builtin = builtin_enum(tok);
-    if (builtin != -1) {
-      Node *node = new_node(builtin, tok);
-      SET_CTX(ctx); 
-      tok = skip(tok->next, "(", ctx);
-      node->builtin_args[0] = assign(&tok, tok);
-      add_type(node->builtin_args[0]);
-      SET_CTX(ctx); 
-      tok = skip(tok, ",", ctx);
-      node->builtin_args[1] = assign(&tok, tok);
-      add_type(node->builtin_args[1]);
-      SET_CTX(ctx); 
-      tok = skip(tok, ",", ctx);
-      node->builtin_args[2] = assign(&tok, tok);
-      add_type(node->builtin_args[2]);
-      SET_CTX(ctx); 
-      tok = skip(tok, ",", ctx);
-      node->builtin_args[3] = assign(&tok, tok);
-      add_type(node->builtin_args[3]);
-      tok = skip(tok, ",", ctx);
-      node->builtin_args[4] = assign(&tok, tok);
-      add_type(node->builtin_args[4]);
-      tok = skip(tok, ",", ctx);
-      node->builtin_args[5] = assign(&tok, tok);
-      add_type(node->builtin_args[5]);   
-      tok = skip(tok, ",", ctx);
-      node->builtin_args[6] = assign(&tok, tok);
-      add_type(node->builtin_args[6]); 
-      tok = skip(tok, ",", ctx);
-      node->builtin_args[7] = assign(&tok, tok);
-      add_type(node->builtin_args[7]);                  
-      node->builtin_nargs = 8;      
-      SET_CTX(ctx);       
-      *rest = skip(tok, ")", ctx);
-    return node;
-    }
-  }
-
-
-  //managing lots of  builtin_ia32 that needs two args
-  // defined in builtin_table[]
-  int builtin = builtin_enum(tok);
-  if (builtin != -1) {
-    Node *node = new_node(builtin, tok);
-    SET_CTX(ctx); 
-    tok = skip(tok->next, "(", ctx);
-    node->lhs = assign(&tok, tok);
-    add_type(node->lhs);
-    SET_CTX(ctx); 
-    tok = skip(tok, ",", ctx);
-    node->rhs = assign(&tok, tok);
-    add_type(node->rhs);
-    SET_CTX(ctx); 
     *rest = skip(tok, ")", ctx);
     return node;
   }
@@ -7209,12 +6916,20 @@ static Node *primary(Token **rest, Token *tok)
 
   if (equal(tok, "__builtin_stdc_trailing_zeros"))
   {
-    return ParseBuiltin(ND_BUILTIN_CTZLL, tok, rest);
+    Node *node = ParseBuiltin(ND_BUILTIN_CTZLL, tok, rest);
+    node->builtin_val = new_cast(node->builtin_val, ty_ulong);
+    add_type(node->builtin_val);
+    add_type(node);
+    return node;
   }
 
   if (equal(tok, "__builtin_stdc_count_ones"))
   {
-    return ParseBuiltin(ND_POPCOUNTLL, tok, rest);
+    Node *node = ParseBuiltin(ND_POPCOUNTLL, tok, rest);
+    node->builtin_val = new_cast(node->builtin_val, ty_ulong);
+    add_type(node->builtin_val);
+    add_type(node);
+    return node;
   }
 
   if (equal(tok, "__builtin_stdc_has_single_bit"))
@@ -7241,6 +6956,9 @@ static Node *primary(Token **rest, Token *tok)
 
     add_type(arg);
     Obj *var = new_lvar("", ty_ulong, NULL);
+    var->is_read = true;
+    var->is_written = true;        
+
     Node *init = new_unary(ND_EXPR_STMT, new_binary(ND_ASSIGN, new_var_node(var, start), new_cast(arg, ty_ulong), start), start);
     
     Node *clz = new_node(ND_BUILTIN_CLZLL, start);
@@ -7255,6 +6973,30 @@ static Node *primary(Token **rest, Token *tok)
     node->body = init;
     init->next = new_unary(ND_EXPR_STMT, cond_node, start);
     return node;
+  }
+
+  if (equal(tok, "__builtin_ceil")) {
+      return ParseBuiltin(ND_BUILTIN_CEIL, tok, rest);
+  }
+
+  if (equal(tok, "__builtin_floor")) {
+      return ParseBuiltin(ND_BUILTIN_FLOOR, tok, rest);
+  }
+
+  if (equal(tok, "__builtin_ceilf")) {
+      return ParseBuiltin(ND_BUILTIN_CEILF, tok, rest);
+  }
+
+  if (equal(tok, "__builtin_floorf")) {
+      return ParseBuiltin(ND_BUILTIN_FLOORF, tok, rest);
+  }
+
+  if (equal(tok, "__builtin_ceill")) {
+      return ParseBuiltin(ND_BUILTIN_CEILL, tok, rest);
+  }
+
+  if (equal(tok, "__builtin_floorl")) {
+      return ParseBuiltin(ND_BUILTIN_FLOORL, tok, rest);
   }
 
   if (equal(tok, "__builtin_bswap16")) {
@@ -7408,11 +7150,11 @@ static Node *primary(Token **rest, Token *tok)
     node->lhs = assign(&tok, tok);
     add_type(node->lhs);
 
-    // __builtin_frame_address(0) doesn't need a frame pointer; it
-    // can be served from %rsp when frames are omitted.  Only force
-    // one when the level is non-zero or not a compile-time constant.
-    if (current_fn &&
-        (node->lhs->kind != ND_NUM || node->lhs->val != 0))
+    // Always force a frame pointer when __builtin_frame_address is used,
+    // matching GCC behaviour: frame_address(0) returns %rbp, not %rsp.
+    // Walking the frame chain (level >= 1) only works when every function
+    // in the chain has a real frame pointer.
+    if (current_fn)
       current_fn->force_frame_pointer = true;
 
     SET_CTX(ctx); 
@@ -7673,17 +7415,595 @@ static Node *primary(Token **rest, Token *tok)
     return to_assign(node);
   }
 
-  // Handle __builtin_huge_valf
-  if (equal(tok, "__builtin_huge_valf")) {
-    return parse_huge_val(HUGE_VALF, tok, rest);
+
+  if (equal(tok, "__builtin_rotateleft32")) {
+    SET_CTX(ctx);
+    tok = skip(tok->next, "(", ctx);
+    Node *x = assign(&tok, tok);
+    SET_CTX(ctx);
+    tok = skip(tok, ",", ctx);
+    Node *y = assign(&tok, tok);
+    SET_CTX(ctx);
+    *rest = skip(tok, ")", ctx);
+
+    Node *x_u = new_cast(x, ty_uint);
+    Node *y_u = new_cast(y, ty_uint);
+    Node *mask1 = new_num(31, start);
+    Node *mask2 = new_num(31, start);
+
+    Node *y_mask1 = new_binary(ND_BITAND, y_u, mask1, start);
+    Node *y_mask2 = new_binary(ND_BITAND, y_u, mask2, start);
+    Node *left = new_binary(ND_SHL, x_u, y_mask1, start);
+
+    Node *sub = new_binary(ND_SUB, new_num(32, start), y_mask2, start);
+    Node *sub_mask = new_binary(ND_BITAND, sub, new_num(31, start), start);
+    Node *right = new_binary(ND_SHR, x_u, sub_mask, start);
+
+    return new_binary(ND_BITOR, left, right, start);
   }
-  // Handle __builtin_huge_vall
-  if (equal(tok, "__builtin_huge_vall")) {
-    return parse_huge_val(HUGE_VALL, tok, rest);
+
+  if (equal(tok, "__builtin_rotateleft64")) {
+    SET_CTX(ctx);
+    tok = skip(tok->next, "(", ctx);
+    Node *x = assign(&tok, tok);
+    SET_CTX(ctx);
+    tok = skip(tok, ",", ctx);
+    Node *y = assign(&tok, tok);
+    SET_CTX(ctx);
+    *rest = skip(tok, ")", ctx);
+
+    Node *x_u = new_cast(x, ty_ulong);
+    Node *y_u = new_cast(y, ty_ulong);
+    Node *mask1 = new_num(63, start);
+    Node *mask2 = new_num(63, start);
+
+    Node *y_mask1 = new_binary(ND_BITAND, y_u, mask1, start);
+    Node *y_mask2 = new_binary(ND_BITAND, y_u, mask2, start);
+    Node *left = new_binary(ND_SHL, x_u, y_mask1, start);
+
+    Node *sub = new_binary(ND_SUB, new_num(64, start), y_mask2, start);
+    Node *sub_mask = new_binary(ND_BITAND, sub, new_num(63, start), start);
+    Node *right = new_binary(ND_SHR, x_u, sub_mask, start);
+
+    return new_binary(ND_BITOR, left, right, start);
   }
-  // Handle __builtin_huge_val
-  if (equal(tok, "__builtin_huge_val")) {
-    return parse_huge_val(HUGE_VAL, tok, rest);
+
+
+ if (equal(tok, "__builtin_offsetof") || equal(tok, "offsetof")) {
+    SET_CTX(ctx);     
+    tok = skip(tok->next, "(", ctx);
+    Type *ty = typename(&tok, tok);
+    SET_CTX(ctx);       
+    tok = skip(tok, ",", ctx);
+
+    Node *node = NULL;
+    int offset = 0;
+    do {
+      Member *mem;
+      do {
+        mem = struct_designator(&tok, tok, ty);
+        offset += mem->offset;
+        ty = mem->ty;
+      } while (!mem->name);
+      SET_CTX(ctx);   
+      for (; ty->base && consume(&tok, tok, "["); tok = skip(tok, "]", ctx)) {
+        ty = ty->base;
+        Node *expr = conditional(&tok, tok);
+        if (!node)
+          node = new_binary(ND_MUL, expr, new_long(ty->size, tok), tok);
+        else
+          node = new_binary(ND_ADD, node, new_binary(ND_MUL, expr, new_long(ty->size, tok), tok), tok);
+      }
+    } while (consume(&tok, tok, "."));
+    SET_CTX(ctx);   
+    *rest = skip(tok, ")", ctx);
+    if (!node)
+      return new_ulong(offset, tok);
+    return new_binary(ND_ADD, node, new_ulong(offset, tok), tok);
+  }
+
+
+
+  //trying to fix ===== some builtin functions linked to mmx/emms
+  if (equal(tok, "__builtin_ia32_emms") ||  equal(tok, "__builtin_ia32_rdtsc") ||
+      equal(tok, "__builtin_ia32_readeflags_u64") || equal(tok, "__builtin_ia32_rdsspq") ||
+      equal(tok, "__builtin_ia32_saveprevssp") || equal(tok, "__builtin_ia32_setssbsy") ||
+      equal(tok, "__builtin_ia32_xbegin") || equal(tok, "__builtin_ia32_xend") ||
+      equal(tok, "__builtin_ia32_serialize") || equal(tok, "__builtin_ia32_xsusldtrk") ||
+      equal(tok, "__builtin_ia32_xresldtrk") || equal(tok, "__builtin_ia32_clui") ||
+      equal(tok, "__builtin_ia32_stui") || equal(tok, "__builtin_ia32_testui") ||
+      equal(tok, "__builtin_ia32_wbnoinvd") || equal(tok, "__builtin_ia32_xtest") ||
+      equal(tok, "__builtin_ia32_wbinvd") || equal(tok, "__builtin_ia32_rdpid") ||
+      equal(tok, "__builtin_ia32_slwpcb") || equal(tok, "__builtin_ia32_rdpkru") ||
+      equal(tok, "__builtin_ia32_rdfsbase32") || equal(tok, "__builtin_ia32_rdfsbase64") ||
+      equal(tok, "__builtin_ia32_rdgsbase32") || equal(tok, "__builtin_ia32_rdgsbase64") ||      
+      equal(tok, "__builtin_ia32_vzeroall") || equal(tok, "__builtin_ia32_vzeroupper") ||
+      equal(tok, "__builtin_ia32_femms") ||
+      equal(tok, "__builtin_ia32_sfence") || equal(tok, "__builtin_ia32_pause") ||
+      equal(tok, "__builtin_ia32_lfence") || equal(tok, "__builtin_ia32_mfence")) 
+  {
+    int builtin = builtin_enum(tok);
+    if (builtin != -1) {
+      Node *node = new_node(builtin, tok);
+      SET_CTX(ctx);      
+      tok = skip(tok->next, "(", ctx);
+      SET_CTX(ctx); 
+      *rest = skip(tok, ")", ctx);    
+      return node;
+    }
+  }
+
+  if (equal(tok, "__builtin_ia32_stmxcsr")) {
+    int builtin = builtin_enum(tok);
+    if (builtin != -1) {
+      Node *node = new_node(builtin, tok);    
+      SET_CTX(ctx); 
+      tok = skip(tok->next, "(", ctx);
+      if (!equal(tok, ")")) {
+        node->lhs = assign(&tok, tok); 
+        add_type(node->lhs);
+      }
+      SET_CTX(ctx); 
+      *rest = skip(tok, ")", ctx);    
+      return node;
+    }
+  }
+
+  if (equal(tok, "__builtin_ia32_cvtss2si") || equal(tok, "__builtin_ia32_cvttss2si") ||
+    equal(tok, "__builtin_ia32_cvttss2si64") || equal(tok, "__builtin_ia32_movmskps") ||
+    equal(tok, "__builtin_ia32_ldmxcsr") ||  equal(tok, "__builtin_ia32_sqrtpd") ||
+    equal(tok, "__builtin_ia32_sqrtsd") ||  equal(tok, "__builtin_ia32_movq128") ||
+    equal(tok, "__builtin_ia32_cvtdq2pd") || equal(tok, "__builtin_ia32_cvtdq2ps") ||
+    equal(tok, "__builtin_ia32_cvtpd2dq") || equal(tok, "__builtin_ia32_cvtpd2ps") ||
+    equal(tok, "__builtin_ia32_cvttpd2dq") || equal(tok, "__builtin_ia32_cvtps2dq") || 
+    equal(tok, "__builtin_ia32_cvttps2dq") || equal(tok, "__builtin_ia32_cvtps2pd") || 
+    equal(tok, "__builtin_ia32_cvtsd2si") || equal(tok, "__builtin_ia32_cvtsd2si64") || 
+    equal(tok, "__builtin_ia32_cvttsd2si") || equal(tok, "__builtin_ia32_cvttsd2si64") ||
+    equal(tok, "__builtin_ia32_movmskpd") || equal(tok, "__builtin_ia32_pmovmskb128") || equal(tok, "__builtin_ia32_pmovmskb256") || 
+    equal(tok, "__builtin_ia32_cvtss2si64") || equal(tok, "__builtin_ia32_cvtps2pi") || 
+    equal(tok, "__builtin_ia32_cvttps2pi") || equal(tok, "__builtin_ia32_cvttpd2pi") || 
+    equal(tok, "__builtin_ia32_cvtpi2pd") ||  equal(tok, "__builtin_ia32_cvtpd2pi") ||
+    equal(tok, "__builtin_ia32_sqrtss") || equal(tok, "__builtin_ia32_rcpss") || 
+    equal(tok, "__builtin_ia32_rcpps") || equal(tok, "__builtin_ia32_rsqrtps") ||
+    equal(tok, "__builtin_ia32_clflush") || equal(tok, "_mm_clflush") ||
+    equal(tok, "__builtin_ia32_pmovmskb") || equal(tok, "__builtin_ia32_sqrtps") || 
+    equal(tok, "__builtin_parity") || equal(tok, "__builtin_parityl") ||
+    equal(tok, "__builtin_parityll") || equal(tok, "__builtin_ia32_movshdup") ||
+    equal(tok, "__builtin_ia32_movsldup") || equal(tok, "__builtin_ia32_lddqu") ||
+    equal(tok, "__builtin_ia32_pabsb128") || equal(tok, "__builtin_ia32_pabsw128") || 
+    equal(tok, "__builtin_ia32_pabsd128") || equal(tok, "__builtin_ia32_pabsb") || 
+    equal(tok, "__builtin_ia32_pabsw") || equal(tok, "__builtin_ia32_pabsd") ||
+    equal(tok, "__builtin_ia32_phminposuw128") || equal(tok, "__builtin_ia32_pmovsxbd128") ||
+    equal(tok, "__builtin_ia32_pmovsxwd128") || equal(tok, "__builtin_ia32_pmovsxbq128") || 
+    equal(tok, "__builtin_ia32_pmovsxdq128") || equal(tok, "__builtin_ia32_pmovsxwq128") ||
+    equal(tok, "__builtin_ia32_pmovsxbw128") || equal(tok, "__builtin_ia32_pmovzxbd128") ||
+    equal(tok, "__builtin_ia32_pmovzxwd128") || equal(tok, "__builtin_ia32_pmovzxbq128") || 
+    equal(tok, "__builtin_ia32_pmovzxdq128") || equal(tok, "__builtin_ia32_pmovzxwq128") ||
+    equal(tok, "__builtin_ia32_pmovzxbw128") || equal(tok, "__builtin_ia32_movntdqa") ||
+    equal(tok, "__builtin_ia32_bsrsi") || equal(tok, "__builtin_ia32_rdpmc") ||
+    equal(tok, "__builtin_ia32_bsrdi") || equal(tok, "__builtin_ia32_rdtscp") ||
+    equal(tok, "__builtin_ia32_writeeflags_u64") || equal(tok, "__builtin_ia32_incsspq") ||
+    equal(tok, "__builtin_ia32_xabort") || equal(tok, "__builtin_ia32_rstorssp") || equal(tok, "__builtin_ia32_clrssbsy") || 
+    equal(tok, "__builtin_ia32_rsqrtss") || equal(tok, "__builtin_ia32_tzcnt_u16") || 
+    equal(tok, "__builtin_ia32_si256_si") || equal(tok, "__builtin_ia32_si_si256") ||
+    equal(tok, "__builtin_ia32_pd_pd256") || equal(tok, "__builtin_ia32_ps_ps256") ||
+    equal(tok, "__builtin_stdc_bit_ceil")) {
+    int builtin = builtin_enum(tok);
+    if (builtin != -1) {
+      Node *node = new_node(builtin, tok);    
+      SET_CTX(ctx); 
+      tok = skip(tok->next, "(", ctx);
+      node->lhs = assign(&tok, tok);
+      add_type(node->lhs);
+      SET_CTX(ctx); 
+      *rest = skip(tok, ")", ctx);
+      return node;
+    }
+
+  }
+   
+  if (equal(tok, "__builtin_ia32_pblendvb128") || 
+      equal(tok, "__builtin_ia32_blendvpd") ||
+      equal(tok, "__builtin_ia32_blendvps") ||
+      equal(tok, "__builtin_ia32_blendps") ||
+      equal(tok, "__builtin_ia32_blendpd") ||
+      equal(tok, "__builtin_ia32_blendps256") ||
+      equal(tok, "__builtin_ia32_blendpd256") ||
+      equal(tok, "__builtin_ia32_dpps") ||
+      equal(tok, "__builtin_ia32_dppd") ||
+      equal(tok, "__builtin_ia32_insertps128") ||
+      equal(tok, "__builtin_ia32_mpsadbw128") ||
+      equal(tok, "__builtin_ia32_mpsadbw256") ||
+      equal(tok, "__builtin_ia32_pcmpgtb256_mask") ||
+      equal(tok, "__builtin_ia32_pblendvb256") ||
+      equal(tok, "__builtin_ia32_vinsertf128_si256") ||
+      equal(tok, "__builtin_ia32_palignr256") ||
+      equal(tok, "__builtin_ia32_palignr128") ||
+      equal(tok, "__builtin_ia32_palignr") ||
+      equal(tok, "__builtin_ia32_permti256") ||
+      equal(tok, "__builtin_ia32_pblendd256") ||
+      equal(tok, "__builtin_ia32_roundsd") ||
+      equal(tok, "__builtin_ia32_roundss") ||
+      equal(tok, "__builtin_ia32_pblendw128") ||
+      equal(tok, "__builtin_ia32_vec_set_v4hi") ||
+      equal(tok, "__builtin_ia32_vec_set_v8hi") ||
+      equal(tok, "__builtin_ia32_vec_set_v16qi") ||
+      equal(tok, "__builtin_ia32_vec_set_v4si") ||
+      equal(tok, "__builtin_ia32_vec_set_v2di") ||
+      equal(tok, "__builtin_ia32_pcmpistrm128") ||
+      equal(tok, "__builtin_ia32_pcmpistri128") ||
+      equal(tok, "__builtin_ia32_pcmpistria128") ||
+      equal(tok, "__builtin_ia32_pcmpistric128") ||
+      equal(tok, "__builtin_ia32_pcmpistrio128") ||
+      equal(tok, "__builtin_ia32_pcmpistris128") ||
+      equal(tok, "__builtin_ia32_pcmpistriz128") ||
+      equal(tok, "__builtin_ia32_pclmulqdq128") ||
+      equal(tok, "__builtin_ia32_dpps256") ||
+      equal(tok, "__builtin_ia32_shufpd256") ||
+      equal(tok, "__builtin_ia32_shufps256") ||
+      equal(tok, "__builtin_ia32_cmppd") ||
+      equal(tok, "__builtin_ia32_cmpps") ||
+      equal(tok, "__builtin_ia32_cmppd256") ||
+      equal(tok, "__builtin_ia32_cmpps256") ||
+      equal(tok, "__builtin_ia32_cmpsd") ||
+      equal(tok, "__builtin_ia32_cmpss") ||
+      equal(tok, "__builtin_ia32_vinsertf128_pd256") ||
+      equal(tok, "__builtin_ia32_vinsertf128_ps256") ||
+      equal(tok, "__builtin_ia32_vperm2f128_pd256") ||
+      equal(tok, "__builtin_ia32_vperm2f128_ps256") ||
+      equal(tok, "__builtin_ia32_vperm2f128_si256") ||
+      equal(tok, "__builtin_ia32_vpclmulqdq_v4di") ||
+      equal(tok, "__builtin_ia32_vpclmulqdq_v8di") ||
+      equal(tok, "__builtin_ia32_rcp28sd_round") ||
+      equal(tok, "__builtin_ia32_rcp28ss_round") ||
+      equal(tok, "__builtin_ia32_rsqrt28sd_round") ||
+      equal(tok, "__builtin_ia32_rsqrt28ss_round") ||
+      equal(tok, "__builtin_ia32_vpshrd_v32hi") ||
+      equal(tok, "__builtin_ia32_vpshrd_v16si") ||
+      equal(tok, "__builtin_ia32_vpshrd_v8di") ||
+      equal(tok, "__builtin_ia32_vpshld_v32hi") ||
+      equal(tok, "__builtin_ia32_vpshld_v16si") ||
+      equal(tok, "__builtin_ia32_vpshld_v8di"))
+  {
+    int builtin = builtin_enum(tok);
+    if (builtin != -1) {
+      Node *node = new_node(builtin, tok);
+      SET_CTX(ctx); 
+      tok = skip(tok->next, "(", ctx);
+      node->builtin_args[0] = assign(&tok, tok);
+      add_type(node->builtin_args[0]);
+      SET_CTX(ctx); 
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[1] = assign(&tok, tok);
+      add_type(node->builtin_args[1]);
+      SET_CTX(ctx); 
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[2] = assign(&tok, tok);
+      add_type(node->builtin_args[2]);
+      node->builtin_nargs = 3;
+      SET_CTX(ctx);       
+      *rest = skip(tok, ")", ctx);
+    return node;
+    }
+  }
+
+  if (equal(tok, "__builtin_ia32_exp2pd_mask") ||
+      equal(tok, "__builtin_ia32_exp2ps_mask") ||
+      equal(tok, "__builtin_ia32_rcp28pd_mask") ||
+      equal(tok, "__builtin_ia32_rcp28ps_mask") ||
+      equal(tok, "__builtin_ia32_rsqrt28pd_mask") ||
+      equal(tok, "__builtin_ia32_rsqrt28ps_mask"))
+  {
+    int builtin = builtin_enum(tok);
+    if (builtin != -1) {
+      Node *node = new_node(builtin, tok);
+      SET_CTX(ctx);
+      tok = skip(tok->next, "(", ctx);
+      node->builtin_args[0] = assign(&tok, tok);
+      add_type(node->builtin_args[0]);
+      SET_CTX(ctx);
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[1] = assign(&tok, tok);
+      add_type(node->builtin_args[1]);
+      SET_CTX(ctx);
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[2] = assign(&tok, tok);
+      add_type(node->builtin_args[2]);
+      SET_CTX(ctx);
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[3] = assign(&tok, tok);
+      add_type(node->builtin_args[3]);
+      node->builtin_nargs = 4;
+      SET_CTX(ctx);
+      *rest = skip(tok, ")", ctx);
+      return node;
+    }
+  }
+
+  if (equal(tok, "__builtin_ia32_pcmpestrm128") ||
+      equal(tok, "__builtin_ia32_pcmpestri128") ||
+      equal(tok, "__builtin_ia32_pcmpestria128") ||
+      equal(tok, "__builtin_ia32_pcmpestric128") ||
+      equal(tok, "__builtin_ia32_pcmpestrio128") ||
+      equal(tok, "__builtin_ia32_pcmpestris128") ||
+      equal(tok, "__builtin_ia32_pcmpestriz128") ||
+      equal(tok, "__builtin_ia32_gatherpfdpd") ||
+      equal(tok, "__builtin_ia32_gatherpfdps") ||
+      equal(tok, "__builtin_ia32_gatherpfqpd") ||
+      equal(tok, "__builtin_ia32_gatherpfqps") ||
+      equal(tok, "__builtin_ia32_scatterpfdpd") ||
+      equal(tok, "__builtin_ia32_scatterpfdps") ||
+      equal(tok, "__builtin_ia32_scatterpfqpd") ||
+      equal(tok, "__builtin_ia32_scatterpfqps") ||
+      equal(tok, "__builtin_ia32_vpshrd_v16si_mask") ||
+      equal(tok, "__builtin_ia32_vpshrd_v8di_mask") ||
+      equal(tok, "__builtin_ia32_vpshld_v16si_mask") ||
+      equal(tok, "__builtin_ia32_vpshld_v8di_mask"))
+  {
+    int builtin = builtin_enum(tok);
+    if (builtin != -1) {
+      Node *node = new_node(builtin, tok);
+      SET_CTX(ctx);
+      tok = skip(tok->next, "(", ctx);
+      node->builtin_args[0] = assign(&tok, tok);
+      add_type(node->builtin_args[0]);
+      SET_CTX(ctx);
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[1] = assign(&tok, tok);
+      add_type(node->builtin_args[1]);
+      SET_CTX(ctx);
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[2] = assign(&tok, tok);
+      add_type(node->builtin_args[2]);
+      SET_CTX(ctx);
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[3] = assign(&tok, tok);
+      add_type(node->builtin_args[3]);
+      SET_CTX(ctx);
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[4] = assign(&tok, tok);
+      add_type(node->builtin_args[4]);
+      node->builtin_nargs = 5;
+      SET_CTX(ctx);
+      *rest = skip(tok, ")", ctx);
+      return node;
+    }
+  }
+
+
+  //builtin shuffle can have two forms : 
+  //builtin_shuffle(a, b, mask) or
+  //builtin_shuffle(a, mask)  where B defaults to A
+  if (equal(tok, "__builtin_shuffle")) {
+    int builtin = builtin_enum(tok);
+    if (builtin != -1) {
+      Node *node = new_node(builtin, tok);
+      SET_CTX(ctx);
+      tok = skip(tok->next, "(", ctx);
+      Node *a = assign(&tok, tok);
+      add_type(a);
+      SET_CTX(ctx);
+      tok = skip(tok, ",", ctx);
+      Node *second = assign(&tok, tok);
+      add_type(second);
+      SET_CTX(ctx);
+      if (equal(tok, ",")) {
+        tok = tok->next;
+        Node *mask = assign(&tok, tok);
+        add_type(mask);
+        node->builtin_args[0] = a;
+        add_type(node->builtin_args[0]);
+        node->builtin_args[1] = second;
+        add_type(node->builtin_args[1]);
+        node->builtin_args[2] = mask;
+        add_type(node->builtin_args[2]);
+      } else {
+        node->builtin_args[0] = a;
+        add_type(node->builtin_args[0]);
+        node->builtin_args[1] = a;      
+        add_type(node->builtin_args[1]);
+        node->builtin_args[2] = second; 
+        add_type(node->builtin_args[2]);
+      }
+      node->builtin_nargs = 3;
+      SET_CTX(ctx);
+      *rest = skip(tok, ")", ctx);
+      return node;
+    }
+  }
+
+
+  if (equal(tok, "__builtin_ia32_maskmovq"))
+  {   
+    int builtin = builtin_enum(tok);
+    if (builtin != -1) {
+      Node *node = new_node(builtin, tok);
+      SET_CTX(ctx); 
+      tok = skip(tok->next, "(", ctx);
+      node->builtin_args[0] = assign(&tok, tok);
+      add_type(node->builtin_args[0]);
+      SET_CTX(ctx); 
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[1] = assign(&tok, tok);
+      add_type(node->builtin_args[1]);
+      SET_CTX(ctx); 
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[2] = assign(&tok, tok);
+      add_type(node->builtin_args[2]);
+      node->builtin_nargs = 3;
+      SET_CTX(ctx);       
+      *rest = skip(tok, ")", ctx);
+    return node;
+    }
+  }
+
+  if (equal(tok, "__builtin_ia32_monitor") || equal(tok, "__builtin_ia32_mwait")) {
+    int builtin = builtin_enum(tok);
+    if (builtin != -1) {
+        Node *node = new_node(builtin, tok);
+        SET_CTX(ctx); 
+        tok = skip(tok->next, "(", ctx);
+        node->builtin_args[0] = assign(&tok, tok);
+        add_type(node->builtin_args[0]);
+        tok = skip(tok, ",", ctx);
+        node->builtin_args[1] = assign(&tok, tok);
+        add_type(node->builtin_args[1]);
+        if (builtin == ND_MONITOR) { // third argument only for monitor
+            tok = skip(tok, ",", ctx);
+            node->builtin_args[2] = assign(&tok, tok);
+            add_type(node->builtin_args[2]);
+            node->builtin_nargs = 3;
+        } else {
+            node->builtin_nargs = 2;
+        }
+        SET_CTX(ctx);       
+        *rest = skip(tok, ")", ctx);
+        return node;
+    }
+  }
+
+  
+    
+  if (equal(tok, "__builtin_ia32_maskmovdqu") || equal(tok, "__builtin_prefetch"))
+  {
+    int builtin = builtin_enum(tok);
+    if (builtin != -1) {
+      Node *node = new_node(builtin, tok);
+      SET_CTX(ctx); 
+      tok = skip(tok->next, "(", ctx);
+      node->builtin_args[0] = assign(&tok, tok);
+      add_type(node->builtin_args[0]);
+      int nargs = 1;
+      while (equal(tok, ",")) {
+          tok = tok->next;
+          if (nargs < 16) {
+              node->builtin_args[nargs] = assign(&tok, tok);
+              add_type(node->builtin_args[nargs]);
+              nargs++;
+          } else {
+              error_tok(tok, "too many arguments to builtin");
+          }
+      }
+      node->builtin_nargs = nargs;
+      SET_CTX(ctx);       
+      *rest = skip(tok, ")", ctx);
+    return node;
+    }
+  }
+    
+
+  if (equal(tok, "__builtin_ia32_vec_init_v4hi") || equal(tok, "__builtin_ia32_sbb_u32") || 
+    equal(tok, "__builtin_ia32_addcarryx_u32") || equal(tok, "__builtin_ia32_sbb_u64") || 
+    equal(tok, "__builtin_ia32_addcarryx_u64"))
+  {
+    int builtin = builtin_enum(tok);
+    if (builtin != -1) {
+      Node *node = new_node(builtin, tok);
+      SET_CTX(ctx); 
+      tok = skip(tok->next, "(", ctx);
+      node->builtin_args[0] = assign(&tok, tok);
+      add_type(node->builtin_args[0]);
+      SET_CTX(ctx); 
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[1] = assign(&tok, tok);
+      add_type(node->builtin_args[1]);
+      SET_CTX(ctx); 
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[2] = assign(&tok, tok);
+      add_type(node->builtin_args[2]);
+      SET_CTX(ctx); 
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[3] = assign(&tok, tok);
+      add_type(node->builtin_args[3]);
+      node->builtin_nargs = 4;
+      SET_CTX(ctx);       
+      *rest = skip(tok, ")", ctx);
+    return node;
+    }
+  }
+
+     
+  if (equal(tok, "__builtin_ia32_shufps") || equal(tok, "__builtin_ia32_shufpd"))
+  {
+    int builtin = builtin_enum(tok);
+    if (builtin != -1) {
+      Node *node = new_node(builtin, tok);
+      SET_CTX(ctx); 
+      tok = skip(tok->next, "(", ctx);
+      node->lhs = assign(&tok, tok);
+      add_type(node->lhs);
+      SET_CTX(ctx); 
+      tok = skip(tok, ",", ctx);
+      node->rhs = assign(&tok, tok);
+      add_type(node->rhs);
+      SET_CTX(ctx); 
+      tok = skip(tok, ",", ctx);
+      node->rhs->val = const_expr(&tok, tok);
+      SET_CTX(ctx);       
+      *rest = skip(tok, ")", ctx);
+    return node;
+    }
+  }
+
+
+  if (equal(tok, "__builtin_ia32_vec_init_v8qi"))
+  {
+    int builtin = builtin_enum(tok);
+    if (builtin != -1) {
+      Node *node = new_node(builtin, tok);
+      SET_CTX(ctx); 
+      tok = skip(tok->next, "(", ctx);
+      node->builtin_args[0] = assign(&tok, tok);
+      add_type(node->builtin_args[0]);
+      SET_CTX(ctx); 
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[1] = assign(&tok, tok);
+      add_type(node->builtin_args[1]);
+      SET_CTX(ctx); 
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[2] = assign(&tok, tok);
+      add_type(node->builtin_args[2]);
+      SET_CTX(ctx); 
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[3] = assign(&tok, tok);
+      add_type(node->builtin_args[3]);
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[4] = assign(&tok, tok);
+      add_type(node->builtin_args[4]);
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[5] = assign(&tok, tok);
+      add_type(node->builtin_args[5]);   
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[6] = assign(&tok, tok);
+      add_type(node->builtin_args[6]); 
+      tok = skip(tok, ",", ctx);
+      node->builtin_args[7] = assign(&tok, tok);
+      add_type(node->builtin_args[7]);                  
+      node->builtin_nargs = 8;      
+      SET_CTX(ctx);       
+      *rest = skip(tok, ")", ctx);
+    return node;
+    }
+  }
+
+
+
+  //managing lots of  builtin_ia32 that needs two args
+  // defined in builtin_table[]
+  int builtin = builtin_enum(tok);
+  if (builtin != -1) {
+    Node *node = new_node(builtin, tok);
+    SET_CTX(ctx); 
+    tok = skip(tok->next, "(", ctx);
+    node->lhs = assign(&tok, tok);
+    add_type(node->lhs);
+    SET_CTX(ctx); 
+    tok = skip(tok, ",", ctx);
+    node->rhs = assign(&tok, tok);
+    add_type(node->rhs);
+    SET_CTX(ctx); 
+    *rest = skip(tok, ")", ctx);
+    return node;
   }
 
 
@@ -7708,7 +8028,7 @@ static Node *primary(Token **rest, Token *tok)
 
       char *name = sc->var->name;
      
-      if (is_returned_twice(name)) {
+      if (is_returned_twice(name) || (sc->var && sc->var->is_returned_twice)) {
         dont_reuse_stack = true;
         if (current_fn) {
           current_fn->force_frame_pointer = true;
@@ -7731,12 +8051,13 @@ static Node *primary(Token **rest, Token *tok)
     {
       Obj *fn = find_func(token_to_string(tok));
 
-      if (!fn && (is_c99_or_later() || opt_implicit)) {
+      if (!fn && !opt_no_implicit && (is_c99_or_later() || opt_implicit)) {
         error_tok(tok, "%s:%d: in %s: implicit declaration of function", __FILE__, __LINE__, __func__);
       }    
 
       if (!fn) {
-        warn_tok(tok, "%s:%d: in %s: implicit declaration of function", __FILE__, __LINE__, __func__);
+        if (!opt_no_implicit)
+          warn_tok(tok, "%s:%d: in %s: implicit declaration of function", __FILE__, __LINE__, __func__);
         Type *ty = func_type(ty_int);        
         ty->is_variadic = true;
         fn = new_gvar(token_to_string(tok), ty);
@@ -7843,19 +8164,28 @@ static void create_param_lvars(Type *param, char *funcname)
   //  return;
   // error_tok(param->name_pos, "parameter name omitted");
   //new_lvar(get_ident(param->name), param, funcname);
+    Obj *var;
     if (param->param_var) {
-      param->param_var->next = locals;
-      locals = param->param_var;
-      param->param_var->funcname = funcname;
-      param->param_var->order = order;
+      var = param->param_var;
+      var->next = scope->locals;
+      scope->locals = var;
+      var->funcname = funcname;
+      var->order = order;
       if (param->name)
-        push_scope(get_ident(param->name))->var = param->param_var;
+        push_scope(get_ident(param->name))->var = var;
     } else {
-    if (!param->name)
-      new_lvar("", param, funcname);
-    else
-    new_lvar(get_ident(param->name), param, funcname);
+    if (!param->name) {
+      var = new_lvar("", param, funcname);
+      var->is_read = true;
+      var->is_written = true;        
     }
+    else
+      var = new_lvar(get_ident(param->name), param, funcname);
+    }
+    var->is_param = true;
+    var->tok = param->name_pos;
+    if (param->is_unused)
+      var->is_unused = true;
     order++;
 
 }
@@ -7889,8 +8219,8 @@ static void resolve_goto_labels(void)
 Obj *find_func(char *name)
 {
   Scope *sc = scope;
-  while (sc->next)
-    sc = sc->next;
+  while (sc->parent)
+    sc = sc->parent;
 
   VarScope *sc2 = hashmap_get(&sc->vars, name);
   if (sc2 && sc2->var && sc2->var->is_function)
@@ -7911,6 +8241,36 @@ static void mark_live(Obj *var)
     if (fn)
       mark_live(fn);
   }
+}
+
+// Recursively check if a type or any of its members (for structs/unions)
+// or base type (for arrays) is volatile.
+static bool is_volatile(Type *ty) {
+  if (!ty) return false;
+  if (ty->is_volatile) return true;
+  if (is_array(ty))
+    return is_volatile(ty->base);
+  if (ty->kind == TY_STRUCT || ty->kind == TY_UNION) {
+    for (Member *mem = ty->members; mem; mem = mem->next) {
+      if (is_volatile(mem->ty))
+        return true;
+    }
+  }
+  return false;
+}
+
+// Check if Tail Call Optimization can be applied to the function.
+// TCO is disabled if any local variable has its address taken or is volatile.
+static bool can_apply_tco_scope(Scope *sc) {
+  for (Obj *var = sc->locals; var; var = var->next) {
+    if (var->is_address_used || is_volatile(var->ty))
+      return false;
+  }
+  for (Scope *child = sc->children; child; child = child->sibling_next) {
+    if (!can_apply_tco_scope(child))
+      return false;
+  }
+  return true;
 }
 
 //implementing tail call optimization. Marking tails calls.
@@ -7957,8 +8317,8 @@ static void mark_tail_calls(Node *node, Obj *fn) {
 
 static Token *function(Token *tok, Type *basety, VarAttr *attr)
 {
-
   Type *ty = declarator(&tok, tok, basety);
+
   
   tok = attribute_list(tok, attr, thing_attributes); 
   if (!ty)
@@ -7974,6 +8334,11 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
     // Redeclaration
     if (!fn->is_function)
       error_tok(tok, "%s:%d: in %s: redeclared as a different kind of symbol", __FILE__, __LINE__, __func__);
+    // Skip the type-compatibility check for an old-style definition, whose
+    // parameter types are not yet resolved here and will be taken from a
+    // preceding prototype (C11 6.7.6.3p15).
+    if (!ty->is_oldstyle && !is_compatible(fn->ty, ty))
+      error_tok(ty->name_pos, "%s:%d: in %s: conflicting types for %s", __FILE__, __LINE__, __func__, name_str);
     if (fn->is_definition && equal(tok, "{"))
       error_tok(tok, "%s:%d: in %s: redefinition of %s", __FILE__, __LINE__, __func__, name_str);
     if (!fn->is_static && attr->is_static)
@@ -7983,6 +8348,7 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   else
   {
     fn = new_gvar(name_str, ty);
+    fn->tok = ty->name_pos;
     fn->funcname = name_str;
     fn->is_function = true;
     fn->is_definition = equal(tok, "{");
@@ -7997,8 +8363,16 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   fn->section = attr->section;
   fn->is_ms_abi |= attr->is_ms_abi;
   fn->visibility = fn->visibility ?: attr->visibility;
+  if (!fn->visibility)
+    fn->visibility = tok->pragma_visibility;
   fn->is_aligned |= attr->is_aligned;
   fn->is_noreturn |= attr->is_noreturn;
+  fn->is_noinline |= attr->is_noinline;
+  fn->is_used |= attr->is_used;
+  fn->is_returned_twice |= attr->is_returned_twice;
+  fn->is_unused |= attr->is_unused;
+  if (fn->is_used)
+    fn->is_root = true;
   fn->is_destructor |= attr->is_destructor;
   fn->is_constructor |=  attr->is_constructor;
   if (attr->destructor_priority > 0)
@@ -8027,8 +8401,9 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
     return tok;
 
   current_fn = fn;
-  locals = NULL;
   enter_scope();
+  fn->ty = ty;
+  ty->scopes = scope;
 
   // if it's a pointer we don't know the size of the type of pointer int ? char ?
   create_param_lvars(ty->params, name_str);
@@ -8050,10 +8425,13 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   // A buffer for a struct/union return value is passed
   // as the hidden first parameter.
   Type *rty = ty->return_ty;
-  if ((rty->kind == TY_STRUCT || rty->kind == TY_UNION) && rty->size > 16)
-    new_lvar("", pointer_to(rty), name_str);
+  if ((rty->kind == TY_STRUCT || rty->kind == TY_UNION) && rty->size > 16) {
+    Obj *var = new_lvar("", pointer_to(rty), name_str);
+    var->is_read = true;
+    var->is_written = true;        
+  }
 
-  fn->params = locals;
+  fn->params = scope->locals;
   //to fix issue with complex vla in parameters
   Node vla_head = {};
   Node *vla_cur = &vla_head;
@@ -8067,6 +8445,7 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   if (ty->is_variadic) {
     fn->va_area = new_lvar("__va_area__", array_of(ty_char, 208), name_str);
     fn->va_area->align = 16;
+    fn->va_area->is_read = true;    
   }
 
 
@@ -8104,8 +8483,8 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   }
 
   //implementing tail call optimization.
-  mark_tail_calls(fn->body, fn);
-  fn->locals = locals;  
+  if (can_apply_tco_scope(scope))
+    mark_tail_calls(fn->body, fn);
   order = 0;
   leave_scope();
   resolve_goto_labels();
@@ -8140,7 +8519,14 @@ static Token *global_declaration(Token *tok, Type *basety, VarAttr *attr)
     
   }
     
+    char *extern_visibility = NULL;
+    VarScope *sc = find_var(ty->name);
+    if (sc && sc->var && !sc->var->is_definition && !sc->var->is_function && !sc->var->is_tentative)
+      extern_visibility = sc->var->visibility;
     Obj *var = new_gvar(get_ident(ty->name), ty);
+    if (extern_visibility)
+      var->visibility = extern_visibility;
+    var->tok = ty->name_pos;
     if (ty->kind == TY_FUNC)
       var->is_function = true;
     
@@ -8170,12 +8556,18 @@ static Token *global_declaration(Token *tok, Type *basety, VarAttr *attr)
     if (!decl_attr.section && current_section) {
       var->section = current_section;
     } 
-    var->visibility = decl_attr.visibility;
+    var->visibility = var->visibility ?: decl_attr.visibility;
+    if (!var->visibility)
+      var->visibility = tok->pragma_visibility;
+    var->is_used |= decl_attr.is_used;
+    if (var->is_used)
+      var->is_root = true;
     var->is_aligned = var->is_aligned | decl_attr.is_aligned;
     var->is_externally_visible = decl_attr.is_externally_visible;
     var->is_definition = !decl_attr.is_extern && ty->kind != TY_FUNC;
     var->is_static = decl_attr.is_static;
     var->is_tls = decl_attr.is_tls;
+    var->is_unused = var->is_unused | decl_attr.is_unused;
     if (decl_attr.align)
       var->align = MAX(var->align, decl_attr.align);
 
@@ -8302,6 +8694,209 @@ static void declare_builtin_functions(void)
   declare3("memset", pvoid, pvoid, ty_int, ty_ulong);
 }
 
+static void mark_liveness_on_node(Node *node, bool is_lhs) {
+  if (!node) return;
+
+  switch (node->kind) {
+  case ND_VAR:
+    if (!node->var || node->var->is_function)
+      return;
+    node->var->is_read = true;
+    if (is_lhs)
+      node->var->is_written = true;
+    return;
+  case ND_MEMBER:
+    mark_liveness_on_node(node->lhs, is_lhs);
+    return;
+  case ND_DEREF:
+    mark_liveness_on_node(node->lhs, false);
+    return;
+  case ND_ASSIGN:
+    mark_liveness_on_node(node->rhs, false);
+    mark_liveness_on_node(node->lhs, true);
+    return;
+  case ND_ADDR:
+    mark_var_address_taken(node->lhs);
+    mark_liveness_on_node(node->lhs, false);
+    return;
+  case ND_FUNCALL:
+    mark_liveness_on_node(node->lhs, false);
+    for (Node *a = node->args; a; a = a->next)
+      mark_liveness_on_node(a, false);
+    if (node->ret_buffer)
+      node->ret_buffer->is_written = true;
+    return;
+  case ND_RETURN:
+    mark_liveness_on_node(node->lhs, false);
+    return;
+  case ND_COND:
+    mark_liveness_on_node(node->cond, false);
+    mark_liveness_on_node(node->then, false);
+    mark_liveness_on_node(node->els, false);
+    return;
+  case ND_BLOCK:
+  case ND_STMT_EXPR:
+    for (Node *n = node->body; n; n = n->next)
+      mark_liveness_on_node(n, false);
+    return;
+  case ND_IF:
+    mark_liveness_on_node(node->cond, false);
+    mark_liveness_on_node(node->then, false);
+    mark_liveness_on_node(node->els, false);
+    return;
+  case ND_FOR:
+    mark_liveness_on_node(node->init, false);
+    mark_liveness_on_node(node->cond, false);
+    mark_liveness_on_node(node->inc, false);
+    mark_liveness_on_node(node->then, false);
+    return;
+  case ND_DO:
+    mark_liveness_on_node(node->then, false);
+    mark_liveness_on_node(node->cond, false);
+    return;
+  case ND_SWITCH:
+    mark_liveness_on_node(node->cond, false);
+    mark_liveness_on_node(node->then, false);
+    return;
+  case ND_CASE:
+  case ND_LABEL:
+    mark_liveness_on_node(node->lhs, false);
+    return;
+  case ND_EXPR_STMT:
+    mark_liveness_on_node(node->lhs, false);
+    return;
+  case ND_COMMA:
+    mark_liveness_on_node(node->lhs, false);
+    mark_liveness_on_node(node->rhs, false);
+    return;
+  case ND_CAST:
+    mark_liveness_on_node(node->lhs, false);
+    return;
+  case ND_GOTO:
+  case ND_GOTO_EXPR:
+  case ND_LABEL_VAL:
+  case ND_NULL_EXPR:
+  case ND_NUM:
+    return;
+  case ND_VLA_PTR:
+    if (node->var && !node->var->is_function)
+      node->var->is_read = true;
+    return;
+  case ND_MEMZERO:
+    if (node->var)
+      node->var->is_written = true;
+    return;
+  case ND_ASM:
+    return;
+  case ND_FPCLASSIFY:
+    if (node->fpc && node->fpc->node)
+      mark_liveness_on_node(node->fpc->node, false);
+    return;
+  default:
+    if (node->lhs)
+      mark_liveness_on_node(node->lhs, false);
+    if (node->rhs)
+      mark_liveness_on_node(node->rhs, false);
+    for (int i = 0; i < MAX_BUILTIN_ARGS; i++)
+      if (node->builtin_args[i])
+        mark_liveness_on_node(node->builtin_args[i], false);
+    // Handle builtin memcpy/memset operands
+    if (node->builtin_dest)
+      mark_liveness_on_node(node->builtin_dest, false);
+    if (node->builtin_src)
+      mark_liveness_on_node(node->builtin_src, false);
+    if (node->builtin_size)
+      mark_liveness_on_node(node->builtin_size, false);
+    if (node->builtin_val)
+      mark_liveness_on_node(node->builtin_val, false);
+    // Handle atomic/CAS operands
+    if (node->cas_addr)
+      mark_liveness_on_node(node->cas_addr, false);
+    if (node->cas_old)
+      mark_liveness_on_node(node->cas_old, false);
+    if (node->cas_new)
+      mark_liveness_on_node(node->cas_new, false);
+    if (node->cas_ptr)
+      mark_liveness_on_node(node->cas_ptr, false);
+    if (node->cas_expected)
+      mark_liveness_on_node(node->cas_expected, false);
+    if (node->cas_desired)
+      mark_liveness_on_node(node->cas_desired, false);
+    if (node->cas_weak)
+      mark_liveness_on_node(node->cas_weak, false);
+    if (node->cas_success)
+      mark_liveness_on_node(node->cas_success, false);
+    if (node->cas_failure)
+      mark_liveness_on_node(node->cas_failure, false);
+    if (node->atomic_addr && !node->atomic_addr->is_function)
+      node->atomic_addr->is_address_used = true;
+    if (node->atomic_addr && !node->atomic_addr->is_function) {
+      node->atomic_addr->is_read = true;
+      node->atomic_addr->is_written = true;
+    }
+    if (node->atomic_expr)
+      mark_liveness_on_node(node->atomic_expr, false);
+    break;
+  }
+}
+
+static void emit_unused_scope_warnings(Scope *sc) {
+  for (Scope *child = sc->children; child; child = child->sibling_next)
+    emit_unused_scope_warnings(child);
+  for (Obj *var = sc->locals; var; var = var->next) {
+    if (var->is_param)
+      continue;
+    if (!var->tok || !var->name || !var->name[0])
+      continue;
+    if (!var->is_read && !var->is_written && !var->is_address_used && !var->is_used && !var->is_unused) {
+      if (opt_wunused_variable && (var->ty && !var->ty->origin) && !(var->tok->file && var->tok->file->is_system_header))
+        warn_tok(var->tok, "unused variable '%s'", var->name);
+    }
+  }
+}
+
+static void emit_unused_warnings(Obj *fn) {
+  if (!fn->name)
+    return;
+  for (Obj *p = fn->params; p; p = p->next) {
+    if (!p->name || !p->tok)
+      continue;
+    if (!p->is_read && !p->is_unused) {
+      if (opt_wunused_parameter && (p->ty && !p->ty->origin) && !(p->tok->file && p->tok->file->is_system_header))
+        warn_tok(p->tok, "unused parameter '%s'", p->name);
+    }
+  }
+  if (fn->ty && fn->ty->scopes)
+    emit_unused_scope_warnings(fn->ty->scopes);
+}
+
+static void mark_liveness_on_locals(Obj *prog) {
+  for (Obj *fn = prog; fn; fn = fn->next) {
+    if (!fn->is_function || !fn->is_definition)
+      continue;
+    mark_liveness_on_node(fn->body, false);
+
+    emit_unused_warnings(fn);
+
+    // Internal variables used directly by codegen (not via AST ND_VAR nodes)
+    // must be kept live so they get stack slots.
+    if (fn->alloca_bottom) {
+      fn->alloca_bottom->is_read = true;
+      fn->alloca_bottom->is_written = true;
+    }
+    if (fn->va_area) {
+      fn->va_area->is_read = true;
+      fn->va_area->is_written = true;
+    }
+
+    for (Obj *p = fn->params; p; p = p->next) {
+      p->is_read = true;
+      if (!p->ty->is_const)
+        p->is_written = true;
+    }
+  }
+}
+
 // program = (typedef | function-definition | global-variable)*
 Obj *parse(Token *tok)
 {
@@ -8343,7 +8938,7 @@ Obj *parse(Token *tok)
   while (tok->kind != TK_EOF)
   {
     current_fn = NULL;
-    locals = NULL;
+
     if (equal(tok, "_Static_assert")) {
       tok = static_assertion(tok);
       continue;
@@ -8384,6 +8979,8 @@ Obj *parse(Token *tok)
     // Global variable
     tok = global_declaration(tok, basety, &attr);
   }
+
+  mark_liveness_on_locals(globals);
 
   for (Obj *var = globals; var; var = var->next)
     if (var->is_root || var->is_address_used)
@@ -8535,6 +9132,8 @@ static Node *ParseAtomic3(NodeKind kind, Token *tok, Token **rest) {
   tok = skip(tok, ",", ctx);
   node->rhs = assign(&tok, tok);
   add_type(node->rhs);
+  if (kind != ND_STORE && kind != ND_LOAD && !is_pointer(node->ty))
+    node->rhs = new_cast(node->rhs, node->ty);
   // Check if there's a comma, indicating a memory order argument
   if (equal(tok, ",")) {
     SET_CTX(ctx); 
@@ -8750,16 +9349,6 @@ static Type *old_params(Type *ty, int nbparms) {
   return head.next;
 }
 
-static Node *parse_huge_val(double fval, Token *tok, Token **rest) {
-  Node *node = new_double(fval, tok);
-  SET_CTX(ctx);    
-  tok = skip(tok->next, "(", ctx);
-  SET_CTX(ctx); 
-  tok = skip(tok, ")", ctx);
-  *rest = tok;
-  return node;
-}
-
 static int64_t eval_sign_extend(Type *ty, uint64_t val) {
   switch (ty->size) {
   case 1: return ty->is_unsigned ? (uint8_t)val : (int64_t)(int8_t)val;
@@ -8877,7 +9466,8 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_vec_init_v8qi", ND_VECINITV8QI },    
     { "__builtin_ia32_vec_init_v2si", ND_VECINITV2SI },       
     { "__builtin_ia32_vec_ext_v2si", ND_VECEXTV2SI },       
-    { "__builtin_ia32_vec_ext_v4si", ND_VECEXTV4SI },       
+    { "__builtin_ia32_vec_ext_v4si", ND_VECEXTV4SI },
+    { "__builtin_ia32_vec_ext_v4sf", ND_VECEXTV4SF },       
     { "__builtin_ia32_emms", ND_EMMS },       
     { "__builtin_ia32_sfence", ND_SFENCE },       
     { "__builtin_ia32_lfence", ND_LFENCE },     
@@ -8948,6 +9538,12 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_movlhps", ND_MOVLHPS },         
     { "__builtin_ia32_movhlps", ND_MOVHLPS },         
     { "__builtin_ia32_unpckhps", ND_UNPCKHPS },    
+    { "__builtin_ceil", ND_BUILTIN_CEIL },
+    { "__builtin_floor", ND_BUILTIN_FLOOR },
+    { "__builtin_ceilf", ND_BUILTIN_CEILF },
+    { "__builtin_floorf", ND_BUILTIN_FLOORF },
+    { "__builtin_ceill", ND_BUILTIN_CEILL },
+    { "__builtin_floorl", ND_BUILTIN_FLOORL },
     { "__builtin_stdc_bit_ceil", ND_STDC_BIT_CEIL },
 
     { "__builtin_ia32_unpcklps", ND_UNPCKLPS },         
@@ -8971,8 +9567,12 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_pavgw", ND_PAVGW },
     { "__builtin_ia32_psadbw", ND_PSADBW },
     { "__builtin_ia32_movntq", ND_MOVNTQ },
-    { "__builtin_ia32_movntps", ND_MOVNTPS },
+    { "__builtin_ia32_movntps", ND_MOVNTPS },    
     { "__builtin_ia32_shufpd", ND_SHUFPD },    
+    { "__builtin_ia32_roundpd", ND_ROUNDPD },    
+    { "__builtin_ia32_roundsd", ND_ROUNDSD },  
+    { "__builtin_ia32_roundss", ND_ROUNDSS },    
+    { "__builtin_ia32_roundps", ND_ROUNDPS },    
     { "__builtin_ia32_addsd", ND_ADDSD },  
     { "__builtin_ia32_subsd", ND_SUBSD },  
     { "__builtin_ia32_mulsd", ND_MULSD },  
@@ -9065,6 +9665,7 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_psubusb128", ND_PSUBUSB128 },    
     { "__builtin_ia32_psubusw128", ND_PSUBUSW128 },              
     { "__builtin_ia32_pmaddwd128", ND_PMADDWD128 },  
+    { "__builtin_ia32_pmaddwd256", ND_PMADDWD256 },  
     { "__builtin_ia32_pmulhw128", ND_PMULHW128 },      
     { "__builtin_ia32_pmuludq", ND_PMULUDQ },          
     { "__builtin_ia32_pmuludq128", ND_PMULUDQ128 },          
@@ -9072,8 +9673,10 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_pslldi128", ND_PSLLDI128 },    
     { "__builtin_ia32_psllqi128", ND_PSLLQI128 },     
     { "__builtin_ia32_psrawi128", ND_PSRAWI128 },          
+    { "__builtin_ia32_psrawi256", ND_PSRAWI256 },          
     { "__builtin_ia32_psradi128", ND_PSRADI128 },     
     { "__builtin_ia32_psrlwi128", ND_PSRLWI128 },    
+    { "__builtin_ia32_psrlwi256", ND_PSRLWI256 },    
     { "__builtin_ia32_psrldi128", ND_PSRLDI128 },       
     { "__builtin_ia32_psrlqi128", ND_PSRLQI128 }, 
     { "__builtin_ia32_psllw128", ND_PSLLW128 },   
@@ -9090,10 +9693,29 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_pminsw128", ND_PMINSW128 },   
     { "__builtin_ia32_pminub128", ND_PMINUB128 }, 
     { "__builtin_ia32_pmovmskb128", ND_PMOVMSKB128 },  
+    { "__builtin_ia32_pmovmskb256", ND_PMOVMSKB256 },  
     { "__builtin_ia32_pmulhuw128", ND_PMULHUW128 }, 
     { "__builtin_ia32_maskmovdqu", ND_MASKMOVDQU },     
     { "__builtin_ia32_pavgb128", ND_PAVGB128 },   
     { "__builtin_ia32_pavgw128", ND_PAVGW128 },   
+    { "__builtin_ia32_pavgb256", ND_PAVGB256 },   
+    { "__builtin_ia32_pavgw256", ND_PAVGW256 },   
+    { "__builtin_ia32_permvarsi256", ND_PERMVARSI256 },   
+    { "__builtin_ia32_vec_ext_v8si", ND_VECEXTV8SI },   
+    { "__builtin_ia32_punpckhbw256", ND_PUNPCKHBW256 },
+    { "__builtin_ia32_punpckhwd256", ND_PUNPCKHWD256 },
+    { "__builtin_ia32_punpckhdq256", ND_PUNPCKHDQ256 },
+    { "__builtin_ia32_punpckhqdq256", ND_PUNPCKHQDQ256 },
+    { "__builtin_ia32_punpcklbw256", ND_PUNPCKLBW256 },
+    { "__builtin_ia32_punpcklwd256", ND_PUNPCKLWD256 },
+    { "__builtin_ia32_punpckldq256", ND_PUNPCKLDQ256 },
+    { "__builtin_ia32_punpcklqdq256", ND_PUNPCKLQDQ256 },
+    { "__builtin_ia32_psadbw256", ND_PSADBW256 },
+    { "__builtin_ia32_packsswb256", ND_PACKSSWB256 },
+    { "__builtin_ia32_packssdw256", ND_PACKSSDW256 },
+    { "__builtin_ia32_packuswb256", ND_PACKUSWB256 },
+    { "__builtin_ia32_packusdw256", ND_PACKUSDW256 },
+    { "__builtin_ia32_pmulhw256", ND_PMULHW256 },
     { "__builtin_ia32_psadbw128", ND_PSADBW128 }, 
     { "__builtin_ia32_movnti", ND_MOVNTI },   
     { "__builtin_ia32_movnti64", ND_MOVNTI64 },   
@@ -9147,8 +9769,18 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_ptestc128", ND_PTESTC128 },
     { "__builtin_ia32_ptestnzc128", ND_PTESTNZC128 },
     { "__builtin_ia32_pblendvb128", ND_PBLENDVB128 },
+    { "__builtin_ia32_pblendw128", ND_PBLENDW128 },
     { "__builtin_ia32_blendvps", ND_BLENDVPS },
     { "__builtin_ia32_blendvpd", ND_BLENDVPD },
+    { "__builtin_ia32_blendps", ND_BLENDPS },
+    { "__builtin_ia32_blendpd", ND_BLENDPD },
+    { "__builtin_ia32_blendps256", ND_BLENDPS256 },
+    { "__builtin_ia32_blendpd256", ND_BLENDPD256 },
+    { "__builtin_ia32_dpps", ND_DPPS },
+    { "__builtin_ia32_dppd", ND_DPPD },
+    { "__builtin_ia32_insertps128", ND_INSERTPS128 },
+    { "__builtin_ia32_mpsadbw128", ND_MPSADBW128 },
+    { "__builtin_ia32_mpsadbw256", ND_MPSADBW256 },
     { "__builtin_ia32_pminsb128", ND_PMINSB128 },
     { "__builtin_ia32_pmaxsb128", ND_PMAXSB128 },
     { "__builtin_ia32_pminuw128", ND_PMINUW128 },
@@ -9178,6 +9810,9 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_crc32si", ND_CRC32SI },    
     { "__builtin_ia32_crc32di", ND_CRC32DI },
     { "__builtin_ia32_pshufd", ND_PSHUFD },
+    { "__builtin_ia32_pshufhw", ND_PSHUFHW },
+    { "__builtin_ia32_pshuflw", ND_PSHUFLW },
+    { "__builtin_ia32_pshufw", ND_PSHUFW },
     { "__builtin_prefetch", ND_PREFETCH },
     { "__builtin_ia32_rdtsc", ND_RDTSC },
     { "__builtin_ia32_readeflags_u64", ND_READEFLAGS_U64 },
@@ -9231,12 +9866,16 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_pcmpgtb256_mask", ND_PCMPGTB256_MASK },
     { "__builtin_ia32_pshufb256", ND_PSHUFB256 },
     { "__builtin_ia32_pblendvb256", ND_PBLENDVB256 },
+    { "__builtin_ia32_psrldqi128", ND_PSRLDQI128 },
+    { "__builtin_ia32_pslldqi128", ND_PSLLDQI128 },
     { "__builtin_ia32_psrldqi256", ND_PSRLDQI256 },
     { "__builtin_ia32_pslldqi256", ND_PSLLDQI256 },
     { "__builtin_ia32_vinsertf128_si256", ND_VINSERTF128_SI256 },        
     { "__builtin_ia32_si256_si", ND_SI256_SI },
     { "__builtin_ia32_si_si256", ND_SI_SI256 },
     { "__builtin_ia32_palignr256", ND_PALIGNR256 },
+    { "__builtin_ia32_palignr128", ND_PALIGNR128 },
+    { "__builtin_ia32_palignr", ND_PALIGNR },
     { "__builtin_ia32_permti256", ND_VPERM2I128_SI256 },
     { "__builtin_ia32_pblendd256", ND_PBLENDD256 },
     { "__builtin_ia32_vextractf128_si256", ND_VEXTRACTF128_SI256 },
@@ -9249,10 +9888,85 @@ static BuiltinEntry builtin_table[] = {
     { "__builtin_ia32_ps_ps256", ND_PS256_PS },
     { "__builtin_ia32_psrlqi256", ND_PSRLQI256 },
     { "__builtin_ia32_psllqi256", ND_PSLLQI256 },
+    { "__builtin_ia32_psllwi256", ND_PSLLWI256 },
     { "__builtin_ia32_permdi256", ND_PERMDI256 },
     { "__builtin_ia32_pslldi256", ND_PSLLDI256 }, 
     { "__builtin_ia32_psrldi256", ND_PSRLDI256 },
     { "__builtin_ia32_psradi256", ND_PSRADI256 },
+    { "__builtin_ia32_vec_ext_v4hi", ND_VECEXTV4HI },
+    { "__builtin_ia32_vec_set_v4hi", ND_VECSETV4HI },
+    { "__builtin_ia32_vec_set_v8hi", ND_VECSETV8HI },
+    { "__builtin_ia32_vec_set_v16qi", ND_VECSETV16QI },
+    { "__builtin_ia32_vec_set_v4si", ND_VECSETV4SI },
+    { "__builtin_ia32_vec_set_v2di", ND_VECSETV2DI },
+    { "__builtin_ia32_pcmpistrm128", ND_PCMPISTRM128 },
+    { "__builtin_ia32_pcmpistri128", ND_PCMPISTRI128 },
+    { "__builtin_ia32_pcmpistria128", ND_PCMPISTRIA128 },
+    { "__builtin_ia32_pcmpistric128", ND_PCMPISTRIC128 },
+    { "__builtin_ia32_pcmpistrio128", ND_PCMPISTRIO128 },
+    { "__builtin_ia32_pcmpistris128", ND_PCMPISTRIS128 },
+    { "__builtin_ia32_pcmpistriz128", ND_PCMPISTRIZ128 },
+    { "__builtin_ia32_pcmpestrm128", ND_PCMPESTRM128 },
+    { "__builtin_ia32_pcmpestri128", ND_PCMPESTRI128 },
+    { "__builtin_ia32_pcmpestria128", ND_PCMPESTRIA128 },
+    { "__builtin_ia32_pcmpestric128", ND_PCMPESTRIC128 },
+    { "__builtin_ia32_pcmpestrio128", ND_PCMPESTRIO128 },
+    { "__builtin_ia32_pcmpestris128", ND_PCMPESTRIS128 },
+    { "__builtin_ia32_pcmpestriz128", ND_PCMPESTRIZ128 },
+    { "__builtin_ia32_pclmulqdq128", ND_PCLMULQDQ128 },
+    { "__builtin_ia32_dpps256", ND_DPPS256 },
+    { "__builtin_ia32_shufpd256", ND_SHUFPD256 },
+    { "__builtin_ia32_shufps256", ND_SHUFPS256 },
+    { "__builtin_ia32_cmppd", ND_CMPPD },
+    { "__builtin_ia32_cmpps", ND_CMPPS },
+    { "__builtin_ia32_cmppd256", ND_CMPPD256 },
+    { "__builtin_ia32_cmpps256", ND_CMPPS256 },
+    { "__builtin_ia32_cmpsd", ND_CMPSD },
+    { "__builtin_ia32_cmpss", ND_CMPSS },
+    { "__builtin_ia32_vextractf128_pd256", ND_VEXTRACTF128_PD256 },
+    { "__builtin_ia32_vextractf128_ps256", ND_VEXTRACTF128_PS256 },
+    { "__builtin_ia32_vinsertf128_pd256", ND_VINSERTF128_PD256 },
+    { "__builtin_ia32_vinsertf128_ps256", ND_VINSERTF128_PS256 },
+    { "__builtin_ia32_vperm2f128_pd256", ND_VPERM2F128_PD256 },
+    { "__builtin_ia32_vperm2f128_ps256", ND_VPERM2F128_PS256 },
+    { "__builtin_ia32_vperm2f128_si256", ND_VPERM2F128_SI256 },
+    { "__builtin_ia32_vpermilpd", ND_VPERMILPD },
+    { "__builtin_ia32_vpermilps", ND_VPERMILPS },
+    { "__builtin_ia32_vpermilpd256", ND_VPERMILPD256 },
+    { "__builtin_ia32_vpermilps256", ND_VPERMILPS256 },
+    { "__builtin_ia32_exp2pd_mask", ND_EXP2PD_MASK },
+    { "__builtin_ia32_exp2ps_mask", ND_EXP2PS_MASK },
+    { "__builtin_ia32_rcp28pd_mask", ND_RCP28PD_MASK },
+    { "__builtin_ia32_rcp28ps_mask", ND_RCP28PS_MASK },
+    { "__builtin_ia32_rcp28sd_round", ND_RCP28SD_ROUND },
+    { "__builtin_ia32_rcp28ss_round", ND_RCP28SS_ROUND },
+    { "__builtin_ia32_rsqrt28pd_mask", ND_RSQRT28PD_MASK },
+    { "__builtin_ia32_rsqrt28ps_mask", ND_RSQRT28PS_MASK },
+    { "__builtin_ia32_rsqrt28sd_round", ND_RSQRT28SD_ROUND },
+    { "__builtin_ia32_rsqrt28ss_round", ND_RSQRT28SS_ROUND },
+    { "__builtin_ia32_vpshrd_v32hi", ND_VPSHRD_V32HI },
+    { "__builtin_ia32_vpshrd_v16si", ND_VPSHRD_V16SI },
+    { "__builtin_ia32_vpshrd_v8di", ND_VPSHRD_V8DI },
+    { "__builtin_ia32_vpshrd_v16si_mask", ND_VPSHRD_V16SI_MASK },
+    { "__builtin_ia32_vpshrd_v8di_mask", ND_VPSHRD_V8DI_MASK },
+    { "__builtin_ia32_vpshld_v32hi", ND_VPSHLD_V32HI },
+    { "__builtin_ia32_vpshld_v16si", ND_VPSHLD_V16SI },
+    { "__builtin_ia32_vpshld_v8di", ND_VPSHLD_V8DI },
+    { "__builtin_ia32_vpshld_v16si_mask", ND_VPSHLD_V16SI_MASK },
+    { "__builtin_ia32_vpshld_v8di_mask", ND_VPSHLD_V8DI_MASK },
+    { "__builtin_ia32_bextri_u32", ND_BEXTR_U32 },
+    { "__builtin_ia32_bextri_u64", ND_BEXTR_U64 },
+    { "__builtin_ia32_xabort", ND_XABORT },
+    { "__builtin_ia32_vpclmulqdq_v4di", ND_VPCLMULQDQ_V4DI },
+    { "__builtin_ia32_vpclmulqdq_v8di", ND_VPCLMULQDQ_V8DI },
+    { "__builtin_ia32_gatherpfdpd", ND_GATHERPFDPD },
+    { "__builtin_ia32_gatherpfdps", ND_GATHERPFDPS },
+    { "__builtin_ia32_gatherpfqpd", ND_GATHERPFQPD },
+    { "__builtin_ia32_gatherpfqps", ND_GATHERPFQPS },
+    { "__builtin_ia32_scatterpfdpd", ND_SCATTERPFDPD },
+    { "__builtin_ia32_scatterpfdps", ND_SCATTERPFDPS },
+    { "__builtin_ia32_scatterpfqpd", ND_SCATTERPFQPD },
+    { "__builtin_ia32_scatterpfqps", ND_SCATTERPFQPS },
 };
 
 
@@ -9387,8 +10101,10 @@ static Node *constant_folding(int kind, Node *lhs, Node *rhs, Token *tok)
     case ND_SUB: node = new_double(a - b, tok); break;
     case ND_MUL: node = new_double(a * b, tok); break;
     case ND_DIV:
-      if (b == 0.0)
-        return NULL;
+      // Fold even division by zero into the host's IEEE result (NaN/inf with
+      // the platform's sign bit).  This mirrors what the native backend
+      // produces by emitting a real hardware division instruction, so the
+      // embedded constant matches signbit/isnan expectations on x86.
       node = new_double(a / b, tok);
       break;
     default: return NULL;

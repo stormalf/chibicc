@@ -84,11 +84,16 @@ static int pragma_pack_current;
 static int pragma_pack_stack[128];
 static int pragma_pack_depth;
 
+static char *pragma_visibility_current;
+static char *pragma_visibility_stack[128];
+static int pragma_visibility_depth;
+
 
 
 //ISS-142
 extern bool opt_E;
 extern bool opt_fbuiltin;
+extern bool opt_ffreestanding;
 
 extern Context *ctx;
 
@@ -184,6 +189,66 @@ static bool handle_pragma_pack(Token **rest, Token *tok) {
   return true;
 }
 
+// Handle #pragma GCC visibility push/pop
+static bool handle_pragma_gcc_visibility(Token **rest, Token *tok) {
+  if (!equal(tok, "GCC"))
+    return false;
+  tok = tok->next;
+  if (!equal(tok, "visibility"))
+    return false;
+  tok = tok->next;
+
+  if (equal(tok, "push")) {
+    tok = tok->next;
+    if (!equal(tok, "("))
+      return false;
+    tok = tok->next;
+    if (tok->kind != TK_IDENT)
+      return false;
+
+    char *vis = NULL;
+    if (equal(tok, "default"))
+      vis = "default";
+    else if (equal(tok, "hidden"))
+      vis = "hidden";
+    else if (equal(tok, "protected"))
+      vis = "protected";
+    else if (equal(tok, "internal"))
+      vis = "hidden";
+    else
+      return false;
+
+    tok = tok->next;
+    if (!equal(tok, ")"))
+      return false;
+    tok = tok->next;
+
+    if (pragma_visibility_depth < 128)
+      pragma_visibility_stack[pragma_visibility_depth++] = pragma_visibility_current;
+    pragma_visibility_current = vis;
+
+    *rest = tok;
+    while (!(*rest)->at_bol)
+      *rest = (*rest)->next;
+    return true;
+  }
+
+  if (equal(tok, "pop")) {
+    tok = tok->next;
+
+    if (pragma_visibility_depth > 0)
+      pragma_visibility_current = pragma_visibility_stack[--pragma_visibility_depth];
+    else
+      pragma_visibility_current = NULL;
+
+    *rest = tok;
+    while (!(*rest)->at_bol)
+      *rest = (*rest)->next;
+    return true;
+  }
+
+  return false;
+}
 
 //begin
 static bool is_hash(Token *tok)
@@ -752,13 +817,15 @@ static MacroArg *read_macro_arg_one(Token **rest, Token *tok, bool read_rest)
 {
   Token head = {};
   Token *cur = &head;
-  int level = 0;
+  int paren = 0;
+  int brace = 0;
+  int bracket = 0;
 
   for (;;)
   {
-    if (level == 0 && equal(tok, ")"))
+    if (paren == 0 && brace == 0 && bracket == 0 && equal(tok, ")"))
       break;
-    if (level == 0 && !read_rest && equal(tok, ","))
+    if (paren == 0 && brace == 0 && bracket == 0 && !read_rest && equal(tok, ","))
       break;
 
     if (tok->kind == TK_EOF)
@@ -766,9 +833,17 @@ static MacroArg *read_macro_arg_one(Token **rest, Token *tok, bool read_rest)
     
 
     if (equal(tok, "("))
-      level++;
+      paren++;
     else if (equal(tok, ")"))
-      level--;
+      paren--;
+    else if (equal(tok, "{"))
+      brace++;
+    else if (equal(tok, "}"))
+      brace--;
+    else if (equal(tok, "["))
+      bracket++;
+    else if (equal(tok, "]"))
+      bracket--;
     cur = cur->next = copy_token(tok);
     tok = tok->next;
   }
@@ -1325,35 +1400,18 @@ static Token *stdver_macro(Token *tok) {
   switch (current_std) {
   case STD_C89:
   case STD_GNU89:
-    tok->val = 0;
-    break; // __STDC_VERSION__ not defined
-
+    return new_num_token(0, tok);
   case STD_C99:
   case STD_GNU99:
-    tok->val = 199901L;
-    break;
-
+    return new_num_token(199901L, tok);
   case STD_C11:
   case STD_GNU11:
-    tok->val = 201112L;
-    break;
-
+    return new_num_token(201112L, tok);
   case STD_C17:
   case STD_GNU17:
-    tok->val = 201710L;
-    break;
-
-  case STD_C23:
-    tok->val = 202311L;
-    break;
-
-  default:
-    unreachable();
+    return new_num_token(201710L, tok);
   }
-
-  tok->kind = TK_NUM;
-  tok->ty = ty_long;
-  return tok;  
+  return new_num_token(0, tok);
 }
 
 
@@ -1404,6 +1462,7 @@ static Token *preprocess2(Token *tok)
       tok->line_delta = tok->file->line_delta;
       tok->filename = tok->file->display_name;
       tok->pack_align = pragma_pack_current;
+      tok->pragma_visibility = pragma_visibility_current;
       cur = cur->next = tok;
       tok = tok->next;
       continue;
@@ -1558,6 +1617,8 @@ static Token *preprocess2(Token *tok)
     {
       if (handle_pragma_pack(&tok, tok->next))
         continue;
+      if (handle_pragma_gcc_visibility(&tok, tok->next))
+        continue;
 
       do
       {
@@ -1700,8 +1761,17 @@ void init_macros(void)
   if (opt_avx) {
     define_macro("__AVX__", "1");
   }
+  if (opt_tbm) {
+    define_macro("__TBM__", "1");
+  }
+
+  if (opt_ffreestanding)
+    define_macro("__STDC_HOSTED__", "0");
+  else
+    define_macro("__STDC_HOSTED__", "1");
+
   // if (opt_optimize) {
-  //   define_macro("__OPTIMIZE__", "1");    
+  //  define_macro("__OPTIMIZE__", "1");    
   // }
 
   // Define predefined macros
@@ -1729,8 +1799,7 @@ void init_macros(void)
   define_macro("__WCHAR_TYPE__", "int"); 
   define_macro("__WINT_TYPE__", "unsigned int");
   define_macro("__SIZE_TYPE__", "unsigned long");
-  define_macro("__PTRDIFF_TYPE__", "long int");
-  define_macro("__STDC_HOSTED__", "1");
+  define_macro("__PTRDIFF_TYPE__", "long int");  
   define_macro("__STDC_NO_COMPLEX__", "1");
   define_macro("__STDC_UTF_16__", "1");
   define_macro("__STDC_UTF_32__", "1");
@@ -1766,9 +1835,9 @@ void init_macros(void)
   define_macro("_DEFAULT_SOURCE", "1");
   //define_macro("__INTEL_COMPILER", "1");
   //define_macro("__GNUC__", "9");
-  define_macro("__GNUC__", "4");
+  define_macro("__GNUC__", "5");
   define_macro("__GNUC_MINOR__", "1");
-  define_macro("__GNUC_PATCHLEVEL__ ", "1");
+  define_macro("__GNUC_PATCHLEVEL__", "1");
   //define_macro("HAVE_ATTRIBUTE_PACKED", "1");
   define_macro("linux", "1");
   define_macro("unix", "1");
@@ -1818,7 +1887,7 @@ void init_macros(void)
   define_macro("__ORDER_BIG_ENDIAN__", "4321");
   define_macro("__BYTE_ORDER__", "__ORDER_LITTLE_ENDIAN__");
   define_macro("USE_BUILTINS", "1");
-  define_macro("_Pragma(message) ", "");
+  define_macro("_Pragma(message)", "");
 
   add_builtin("__STDC_VERSION__", stdver_macro);
   add_builtin("__FILE__", file_macro);
@@ -1958,6 +2027,8 @@ Token *preprocess(Token *tok, bool isReadLine)
   if (!isReadLine) {
     pragma_pack_current = 0;
     pragma_pack_depth = 0;
+    pragma_visibility_current = NULL;
+    pragma_visibility_depth = 0;
   }
 
   tok = preprocess2(tok);

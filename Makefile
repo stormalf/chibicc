@@ -70,11 +70,13 @@ test-stage2: $(TESTS:test/%=stage2/test/%)
 	TEST_JOBS="$(TEST_JOBS)" TEST_TIMEOUT="$(TEST_TIMEOUT)" ./test/run_tests.sh $(addprefix ./,$^)
 	test/driver.sh ./stage2/$(OBJECT)
 
-projects-all: projects projects-oth lxc vlc git memcached cpython openssl
+projects-all: projects projects-oth lxc php-src projects-slow
 
-projects-oth: sqlite vim nmap curl 
+projects-slow: openssh-portable sqlite openssl cpython
 
-projects: zlib util-linux nginx
+projects-oth: nmap memcached git curl vim
+
+projects: zlib util-linux nginx vlc 
 
 
 curl:
@@ -120,10 +122,10 @@ memcached:
 	cd ../memcached && make clean && CC=chibicc CFLAGS="-fPIC -std=c11 -g" ./configure && make -j2 && make test
 
 openssh-portable:
-	cd ../openssh-portable && make clean && CC=chibicc CFLAGS="-std=c11 -g" ./configure && make -j4 && make tests
+	cd ../openssh-portable && make clean && CC=chibicc CFLAGS="-std=c11 -g" ./configure && make -j2 && make tests
 
 sqlite:
-	cd ../sqlite && CC=chibicc CFLAGS="-fPIC -std=c11 -g" ./configure && make clean && make -j2 && make test
+	cd ../sqlite && CC=chibicc CFLAGS="-fPIC -std=c11 -g" ./configure && make clean && make -j2 && make test TSTRNNR_OPTS="--jobs 1"
 
 php-src:
 	cd ../php-src && CC=chibicc CFLAGS="-fPIC -std=c11 -g" ./buildconf && ./configure && make clean && make -j2 && make test
@@ -149,4 +151,4 @@ uninstall:
 	rm -f $(PREFIX)/bin/chibicc
 	rm -f $(PREFIX)/include/x86_64-linux-gnu/chibicc/*
 
-.PHONY: test clean test-stage2 libchibicc projects projects-all  projects-oth test-all install uninstall test_spe
+.PHONY: test clean test-stage2 libchibicc projects projects-all  projects-oth test-all install uninstall test_spe projects-slow

@@ -72,33 +72,33 @@ _mm256_mpsadbw_epu8 (__m256i __X, __m256i __Y, const int __M)
 //   return (__m256i)__builtin_ia32_pabsd256 ((__v8si)__A);
 // }
 
-// extern __inline __m256i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_packs_epi32 (__m256i __A, __m256i __B)
-// {
-//   return (__m256i)__builtin_ia32_packssdw256 ((__v8si)__A, (__v8si)__B);
-// }
+extern __inline __m256i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_packs_epi32 (__m256i __A, __m256i __B)
+{
+  return (__m256i)__builtin_ia32_packssdw256 ((__v8si)__A, (__v8si)__B);
+}
 
-// extern __inline __m256i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_packs_epi16 (__m256i __A, __m256i __B)
-// {
-//   return (__m256i)__builtin_ia32_packsswb256 ((__v16hi)__A, (__v16hi)__B);
-// }
+extern __inline __m256i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_packs_epi16 (__m256i __A, __m256i __B)
+{
+  return (__m256i)__builtin_ia32_packsswb256 ((__v16hi)__A, (__v16hi)__B);
+}
 
-// extern __inline __m256i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_packus_epi32 (__m256i __A, __m256i __B)
-// {
-//   return (__m256i)__builtin_ia32_packusdw256 ((__v8si)__A, (__v8si)__B);
-// }
+extern __inline __m256i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_packus_epi32 (__m256i __A, __m256i __B)
+{
+  return (__m256i)__builtin_ia32_packusdw256 ((__v8si)__A, (__v8si)__B);
+}
 
-// extern __inline __m256i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_packus_epi16 (__m256i __A, __m256i __B)
-// {
-//   return (__m256i)__builtin_ia32_packuswb256 ((__v16hi)__A, (__v16hi)__B);
-// }
+extern __inline __m256i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_packus_epi16 (__m256i __A, __m256i __B)
+{
+  return (__m256i)__builtin_ia32_packuswb256 ((__v16hi)__A, (__v16hi)__B);
+}
 
 extern __inline __m256i
 __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
@@ -107,12 +107,12 @@ _mm256_add_epi8 (__m256i __A, __m256i __B)
   return (__m256i) ((__v32qu)__A + (__v32qu)__B);
 }
 
-// extern __inline __m256i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_add_epi16 (__m256i __A, __m256i __B)
-// {
-//   return (__m256i) ((__v16hu)__A + (__v16hu)__B);
-// }
+extern __inline __m256i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_add_epi16 (__m256i __A, __m256i __B)
+{
+  return (__m256i) ((__v16hu)__A + (__v16hu)__B);
+}
 
 extern __inline __m256i
 __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
@@ -188,19 +188,26 @@ _mm256_andnot_si256 (__m256i __A, __m256i __B)
   return (__m256i) __builtin_ia32_andnotsi256 ((__v4di)__A, (__v4di)__B);
 }
 
-// extern __inline __m256i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_avg_epu8 (__m256i __A, __m256i __B)
-// {
-//   return (__m256i)__builtin_ia32_pavgb256 ((__v32qi)__A, (__v32qi)__B);
-// }
+extern __inline __m256i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_avg_epu8 (__m256i __A, __m256i __B)
+{
+  return (__m256i)__builtin_ia32_pavgb256 ((__v32qi)__A, (__v32qi)__B);
+}
 
-// extern __inline __m256i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_avg_epu16 (__m256i __A, __m256i __B)
-// {
-//   return (__m256i)__builtin_ia32_pavgw256 ((__v16hi)__A, (__v16hi)__B);
-// }
+extern __inline __m256i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_avg_epu16 (__m256i __A, __m256i __B)
+{
+  return (__m256i)__builtin_ia32_pavgw256 ((__v16hi)__A, (__v16hi)__B);
+}
+
+extern __inline int
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_cvtsi256_si32 (__m256i __A)
+{
+  return __builtin_ia32_vec_ext_v8si ((__v8si)__A, 0);
+}
 
 extern __inline __m256i
 __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
@@ -261,26 +268,26 @@ _mm256_cmpgt_epi8 (__m256i __A, __m256i __B)
   return (__m256i) ((__v32qs)__A > (__v32qs)__B);
 }
 
-// extern __inline __m256i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_cmpgt_epi16 (__m256i __A, __m256i __B)
-// {
-//   return (__m256i) ((__v16hi)__A > (__v16hi)__B);
-// }
+extern __inline __m256i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_cmpgt_epi16 (__m256i __A, __m256i __B)
+{
+  return (__m256i) ((__v16hi)__A > (__v16hi)__B);
+}
 
-// extern __inline __m256i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_cmpgt_epi32 (__m256i __A, __m256i __B)
-// {
-//   return (__m256i) ((__v8si)__A > (__v8si)__B);
-// }
+extern __inline __m256i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_cmpgt_epi32 (__m256i __A, __m256i __B)
+{
+  return (__m256i) ((__v8si)__A > (__v8si)__B);
+}
 
-// extern __inline __m256i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_cmpgt_epi64 (__m256i __A, __m256i __B)
-// {
-//   return (__m256i) ((__v4di)__A > (__v4di)__B);
-// }
+extern __inline __m256i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_cmpgt_epi64 (__m256i __A, __m256i __B)
+{
+  return (__m256i) ((__v4di)__A > (__v4di)__B);
+}
 
 // extern __inline __m256i
 // __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
@@ -336,13 +343,13 @@ _mm256_cmpgt_epi8 (__m256i __A, __m256i __B)
 // 						(__v32qi)__Y);
 // }
 
-// extern __inline __m256i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_madd_epi16 (__m256i __A, __m256i __B)
-// {
-//   return (__m256i)__builtin_ia32_pmaddwd256 ((__v16hi)__A,
-// 					     (__v16hi)__B);
-// }
+extern __inline __m256i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_madd_epi16 (__m256i __A, __m256i __B)
+{
+  return (__m256i)__builtin_ia32_pmaddwd256 ((__v16hi)__A,
+					     (__v16hi)__B);
+}
 
 // extern __inline __m256i
 // __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
@@ -428,12 +435,12 @@ _mm256_cmpgt_epi8 (__m256i __A, __m256i __B)
 //   return (__m256i)__builtin_ia32_pminud256 ((__v8si)__A, (__v8si)__B);
 // }
 
-// extern __inline int
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_movemask_epi8 (__m256i __A)
-// {
-//   return __builtin_ia32_pmovmskb256 ((__v32qi)__A);
-// }
+extern __inline int
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_movemask_epi8 (__m256i __A)
+{
+  return __builtin_ia32_pmovmskb256 ((__v32qi)__A);
+}
 
 // extern __inline __m256i
 // __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
@@ -541,12 +548,12 @@ _mm256_mulhi_epu16 (__m256i __A, __m256i __B)
   return (__m256i)__builtin_ia32_pmulhuw256 ((__v16hi)__A, (__v16hi)__B);
 }
 
-// extern __inline __m256i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_mulhi_epi16 (__m256i __A, __m256i __B)
-// {
-//   return (__m256i)__builtin_ia32_pmulhw256 ((__v16hi)__A, (__v16hi)__B);
-// }
+extern __inline __m256i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_mulhi_epi16 (__m256i __A, __m256i __B)
+{
+  return (__m256i)__builtin_ia32_pmulhw256 ((__v16hi)__A, (__v16hi)__B);
+}
 
 extern __inline __m256i
 __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
@@ -576,12 +583,12 @@ _mm256_or_si256 (__m256i __A, __m256i __B)
   return (__m256i) ((__v4du)__A | (__v4du)__B);
 }
 
-// extern __inline __m256i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_sad_epu8 (__m256i __A, __m256i __B)
-// {
-//   return (__m256i)__builtin_ia32_psadbw256 ((__v32qi)__A, (__v32qi)__B);
-// }
+extern __inline __m256i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_sad_epu8 (__m256i __A, __m256i __B)
+{
+  return (__m256i)__builtin_ia32_psadbw256 ((__v32qi)__A, (__v32qi)__B);
+}
 
 extern __inline __m256i
 __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
@@ -663,12 +670,12 @@ _mm256_slli_si256 (__m256i __A, const int __N)
   ((__m256i)__builtin_ia32_pslldqi256 ((__m256i)(A), (int)(N) * 8))
 #endif
 
-// extern __inline __m256i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_slli_epi16 (__m256i __A, int __B)
-// {
-//   return (__m256i)__builtin_ia32_psllwi256 ((__v16hi)__A, __B);
-// }
+extern __inline __m256i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_slli_epi16 (__m256i __A, int __B)
+{
+  return (__m256i)__builtin_ia32_psllwi256 ((__v16hi)__A, __B);
+}
 
 // extern __inline __m256i
 // __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
@@ -705,12 +712,12 @@ _mm256_slli_epi64 (__m256i __A, int __B)
 //   return (__m256i)__builtin_ia32_psllq256((__v4di)__A, (__v2di)__B);
 // }
 
-// extern __inline __m256i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_srai_epi16 (__m256i __A, int __B)
-// {
-//   return (__m256i)__builtin_ia32_psrawi256 ((__v16hi)__A, __B);
-// }
+extern __inline __m256i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_srai_epi16 (__m256i __A, int __B)
+{
+  return (__m256i)__builtin_ia32_psrawi256 ((__v16hi)__A, __B);
+}
 
 // extern __inline __m256i
 // __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
@@ -754,12 +761,12 @@ _mm256_srli_si256 (__m256i __A, const int __N)
   ((__m256i)__builtin_ia32_psrldqi256 ((__m256i)(A), (int)(N) * 8))
 #endif
 
-// extern __inline __m256i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_srli_epi16 (__m256i __A, int __B)
-// {
-//   return (__m256i)__builtin_ia32_psrlwi256 ((__v16hi)__A, __B);
-// }
+extern __inline __m256i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_srli_epi16 (__m256i __A, int __B)
+{
+  return (__m256i)__builtin_ia32_psrlwi256 ((__v16hi)__A, __B);
+}
 
 // extern __inline __m256i
 // __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
@@ -852,61 +859,61 @@ _mm256_subs_epu8 (__m256i __A, __m256i __B)
 //   return (__m256i)__builtin_ia32_psubusw256 ((__v16hi)__A, (__v16hi)__B);
 // }
 
-// extern __inline __m256i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_unpackhi_epi8 (__m256i __A, __m256i __B)
-// {
-//   return (__m256i)__builtin_ia32_punpckhbw256 ((__v32qi)__A, (__v32qi)__B);
-// }
+ extern __inline __m256i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_unpackhi_epi8 (__m256i __A, __m256i __B)
+{
+  return (__m256i)__builtin_ia32_punpckhbw256 ((__v32qi)__A, (__v32qi)__B);
+}
 
-// extern __inline __m256i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_unpackhi_epi16 (__m256i __A, __m256i __B)
-// {
-//   return (__m256i)__builtin_ia32_punpckhwd256 ((__v16hi)__A, (__v16hi)__B);
-// }
+extern __inline __m256i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_unpackhi_epi16 (__m256i __A, __m256i __B)
+{
+  return (__m256i)__builtin_ia32_punpckhwd256 ((__v16hi)__A, (__v16hi)__B);
+}
 
-// extern __inline __m256i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_unpackhi_epi32 (__m256i __A, __m256i __B)
-// {
-//   return (__m256i)__builtin_ia32_punpckhdq256 ((__v8si)__A, (__v8si)__B);
-// }
+extern __inline __m256i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_unpackhi_epi32 (__m256i __A, __m256i __B)
+{
+  return (__m256i)__builtin_ia32_punpckhdq256 ((__v8si)__A, (__v8si)__B);
+}
 
-// extern __inline __m256i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_unpackhi_epi64 (__m256i __A, __m256i __B)
-// {
-//   return (__m256i)__builtin_ia32_punpckhqdq256 ((__v4di)__A, (__v4di)__B);
-// }
+extern __inline __m256i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_unpackhi_epi64 (__m256i __A, __m256i __B)
+{
+  return (__m256i)__builtin_ia32_punpckhqdq256 ((__v4di)__A, (__v4di)__B);
+}
 
-// extern __inline __m256i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_unpacklo_epi8 (__m256i __A, __m256i __B)
-// {
-//   return (__m256i)__builtin_ia32_punpcklbw256 ((__v32qi)__A, (__v32qi)__B);
-// }
+extern __inline __m256i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_unpacklo_epi8 (__m256i __A, __m256i __B)
+{
+  return (__m256i)__builtin_ia32_punpcklbw256 ((__v32qi)__A, (__v32qi)__B);
+}
 
-// extern __inline __m256i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_unpacklo_epi16 (__m256i __A, __m256i __B)
-// {
-//   return (__m256i)__builtin_ia32_punpcklwd256 ((__v16hi)__A, (__v16hi)__B);
-// }
+extern __inline __m256i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_unpacklo_epi16 (__m256i __A, __m256i __B)
+{
+  return (__m256i)__builtin_ia32_punpcklwd256 ((__v16hi)__A, (__v16hi)__B);
+}
 
-// extern __inline __m256i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_unpacklo_epi32 (__m256i __A, __m256i __B)
-// {
-//   return (__m256i)__builtin_ia32_punpckldq256 ((__v8si)__A, (__v8si)__B);
-// }
+extern __inline __m256i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_unpacklo_epi32 (__m256i __A, __m256i __B)
+{
+  return (__m256i)__builtin_ia32_punpckldq256 ((__v8si)__A, (__v8si)__B);
+}
 
-// extern __inline __m256i
-// __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_unpacklo_epi64 (__m256i __A, __m256i __B)
-// {
-//   return (__m256i)__builtin_ia32_punpcklqdq256 ((__v4di)__A, (__v4di)__B);
-// }
+extern __inline __m256i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_unpacklo_epi64 (__m256i __A, __m256i __B)
+{
+  return (__m256i)__builtin_ia32_punpcklqdq256 ((__v4di)__A, (__v4di)__B);
+}
 
 extern __inline __m256i
 __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
@@ -1038,10 +1045,12 @@ _mm256_blend_epi32 (__m256i __X, __m256i __Y, const int __M)
 
 // extern __inline __m256i
 // __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_permutevar8x32_epi32 (__m256i __X, __m256i __Y)
-// {
-//   return (__m256i) __builtin_ia32_permvarsi256 ((__v8si)__X, (__v8si)__Y);
-// }
+extern __inline __m256i
+__attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_permutevar8x32_epi32 (__m256i __X, __m256i __Y)
+{
+  return (__m256i) __builtin_ia32_permvarsi256 ((__v8si)__X, (__v8si)__Y);
+}
 
 // #ifdef __OPTIMIZE__
 // extern __inline __m256d

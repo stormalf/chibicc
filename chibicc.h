@@ -1,5 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 #define _GNU_SOURCE
+#ifndef CHIBICC_H
+#define CHIBICC_H
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
@@ -48,8 +50,9 @@
 #endif
 
 #define PRODUCT "chibicc"
-#define VERSION "1.0.24.1"
+#define VERSION "1.0.25"
 #define MAXLEN 1001
+#define MAX_PATH_LENGTH 500
 #define DEFAULT_TARGET_MACHINE "x86_64-linux-gnu"
 #define MAX_BUILTIN_ARGS 8
 #define MAX_WEAK 20
@@ -119,14 +122,26 @@ this " PRODUCT " supports vector, some extended assembly and int128 \n"
 -mno-sse disabling sse support \n \
 -msse2 enabling sse2 support \n \
 -mno-sse2 disabling sse2 support \n \
--msse3 enabling sse3 support \n\
+-msse3 enabling sse3 support \n \
+-mssse3 enabling supplemental sse3 support (but chibicc managed it as -msse3) \n \
 -mno-sse3 disabling sse3 support \n \
 -msse4 enabling sse4 support \n \
 -mno-sse4 disabling sse4 support \n \
 -msse4.1 enabling sse4.1 support \n \
+-msse4.2 enabling sse4.2 support \n \
 -mcrc32 enabling crc32 instruction support \n \
 -nostdlib  Do not use the standard system startup files or libraries when linking \n \
 -nostdinc Do not use the standard system header files when compiling \n \
+-ffreestanding  Compile for a freestanding environment; implies no CRT startup files\n \
+-fvisibility=default|hidden|protected  Set default symbol visibility\n \
+ -Wall  Enable all warnings (currently: -Wunused-variable)\n \
+ -Wextra  Enable extra warnings (currently: -Wunused-parameter)\n \
+ -Wunused-parameter  Warn about unused function parameters\n \
+ -Wno-unused-parameter  Suppress unused parameter diagnostics\n \
+ -Wunused-variable  Warn about unused local variables\n \
+ -Wno-unused-variable  Suppress unused variable diagnostics\n \
+-Wimplicit-function-declaration  Warn about implicit function declarations\n \
+-Wno-implicit-function-declaration  Suppress implicit function declaration diagnostics\n \
 -std=c99 generates an error on implicit function declaration (without -std only a warning is emitted) \n \
 -std=c11 generates an error on implicit function declaration (without -std only a warning is emitted) \n \
 -mmmx enabling mmx instructions \n \
@@ -135,8 +150,9 @@ this " PRODUCT " supports vector, some extended assembly and int128 \n"
 -mavx2 enabling avx2 instructions \n \
 -print-search-dirs prints minimal information on install dir. \n \
 -Werror any warning is sent as an error and stops the compile \n \
--f-omit-frame-pointer omits frame pointer and uses rsp-relative addressing. Minimal stack usage \n \
+-fomit-frame-pointer omits frame pointer and uses rsp-relative addressing. Minimal stack usage \n \
 -f-no-omit-frame-pointer always keeps frame pointer (default) \n \
+-fcf-protection enable control flow protection (CET IBT + SHSTK) \n \
 -g enabling debug symbols \n \
 -O0 disabling optimization \n \
 -O or -O1 enabling optimization level 1 \n \
@@ -150,6 +166,7 @@ typedef struct Member Member;
 typedef struct DebugTypedef DebugTypedef;
 typedef struct Relocation Relocation;
 typedef struct Hideset Hideset;
+typedef struct Scope Scope;
 
 
 typedef struct
@@ -207,7 +224,10 @@ typedef struct
   // For #line directive
   char *display_name;
   int line_delta;
+  bool is_system_header;
 } File;
+
+bool is_system_include_path(char *path);
 
 // Token type
 typedef struct Token Token;
@@ -227,6 +247,7 @@ struct Token
   int line_no;      // Line number
   int line_delta;   // Line number
   int pack_align;   // Active #pragma pack value (0 means default)
+  char *pragma_visibility; // Active #pragma GCC visibility (NULL means no pragma override)
   bool at_bol;      // True if this token is at beginning of line
   bool has_space;   // True if this token follows a space character
   Hideset *hideset; // For macro expansion
@@ -374,6 +395,11 @@ struct Obj
   bool force_frame_pointer;
   Type *vla_ty;
   bool is_returned_twice;
+  bool is_noinline;
+  bool is_used;
+  bool is_unused;
+  bool is_read;
+  bool is_written;
 };
 
 // Global variable can be initialized either by a constant expression
@@ -489,6 +515,12 @@ typedef enum
   ND_BUILTIN_BSWAP32, //builtin bswap32
   ND_BUILTIN_BSWAP64, //builtin bswap64,
   ND_BUILTIN_FRAME_ADDRESS, // builtin frame address
+  ND_BUILTIN_CEIL,  // builtin ceil (double)
+  ND_BUILTIN_FLOOR, // builtin floor (double)
+  ND_BUILTIN_CEILF, // builtin ceilf (float)
+  ND_BUILTIN_FLOORF,// builtin floorf (float)
+  ND_BUILTIN_CEILL, // builtin ceill (long double)
+  ND_BUILTIN_FLOORL,// builtin floorl (long double)
   ND_STDC_BIT_CEIL, // builtin stdc bit ceil
   ND_EMMS,
   ND_SFENCE,
@@ -640,7 +672,12 @@ typedef enum
   ND_MOVNTQ,
   ND_MOVNTPS,
   ND_SHUFPD,
+  ND_ROUNDPD,
+  ND_ROUNDSD,
+  ND_ROUNDSS,
+  ND_ROUNDPS,
   ND_VECEXTV4SI,
+  ND_VECEXTV4SF,
   ND_ADDSD,
   ND_SUBSD,
   ND_MULSD,
@@ -713,8 +750,7 @@ typedef enum
   ND_LOADHPD,
   ND_LOADLPD,
   ND_MOVMSKPD,
-  ND_PACKSSWB128,
-  ND_PACKSSDW128,
+  ND_PACKSSWB128,  
   ND_PACKUSWB128,
   ND_PUNPCKHBW128,
   ND_PUNPCKHWD128,
@@ -740,8 +776,10 @@ typedef enum
   ND_PSLLDI128,
   ND_PSLLQI128,
   ND_PSRAWI128,
+  ND_PSRAWI256,
   ND_PSRADI128,
   ND_PSRLWI128,
+  ND_PSRLWI256,
   ND_PSRLDI128,
   ND_PSRLQI128,
   ND_PSLLW128,
@@ -758,6 +796,7 @@ typedef enum
   ND_PMINSW128,
   ND_PMINUB128,
   ND_PMOVMSKB128,
+  ND_PMOVMSKB256,
   ND_PMULHUW128,
   ND_MASKMOVDQU,
   ND_PAVGB128,
@@ -824,8 +863,18 @@ typedef enum
   ND_PTESTC128,
   ND_PTESTNZC128,
   ND_PBLENDVB128,
+  ND_PBLENDW128,
   ND_BLENDVPS,
   ND_BLENDVPD,
+  ND_BLENDPS,
+  ND_BLENDPD,
+  ND_BLENDPS256,
+  ND_BLENDPD256,
+  ND_DPPS,
+  ND_DPPD,
+  ND_INSERTPS128,
+  ND_MPSADBW128,
+  ND_MPSADBW256,
   ND_PMINSB128,
   ND_PMAXSB128,
   ND_PMINUW128,
@@ -848,6 +897,7 @@ typedef enum
   ND_PMOVZXBW128,
   ND_PMOVZXDQ128,
   ND_PMOVZXWQ128,
+  ND_PACKSSDW128,
   ND_PACKUSDW128,
   ND_MOVNTDQA,
   ND_CRC32QI,
@@ -855,6 +905,9 @@ typedef enum
   ND_CRC32SI,
   ND_CRC32DI,
   ND_PSHUFD,
+  ND_PSHUFHW,
+  ND_PSHUFLW,
+  ND_PSHUFW,
   ND_FETCHNAND,       
   ND_ADD_AND_FETCH,   
   ND_SUB_AND_FETCH,   
@@ -908,6 +961,7 @@ typedef enum
   ND_ADDCARRYX_U64,
   ND_TZCNT_U16,
   ND_BEXTR_U32,
+  ND_BEXTR_U64,
   ND_ADDFETCH,  
   ND_ORFETCH,
   ND_ANDFETCH,
@@ -923,12 +977,16 @@ typedef enum
   ND_PCMPGTB256_MASK,
   ND_PSHUFB256,
   ND_PBLENDVB256,
+  ND_PSRLDQI128,
+  ND_PSLLDQI128,
   ND_PSRLDQI256,
   ND_PSLLDQI256,
   ND_VINSERTF128_SI256,    
   ND_SI256_SI,
   ND_SI_SI256,
+  ND_PALIGNR128,
   ND_PALIGNR256,
+  ND_PALIGNR,
   ND_VPERM2I128_SI256,
   ND_PBLENDD256,
   ND_VEXTRACTF128_SI256,
@@ -937,14 +995,106 @@ typedef enum
   ND_ANDNOTSI256,
   ND_VECEXTV2DI,
   ND_PMULHUW256,
+  ND_PMADDWD256,
   ND_PD256_PD,
   ND_PS256_PS,
   ND_PSRLQI256,
   ND_PSLLQI256,
+  ND_PSLLWI256,
   ND_PERMDI256,
   ND_PSLLDI256,
   ND_PSRLDI256,
   ND_PSRADI256,
+  ND_VECEXTV4HI,
+  ND_VECSETV4HI,
+  ND_VECSETV8HI,
+  ND_VECSETV16QI,
+  ND_VECSETV4SI,
+  ND_VECSETV2DI,
+  ND_PCMPISTRM128,
+  ND_PCMPISTRI128,
+  ND_PCMPISTRIA128,
+  ND_PCMPISTRIC128,
+  ND_PCMPISTRIO128,
+  ND_PCMPISTRIS128,
+  ND_PCMPISTRIZ128,
+  ND_PCMPESTRM128,
+  ND_PCMPESTRI128,
+  ND_PCMPESTRIA128,
+  ND_PCMPESTRIC128,
+  ND_PCMPESTRIO128,
+  ND_PCMPESTRIS128,
+  ND_PCMPESTRIZ128,
+  ND_PCLMULQDQ128,
+  ND_DPPS256,
+  ND_SHUFPD256,
+  ND_SHUFPS256,
+  ND_CMPPD,
+  ND_CMPPS,
+  ND_CMPPD256,
+  ND_CMPPS256,
+  ND_CMPSD,
+  ND_CMPSS,
+  ND_VEXTRACTF128_PD256,
+  ND_VEXTRACTF128_PS256,
+  ND_VINSERTF128_PD256,
+  ND_VINSERTF128_PS256,
+  ND_VPERM2F128_PD256,
+  ND_VPERM2F128_PS256,
+  ND_VPERM2F128_SI256,
+  ND_VPERMILPD,
+  ND_VPERMILPS,
+  ND_VPERMILPD256,
+  ND_VPERMILPS256,
+  ND_EXP2PD_MASK,
+  ND_EXP2PS_MASK,
+  ND_RCP28PD_MASK,
+  ND_RCP28PS_MASK,
+  ND_RCP28SD_ROUND,
+  ND_RCP28SS_ROUND,
+  ND_RSQRT28PD_MASK,
+  ND_RSQRT28PS_MASK,
+  ND_RSQRT28SD_ROUND,
+  ND_RSQRT28SS_ROUND,
+  ND_GATHERPFDPD,
+  ND_GATHERPFDPS,
+  ND_GATHERPFQPD,
+  ND_GATHERPFQPS,
+  ND_SCATTERPFDPD,
+  ND_SCATTERPFDPS,
+  ND_SCATTERPFQPD,
+  ND_SCATTERPFQPS,
+  ND_VPSHLD_V32HI,
+  ND_VPSHLD_V16SI,
+  ND_VPSHLD_V8DI,
+  ND_VPSHLD_V16SI_MASK,
+  ND_VPSHLD_V8DI_MASK,
+  ND_VPSHRD_V32HI,
+  ND_VPSHRD_V16SI,
+  ND_VPSHRD_V8DI,
+  ND_VPSHRD_V16SI_MASK,
+  ND_VPSHRD_V8DI_MASK,
+  ND_XABORT,
+  ND_VPCLMULQDQ_V4DI,
+  ND_VPCLMULQDQ_V8DI,
+   ND_PAVGB256,
+   ND_PAVGW256,
+   ND_PERMVARSI256,
+   ND_VECEXTV8SI,
+   ND_PUNPCKHBW256,
+   ND_PUNPCKHWD256,
+   ND_PUNPCKHDQ256,
+   ND_PUNPCKHQDQ256,
+   ND_PUNPCKLBW256,
+   ND_PUNPCKLWD256,
+   ND_PUNPCKLDQ256,
+   ND_PUNPCKLQDQ256,
+   ND_PSADBW256,
+   ND_PACKSSWB256,
+   ND_PACKSSDW256,
+   ND_PACKUSWB256,
+   ND_PACKUSDW256,
+   ND_PMULHW256,
 } NodeKind;
 
 // AST node type
@@ -1037,6 +1187,8 @@ Node
   bool is_scalar_promoted;  
   bool is_tail;
   bool clobbers_rbx;
+  bool asm_is_volatile;
+  Scope *scope;
 };
 
 typedef struct
@@ -1145,6 +1297,7 @@ struct Type
   bool is_weak;
   char *visibility;
   bool is_inline;
+  bool is_unused;
   int min_vector_width;
   bool is_compound_lit; // Flag to indicate if this type is a compound literal
   // Function type
@@ -1162,6 +1315,8 @@ struct Type
   bool is_vector;
   Token *tag_name; // struct/union/enum tag name
 
+  // Scope tree for function-local variables
+  struct Scope *scopes;
 };
 
 struct DebugTypedef
@@ -1235,8 +1390,13 @@ bool is_array(Type *ty);
 Type *new_qualified_type(Type *ty);
 Type *unqual(Type *ty);
 bool is_vector(Type *ty);
+bool has_flonum(Type *ty, int lo, int hi, int offset);
+bool has_flonum1(Type *ty);
+bool has_flonum2(Type *ty);
 bool is_int128(Type *ty);
 bool is_pointer(Type *ty);
+bool is_sret(Type *ty);
+bool has_pointer(Type *ty);
 bool is_const_expr(Node *node);
 bool contains_label(Node *node);
 
@@ -1341,6 +1501,12 @@ void gen_builtin_clzl(Node *node);
 void gen_builtin_bswap16(Node *node);
 void gen_builtin_bswap32(Node *node);
 void gen_builtin_bswap64(Node *node);
+void gen_builtin_ceil(Node *node);
+void gen_builtin_floor(Node *node);
+void gen_builtin_ceilf(Node *node);
+void gen_builtin_floorf(Node *node);
+void gen_builtin_ceill(Node *node);
+void gen_builtin_floorl(Node *node);
 void gen_builtin_frame_address(Node *node);
 void gen_builtin_expect(Node *node);
 void gen_builtin_abort(Node *node);
@@ -1351,6 +1517,7 @@ void gen_builtin_nan(Node *node);
 void gen_builtin_nanl(Node *node);
 void gen_tzcnt_u16(Node *node);
 void gen_bextr_u32(Node *node);
+void gen_bextr_u64(Node *node);
 void gen_binop1(Node *node, const char *insn);
 void gen_binop2(Node *node, const char *insn);
 void gen_nothing(Node *node);
@@ -1425,10 +1592,20 @@ void gen_signbit(Node *node);
 void gen_isunordered(Node *node);
 void gen_vec_init_v2si(Node *node);
 void gen_vec_ext(Node *node);
+void gen_vec_ext_v4sf(Node *node);
+void gen_vec_set_v4hi(Node *node);
+void gen_vec_set_v8hi(Node *node);
+void gen_vec_set_v16qi(Node *node);
+void gen_vec_set_v4si(Node *node);
+void gen_vec_set_v2di(Node *node);
 void gen_psubusb256(Node *node);
 void gen_vec_init_binop(Node *node, const char *insn);
 void gen_pshufd(Node *node);
+void gen_pshufhw(Node *node);
+void gen_pshuflw(Node *node);
+void gen_pshufw(Node *node);
 void gen_shuf_binop(Node *node, const char *insn);
+void gen_round(Node *node, const char *insn);
 void gen_psll_binop(Node *node, const char *insn);
 void gen_shuffle(Node *node, const char *insn);
 void gen_maskmovq(Node *node);
@@ -1442,14 +1619,25 @@ void gen_sse_blendvpx(Node *node, const char *insn);
 void gen_pcmpgtb256_mask(Node *node);
 void gen_pshufb256(Node *node);
 void gen_avx2_256(Node *node, const char *insn);
+void gen_sse2_dqshift(Node *node, const char *insn);
 void gen_vinsertf128_si256(Node *node);
 void gen_avx2_permdi256(Node *node);
 void gen_avx2_psll_binop(Node *node, const char *insn);
+void gen_palignr128(Node *node);
 void gen_avx2_palignr256(Node *node);
+void gen_palignr(Node *node);
 void gen_vperm2i128_si256(Node *node);
 void gen_pblendd256(Node *node);
 void gen_pmulhuw256(Node *node);
+void gen_pmaddwd256(Node *node);
+void gen_avx2_pmovmskb256(Node *node);
 void gen_andnotsi256(Node *node);
+void gen_punpck256(Node *node, const char *insn);
+void gen_psadbw256(Node *node);
+void gen_pack256(Node *node, const char *insn);
+void gen_mulhw256(Node *node);
+void gen_pavg256(Node *node, const char *insn);
+void gen_permvarsi256(Node *node);
 void gen_vextractf128_si256(Node *node);
 void gen_si256(Node *node);
 void gen_cvt_mmx_binop(Node *node, const char *insn);
@@ -1461,6 +1649,41 @@ void gen_mmx_binop1(Node *node, const char *insn);
 void gen_sse_testz(Node *node);
 void gen_sse_testc(Node *node);
 void gen_sse_testnzc(Node *node);
+void gen_blendps(Node *node, bool is256);
+void gen_blendpd(Node *node, bool is256);
+void gen_dpps(Node *node);
+void gen_dppd(Node *node);
+void gen_insertps128(Node *node);
+void gen_mpsadbw128(Node *node);
+void gen_mpsadbw256(Node *node);
+void gen_pcmpistrm128(Node *node);
+void gen_pcmpistri128(Node *node);
+void gen_pcmpestrm128(Node *node);
+void gen_pcmpestri128(Node *node);
+void gen_pclmulqdq128(Node *node);
+void gen_pcmpi_flag(Node *node, const char *flag_insn, bool is_explicit);
+void gen_dpps256(Node *node);
+void gen_shufpd256(Node *node);
+void gen_shufps256(Node *node);
+void gen_avx_cmp(Node *node, const char *insn, bool is256);
+void gen_vextractf128_pd256(Node *node);
+void gen_vextractf128_ps256(Node *node);
+void gen_vinsertf128_pd256(Node *node);
+void gen_vinsertf128_ps256(Node *node);
+void gen_vperm2f128_si256(Node *node);
+void gen_vperm2f128_pd256(Node *node);
+void gen_vperm2f128_ps256(Node *node);
+void gen_vpermilpd(Node *node);
+void gen_vpermilps(Node *node);
+void gen_vpermilpd256(Node *node);
+void gen_vpermilps256(Node *node);
+void gen_xabort(Node *node);
+void gen_vpclmulqdq_v4di(Node *node);
+void gen_avx512er_first(Node *node);
+void gen_avx512pf_void(Node *node);
+void gen_vbmi2_3(Node *node);
+void gen_vbmi2_5(Node *node);
+void gen_pblendw128(Node *node);
 
 //
 // unicode.c
@@ -1497,6 +1720,20 @@ void hashmap_put2(HashMap *map, char *key, int keylen, void *val);
 void hashmap_delete(HashMap *map, char *key);
 void hashmap_delete2(HashMap *map, char *key, int keylen);
 void hashmap_test(void);
+
+// Scope tree - represents nested block scopes for variables/tags.
+// `parent` points to the enclosing scope (outer scope).
+// `children`/`sibling_next` links child scopes at the same nesting level.
+// `locals` is the linked list of Obj variables declared in this scope.
+struct Scope
+{
+  Scope *parent;
+  Scope *children;
+  Scope *sibling_next;
+  Obj *locals;
+  HashMap vars;
+  HashMap tags;
+};
 
 //
 // main.c
@@ -1560,6 +1797,15 @@ extern bool opt_optimize_level3;
 extern bool opt_omit_frame_pointer;
 extern bool opt_avx2;
 extern bool opt_avx;
+extern bool opt_tbm;
+extern char *opt_fvisibility;
+extern bool opt_implicit_warn;
+extern bool opt_no_implicit;
+extern bool opt_ffreestanding;
+extern bool opt_wall;
+extern bool opt_wextra;
+extern bool opt_wunused_parameter;
+extern bool opt_wunused_variable;
 
 //
 // extended_asm.c
@@ -1585,3 +1831,7 @@ int retrieve_output_index_from_letter(char letter);
 char *retrieveVariableNumber(int index);
 char *generate_input_for_output(void);
 char *generate_return_rax(Token *retval);
+char *register_to_64(char *regist);
+
+
+#endif // CHIBICC_H

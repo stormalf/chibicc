@@ -184,6 +184,14 @@ static Obj *find_obj_by_tok(Obj *locals, Token *tok) {
     return NULL;
 }
 
+static void mark_asm_var_liveness(Token *tok, bool is_write, bool is_read) {
+  VarScope *sc = find_var(tok);
+  if (sc && sc->var && !sc->var->is_function) {
+    if (is_read) sc->var->is_read = true;
+    if (is_write) sc->var->is_written = true;
+  }
+}
+
 static Member *find_struct_member(Type *ty, Token *tok) {
     if (!ty || !ty->members || !tok || tok->kind != TK_IDENT)
         return NULL;
@@ -369,10 +377,16 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals, Obj *curre
             else
                 snprintf(reg, sizeof(reg), "%%%s", name);
 
-            if (!check_register_used(reg))
-                add_register_used(reg);
+            // Normalize to the 64-bit name: GCC clobbers are commonly written
+            // with a 32-bit sub-register (e.g. "%ebx"), but callee_save and the
+            // clobbers_rbx check use the 64-bit name ("%rbx"). Without this, a
+            // clobbered callee-saved register would never be preserved,
+            // corrupting the caller's value.
+            char *reg64 = register_to_64(reg);
+            if (!check_register_used(reg64))
+                add_register_used(reg64);
 
-            if (!strncmp(reg, "%rbx", 4))
+            if (!strncmp(reg64, "%rbx", 4))
                 node->clobbers_rbx = true;
 
             tok = tok->next;
@@ -431,8 +445,10 @@ char *extended_asm(Node *node, Token **rest, Token *tok, Obj *locals, Obj *curre
                 tmp_asm = subst_asm(template, tmp, asmExt->output[i]->variableNumber);
                 free(tmp);
             }else {
-                  tmp_asm = subst_asm(template, asmExt->output[i]->reg, asmExt->output[i]->variableNumber);                         
-                }
+                if (!asmExt->output[i]->variableNumber)
+                  error("%s:%d: error: in %s: variableNumber is null! template=%s i=%d", __FILE__, __LINE__, __func__, template, i);
+                tmp_asm = subst_asm(template, asmExt->output[i]->reg, asmExt->output[i]->variableNumber);                         
+            }
         }
             
         //special case %b0 %h0
@@ -637,6 +653,7 @@ static bool parse_simple_binary_input(Token **rest, Token *tok, Obj *locals)
                 error_tok(lhs, "%s:%d: in %s: not a variable", __FILE__, __LINE__, __func__);
             if (!sc->var->ty)
                 error_tok(lhs, "%s:%d: in %s: variable type unknown", __FILE__, __LINE__, __func__);
+            mark_asm_var_liveness(lhs, false, true);
             in->bin_lhs_is_imm = false;
             in->bin_lhs_offset = sc->var->offset;
             in->bin_lhs_size = sc->var->ty->size;
@@ -664,6 +681,7 @@ static bool parse_simple_binary_input(Token **rest, Token *tok, Obj *locals)
                 error_tok(rhs, "%s:%d: in %s: not a variable", __FILE__, __LINE__, __func__);
             if (!sc->var->ty)
                 error_tok(rhs, "%s:%d: in %s: variable type unknown", __FILE__, __LINE__, __func__);
+            mark_asm_var_liveness(rhs, false, true);
             in->bin_rhs_is_imm = false;
             in->bin_rhs_offset = sc->var->offset;
             in->bin_rhs_size = sc->var->ty->size;
@@ -760,6 +778,20 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 asmExt->output[nbOutput]->regw = register_word(asmExt->output[nbOutput]->reg64);
                 asmExt->output[nbOutput]->letter = 'r';       
                 asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);       
+            }
+            else if (!strncmp(tok->str, "+&r", tok->len) )
+            {
+                asmExt->output[nbOutput]->isRegister = true;
+                asmExt->output[nbOutput]->prefix = "+";
+                asmExt->output[nbOutput]->reg = specific_register_available("%r9");
+                if (!asmExt->output[nbOutput]->reg)
+                    error("%s:%d: error: in %s: reg is null!", __FILE__,  __LINE__, __func__);
+                asmExt->output[nbOutput]->reg64 = asmExt->output[nbOutput]->reg;
+                asmExt->output[nbOutput]->regh = register_higher(asmExt->output[nbOutput]->reg64);
+                asmExt->output[nbOutput]->regl = register_lower(asmExt->output[nbOutput]->reg64);
+                asmExt->output[nbOutput]->regw = register_word(asmExt->output[nbOutput]->reg64);
+                asmExt->output[nbOutput]->letter = 'r';
+                asmExt->output[nbOutput]->variableNumber = retrieveVariableNumber(nbOutput);
             }
 
             else if (!strncmp(tok->str, "=m", tok->len) || !strncmp(tok->str, "+m", tok->len))
@@ -1053,6 +1085,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     error_tok(tok, "%s:%d: in %s: variable undefined", __FILE__, __LINE__, __func__);
                 if (!sc->var->ty)
                     error_tok(tok, "%s:%d: in %s: variable type unknown", __FILE__, __LINE__, __func__);
+                mark_asm_var_liveness(tok, true, true);
                 // retrieve the size of the variable to determine the register to use here we use RAX variation
                 asmExt->output[nbOutput]->size = sc->var->ty->size;
                 if (!asmExt->output[nbOutput]->reg)
@@ -1245,6 +1278,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                         error_tok(tok, "%s:%d: in %s: variable undefined2", __FILE__, __LINE__, __func__);
                     if (!sc->var->ty)
                         error_tok(tok, "%s:%d: in %s: variable type unknown2", __FILE__, __LINE__, __func__);
+                    mark_asm_var_liveness(tok, true, true);
                     // retrieve the size of the variable to determine the register to use here we use RAX variation
                     // skip the variable to go to next token that should be a ")"
                 
@@ -1297,7 +1331,8 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                             if (!sc || !sc->var)
                                 error_tok(tok, "%s:%d: in %s: variable undefined after cast", __FILE__, __LINE__, __func__);
                             if (!sc->var->ty)
-                                error_tok(tok, "%s:%d: in %s: variable type unknown after cast", __FILE__, __LINE__, __func__);                                
+                                error_tok(tok, "%s:%d: in %s: variable type unknown after cast", __FILE__, __LINE__, __func__);
+                            mark_asm_var_liveness(tok, true, !strcmp(asmExt->output[nbOutput]->prefix, "+"));
 
                             asmExt->output[nbOutput]->size = sc->var->ty->size;
                             if (sc->var->funcname) {
@@ -1799,6 +1834,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     error_tok(tok, "%s:%d: in %s: not a variable", __FILE__, __LINE__, __func__);
                 if (!sc->var->ty)
                     error_tok(tok, "%s:%d: in %s: variable type unknown", __FILE__, __LINE__, __func__);
+                mark_asm_var_liveness(tok, false, true);
                 asmExt->input[nbInput]->input = tok;
                 asmExt->input[nbInput]->isVariable = true;
                 asmExt->input[nbInput]->size = sc->var->ty->size;
@@ -1967,6 +2003,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                         error_tok(tok, "%s:%d: in %s: variable undefined2", __FILE__, __LINE__, __func__);
                     if (!sc->var->ty)
                         error_tok(tok, "%s:%d: in %s: variable type unknown2", __FILE__, __LINE__, __func__);
+                    mark_asm_var_liveness(tok, false, true);
                     asmExt->input[nbInput]->input = tok;
                     asmExt->input[nbInput]->isVariable = true;
                     asmExt->input[nbInput]->isAddress = true;
@@ -2021,6 +2058,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                             error_tok(tok, "%s:%d: error: in %s: variable undefined", __FILE__, __LINE__, __func__);
                         if (!sc->var->ty)
                             error_tok(tok, "%s:%d: error: in %s: variable type undefined", __FILE__, __LINE__, __func__);
+                        mark_asm_var_liveness(tok, false, true);
 
                         asmExt->input[nbInput]->size = sc->var->ty->size;
 
@@ -2053,6 +2091,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     sc = find_var(tok);
                     if (!sc || !sc->var)
                         error_tok(tok, "%s:%d: error: in %s: variable undefined", __FILE__, __LINE__, __func__);
+                    mark_asm_var_liveness(tok, false, true);
                     asmExt->input[nbInput]->input = tok;
                     asmExt->input[nbInput]->isVariable = true;
                     asmExt->input[nbInput]->isLea = true;
@@ -2083,7 +2122,8 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                         error_tok(tok, "%s:%d: in %s: variable undefined", __FILE__, __LINE__, __func__);
                     if (!sc->var->ty)
                         error_tok(tok, "%s:%d: in %s: variable type unknown", __FILE__, __LINE__, __func__);
-                    
+                    mark_asm_var_liveness(tok, true, !strcmp(asmExt->output[nbOutput]->prefix, "+"));
+
                     asmExt->output[nbOutput]->size = sc->var->ty->size;
                     if (sc->var->funcname) {
                         update_offset(sc->var->funcname, locals);
@@ -2129,6 +2169,12 @@ char *subst_asm(char *template, char *output_str, char *input_str)
 // generic string replace function
 char *string_replace(char *str, char *oldstr, char *newstr)
 {
+    if (!oldstr)
+        error("%s:%d: error: in %s: oldstr is null ", __FILE__, __LINE__, __func__);
+    if (!newstr )
+        return oldstr;
+    if (!str)
+        error("%s:%d: error: in %s: str is null ", __FILE__, __LINE__, __func__);
     size_t cap = 10000;
     char bstr[10000];
     memset(bstr, 0, sizeof(bstr));
@@ -2552,16 +2598,8 @@ static char *arith_opcode(char op, int size)
 // TODO we can have an issue here if several functions with same name. Probably need to find in a better way to avoid this issue.
 void update_offset(char *funcname, Obj *locals)
 {
-    //printf(" function %s \n", funcname);
     Obj *fn = find_func(funcname);
     if (fn) {
-        //fixing ====ISS-161 issue with some locals missing in fn->locals
-        //if (!fn->locals)
-        fn->locals = locals;
-
-        // During parsing we may call this before the function is fully marked as
-        // a definition. Force offset assignment so inline asm can use (%rbp)-relative
-        // slots for locals/params.
         bool saved_def = fn->is_definition;
         fn->is_definition = true;
         fn->is_function = true;
@@ -2580,7 +2618,6 @@ void update_offset(char *funcname, Obj *locals)
     Type dummy_ty = {0};
     dummy_fn.is_function = true;
     dummy_fn.is_definition = true;
-    dummy_fn.locals = locals;
     dummy_fn.ty = &dummy_ty;
     assign_lvar_offsets(&dummy_fn);
 }

@@ -8,6 +8,18 @@ Using PVS.studio to find some potential issues and fix them.
 
 Trying to work on issues and pull requests done in the original repository.
 
+This project used also AI to produce code.
+
+
+## contributors and inspiring people
+
+Many thanks to Justin Tunney for their great cosmopolitan project that fixed some chibicc bugs and added some features (like int128 management):  https://github.com/jart/cosmopolitan 
+Many thanks to Hsiang-Ying Fu for his great project slimcc that bring some features and bugs and tests to improve this chibicc forked project:  https://github.com/fuhsnn/slimcc 
+Many thanks also to  Freddy Cubas, Arne de Bruijn and Urs Jansen for their contributions and of course of the open source community that brings lots of beautiful projects and resources that are very inspirational!
+And of course many thanks on all contributors on the original project chibicc (that I merged their pull request or suggestion in this project).
+
+
+
 ## usage
 
 ./chibicc --help
@@ -75,13 +87,25 @@ or
      -msse2 enabling sse2 support 
      -mno-sse2 disabling sse2 support 
      -msse3 enabling sse3 support 
+     -mssse3 enabling supplemental sse3 support (but chibicc managed it as -msse3)
      -mno-sse3 disabling sse3 support 
      -msse4 enabling sse4 support 
      -mno-sse4 disabling sse4 support 
      -msse4.1 enabling sse4.1 support 
+     -msse4.2 enabling sse4.2 support
      -mcrc32 enabling crc32 instruction support 
      -nostdlib  Do not use the standard system startup files or libraries when linking 
      -nostdinc Do not use the standard system header files when compiling 
+     -ffreestanding  Compile for a freestanding environment; implies no CRT startup files
+     -fvisibility=default|hidden|protected  Set default symbol visibility
+     -Wall  Enable all warnings (currently: -Wunused-variable)
+     -Wextra  Enable extra warnings (currently: -Wunused-parameter)
+     -Wunused-parameter  Warn about unused function parameters
+     -Wno-unused-parameter  Suppress unused parameter diagnostics
+     -Wunused-variable  Warn about unused local variables
+     -Wno-unused-variable  Suppress unused variable diagnostics
+     -Wimplicit-function-declaration  Warn about implicit function declarations
+     -Wno-implicit-function-declaration  Suppress implicit function declaration diagnostics
      -std=c99 generates an error on implicit function declaration (without -std only a warning is emitted) 
      -std=c11 generates an error on implicit function declaration (without -std only a warning is emitted) 
      -mmmx enabling mmx instructions 
@@ -90,8 +114,9 @@ or
      -mavx2 enabling avx2 instructions 
      -print-search-dirs prints minimal information on install dir. 
      -Werror any warning is sent as an error and stops the compile 
-     -f-omit-frame-pointer omits frame pointer and uses rsp-relative addressing. Minimal stack usage 
+     -fomit-frame-pointer omits frame pointer and uses rsp-relative addressing. Minimal stack usage 
      -f-no-omit-frame-pointer always keeps frame pointer (default) 
+     -fcf-protection enable control flow protection (CET IBT + SHSTK) 
      -g enabling debug symbols 
      -O0 disabling optimization 
      -O or -O1 enabling optimization level 1 
@@ -238,14 +263,10 @@ it means that if you don't use the ld linker or ld.lld probably some options sho
 List of options ignored :
   
     "-P"
-    "-Wall"
-    "-Wextra"
     "-Wpedantic"
     "-Wno-switch"
     "-Wno-clobbered"
-    "-Wduplicated-cond" 
-    "-Wno-unused-variable"    
-    "-Wno-unused-parameter"
+    "-Wduplicated-cond"
     "-Wno-sign-compare"
     "-Wno-format-y2k"
     "-Wno-uninitialized"
@@ -259,7 +280,6 @@ List of options ignored :
     "-fcx-limited-range"
     "-funsafe-math-optimizations"
     "-funroll-loops"
-    "-ffreestanding"
     "-funwind-tables"
     "-fno-stack-protector"
     "-fno-strict-aliasing"
@@ -273,8 +293,6 @@ List of options ignored :
     "-pedantic-errors"
     "-nostdinc"
     "-mno-red-zone"
-    "-fvisibility=default"
-    "-fvisibility=hidden"
     "-Wsign-compare"
     "-Wundef"
     "-Wpointer-arith"
@@ -375,6 +393,10 @@ openssh-portable : https://github.com/openssh/openssh-portable.git
     autoreconf -fi
     CC=chibicc ./configure
     make
+    make tests
+    unit tests passed
+    echo all tests passed
+    all tests passed
 
 
 luajit: https://github.com/LuaJIT/LuaJIT.git 
@@ -436,6 +458,11 @@ vim: https://github.com/vim/vim.git
     CC=chibicc CFLAGS="-fPIC" ./configure
     make
     make test    
+    == SUMMARY SYNTAX TESTS ==
+    Test run on 2026 Jun 20 13:33:07
+    OK: 219
+    FAILED: 0: []
+    skipped: 0
 
 
 
@@ -485,10 +512,8 @@ sqlite : https://github.com/sqlite/sqlite.git
     CC=chibicc CFLAGS="-std=c11" ./configure
     make all
     make test
-    FAILED: All-Debug test/walsetlk.test (0)
-    14:13 bld(10/10) fuzz(54/54) tcl(2470/2470) f1 ETC 00:00
-    1 failures:
-    FAILED: All-Debug test/walsetlk.test
+    10:39 bld(10/10) fuzz(54/54) tcl(2470/2470) ETC 00:00
+    0 errors out of 977914 tests in 10:39
     
 
 
@@ -539,18 +564,12 @@ Some C projects doesn't compile for now or crash after being compiled with chibi
 cpython: git clone https://github.com/python/cpython.git 
         
     CC=chibicc CFLAGS="-std=c11"  ./configure  --host=x86_64-pc-linux-gnu 
-    make && make test
+    make && make test   
     
-    3 tests failed:
-    test_call test_faulthandler test_frame_pointer_unwind
+    1 test failed:
+        test_call
     
-    469 tests OK.
-    
-    Total duration: 35 min 47 sec
-    Total tests: run=47,851 failures=5 skipped=2,621
-    Total test files: run=501/500 failed=3 skipped=25 resource_denied=3 rerun=4
-    Result: FAILURE then FAILURE
-    
+    476 tests OK.
 
 
 
@@ -559,19 +578,19 @@ cpython: git clone https://github.com/python/cpython.git
     - some extended assembly syntax taken in account (only when on macro body they are failing)
     - adding basic support on int128 (probably some operations are still not supported)
     - adding vector management and scalar promotion to vector    
-    - alignment attributes supported (like GNUC level 4)
+    - alignment attributes supported (like GNUC level 5)
     - some basic optimization
     - some basic debug information (dwarf information)
     - adding support on __m256 avx2
+    - adding support __Float32
+    - adding support for warnings (unused variables, unused parameters)
 
  
 ## TODO
 
-- trying to pass GNUC from 4 to higher compatibility level
+- trying to pass GNUC from 5 to higher compatibility level
 - trying to compile other C projects from source to see what is missing or which bug we have with chibicc.
-- trying to fix issue with postgres tests
 - trying to rewrite extended assembly to be more robust
-- trying to improve chibicc by reporting tests from slimcc to see what is missing/need to be fixed.
 
 
 ## issues and pull requests fixed
@@ -580,9 +599,10 @@ cpython: git clone https://github.com/python/cpython.git
 
 
 ## known issues
+
+    on WSL all tests that use udp > 1500 failed. Need to change the value to 1500 or less to pass. It seems a known issue on WSL environment.
     
-    vim: compile OK, tests OK except 1.
-    cpython : compile OK, some tests KO     
+    cpython : compile OK, some tests KO        
            
 
 ## projects compiled successfully with chibicc
@@ -590,8 +610,7 @@ cpython: git clone https://github.com/python/cpython.git
     util-linux : compile OK, tests OK    
     nginx: compile OK
     zlib: compile OK, tests OK
-    nmap: compile OK, tests OK    
-    openssh-portable : compile OK, tests OK
+    nmap: compile OK, tests OK        
     vlc: compile OK  
     memcached : compile OK, tests OK      
     php-src : compile OK, tests OK    
@@ -599,6 +618,8 @@ cpython: git clone https://github.com/python/cpython.git
     postgres execution : compile OK, tests OK    
     sqlite: compile OK, tests OK
     git : compile OK, tests OK
+    vim : compile OK, tests OK 
+    openssh-portable : compile OK, tests OK
     
 
 ## debug
@@ -629,7 +650,9 @@ Example of diagram generated with -dotfile parameter :
 
 ## release notes
 
-1.0.24.1    Managing ms_struct attribute. Fixing 2 issues with cpython tests. Fixing remaining issue with dwarf info not correct for struct, typedef and bitfields. Fixing ISS-208 regression caused by b4f8d21dad78c7a3a0fecdb42818e5d389237e0b. Fixing issue with omit frame pointer and return buffer. Fixing issue with extended assembly and struct. Fixing missing math functions and builtin_stdc_bit_ceil found during vlc compile. Refactoring and moving builtin to builtin.c. After updating cpython, fixing some assembly {&att|intel} keeping only the &att part. Fixing issue with git tests due to bitwise evaluation order by chibicc right-to-left instead of left-to-right.
+
+1.0.25    Adding promotion to int on variadic argument. Fixing issue with mistake on help on -fomit-frame-pointer. Fixing issue with assign_lvar_offsets that skipped some offsets already assigned by extended assembly and caused failure on some cpython tests. Adding --eh-frame-hdr needed by glibc's backtrace. Disabling tail call optimization when volatile local variable is found. Reporting commit 4f4c864c3f6872d3c7c53c66fe2db1bf8143bb02 from slimcc (about variable scope instead of flat list). Fixing ISS-209 extended assembly issue found during openssh-portable compile. Adding builtin missing when __OPTIMIZE__ is enabled. Updating __GNUC__ from 4 to 5 and implementing __Float32 support. Supporting -ffreestanding, -fvisibility=hidden, -Wno-implicit-function-declaration. Managing pragma visibility found during vlc compile. Managing attributes used, returns_twice, noinline. Managing unused variables, unused parameters, -Wextra, -Wall. Fixing issue with __builtin_shuffle and vectors in compound literal.
+
 
 
 

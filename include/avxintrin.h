@@ -1066,10 +1066,10 @@ _mm256_storeu_si256 (__m256i_u *__P, __m256i __A)
 //   ((__m256) __builtin_ia32_roundps256 ((__v8sf)(__m256)(V), (int)(M)))
 // #endif
 
-// #define _mm256_ceil_pd(V)	_mm256_round_pd ((V), _MM_FROUND_CEIL)
-// #define _mm256_floor_pd(V)	_mm256_round_pd ((V), _MM_FROUND_FLOOR)
-// #define _mm256_ceil_ps(V)	_mm256_round_ps ((V), _MM_FROUND_CEIL)
-// #define _mm256_floor_ps(V)	_mm256_round_ps ((V), _MM_FROUND_FLOOR)
+#define _mm256_ceil_pd(V)	_mm256_round_pd ((V), _MM_FROUND_CEIL)
+#define _mm256_floor_pd(V)	_mm256_round_pd ((V), _MM_FROUND_FLOOR)
+#define _mm256_ceil_ps(V)	_mm256_round_ps ((V), _MM_FROUND_CEIL)
+#define _mm256_floor_ps(V)	_mm256_round_ps ((V), _MM_FROUND_FLOOR)
 
 // extern __inline __m256d __attribute__((__gnu_inline__, __always_inline__, __artificial__))
 // _mm256_unpackhi_pd (__m256d __A, __m256d __B)
@@ -1322,12 +1322,12 @@ _mm256_set1_epi32 (int __A)
 					  __A, __A, __A, __A };
 }
 
-// extern __inline __m256i __attribute__((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_set1_epi16 (short __A)
-// {
-//   return _mm256_set_epi16 (__A, __A, __A, __A, __A, __A, __A, __A,
-// 			   __A, __A, __A, __A, __A, __A, __A, __A);
-// }
+extern __inline __m256i __attribute__((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_set1_epi16 (short __A)
+{
+  return _mm256_set_epi16 (__A, __A, __A, __A, __A, __A, __A, __A,
+			   __A, __A, __A, __A, __A, __A, __A, __A);
+}
 
 extern __inline __m256i __attribute__((__gnu_inline__, __always_inline__, __artificial__))
 _mm256_set1_epi8 (char __A)
@@ -1347,11 +1347,11 @@ _mm256_set1_epi64x (long long __A)
 // /* Create vectors of elements in the reversed order from the
 //    _mm256_set_XXX functions.  */
 
-// extern __inline __m256d __attribute__((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_setr_pd (double __A, double __B, double __C, double __D)
-// {
-//   return _mm256_set_pd (__D, __C, __B, __A);
-// }
+extern __inline __m256d __attribute__((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_setr_pd (double __A, double __B, double __C, double __D)
+{
+  return _mm256_set_pd (__D, __C, __B, __A);
+}
 
 extern __inline __m256 __attribute__((__gnu_inline__, __always_inline__, __artificial__))
 _mm256_setr_ps (float __A, float __B, float __C, float __D,
@@ -1487,23 +1487,23 @@ _mm256_castsi128_si256 (__m128i __A)
 
 // /* Similarly, but with zero extension instead of undefined values.  */
 
-// extern __inline __m256d __attribute__((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_zextpd128_pd256 (__m128d __A)
-// {
-//   return _mm256_insertf128_pd (_mm256_setzero_pd (), __A, 0);
-// }
+extern __inline __m256d __attribute__((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_zextpd128_pd256 (__m128d __A)
+{
+  return _mm256_insertf128_pd (_mm256_setzero_pd (), __A, 0);
+}
 
-// extern __inline __m256 __attribute__((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_zextps128_ps256 (__m128 __A)
-// {
-//   return _mm256_insertf128_ps (_mm256_setzero_ps (), __A, 0);
-// }
+extern __inline __m256 __attribute__((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_zextps128_ps256 (__m128 __A)
+{
+  return _mm256_insertf128_ps (_mm256_setzero_ps (), __A, 0);
+}
 
-// extern __inline __m256i __attribute__((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_zextsi128_si256 (__m128i __A)
-// {
-//   return _mm256_insertf128_si256 (_mm256_setzero_si256 (), __A, 0);
-// }
+extern __inline __m256i __attribute__((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_zextsi128_si256 (__m128i __A)
+{
+  return _mm256_insertf128_si256 (_mm256_setzero_si256 (), __A, 0);
+}
 
 // extern __inline __m256 __attribute__((__gnu_inline__, __always_inline__, __artificial__))
 // _mm256_set_m128 ( __m128 __H, __m128 __L)
@@ -1548,12 +1548,12 @@ _mm256_set_m128i (__m128i __H, __m128i __L)
 // 			       _mm_loadu_ps (__PH), 1);
 // }
 
-// extern __inline void __attribute__((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_storeu2_m128 (float *__PH, float *__PL, __m256 __A)
-// {
-//   _mm_storeu_ps (__PL, _mm256_castps256_ps128 (__A));
-//   _mm_storeu_ps (__PH, _mm256_extractf128_ps (__A, 1));
-// }
+extern __inline void __attribute__((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_storeu2_m128 (float *__PH, float *__PL, __m256 __A)
+{
+  _mm_storeu_ps (__PL, _mm256_castps256_ps128 (__A));
+  _mm_storeu_ps (__PH, _mm256_extractf128_ps (__A, 1));
+}
 
 // extern __inline __m256d __attribute__((__gnu_inline__, __always_inline__, __artificial__))
 // _mm256_loadu2_m128d (double const *__PH, double const *__PL)
@@ -1562,26 +1562,26 @@ _mm256_set_m128i (__m128i __H, __m128i __L)
 // 			       _mm_loadu_pd (__PH), 1);
 // }
 
-// extern __inline void __attribute__((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_storeu2_m128d (double *__PH, double *__PL, __m256d __A)
-// {
-//   _mm_storeu_pd (__PL, _mm256_castpd256_pd128 (__A));
-//   _mm_storeu_pd (__PH, _mm256_extractf128_pd (__A, 1));
-// }
+extern __inline void __attribute__((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_storeu2_m128d (double *__PH, double *__PL, __m256d __A)
+{
+  _mm_storeu_pd (__PL, _mm256_castpd256_pd128 (__A));
+  _mm_storeu_pd (__PH, _mm256_extractf128_pd (__A, 1));
+}
 
-// extern __inline __m256i __attribute__((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_loadu2_m128i (__m128i_u const *__PH, __m128i_u const *__PL)
-// {
-//   return _mm256_insertf128_si256 (_mm256_castsi128_si256 (_mm_loadu_si128 (__PL)),
-// 				  _mm_loadu_si128 (__PH), 1);
-// }
+extern __inline __m256i __attribute__((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_loadu2_m128i (__m128i_u const *__PH, __m128i_u const *__PL)
+{
+  return _mm256_insertf128_si256 (_mm256_castsi128_si256 (_mm_loadu_si128 (__PL)),
+				  _mm_loadu_si128 (__PH), 1);
+}
 
-// extern __inline void __attribute__((__gnu_inline__, __always_inline__, __artificial__))
-// _mm256_storeu2_m128i (__m128i_u *__PH, __m128i_u *__PL, __m256i __A)
-// {
-//   _mm_storeu_si128 (__PL, _mm256_castsi256_si128 (__A));
-//   _mm_storeu_si128 (__PH, _mm256_extractf128_si256 (__A, 1));
-// }
+extern __inline void __attribute__((__gnu_inline__, __always_inline__, __artificial__))
+_mm256_storeu2_m128i (__m128i_u *__PH, __m128i_u *__PL, __m256i __A)
+{
+  _mm_storeu_si128 (__PL, _mm256_castsi256_si128 (__A));
+  _mm_storeu_si128 (__PH, _mm256_extractf128_si256 (__A, 1));
+}
 
 #ifdef __DISABLE_AVX__
 #undef __DISABLE_AVX__

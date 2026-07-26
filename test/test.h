@@ -13,17 +13,16 @@ void assert128(__int128, __int128, char *, char *, int);
 void assert(int expected, int actual, char *code);
 void assert64(long long expected, long long actual, char *code);
 
-int printf(char *fmt, ...);
-int sprintf(char *buf, char *fmt, ...);
-int vsprintf(char *buf, char *fmt, void *ap);
-int strcmp(char *p, char *q);
-int strncmp(char *p, char *q, long n);
-int memcmp(char *p, char *q, long n);
+int printf(const char *fmt, ...);
+int sprintf(char *buf, const char *fmt, ...);
+int vsprintf(char *buf, const char *fmt, va_list ap);
+int strcmp(const char *p, const char *q);
+int strncmp(const char *p, const char *q, size_t n);
+int memcmp(const void *p, const void *q, size_t n);
 void exit(int n);
-int vsprintf();
-long strlen(char *s);
-void *memcpy(void *dest, void *src, long n);
-void *memset(void *s, int c, long n);
+size_t strlen(const char *s);
+void *memcpy(void *dest, const void *src, size_t n);
+void *memset(void *s, int c, size_t n);
 #else
 #include <stdio.h>
 #include <string.h>
