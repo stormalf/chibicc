@@ -8510,7 +8510,13 @@ static Token *global_declaration(Token *tok, Type *basety, VarAttr *attr)
     
   }
     
+    char *extern_visibility = NULL;
+    VarScope *sc = find_var(ty->name);
+    if (sc && sc->var && !sc->var->is_definition && !sc->var->is_function && !sc->var->is_tentative)
+      extern_visibility = sc->var->visibility;
     Obj *var = new_gvar(get_ident(ty->name), ty);
+    if (extern_visibility)
+      var->visibility = extern_visibility;
     var->tok = ty->name_pos;
     if (ty->kind == TY_FUNC)
       var->is_function = true;
@@ -8541,7 +8547,7 @@ static Token *global_declaration(Token *tok, Type *basety, VarAttr *attr)
     if (!decl_attr.section && current_section) {
       var->section = current_section;
     } 
-    var->visibility = decl_attr.visibility;
+    var->visibility = var->visibility ?: decl_attr.visibility;
     if (!var->visibility)
       var->visibility = tok->pragma_visibility;
     var->is_used |= decl_attr.is_used;
