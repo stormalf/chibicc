@@ -1297,6 +1297,7 @@ struct Type
   bool is_weak;
   char *visibility;
   bool is_inline;
+  bool is_unused;
   int min_vector_width;
   bool is_compound_lit; // Flag to indicate if this type is a compound literal
   // Function type

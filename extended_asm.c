@@ -1085,7 +1085,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     error_tok(tok, "%s:%d: in %s: variable undefined", __FILE__, __LINE__, __func__);
                 if (!sc->var->ty)
                     error_tok(tok, "%s:%d: in %s: variable type unknown", __FILE__, __LINE__, __func__);
-                mark_asm_var_liveness(tok, true, !strcmp(asmExt->output[nbOutput]->prefix, "+"));
+                mark_asm_var_liveness(tok, true, true);
                 // retrieve the size of the variable to determine the register to use here we use RAX variation
                 asmExt->output[nbOutput]->size = sc->var->ty->size;
                 if (!asmExt->output[nbOutput]->reg)
@@ -1278,7 +1278,7 @@ void output_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                         error_tok(tok, "%s:%d: in %s: variable undefined2", __FILE__, __LINE__, __func__);
                     if (!sc->var->ty)
                         error_tok(tok, "%s:%d: in %s: variable type unknown2", __FILE__, __LINE__, __func__);
-                    mark_asm_var_liveness(tok, true, !strcmp(asmExt->output[nbOutput]->prefix, "+"));
+                    mark_asm_var_liveness(tok, true, true);
                     // retrieve the size of the variable to determine the register to use here we use RAX variation
                     // skip the variable to go to next token that should be a ")"
                 

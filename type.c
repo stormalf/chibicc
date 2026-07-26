@@ -364,6 +364,8 @@ Type *pointer_to(Type *base)
   ty->is_pointer = true;
   ty->pointertype = base;
   ty->is_unsigned = true;
+  if (base->is_unused)
+    ty->is_unused = true;
   return ty;
 }
 

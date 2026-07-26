@@ -925,8 +925,8 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
   enter_scope();
   while (!equal(tok, ")"))
   {
-
-    tok = attribute_list(tok, ty, type_attributes);
+    Type param_attr = {};
+    tok = attribute_list(tok, &param_attr, type_attributes);
     if (cur != &head) {
       if (equal(tok, ";")) {
         SET_CTX(ctx); 
@@ -946,7 +946,7 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
       tok = skip(tok, ",", ctx);
     }
     }
-    tok = attribute_list(tok, ty, type_attributes);
+    tok = attribute_list(tok, &param_attr, type_attributes);
     if (equal(tok, "..."))
     {
       is_variadic = true;
@@ -981,6 +981,8 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
 
     ty2 = declarator(&tok, tok, ty2);
     tok = attribute_list(tok, ty2, type_attributes);
+    if (param_attr.is_unused)
+      ty2->is_unused = true;
 
     if (!ty2)
       error_tok(tok, "%s:%d: in %s: ty2 is null", __FILE__, __LINE__, __func__);
@@ -4780,6 +4782,11 @@ static Token *type_attributes(Token *tok, void *arg)
       consume(&tok, tok, "__transparent_union__") || consume(&tok, tok, "transparent_union")) {
     return tok;
   }
+
+  if (consume(&tok, tok, "unused") || consume(&tok, tok, "__unused__")) {
+    ty->is_unused = true;
+    return tok;
+  }
   
   // Handle __cleanup__ attribute
   if (consume(&tok, tok, "cleanup") || consume(&tok, tok, "__cleanup__")) {
@@ -8177,6 +8184,8 @@ static void create_param_lvars(Type *param, char *funcname)
     }
     var->is_param = true;
     var->tok = param->name_pos;
+    if (param->is_unused)
+      var->is_unused = true;
     order++;
 
 }
