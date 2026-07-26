@@ -439,7 +439,7 @@ static Token *read_string_literal(char *start, char *quote)
   char *end = string_literal_end(quote + 1);
   char *buf = calloc(1, end - quote);
   if (buf == NULL)
-    error("%s:%d: error: in %s: buf is null!", __FILE__, __LINE__, __func__);
+    error("%s:%d: in %s: buf is null!", __FILE__, __LINE__, __func__);
   int len = 0;
 
   for (char *p = quote + 1; p < end;)
@@ -470,7 +470,7 @@ static Token *read_utf16_string_literal(char *start, char *quote)
   char *end = string_literal_end(quote + 1);
   uint16_t *buf = calloc(2, end - start);
   if (buf == NULL)
-    error("%s:%d: error: in %s: buf is null!", __FILE__, __LINE__, __func__);
+    error("%s:%d: in %s: buf is null!", __FILE__, __LINE__, __func__);
   int len = 0;
 
   for (char *p = quote + 1; p < end;)
@@ -510,7 +510,7 @@ static Token *read_utf32_string_literal(char *start, char *quote, Type *ty)
   char *end = string_literal_end(quote + 1);
   uint32_t *buf = calloc(4, end - quote);
   if (buf == NULL)
-    error("%s:%d: error: in %s: buf is null!", __FILE__, __LINE__, __func__);
+    error("%s:%d: in %s: buf is null!", __FILE__, __LINE__, __func__);
   int len = 0;
 
   for (char *p = quote + 1; p < end;)
@@ -986,9 +986,9 @@ File *new_file(char *name, unsigned int file_no, char *contents)
 {
   File *file = calloc(1, sizeof(File));
   if (file == NULL)
-    error("%s:%d: error: in %s: file is null!", __FILE__, __LINE__, __func__);
+    error("%s:%d: in %s: file is null!", __FILE__, __LINE__, __func__);
   if (name == NULL)
-    error("%s:%d: error: in %s: name is null!", __FILE__, __LINE__, __func__);  
+    error("%s:%d: in %s: name is null!", __FILE__, __LINE__, __func__);  
   file->name = name;
   file->display_name = name;
   file->file_no = file_no;
@@ -1168,7 +1168,7 @@ Token *tokenize_file(char *path)
   // Save the filename for assembler .file directive.
   input_files = realloc(input_files, sizeof(char *) * (file_no + 2));
   if (input_files == NULL)
-    error("%s:%d: error: in %s: input_files is null!", __FILE__, __LINE__, __func__);
+    error("%s:%d: in %s: input_files is null!", __FILE__, __LINE__, __func__);
   input_files[file_no] = file;
   input_files[file_no + 1] = NULL;
   file_no++;

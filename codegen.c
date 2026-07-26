@@ -601,7 +601,7 @@ void gen_addr(Node *node)
     if (node->var->ty->kind == TY_VLA)
     {
       if (!node->var->ptr)
-        error("%s:%d: error: in %s: VLA pointer is null", __FILE__, __LINE__, __func__);
+        error("%s:%d: in %s: VLA pointer is null", __FILE__, __LINE__, __func__);
       if (is_omit_fp(current_fn))
         println("  mov %d(%%rsp), %%rax", node->var->offset + current_fn->stack_size + depth * 8);
       else
@@ -613,7 +613,7 @@ void gen_addr(Node *node)
     if (node->var->is_local)
     {
       if (!node->var->ptr)
-        error("%s:%d: error: in %s: VLA pointer is null", __FILE__, __LINE__, __func__);    
+        error("%s:%d: in %s: VLA pointer is null", __FILE__, __LINE__, __func__);    
       if (is_omit_fp(current_fn))
         println("  lea %d(%%rsp), %%rax", node->var->offset + current_fn->stack_size + depth * 8);
       else
@@ -865,7 +865,7 @@ int vec_use_ymm(Type *ty) {
 void load(Type *ty)
 {
   if (!ty)
-    error("%s:%d: error: in %s: ty is null!", __FILE__, __LINE__, __func__);
+    error("%s:%d: in %s: ty is null!", __FILE__, __LINE__, __func__);
 
   switch (ty->kind)
   {
@@ -1898,7 +1898,7 @@ static void gen_int128_op(Node *node) {
       break;
     }
     default:
-        error_tok(node->tok,"%s:%d: error: in %s: unsupported int128 operation %d", __FILE__, __LINE__, __func__, node->kind);
+        error_tok(node->tok,"%s:%d: in %s: unsupported int128 operation %d", __FILE__, __LINE__, __func__, node->kind);
     }
 }
 
@@ -1920,7 +1920,7 @@ static void scalar_to_xmm(Type *vec_ty, const char *xmm_reg) {
       println("  shufpd $0x00, %s, %s", xmm_reg, xmm_reg);
       break;
     default:
-      error("%s:%d: error: in %s: unsupported vector base type for scalar promotion %d", __FILE__, __LINE__, __func__, vec_ty->base->kind);
+      error("%s:%d: in %s: unsupported vector base type for scalar promotion %d", __FILE__, __LINE__, __func__, vec_ty->base->kind);
     }
 }
 
@@ -1931,7 +1931,7 @@ static void gen_vector_op(Node *node) {
     vec_ty = vec_ty->base;
 
   if (vec_ty->kind != TY_VECTOR)
-    error_tok(node->tok, "%s:%d: error: in %s: lhs is not a vector", __FILE__, __LINE__, __func__);
+    error_tok(node->tok, "%s:%d: in %s: lhs is not a vector", __FILE__, __LINE__, __func__);
 
   bool use_ymm = vec_use_ymm(vec_ty);
 
@@ -1988,13 +1988,13 @@ static void gen_vector_op(Node *node) {
     break;
   case ND_DIV:
     if (is_integer(node->lhs->ty->base))
-      error_tok(node->tok, "%s:%d: error: in %s:  integer vector division not supported", __FILE__, __LINE__, __func__);
+      error_tok(node->tok, "%s:%d: in %s: integer vector division not supported", __FILE__, __LINE__, __func__);
     break;
   case ND_NEG:
     //gen_expr(node->lhs);          // materialize operand in %xmm0
     break;    
   default:
-    error_tok(node->tok, "%s:%d: error: in %s:  unsupported vector operation %d", __FILE__, __LINE__, __func__, node->kind);
+    error_tok(node->tok, "%s:%d: in %s:  unsupported vector operation %d", __FILE__, __LINE__, __func__, node->kind);
   }
 
   switch (vec_ty->base->kind) {
@@ -2054,7 +2054,7 @@ static void gen_vector_op(Node *node) {
         }
         break;                
       default:
-        error_tok(node->tok, "%s:%d: error: in %s: unsupported float vector operation", __FILE__, __LINE__, __func__);
+        error_tok(node->tok, "%s:%d: in %s: unsupported float vector operation", __FILE__, __LINE__, __func__);
       }
       break;
   case TY_DOUBLE:
@@ -2113,7 +2113,7 @@ static void gen_vector_op(Node *node) {
       }
       break;      
     default:
-      error_tok(node->tok, "%s:%d: error: in %s: unsupported double vector operation", __FILE__, __LINE__, __func__);
+      error_tok(node->tok, "%s:%d: in %s: unsupported double vector operation", __FILE__, __LINE__, __func__);
     }
     break;
   case TY_CHAR:
@@ -2212,7 +2212,7 @@ static void gen_vector_op(Node *node) {
       }
       break;
     default:
-      error_tok(node->tok, "%s:%d: error: in %s: char vector operation not supported", __FILE__, __LINE__, __func__);
+      error_tok(node->tok, "%s:%d: in %s: char vector operation not supported", __FILE__, __LINE__, __func__);
     }
     break;
   case TY_SHORT:
@@ -2317,7 +2317,7 @@ static void gen_vector_op(Node *node) {
       }
       break;
     default:
-      error_tok(node->tok, "%s:%d: error: in %s: short vector operation not supported", __FILE__, __LINE__, __func__);
+      error_tok(node->tok, "%s:%d: in %s: short vector operation not supported", __FILE__, __LINE__, __func__);
     }
     break;
   case TY_LLONG:
@@ -2336,7 +2336,7 @@ static void gen_vector_op(Node *node) {
         println("  psubq %%xmm1, %%xmm0");
       break;
     case ND_MUL:
-      error_tok(node->tok, "%s:%d: error: in %s: 64-bit integer vector multiply not supported", __FILE__, __LINE__, __func__);
+      error_tok(node->tok, "%s:%d: in %s: 64-bit integer vector multiply not supported", __FILE__, __LINE__, __func__);
       break;
     case ND_BITXOR:
       if (use_ymm)
@@ -2420,7 +2420,7 @@ static void gen_vector_op(Node *node) {
       }
       break;
     default:
-      error_tok(node->tok, "%s:%d: error: in %s: long vector operation not supported", __FILE__, __LINE__, __func__);
+      error_tok(node->tok, "%s:%d: in %s: long vector operation not supported", __FILE__, __LINE__, __func__);
     }
     break;
   case TY_INT:
@@ -2525,11 +2525,11 @@ static void gen_vector_op(Node *node) {
       }
       break;
     default:
-      error_tok(node->tok, "%s:%d: error: in %s: integer vector operation not supported", __FILE__, __LINE__, __func__);
+      error_tok(node->tok, "%s:%d: in %s: integer vector operation not supported", __FILE__, __LINE__, __func__);
     }
     break;
   default:
-    error_tok(node->tok, "%s:%d: error: in %s: vector base type not supported %d", __FILE__, __LINE__, __func__, vec_ty->base->kind);
+    error_tok(node->tok, "%s:%d: in %s: vector base type not supported %d", __FILE__, __LINE__, __func__, vec_ty->base->kind);
   }
 }
 
@@ -2670,7 +2670,7 @@ static void gen_cmpxchgn(Node *node) {
 void gen_expr(Node *node)
 {
   if (!node)
-    error("%s:%d: error: in %s: node is null!", __FILE__, __LINE__, __func__);
+    error("%s:%d: in %s: node is null!", __FILE__, __LINE__, __func__);
   if (node->tok && (node->tok->line_no != last_loc_line || node->tok->file->file_no != last_loc_file)) {
     println("  .loc %d %u", node->tok->file->file_no, node->tok->line_no);
     last_loc_line = node->tok->line_no;
@@ -4292,7 +4292,7 @@ switch (node->lhs->ty->kind)
 static void gen_stmt(Node *node)
 {
   if (!node)
-    error("%s:%d: error: in %s: node is null!", __FILE__, __LINE__, __func__);
+    error("%s:%d: in %s: node is null!", __FILE__, __LINE__, __func__);
   if (node->tok && (node->tok->line_no != last_loc_line || node->tok->file->file_no != last_loc_file)) {
     println("  .loc %d %u", node->tok->file->file_no, node->tok->line_no);
     last_loc_line = node->tok->line_no;
@@ -5226,7 +5226,7 @@ char *register_available() {
       }
   }
   //no registry available
-  error("%s:%d: error: in %s: no register available!", __FILE__, __LINE__, __func__);
+  error("%s:%d: in %s: no register available!", __FILE__, __LINE__, __func__);
 }
 
 //check if a specific register is available in priority if not try to found a new available
@@ -5254,7 +5254,7 @@ int i;
           return newargreg64[i];
       }
   }
-  error("%s:%d: error: in %s: unexpected error!", __FILE__, __LINE__, __func__);
+  error("%s:%d: in %s: unexpected error!", __FILE__, __LINE__, __func__);
 }
 
 //convert register 16 to register 64
@@ -5270,7 +5270,7 @@ int i;
           return newargreg64[i];
       }
   }
-  error("%s:%d: error: in %s: unexpected error!", __FILE__, __LINE__, __func__);
+  error("%s:%d: in %s: unexpected error!", __FILE__, __LINE__, __func__);
 }
 
 //convert any register sub-name (64/32/16/8-bit) to its 64-bit name
@@ -5329,7 +5329,7 @@ int i;
           return newargreg64[i];
       }
   }
-  error("%s:%d: error: in %s: unexpected error!", __FILE__, __LINE__, __func__);
+  error("%s:%d: in %s: unexpected error!", __FILE__, __LINE__, __func__);
 }
 
 //add a register in the list of used registers

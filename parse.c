@@ -266,7 +266,7 @@ static Node *new_node(NodeKind kind, Token *tok)
   static int count = 0;
   Node *node = calloc(1, sizeof(Node));
   if (node == NULL)
-    error("%s:%d: error: in %s: node is null", __FILE__, __LINE__, __func__);
+    error("%s:%d: in %s: node is null", __FILE__, __LINE__, __func__);
   node->kind = kind;
   node->unique_number = count++;
   node->tok = tok;
@@ -366,12 +366,12 @@ Node *new_cast(Node *expr, Type *ty)
 
   Node *node = calloc(1, sizeof(Node));
   if (node == NULL)
-    error("%s:%d: error: in %s: node is null", __FILE__, __LINE__, __func__);
+    error("%s:%d: in %s: node is null", __FILE__, __LINE__, __func__);
   node->kind = ND_CAST;
   node->tok = expr->tok;
   node->lhs = expr;
   if (!ty)
-    error("%s:%d: error: in %s: type is null", __FILE__, __LINE__, __func__);
+    error("%s:%d: in %s: type is null", __FILE__, __LINE__, __func__);
   node->ty = copy_type(ty);
   return node;
 }
@@ -395,7 +395,7 @@ static VarScope *push_scope(char *name)
 {
   VarScope *sc = calloc(1, sizeof(VarScope));
   if (sc == NULL)
-    error("%s:%d: error: in %s: sc is null!", __FILE__, __LINE__, __func__);
+    error("%s:%d: in %s: sc is null!", __FILE__, __LINE__, __func__);
 
   hashmap_put(&scope->vars, name, sc);
   return sc;
@@ -405,7 +405,7 @@ static Initializer *new_initializer(Type *ty, bool is_flexible)
 {
   Initializer *init = calloc(1, sizeof(Initializer));
   if (init == NULL)
-    error("%s:%d: error: in %s: init is null", __FILE__, __LINE__, __func__);
+    error("%s:%d: in %s: init is null", __FILE__, __LINE__, __func__);
   init->ty = ty;
 
   if (ty->kind == TY_ARRAY)
@@ -418,7 +418,7 @@ static Initializer *new_initializer(Type *ty, bool is_flexible)
 
     init->children = calloc(ty->array_len, sizeof(Initializer *));
     if (init->children == NULL)
-      error("%s:%d: error: in %s: init->children is null %ld %ld", __FILE__, __LINE__, __func__, ty->array_len, ty->size);
+      error("%s:%d: in %s: init->children is null %ld %ld", __FILE__, __LINE__, __func__, ty->array_len, ty->size);
     for (int i = 0; i < ty->array_len; i++)
       init->children[i] = new_initializer(ty->base, false);
     return init;
@@ -430,7 +430,7 @@ static Initializer *new_initializer(Type *ty, bool is_flexible)
 
     init->children = calloc(ty->array_len, sizeof(Initializer *));
     if (init->children == NULL)
-      error("%s:%d: error: in %s: init->children is null %ld %ld", __FILE__, __LINE__, __func__, ty->array_len, ty->size);
+      error("%s:%d: in %s: init->children is null %ld %ld", __FILE__, __LINE__, __func__, ty->array_len, ty->size);
     for (int i = 0; i < ty->array_len; i++)
       init->children[i] = new_initializer(ty->base, false);
     return init;
@@ -446,14 +446,14 @@ static Initializer *new_initializer(Type *ty, bool is_flexible)
 
     init->children = calloc(len, sizeof(Initializer *));
     if (init->children == NULL)
-      error("%s:%d: error: in %s: init->children is null (bis)", __FILE__, __LINE__, __func__);
+      error("%s:%d: in %s: init->children is null (bis)", __FILE__, __LINE__, __func__);
     for (Member *mem = ty->members; mem; mem = mem->next)
     {
       if (is_flexible && ty->is_flexible && !mem->next)
       {
         Initializer *child = calloc(1, sizeof(Initializer));
         if (child == NULL)
-          error("%s:%d: error: in %s: child is null", __FILE__, __LINE__, __func__);
+          error("%s:%d: in %s: child is null", __FILE__, __LINE__, __func__);
         child->ty = mem->ty;
         child->is_flexible = true;
         init->children[mem->idx] = child;
@@ -475,7 +475,7 @@ static Obj *new_var(char *name, Type *ty)
 
   Obj *var = calloc(1, sizeof(Obj));
   if (var == NULL)
-    error("%s:%d: error: in %s: var is null", __FILE__, __LINE__, __func__);
+    error("%s:%d: in %s: var is null", __FILE__, __LINE__, __func__);
   var->name = name;
   var->ty = ty;
   var->align = ty->align;
@@ -2184,7 +2184,7 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
   if (equal(tok, ","))
     return;
   if (!init)
-    error("%s:%d: error: in %s:  init is null %s", __FILE__, __LINE__, __func__, tok->loc);
+    error("%s:%d: in %s:  init is null %s", __FILE__, __LINE__, __func__, tok->loc);
 
   if (init->ty->kind == TY_ARRAY && is_integer(init->ty->base)) {
     Token *start = tok;
@@ -2234,7 +2234,7 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
     }
 
     if (!init->ty->members)
-      error_tok(tok, "%s:%d: error: in %s:  initializer for empty aggregate requires explicit braces", __FILE__, __LINE__, __func__);
+      error_tok(tok, "%s:%d: in %s:  initializer for empty aggregate requires explicit braces", __FILE__, __LINE__, __func__);
 
     struct_initializer2(rest, tok, init, init->ty->members, false);
     return;
@@ -2253,7 +2253,7 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
       return;
     }
     if (!init->ty->members)
-      error_tok(tok, "%s:%d: error: in %s:  initializer for empty aggregate requires explicit braces", __FILE__, __LINE__, __func__);
+      error_tok(tok, "%s:%d: in %s:  initializer for empty aggregate requires explicit braces", __FILE__, __LINE__, __func__);
 
     init->mem = init->ty->members;
     initializer2(rest, tok, init->children[0]);
@@ -2287,7 +2287,7 @@ static Type *copy_struct_type(Type *ty)
   {
     Member *m = calloc(1, sizeof(Member));
     if (m == NULL)
-      error("%s:%d: error: in %s:  m is null", __FILE__, __LINE__, __func__);
+      error("%s:%d: in %s:  m is null", __FILE__, __LINE__, __func__);
     *m = *mem;
     cur = cur->next = m;
   }
@@ -2632,7 +2632,7 @@ static Relocation *write_gvar_data(Relocation *cur, Initializer *init, Type *ty,
 
   Relocation *rel = calloc(1, sizeof(Relocation));
   if (rel == NULL)
-    error("%s:%d: error: in %s: rel is null", __FILE__, __LINE__, __func__);
+    error("%s:%d: in %s: rel is null", __FILE__, __LINE__, __func__);
 
   rel->offset = offset;
   rel->label = label;
@@ -2653,7 +2653,7 @@ static void gvar_initializer(Token **rest, Token *tok, Obj *var)
   Relocation head = {};
   char *buf = calloc(1, var->ty->size);
   if (buf == NULL)
-    error("%s:%d: error: in %s: buf is null!", __FILE__, __LINE__, __func__);
+    error("%s:%d: in %s: buf is null!", __FILE__, __LINE__, __func__);
   write_gvar_data(&head, init, var->ty, buf, 0);
   var->init_data = buf;
   var->rel = head.next;
@@ -4503,7 +4503,7 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
     {
       Member *mem = calloc(1, sizeof(Member));
       if (mem == NULL)
-        error("%s:%d: error: in %s: mem is null", __FILE__, __LINE__, __func__);
+        error("%s:%d: in %s: mem is null", __FILE__, __LINE__, __func__);
       mem->ty = basety;
       //mem->idx = idx++;
       mem->align = mem->ty->align;
@@ -4528,7 +4528,7 @@ static void struct_members(Token **rest, Token *tok, Type *ty)
 
       Member *mem = calloc(1, sizeof(Member));
       if (mem == NULL)
-        error("%s:%d: error: in %s: mem is null", __FILE__, __LINE__, __func__);
+        error("%s:%d: in %s: mem is null", __FILE__, __LINE__, __func__);
 
       mem->ty = declarator(&tok, tok, basety);
       tok = attribute_list(tok, &mem_attr, thing_attributes);
@@ -8075,7 +8075,7 @@ static Node *primary(Token **rest, Token *tok)
     }
 
     //printf("=======%s:%d\n", tok->loc, __LINE__);
-    error_tok(tok, "%s:%d: in %s: error: undefined variable %.*s", __FILE__, __LINE__, __func__, tok->len, tok->loc);
+    error_tok(tok, "%s:%d: in %s: undefined variable %.*s", __FILE__, __LINE__, __func__, tok->len, tok->loc);
   }
 
   if (tok->kind == TK_STR)

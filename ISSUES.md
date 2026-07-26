@@ -40,7 +40,7 @@ List all issues found and fixed
                                                 ^ expected ','
     - issue #117 parsing failed if a generic argument in macro starts by a number example  ...(void))fromtype##2obj_decode... in this case chibicc considers wrongly 2 as a number.
     - issue #118 issues/issue118.c:1: NID_sha_224
-                                     ^ parse.c: in primary : error: undefined variable
+                                     ^ parse.c: in primary : undefined variable
     - issue #119 caused by _Complex attribute   /usr/include/x86_64-linux-gnu/bits/cmathcalls.h:55: __MATHCALL (cacos, (_Mdouble_complex_ __z));
                                                                                                                                 ^ expected ','
     - issue #120 in VLC static_assert function outside a function caused an issue with chibicc
@@ -56,7 +56,7 @@ List all issues found and fixed
     - issue #125 extended assembly not managed yet. First taken in account of extended assembly (basic one only one operand)
     - issue #126 old C style with declaration argument type after the function parameters and before the beginning of the function body :
             size_t strlcpy(dst, src, siz) char *dst; const char *src; size_t siz; {...
-            strlcpy.c:44:2: error:  char *dst;
+            strlcpy.c:44:2:  char *dst;
                                     ^ tokenize.c: in skip : expected '{'
     - issue #127 incorrect fix for old C style that cause issue later during linkage.
     - issue #128 union initialized by an expression failed :
