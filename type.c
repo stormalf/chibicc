@@ -1718,3 +1718,62 @@ void add_type(Node *node)
     node->ty = ty_void_ptr;
   }
 }
+
+Type *copy_struct_type(Type *ty)
+{
+  ty = copy_type(ty);
+
+  Member head = {};
+  Member *cur = &head;
+  for (Member *mem = ty->members; mem; mem = mem->next)
+  {
+    Member *m = calloc(1, sizeof(Member));
+    if (m == NULL)
+      error("%s:%d: in %s:  m is null", __FILE__, __LINE__, __func__);
+    *m = *mem;
+    cur = cur->next = m;
+  }
+
+  ty->members = head.next;
+  if (!ty)
+    error("%s:%d: in %s: ty is null!", __FILE__, __LINE__, __func__);
+  return ty;
+}
+
+// Recursively check if a type or any of its members (for structs/unions)
+// or base type (for arrays) is volatile.
+bool is_volatile(Type *ty) {
+  if (!ty) return false;
+  if (ty->is_volatile) return true;
+  if (is_array(ty))
+    return is_volatile(ty->base);
+  if (ty->kind == TY_STRUCT || ty->kind == TY_UNION) {
+    for (Member *mem = ty->members; mem; mem = mem->next) {
+      if (is_volatile(mem->ty))
+        return true;
+    }
+  }
+  return false;
+}
+
+int64_t eval_sign_extend(Type *ty, uint64_t val) {
+  switch (ty->size) {
+  case 1: return ty->is_unsigned ? (uint8_t)val : (int64_t)(int8_t)val;
+  case 2: return ty->is_unsigned ? (uint16_t)val : (int64_t)(int16_t)val;
+  case 4: return ty->is_unsigned ? (uint32_t)val : (int64_t)(int32_t)val;
+  case 8: return val;
+  case 16: return ty->is_unsigned ? (uint64_t)val : (int64_t)val;
+
+  }
+  printf("====FATAL ERROR %ld\n", ty->size );
+  unreachable();
+}
+
+bool is_const_var(Obj *var) {
+  Type *ty = var->ty;
+  for (; ty && ty->kind == TY_ARRAY; ty = ty->base)
+    if (ty->is_const)
+      return true;
+  return ty->is_const;
+}
+

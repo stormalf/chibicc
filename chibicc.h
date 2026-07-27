@@ -414,6 +414,57 @@ struct Relocation
   long addend;
 };
 
+
+// Scope for local variables, global variables, typedefs
+// or enum constants
+
+typedef struct VarAttr VarAttr;
+// Variable attributes such as typedef or extern.
+struct VarAttr
+{
+  bool is_typedef;
+  bool is_static;
+  bool is_extern;
+  bool is_inline;
+  bool is_tls;
+  int align;
+  int min_vector_width;
+    //from COSMOPOLITAN adding some attributes
+  bool is_weak;
+  bool is_ms_abi;
+  bool is_aligned;
+  bool is_noreturn;
+  bool is_destructor;
+  bool is_constructor;
+  bool is_externally_visible;
+  bool is_no_instrument_function;
+  bool is_force_align_arg_pointer;
+  bool is_no_caller_saved_registers;
+  char *section;
+  char *visibility;
+  char *alias_name; //to store alias name for function when weak attribute
+  int destructor_priority;
+  int constructor_priority;
+  bool is_packed;
+  bool is_noinline;
+  bool is_used;
+  bool is_unused;
+  bool is_returned_twice;
+};
+
+
+// For local variable initializer.
+typedef struct InitDesg InitDesg;
+struct InitDesg
+{
+  InitDesg *next;
+  int idx;
+  Member *member;
+  Obj *var;
+};
+
+
+
 // AST node
 typedef enum
 {
@@ -1199,6 +1250,12 @@ typedef struct
   int enum_val;
 } VarScope;
 
+typedef struct {
+    const char *name;
+    int node_kind;
+} BuiltinEntry;
+
+
 Node *new_cast(Node *expr, Type *ty);
 int64_t  const_expr(Token **rest, Token *tok);
 Node *conditional(Token **rest, Token *tok);
@@ -1211,6 +1268,8 @@ int64_t  eval(Node *node);
 bool equal_tok(Token *a, Token *b);
 
 extern bool opt_fbuiltin;
+
+
 //
 // type.c
 //
@@ -1399,6 +1458,10 @@ bool is_sret(Type *ty);
 bool has_pointer(Type *ty);
 bool is_const_expr(Node *node);
 bool contains_label(Node *node);
+Type *copy_struct_type(Type *ty);
+bool is_volatile(Type *ty);
+int64_t eval_sign_extend(Type *ty, uint64_t val);
+bool is_const_var(Obj *var);
 
 extern DebugTypedef *debug_typedefs;
 
@@ -1684,6 +1747,8 @@ void gen_avx512pf_void(Node *node);
 void gen_vbmi2_3(Node *node);
 void gen_vbmi2_5(Node *node);
 void gen_pblendw128(Node *node);
+int builtin_enum(Token *tok);
+char *prefix_builtin(const char *name);
 
 //
 // unicode.c
@@ -1832,6 +1897,22 @@ char *retrieveVariableNumber(int index);
 char *generate_input_for_output(void);
 char *generate_return_rax(Token *retval);
 char *register_to_64(char *regist);
+
+//
+// inline.c
+//
+
+void inline_function_bodies(Obj *prog);
+
+
+
+//
+// optimize.c
+//
+
+
+bool can_apply_tco_scope(Scope *sc); 
+void mark_tail_calls(Node *node, Obj *fn);
 
 
 #endif // CHIBICC_H
