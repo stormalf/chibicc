@@ -1272,6 +1272,10 @@ Obj *find_func(char *name);
 char *ConsumeStringLiteral(Token **rest, Token *tok) ;
 int64_t  eval(Node *node);
 bool equal_tok(Token *a, Token *b);
+void mark_var_address_taken(Node *node);
+Node *new_double(double fval, Token *tok);
+Node *new_num(int64_t val, Token *tok);
+Node *constant_folding(int kind, Node *lhs, Node *rhs, Token *tok);
 
 extern bool opt_fbuiltin;
 
@@ -1919,6 +1923,8 @@ void inline_function_bodies(Obj *prog);
 
 bool can_apply_tco_scope(Scope *sc); 
 void mark_tail_calls(Node *node, Obj *fn);
+void mark_liveness_on_locals(Obj *prog);
+void mark_live(Obj *var);
 
 
 //
