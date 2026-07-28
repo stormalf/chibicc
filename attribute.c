@@ -231,8 +231,6 @@ Token *type_attributes(Token *tok, void *arg)
       consume(&tok, tok, "__pure__") ||
       consume(&tok, tok, "dontclone") ||
       consume(&tok, tok, "__dontclone__") ||
-      consume(&tok, tok, "may_alias") ||
-      consume(&tok, tok, "__may_alias__") ||
       consume(&tok, tok, "warn_unused_result") ||
       consume(&tok, tok, "__warn_unused_result__") ||
       consume(&tok, tok, "flatten") ||
@@ -253,16 +251,10 @@ Token *type_attributes(Token *tok, void *arg)
       consume(&tok, tok, "__artificial__") ||
       consume(&tok, tok, "returns_nonnull") ||
       consume(&tok, tok, "__returns_nonnull__") ||
-      consume(&tok, tok, "deprecated") ||
-      consume(&tok, tok, "__deprecated__") ||
-      consume(&tok, tok, "__transparent_union__") ||
-      consume(&tok, tok, "transparent_union") ||
       consume(&tok, tok, "gnu_inline") ||
       consume(&tok, tok, "__gnu_inline__") ||
       consume(&tok, tok, "used") ||
       consume(&tok, tok, "__used__") ||
-      consume(&tok, tok, "unused") ||
-      consume(&tok, tok, "__unused__") ||
       consume(&tok, tok, "no_icf") ||
       consume(&tok, tok, "__no_icf__") ||
       consume(&tok, tok, "noipa") ||
@@ -285,7 +277,6 @@ Token *type_attributes(Token *tok, void *arg)
       consume(&tok, tok, "nonstring") ||
       consume(&tok, tok, "no_profile_instrument_function") ||
       consume(&tok, tok, "stdcall") ||
-      consume(&tok, tok, "ms_struct") ||
       consume(&tok, tok, "__stub__") ||
       consume(&tok, tok, "__retain__") ||
       consume(&tok, tok, "transaction_pure") ||
@@ -388,11 +379,6 @@ Token *type_attributes(Token *tok, void *arg)
   }
 
   if (consume(&tok, tok, "__common__")) {
-    return tok;
-  }
-
-  if (consume(&tok, tok, "const") || consume(&tok, tok, "__const__")) {
-      ty->is_const = true;
     return tok;
   }
 
@@ -846,8 +832,6 @@ Token *thing_attributes(Token *tok, void *arg) {
 
   if (consume(&tok, tok, "noclone") ||
       consume(&tok, tok, "__noclone__") ||
-      consume(&tok, tok, "const") ||
-      consume(&tok, tok, "__const__") ||
       consume(&tok, tok, "pure") ||
       consume(&tok, tok, "__pure__") ||
       consume(&tok, tok, "dontclone") ||
@@ -866,8 +850,6 @@ Token *thing_attributes(Token *tok, void *arg) {
       consume(&tok, tok, "__dontthrow__") ||
       consume(&tok, tok, "optnone") ||
       consume(&tok, tok, "__optnone__") ||
-      consume(&tok, tok, "returns_twice") ||
-      consume(&tok, tok, "__returns_twice__") ||
       consume(&tok, tok, "nodebug") ||
       consume(&tok, tok, "__nodebug__") ||
       consume(&tok, tok, "artificial") ||
@@ -880,10 +862,6 @@ Token *thing_attributes(Token *tok, void *arg) {
       consume(&tok, tok, "transparent_union") ||
       consume(&tok, tok, "gnu_inline") ||
       consume(&tok, tok, "__gnu_inline__") ||
-      consume(&tok, tok, "used") ||
-      consume(&tok, tok, "__used__") ||
-      consume(&tok, tok, "unused") ||
-      consume(&tok, tok, "__unused__") ||
       consume(&tok, tok, "no_icf") ||
       consume(&tok, tok, "__no_icf__") ||
       consume(&tok, tok, "noipa") ||
@@ -916,11 +894,6 @@ Token *thing_attributes(Token *tok, void *arg) {
       consume(&tok, tok, "__flag_enum__") ||
       consume(&tok, tok, "__no_profile_instrument_function__"))
     {
-        return tok;
-    }
-
-    if (consume(&tok, tok, "always_inline") || consume(&tok, tok, "__always_inline__")) {
-      attr->is_inline = true;
         return tok;
     }
 
