@@ -1915,4 +1915,13 @@ bool can_apply_tco_scope(Scope *sc);
 void mark_tail_calls(Node *node, Obj *fn);
 
 
+//
+// attribute.c
+//
+
+Token *attribute_list(Token *tok, void *arg, Token *(*f)(Token *, void *));
+Token *type_attributes(Token *tok, void *arg);
+Token *thing_attributes(Token *tok, void *arg);
+
+
 #endif // CHIBICC_H

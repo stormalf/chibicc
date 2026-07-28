@@ -54,5 +54,7 @@ void mark_tail_calls(Node *node, Obj *fn) {
   case ND_FUNCALL:
     node->is_tail = true;
     break;
+  default:
+    break;
   }
 }
