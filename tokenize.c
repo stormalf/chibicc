@@ -176,7 +176,7 @@ bool equal(Token *tok, const char *op)
 Token *skip(Token *tok, char *op, Context *ctx)
 {
   if (!equal(tok, op))
-    error_tok(tok, "%s %s %s %u: in skip : expected '%s'", __FILE__, ctx->filename, ctx->funcname, ctx->line_no, op );
+    error_tok(tok, "%s:%d: in %s: expected '%s'", __FILE__, __LINE__, __func__, op);
   return tok->next;
 }
 
@@ -196,7 +196,7 @@ static Token *new_token(TokenKind kind, char *start, char *end)
 {
   Token *tok = calloc(1, sizeof(Token));
   if (tok == NULL)
-    error("%s:%d in new_token tok is null!",  __FILE__, __LINE__);
+    error("%s:%d: in %s: new_token tok is null!",  __FILE__, __LINE__, __func__);
   tok->kind = kind;
   tok->loc = start;
   tok->len = end - start;

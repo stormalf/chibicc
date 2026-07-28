@@ -775,14 +775,14 @@ void add_type(Node *node)
   case ND_SHR:
     //node->ty = node->lhs->ty;  
     if (!is_integer(node->lhs->ty) && !is_vector(node->lhs->ty))
-      error_tok(node->tok, "%s:%d %d invalid operand ", __FILE__, __LINE__, node->kind);
+      error_tok(node->tok, "%s:%d: in %s: %d invalid operand", __FILE__, __LINE__, __func__, node->kind);
     if (is_integer(node->lhs->ty))
       int_promotion(&node->lhs);
     node->ty = node->lhs->ty;       
     return;
   case ND_VAR:
       if (!node->var) {
-        error_tok(node->tok, "%s:%d %d variable undefined ", __FILE__, __LINE__, node->kind);
+        error_tok(node->tok, "%s:%d: in %s: %d variable undefined", __FILE__, __LINE__, __func__, node->kind);
       }
   case ND_VLA_PTR:
     node->ty = node->var->ty;
@@ -1119,7 +1119,7 @@ void add_type(Node *node)
   case ND_FETCHNAND:
   case ND_SUBFETCH:
     if (node->lhs->ty->kind != TY_PTR)
-      error_tok(node->lhs->tok, "%s:%d:  in %s: pointer expected", __FILE__, __LINE__, __func__);
+      error_tok(node->lhs->tok, "%s:%d: in %s: pointer expected", __FILE__, __LINE__, __func__);
     node->rhs = new_cast(node->rhs, node->lhs->ty->base);
     node->ty = node->lhs->ty->base;
     return;

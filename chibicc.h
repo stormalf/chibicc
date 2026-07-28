@@ -396,6 +396,9 @@ struct Obj
   Type *vla_ty;
   bool is_returned_twice;
   bool is_noinline;
+  bool is_deprecated;
+  bool is_warn_unused_result;
+  int nonnull_param_mask;
   bool is_used;
   bool is_unused;
   bool is_read;
@@ -447,6 +450,9 @@ struct VarAttr
   int constructor_priority;
   bool is_packed;
   bool is_noinline;
+  bool is_deprecated;
+  bool is_warn_unused_result;
+  int nonnull_param_mask;
   bool is_used;
   bool is_unused;
   bool is_returned_twice;
@@ -1922,6 +1928,7 @@ void mark_tail_calls(Node *node, Obj *fn);
 Token *attribute_list(Token *tok, void *arg, Token *(*f)(Token *, void *));
 Token *type_attributes(Token *tok, void *arg);
 Token *thing_attributes(Token *tok, void *arg);
+void emit_unused_warnings(Obj *fn);
 
 
 #endif // CHIBICC_H

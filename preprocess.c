@@ -273,7 +273,7 @@ static Token *skip_line(Token *tok)
 {
   if (tok->at_bol)
     return tok;
-  warn_tok(tok, "extra token");
+  warn_tok(tok, "%s:%d: in %s: extra token", __FILE__, __LINE__, __func__);
   while (!tok->at_bol)
     tok = tok->next;
   return tok;
@@ -658,7 +658,7 @@ static long eval_const_expr(Token **rest, Token *tok)
   // Convert pp-numbers to regular numbers
   convert_pp_tokens(expr);
   if (expr->ty && is_flonum(expr->ty))
-    error_tok(expr, "%s:%d: in %s:  floating constant in preprocessor expression", __FILE__, __LINE__, __func__);
+    error_tok(expr, "%s:%d: in %s: floating constant in preprocessor expression", __FILE__, __LINE__, __func__);
 
   Token *rest2;
   long val = const_expr(&rest2, expr);
@@ -722,7 +722,7 @@ static MacroParam *read_macro_params(Token **rest, Token *tok, char **va_args_na
     }
 
     if (tok->kind != TK_IDENT)
-      error_tok(tok, "%s in read_macro_params : expected an identifier", __FILE__);
+      error_tok(tok, "%s:%d: in %s: expected an identifier in read_macro_params", __FILE__, __LINE__, __func__);
 
     if (equal(tok->next, "..."))
     {
@@ -1637,7 +1637,7 @@ static Token *preprocess2(Token *tok)
     //from @fuhsnn warning management
     if (equal(tok, "warning"))
     {
-      warn_tok(tok, "warning");
+      warn_tok(tok, "%s:%d: in %s: warning", __FILE__, __LINE__, __func__);
         do {
           tok = tok->next;
         }while (!tok->at_bol);     

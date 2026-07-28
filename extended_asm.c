@@ -1774,7 +1774,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                 Node *node = conditional(rest, tok);
                 add_type(node);
                 if (!is_const_expr(node))
-                    error_tok(tok, "expression is not a compile-time constant");
+                    error_tok(tok, "%s:%d: in %s: expression is not a compile-time constant", __FILE__, __LINE__, __func__);
                 int64_t val = eval(node);
                 int length = snprintf(NULL, 0, "%ld", val);
                 snprintf(input_value, length + 1, "%ld", val);
@@ -1938,7 +1938,7 @@ void input_asm(Node *node, Token **rest, Token *tok, Obj *locals)
                     char *toktmp = calloc(1, sizeof(char) * 300);                    
                     for (Member *mbr = sc->var->ty->base->members; mbr; mbr = mbr->next) {
                         if (mbr->name->len > 59)
-                            error_tok(tok, "%s:%d %d: in %s: not enough size for toktmp", __FILE__, __LINE__, mbr->name->len, __func__);
+                            error_tok(tok, "%s:%d: in %s: not enough size for toktmp", __FILE__, __LINE__, __func__);
                         strncat(toktmp, mbr->name->loc, mbr->name->len);                            
                         if (equal(tokmbr, toktmp)) {
                             asmExt->input[nbInput]->offsetStruct = mbr->offset ;

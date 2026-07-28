@@ -77,7 +77,7 @@ Token *type_attributes(Token *tok, void *arg)
         ty->constructor_priority = tok->val;
         tok = tok->next;
       } else {
-        warn_tok(tok, "in type_attributes: %s:%d: expected integer priority in constructor attribute", __FILE__, __LINE__);
+        warn_tok(tok, "%s:%d: in %s: expected integer priority in constructor attribute", __FILE__, __LINE__, __func__);
       }
       SET_CTX(ctx);
       tok = skip(tok, ")", ctx);
@@ -95,7 +95,7 @@ Token *type_attributes(Token *tok, void *arg)
         ty->destructor_priority = tok->val;
         tok = tok->next;
       } else {
-        warn_tok(tok, "in type_attributes: %s:%d: expected integer priority in destructor attribute", __FILE__, __LINE__);
+        warn_tok(tok, "%s:%d: in %s: expected integer priority in destructor attribute", __FILE__, __LINE__, __func__);
       }
       SET_CTX(ctx);
       tok = skip(tok, ")", ctx);
@@ -221,6 +221,10 @@ Token *type_attributes(Token *tok, void *arg)
     return tok;
   }
 
+  // Function-declaration-only attributes without args.
+  // type_attributes only has a Type*, not a VarAttr*, so these are
+  // consumed and silently dropped here.  The real work happens in
+  // thing_attributes where the VarAttr* is available.
   if (consume(&tok, tok, "noinline") ||
       consume(&tok, tok, "__noinline__") ||
       consume(&tok, tok, "noclone") ||
@@ -288,7 +292,7 @@ Token *type_attributes(Token *tok, void *arg)
       consume(&tok, tok, "__no_profile_instrument_function__"))
     {
         return tok;
-  }
+    }
 
   if (consume(&tok, tok, "fallthrough") ||
     consume(&tok, tok, "__fallthrough__") )
@@ -766,6 +770,11 @@ Token *thing_attributes(Token *tok, void *arg) {
     return skip(tok, ")", ctx);
   }
 
+  if (consume(&tok, tok, "deprecated") || consume(&tok, tok, "__deprecated__")) {
+    attr->is_deprecated = true;
+    return tok;
+  }
+
  if (consume(&tok, tok, "cleanup") || consume(&tok, tok, "__cleanup__")) {
       SET_CTX(ctx);
       tok = skip(tok, "(", ctx);
@@ -830,6 +839,12 @@ Token *thing_attributes(Token *tok, void *arg) {
     return tok;
   }
 
+  if (consume(&tok, tok, "warn_unused_result") ||
+      consume(&tok, tok, "__warn_unused_result__")) {
+    attr->is_warn_unused_result = true;
+    return tok;
+  }
+
   if (consume(&tok, tok, "noclone") ||
       consume(&tok, tok, "__noclone__") ||
       consume(&tok, tok, "pure") ||
@@ -838,8 +853,6 @@ Token *thing_attributes(Token *tok, void *arg) {
       consume(&tok, tok, "__dontclone__") ||
       consume(&tok, tok, "may_alias") ||
       consume(&tok, tok, "__may_alias__") ||
-      consume(&tok, tok, "warn_unused_result") ||
-      consume(&tok, tok, "__warn_unused_result__") ||
       consume(&tok, tok, "flatten") ||
       consume(&tok, tok, "__flatten__") ||
       consume(&tok, tok, "leaf") ||
@@ -924,6 +937,7 @@ Token *thing_attributes(Token *tok, void *arg) {
               if (tok->kind != TK_NUM) {
                   error_tok(tok, "%s:%d: in %s: expected parameter index in __nonnull__", __FILE__, __LINE__, __func__);
               }
+              attr->nonnull_param_mask |= 1 << (tok->val - 1);
               tok = tok->next;
               if (equal(tok, ","))
                   tok = tok->next;
@@ -932,6 +946,8 @@ Token *thing_attributes(Token *tok, void *arg) {
           }
           SET_CTX(ctx);
           tok = skip(tok, ")",ctx);
+      } else {
+          attr->nonnull_param_mask = -1;
       }
      return tok;
     }
@@ -1008,4 +1024,114 @@ Token *thing_attributes(Token *tok, void *arg) {
   }
 
   return tok;
+}
+
+static void emit_unused_scope_warnings(Scope *sc) {
+  for (Scope *child = sc->children; child; child = child->sibling_next)
+    emit_unused_scope_warnings(child);
+  for (Obj *var = sc->locals; var; var = var->next) {
+    if (var->is_param)
+      continue;
+    if (!var->tok || !var->name || !var->name[0])
+      continue;
+    if (!var->is_read && !var->is_written && !var->is_address_used && !var->is_used && !var->is_unused) {
+      if (opt_wunused_variable && (var->ty && !var->ty->origin) && !(var->tok->file && var->tok->file->is_system_header))
+        warn_tok(var->tok, "%s:%d: in %s: unused variable '%s'", __FILE__, __LINE__, __func__, var->name);
+    }
+  }
+}
+
+static void check_warn_unused_result_node(Node *node) {
+  if (!node)
+    return;
+  if (node->kind == ND_EXPR_STMT && node->lhs) {
+    Node *expr = node->lhs;
+    while (expr->kind == ND_CAST)
+      expr = expr->lhs;
+    if (expr->kind == ND_FUNCALL && expr->lhs->kind == ND_VAR &&
+        expr->lhs->var->is_function && expr->lhs->var->is_warn_unused_result)
+      warn_tok(expr->tok, "%s:%d: in %s: ignoring return value of '%s' declared with warn_unused_result", __FILE__, __LINE__, __func__, expr->lhs->var->name);
+  }
+  check_warn_unused_result_node(node->lhs);
+  check_warn_unused_result_node(node->rhs);
+  check_warn_unused_result_node(node->cond);
+  check_warn_unused_result_node(node->then);
+  check_warn_unused_result_node(node->els);
+  check_warn_unused_result_node(node->init);
+  check_warn_unused_result_node(node->inc);
+  if (node->kind == ND_BLOCK) {
+    for (Node *n = node->body; n; n = n->next)
+      check_warn_unused_result_node(n);
+  }
+}
+
+static void check_deprecated_node(Node *node) {
+  if (!node)
+    return;
+  if (node->kind == ND_VAR && node->var && node->var->is_deprecated)
+    warn_tok(node->tok, "%s:%d: in %s: '%s' is deprecated", __FILE__, __LINE__, __func__, node->var->name);
+  check_deprecated_node(node->lhs);
+  check_deprecated_node(node->rhs);
+  check_deprecated_node(node->cond);
+  check_deprecated_node(node->then);
+  check_deprecated_node(node->els);
+  check_deprecated_node(node->init);
+  check_deprecated_node(node->inc);
+  if (node->kind == ND_BLOCK) {
+    for (Node *n = node->body; n; n = n->next)
+      check_deprecated_node(n);
+  }
+}
+
+static bool is_null_constant(Node *node) {
+  if (node->kind == ND_NUM && node->val == 0)
+    return true;
+  if (node->kind == ND_CAST && node->lhs && is_null_constant(node->lhs))
+    return true;
+  return false;
+}
+
+static void check_nonnull_node(Node *node) {
+  if (!node)
+    return;
+  if (node->kind == ND_FUNCALL && node->lhs->kind == ND_VAR &&
+      node->lhs->var->is_function && node->lhs->var->nonnull_param_mask) {
+    int mask = node->lhs->var->nonnull_param_mask;
+    int i = 1;
+    for (Node *arg = node->args; arg; arg = arg->next, i++) {
+      bool is_nonnull = (mask == -1) ? (arg->ty && arg->ty->kind == TY_PTR)
+                                     : (mask & (1 << (i - 1)));
+      if (is_nonnull && is_null_constant(arg))
+        warn_tok(arg->tok, "%s:%d: in %s: NULL passed to nonnull parameter %d of '%s'", __FILE__, __LINE__, __func__, i, node->lhs->var->name);
+    }
+  }
+  check_nonnull_node(node->lhs);
+  check_nonnull_node(node->rhs);
+  check_nonnull_node(node->cond);
+  check_nonnull_node(node->then);
+  check_nonnull_node(node->els);
+  check_nonnull_node(node->init);
+  check_nonnull_node(node->inc);
+  if (node->kind == ND_BLOCK) {
+    for (Node *n = node->body; n; n = n->next)
+      check_nonnull_node(n);
+  }
+}
+
+void emit_unused_warnings(Obj *fn) {
+  if (!fn->name)
+    return;
+  for (Obj *p = fn->params; p; p = p->next) {
+    if (!p->name || !p->tok)
+      continue;
+    if (!p->is_read && !p->is_unused) {
+      if (opt_wunused_parameter && (p->ty && !p->ty->origin) && !(p->tok->file && p->tok->file->is_system_header))
+        warn_tok(p->tok, "%s:%d: in %s: unused parameter '%s'", __FILE__, __LINE__, __func__, p->name);
+    }
+  }
+  if (fn->ty && fn->ty->scopes)
+    emit_unused_scope_warnings(fn->ty->scopes);
+  check_warn_unused_result_node(fn->body);
+  check_deprecated_node(fn->body);
+  check_nonnull_node(fn->body);
 }

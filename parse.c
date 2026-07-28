@@ -866,7 +866,7 @@ static Type *func_params(Token **rest, Token *tok, Type *ty)
       else if (!equal(tok, ",")) {
         Node *node = expr(&tok, tok);
         if (eval(node->lhs) == 0) { 
-          error("%s:%d: static assert error : %s",  __FILE__, __LINE__, node->rhs->tok->loc);
+           error("%s:%d: in %s: static assert error : %s",  __FILE__, __LINE__, __func__, node->rhs->tok->loc);
         }
         while(!equal(tok->next, ";")) 
           tok = tok->next;
@@ -1395,7 +1395,7 @@ static Node *compute_vla_size(Type *ty, Token *tok)
     Node *n = compute_vla_size(ty->vla_param_ty, tok);
     ty->vla_size = ty->vla_param_ty->vla_size;
     if (!ty->vla_size)
-      error_tok(tok, "%s:%d:  in %s: vla_size null after computation",
+      error_tok(tok, "%s:%d: in %s: vla_size null after computation",
                 __FILE__, __LINE__, __func__);
     return new_binary(ND_COMMA, node, n, tok);
   }
@@ -2162,7 +2162,7 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
     }
 
     if (!init->ty->members)
-      error_tok(tok, "%s:%d: in %s:  initializer for empty aggregate requires explicit braces", __FILE__, __LINE__, __func__);
+      error_tok(tok, "%s:%d: in %s: initializer for empty aggregate requires explicit braces", __FILE__, __LINE__, __func__);
 
     struct_initializer2(rest, tok, init, init->ty->members, false);
     return;
@@ -2181,7 +2181,7 @@ static void initializer2(Token **rest, Token *tok, Initializer *init)
       return;
     }
     if (!init->ty->members)
-      error_tok(tok, "%s:%d: in %s:  initializer for empty aggregate requires explicit braces", __FILE__, __LINE__, __func__);
+      error_tok(tok, "%s:%d: in %s: initializer for empty aggregate requires explicit braces", __FILE__, __LINE__, __func__);
 
     init->mem = init->ty->members;
     initializer2(rest, tok, init->children[0]);
@@ -3029,9 +3029,10 @@ static Node *compound_stmt(Token **rest, Token *tok, Node **last)
     {
       //VarAttr attr = {};
       Type *basety = declspec(&tok, tok, &attr);
+      tok = attribute_list(tok, &attr, thing_attributes);
       if (attr.is_typedef)
       {
-  
+   
         Node *vla_calc = parse_typedef(&tok, tok, basety, &attr);
         cur = cur->next = new_unary(ND_EXPR_STMT, vla_calc, tok);
         add_type(cur);
@@ -3094,6 +3095,7 @@ static Node *compound_stmt2(Token **rest, Token *tok)
     {
       //VarAttr attr = {};
       Type *basety = declspec(&tok, tok, &attr);
+        tok = attribute_list(tok, &attr, thing_attributes);
       if (attr.is_typedef)
       {
         Node *vla_calc = parse_typedef(&tok, tok, basety, &attr);
@@ -6658,7 +6660,7 @@ static Node *primary(Token **rest, Token *tok)
               add_type(node->builtin_args[nargs]);
               nargs++;
           } else {
-              error_tok(tok, "too many arguments to builtin");
+              error_tok(tok, "%s:%d: in %s: too many arguments to builtin", __FILE__, __LINE__, __func__);
           }
       }
       node->builtin_nargs = nargs;
@@ -7074,9 +7076,12 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   fn->is_aligned |= attr->is_aligned;
   fn->is_noreturn |= attr->is_noreturn;
   fn->is_noinline |= attr->is_noinline;
+  fn->is_deprecated |= attr->is_deprecated;
   fn->is_used |= attr->is_used;
   fn->is_returned_twice |= attr->is_returned_twice;
   fn->is_unused |= attr->is_unused;
+  fn->is_warn_unused_result |= attr->is_warn_unused_result;
+  fn->nonnull_param_mask |= attr->nonnull_param_mask;
   if (fn->is_used)
     fn->is_root = true;
   fn->is_destructor |= attr->is_destructor;
@@ -7269,6 +7274,7 @@ static Token *global_declaration(Token *tok, Type *basety, VarAttr *attr)
     if (var->is_used)
       var->is_root = true;
     var->is_aligned = var->is_aligned | decl_attr.is_aligned;
+    var->is_deprecated = decl_attr.is_deprecated;
     var->is_externally_visible = decl_attr.is_externally_visible;
     var->is_definition = !decl_attr.is_extern && ty->kind != TY_FUNC;
     var->is_static = decl_attr.is_static;
@@ -7533,36 +7539,6 @@ static void mark_liveness_on_node(Node *node, bool is_lhs) {
       mark_liveness_on_node(node->atomic_expr, false);
     break;
   }
-}
-
-static void emit_unused_scope_warnings(Scope *sc) {
-  for (Scope *child = sc->children; child; child = child->sibling_next)
-    emit_unused_scope_warnings(child);
-  for (Obj *var = sc->locals; var; var = var->next) {
-    if (var->is_param)
-      continue;
-    if (!var->tok || !var->name || !var->name[0])
-      continue;
-    if (!var->is_read && !var->is_written && !var->is_address_used && !var->is_used && !var->is_unused) {
-      if (opt_wunused_variable && (var->ty && !var->ty->origin) && !(var->tok->file && var->tok->file->is_system_header))
-        warn_tok(var->tok, "unused variable '%s'", var->name);
-    }
-  }
-}
-
-static void emit_unused_warnings(Obj *fn) {
-  if (!fn->name)
-    return;
-  for (Obj *p = fn->params; p; p = p->next) {
-    if (!p->name || !p->tok)
-      continue;
-    if (!p->is_read && !p->is_unused) {
-      if (opt_wunused_parameter && (p->ty && !p->ty->origin) && !(p->tok->file && p->tok->file->is_system_header))
-        warn_tok(p->tok, "unused parameter '%s'", p->name);
-    }
-  }
-  if (fn->ty && fn->ty->scopes)
-    emit_unused_scope_warnings(fn->ty->scopes);
 }
 
 static void mark_liveness_on_locals(Obj *prog) {

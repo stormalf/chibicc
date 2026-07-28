@@ -1929,12 +1929,12 @@ void gen_cas(Node *node)   {
   gen_expr(node->cas_old);
   println("  mov %%rax, %%r9");
   if (!node->cas_old->ty->base)
-    error("%s:%d: in %s :node->cas_old base type is null!", __FILE__, __LINE__, __func__); 
+    error("%s:%d: in %s: node->cas_old base type is null!", __FILE__, __LINE__, __func__); 
   load(node->cas_old->ty->base);
   pop_tmp("%rdx"); // new
   pop_tmp("%rdi"); // addr
   if (!node->cas_addr->ty->base)
-    error("%s:%d: in %s : node->cas_addr base type is null!", __FILE__, __LINE__, __func__); 
+    error("%s:%d: in %s: node->cas_addr base type is null!", __FILE__, __LINE__, __func__);   
   int sz = node->cas_addr->ty->base->size;
   println("  lock cmpxchg %s, (%%rdi)", reg_dx(sz));
   println("  sete %%cl");
@@ -1978,7 +1978,7 @@ void gen_bool_cas(Node *node) {
   pop_tmp("%rdi");
   int sz = node->cas_ptr->ty->base->size;
   if (!node->cas_ptr->ty->base)
-    error("%s:%d: in %s : node->cas_ptr base type is null!", __FILE__, __LINE__, __func__);   
+    error("%s:%d: in %s: node->cas_ptr base type is null!", __FILE__, __LINE__, __func__);   
   println("  lock cmpxchg %s, (%%rdi)", reg_dx(sz)); 
   println("  sete %%al");       
   println("  movzbl %%al, %%eax"); 
@@ -2099,7 +2099,7 @@ void gen_fetchnand(Node *node) {
         case 2: println("  movzwl (%%rdi), %%rax"); break;
         case 4: println("  movl (%%rdi), %%eax");   break;
         case 8: println("  movq (%%rdi), %%rax");   break;
-        default: error("%s:%d: in %s : unsupported size %d!", __FILE__, __LINE__, __func__, sz); 
+        default: error("%s:%d: in %s: unsupported size %d!", __FILE__, __LINE__, __func__, sz); 
     }
     int label = count();
     println(".L.fetchnand_loop_%d:", label);
@@ -2149,7 +2149,7 @@ void gen_cas_n(Node *node)   {
   pop_tmp("%rdi"); /* addr */
   int sz = node->cas_addr->ty->base->size;
   if (!node->cas_addr->ty->base)
-    error("%s:%d: in %s : node->cas_addr base type is null!", __FILE__, __LINE__, __func__);   
+    error("%s:%d: in %s: node->cas_addr base type is null!", __FILE__, __LINE__, __func__); 
 
   println("  lock cmpxchg %s, (%%rdi)", reg_dx(sz));
 
@@ -2744,7 +2744,7 @@ void gen_psll_binop(Node *node, const char *insn) {
 
 static int get_const_int_from_node(Node *node) {
   if (!node)
-    error("%s:%d: in %s : expected constant node", __FILE__, __LINE__, __func__);
+    error("%s:%d: in %s: expected constant node", __FILE__, __LINE__, __func__);
   while (true) {
     if (node->kind == ND_NUM) return node->val;
     if (node->kind == ND_CAST) { node = node->lhs; continue; }
@@ -2753,7 +2753,7 @@ static int get_const_int_from_node(Node *node) {
     break;
   }
 
-  error_tok(node->tok, "%s:%d: in %s : not a compile-time integer constant", __FILE__, __LINE__, __func__);
+  error_tok(node->tok, "%s:%d: in %s: not a compile-time integer constant", __FILE__, __LINE__, __func__);
  
 }
 
@@ -2766,11 +2766,11 @@ static Node *unwrap_casts(Node *node) {
 static void get_mask_values(Node *mask_node, int *vals, int expected_len) {
   mask_node = unwrap_casts(mask_node);
   if (!mask_node->var || !mask_node->var->init)
-    error_tok(mask_node->tok, "%s:%d: in %s : shuffle mask must be a constant vector initializer! %d", __FILE__, __LINE__, __func__,  mask_node->kind);
+    error_tok(mask_node->tok, "%s:%d: in %s: shuffle mask must be a constant vector initializer! %d", __FILE__, __LINE__, __func__,  mask_node->kind);
 
   Initializer *init = mask_node->var->init;
   if (!mask_node->var->ty || !mask_node->var->ty->base)
-    error_tok(mask_node->tok, "%s:%d: in %s : shuffle mask type has no base type!", __FILE__, __LINE__, __func__);
+    error_tok(mask_node->tok, "%s:%d: in %s: shuffle mask type has no base type!", __FILE__, __LINE__, __func__);
   int len = mask_node->var->ty->array_len;
   int elem_size = mask_node->var->ty->base->size;
   int expand = elem_size / 4;
@@ -2989,7 +2989,7 @@ void gen_blendps(Node *node, bool is256) {
     println("  movaps %%xmm0, %%xmm2");
   int imm = eval(node->builtin_args[2]);
   if (imm < 0 || imm > 255)
-    error_tok(node->builtin_args[2]->tok, "immediate out of range");
+    error_tok(node->builtin_args[2]->tok, "%s:%d: in %s: immediate out of range", __FILE__, __LINE__, __func__);
   if (is256)
     println("  vblendps $%d, %%ymm2, %%ymm1, %%ymm0", imm);
   else
@@ -3012,7 +3012,7 @@ void gen_blendpd(Node *node, bool is256) {
     println("  movaps %%xmm0, %%xmm2");
   int imm = eval(node->builtin_args[2]);
   if (imm < 0 || imm > 255)
-    error_tok(node->builtin_args[2]->tok, "immediate out of range");
+    error_tok(node->builtin_args[2]->tok, "%s:%d: in %s: immediate out of range", __FILE__, __LINE__, __func__);
   if (is256)
     println("  vblendpd $%d, %%ymm2, %%ymm1, %%ymm0", imm);
   else
@@ -3029,7 +3029,7 @@ void gen_dpps(Node *node) {
   println("  movaps %%xmm0, %%xmm2");
   int imm = eval(node->builtin_args[2]);
   if (imm < 0 || imm > 255)
-    error_tok(node->builtin_args[2]->tok, "immediate out of range");
+    error_tok(node->builtin_args[2]->tok, "%s:%d: in %s: immediate out of range", __FILE__, __LINE__, __func__);
   println("  dpps $%d, %%xmm2, %%xmm1", imm);
   println("  movaps %%xmm1, %%xmm0");
 }
@@ -3042,7 +3042,7 @@ void gen_dppd(Node *node) {
   println("  movaps %%xmm0, %%xmm2");
   int imm = eval(node->builtin_args[2]);
   if (imm < 0 || imm > 255)
-    error_tok(node->builtin_args[2]->tok, "immediate out of range");
+    error_tok(node->builtin_args[2]->tok, "%s:%d: in %s: immediate out of range", __FILE__, __LINE__, __func__);
   println("  dppd $%d, %%xmm2, %%xmm1", imm);
   println("  movaps %%xmm1, %%xmm0");
 }
@@ -3055,7 +3055,7 @@ void gen_insertps128(Node *node) {
   println("  movaps %%xmm0, %%xmm2");
   int imm = eval(node->builtin_args[2]);
   if (imm < 0 || imm > 255)
-    error_tok(node->builtin_args[2]->tok, "immediate out of range");
+    error_tok(node->builtin_args[2]->tok, "%s:%d: in %s: immediate out of range", __FILE__, __LINE__, __func__);
   println("  insertps $%d, %%xmm2, %%xmm1", imm);
   println("  movaps %%xmm1, %%xmm0");
 }
@@ -3068,7 +3068,7 @@ void gen_mpsadbw128(Node *node) {
   println("  movaps %%xmm0, %%xmm2");
   int imm = eval(node->builtin_args[2]);
   if (imm < 0 || imm > 255)
-    error_tok(node->builtin_args[2]->tok, "immediate out of range");
+    error_tok(node->builtin_args[2]->tok, "%s:%d: in %s: immediate out of range", __FILE__, __LINE__, __func__);
   println("  mpsadbw $%d, %%xmm2, %%xmm1", imm);
   println("  movaps %%xmm1, %%xmm0");
 }
@@ -3081,7 +3081,7 @@ void gen_mpsadbw256(Node *node) {
   pop_ymm(1);
   int imm = eval(node->builtin_args[2]);
   if (imm < 0 || imm > 255)
-    error_tok(node->builtin_args[2]->tok, "immediate out of range");
+    error_tok(node->builtin_args[2]->tok, "%s:%d: in %s: immediate out of range", __FILE__, __LINE__, __func__);
   println("  vmpsadbw $%d, %%ymm1, %%ymm0, %%ymm0", imm);
 }
 
@@ -3299,7 +3299,7 @@ void gen_vextractf128_si256(Node *node) {
   gen_expr(node->lhs); // Source vector -> ymm0
   Node *imm_node = node->rhs;
   int64_t imm = eval(imm_node);
-  if (imm < 0 || imm > 1) error_tok(imm_node->tok, "vextractf128 imm must be 0 or 1");
+  if (imm < 0 || imm > 1) error_tok(imm_node->tok, "%s:%d: in %s: vextractf128 imm must be 0 or 1", __FILE__, __LINE__, __func__);
   println("  vextractf128 $%ld, %%ymm0, %%xmm0", imm);
 }
 
@@ -3419,7 +3419,7 @@ void gen_pcmpistrm128(Node *node) {
   println("  movaps %%xmm0, %%xmm2");
   int imm = eval(node->builtin_args[2]);
   if (imm < 0 || imm > 255)
-    error_tok(node->builtin_args[2]->tok, "immediate out of range");
+    error_tok(node->builtin_args[2]->tok, "%s:%d: in %s: immediate out of range", __FILE__, __LINE__, __func__);
   println("  pcmpistrm $%d, %%xmm2, %%xmm1", imm);
 }
 
@@ -3431,7 +3431,7 @@ void gen_pcmpistri128(Node *node) {
   println("  movaps %%xmm0, %%xmm2");
   int imm = eval(node->builtin_args[2]);
   if (imm < 0 || imm > 255)
-    error_tok(node->builtin_args[2]->tok, "immediate out of range");
+    error_tok(node->builtin_args[2]->tok, "%s:%d: in %s: immediate out of range", __FILE__, __LINE__, __func__);
   println("  pcmpistri $%d, %%xmm2, %%xmm1", imm);
   println("  mov %%ecx, %%eax");
 }
@@ -3449,7 +3449,7 @@ void gen_pcmpestrm128(Node *node) {
   pop_tmp("%rax");
   int imm = eval(node->builtin_args[4]);
   if (imm < 0 || imm > 255)
-    error_tok(node->builtin_args[4]->tok, "immediate out of range");
+    error_tok(node->builtin_args[4]->tok, "%s:%d: in %s: immediate out of range", __FILE__, __LINE__, __func__);
   println("  pcmpestrm $%d, %%xmm2, %%xmm1", imm);
 }
 
@@ -3466,7 +3466,7 @@ void gen_pcmpestri128(Node *node) {
   pop_tmp("%rax");
   int imm = eval(node->builtin_args[4]);
   if (imm < 0 || imm > 255)
-    error_tok(node->builtin_args[4]->tok, "immediate out of range");
+    error_tok(node->builtin_args[4]->tok, "%s:%d: in %s: immediate out of range", __FILE__, __LINE__, __func__);
   println("  pcmpestri $%d, %%xmm2, %%xmm1", imm);
   println("  mov %%ecx, %%eax");
 }
@@ -3485,7 +3485,7 @@ void gen_pcmpi_flag(Node *node, const char *flag_insn, bool is_explicit) {
     pop_tmp("%rax");
     int imm = eval(node->builtin_args[4]);
     if (imm < 0 || imm > 255)
-      error_tok(node->builtin_args[4]->tok, "immediate out of range");
+      error_tok(node->builtin_args[4]->tok, "%s:%d: in %s: immediate out of range", __FILE__, __LINE__, __func__);
     println("  pcmpestri $%d, %%xmm2, %%xmm1", imm);
   } else {
     assert(node->builtin_nargs == 3);
@@ -3495,7 +3495,7 @@ void gen_pcmpi_flag(Node *node, const char *flag_insn, bool is_explicit) {
     println("  movaps %%xmm0, %%xmm2");
     int imm = eval(node->builtin_args[2]);
     if (imm < 0 || imm > 255)
-      error_tok(node->builtin_args[2]->tok, "immediate out of range");
+      error_tok(node->builtin_args[2]->tok, "%s:%d: in %s: immediate out of range", __FILE__, __LINE__, __func__);
     println("  pcmpistri $%d, %%xmm2, %%xmm1", imm);
   }
   println("  %s %%al", flag_insn);
@@ -3510,7 +3510,7 @@ void gen_pclmulqdq128(Node *node) {
   println("  movaps %%xmm0, %%xmm2");
   int imm = eval(node->builtin_args[2]);
   if (imm < 0 || imm > 255)
-    error_tok(node->builtin_args[2]->tok, "immediate out of range");
+    error_tok(node->builtin_args[2]->tok, "%s:%d: in %s: immediate out of range", __FILE__, __LINE__, __func__);
   println("  pclmulqdq $%d, %%xmm2, %%xmm1", imm);
   println("  movaps %%xmm1, %%xmm0");
 }
@@ -3523,7 +3523,7 @@ void gen_dpps256(Node *node) {
   pop_ymm(1);
   int imm = eval(node->builtin_args[2]);
   if (imm < 0 || imm > 255)
-    error_tok(node->builtin_args[2]->tok, "immediate out of range");
+    error_tok(node->builtin_args[2]->tok, "%s:%d: in %s: immediate out of range", __FILE__, __LINE__, __func__);
   println("  vdpps $%d, %%ymm1, %%ymm0, %%ymm0", imm);
 }
 
@@ -3535,7 +3535,7 @@ void gen_shufpd256(Node *node) {
   pop_ymm(1);
   int imm = eval(node->builtin_args[2]);
   if (imm < 0 || imm > 255)
-    error_tok(node->builtin_args[2]->tok, "immediate out of range");
+    error_tok(node->builtin_args[2]->tok, "%s:%d: in %s: immediate out of range", __FILE__, __LINE__, __func__);
   println("  vshufpd $%d, %%ymm1, %%ymm0, %%ymm0", imm);
 }
 
@@ -3547,7 +3547,7 @@ void gen_shufps256(Node *node) {
   pop_ymm(1);
   int imm = eval(node->builtin_args[2]);
   if (imm < 0 || imm > 255)
-    error_tok(node->builtin_args[2]->tok, "immediate out of range");
+    error_tok(node->builtin_args[2]->tok, "%s:%d: in %s: immediate out of range", __FILE__, __LINE__, __func__);
   println("  vshufps $%d, %%ymm1, %%ymm0, %%ymm0", imm);
 }
 
@@ -3565,7 +3565,7 @@ void gen_avx_cmp(Node *node, const char *insn, bool is256) {
     pop_tmpf(1);
   int imm = eval(node->builtin_args[2]);
   if (imm < 0 || imm > 255)
-    error_tok(node->builtin_args[2]->tok, "immediate out of range");
+    error_tok(node->builtin_args[2]->tok, "%s:%d: in %s: immediate out of range", __FILE__, __LINE__, __func__);
   if (is256)
     println("  %s $%d, %%ymm1, %%ymm0, %%ymm0", insn, imm);
   else
@@ -3576,7 +3576,7 @@ void gen_vextractf128_pd256(Node *node) {
   gen_expr(node->lhs);
   int64_t imm = eval(node->rhs);
   if (imm < 0 || imm > 1)
-    error_tok(node->rhs->tok, "imm must be 0 or 1");
+    error_tok(node->rhs->tok, "%s:%d: in %s: imm must be 0 or 1", __FILE__, __LINE__, __func__);
   println("  vextractf128 $%ld, %%ymm0, %%xmm0", imm);
 }
 
@@ -3584,7 +3584,7 @@ void gen_vextractf128_ps256(Node *node) {
   gen_expr(node->lhs);
   int64_t imm = eval(node->rhs);
   if (imm < 0 || imm > 1)
-    error_tok(node->rhs->tok, "imm must be 0 or 1");
+    error_tok(node->rhs->tok, "%s:%d: in %s: imm must be 0 or 1", __FILE__, __LINE__, __func__);
   println("  vextractf128 $%ld, %%ymm0, %%xmm0", imm);
 }
 
@@ -3598,7 +3598,7 @@ void gen_vinsertf128_pd256(Node *node) {
   pop_ymm(1);
   int64_t imm = eval(node->builtin_args[2]);
   if (imm < 0 || imm > 1)
-    error_tok(node->builtin_args[2]->tok, "imm must be 0 or 1");
+    error_tok(node->builtin_args[2]->tok, "%s:%d: in %s: imm must be 0 or 1", __FILE__, __LINE__, __func__);
   println("  vinsertf128 $%ld, %%xmm2, %%ymm1, %%ymm0", imm);
 }
 
@@ -3612,7 +3612,7 @@ void gen_vinsertf128_ps256(Node *node) {
   pop_ymm(1);
   int64_t imm = eval(node->builtin_args[2]);
   if (imm < 0 || imm > 1)
-    error_tok(node->builtin_args[2]->tok, "imm must be 0 or 1");
+    error_tok(node->builtin_args[2]->tok, "%s:%d: in %s: imm must be 0 or 1", __FILE__, __LINE__, __func__);
   println("  vinsertf128 $%ld, %%xmm2, %%ymm1, %%ymm0", imm);
 }
 
@@ -3624,7 +3624,7 @@ void gen_vperm2f128_si256(Node *node) {
   pop_ymm(1);
   int64_t imm = eval(node->builtin_args[2]);
   if (imm < 0 || imm > 255)
-    error_tok(node->builtin_args[2]->tok, "immediate out of range");
+    error_tok(node->builtin_args[2]->tok, "%s:%d: in %s: immediate out of range", __FILE__, __LINE__, __func__);
   println("  vperm2f128 $%ld, %%ymm1, %%ymm0, %%ymm0", imm);
 }
 
@@ -3636,7 +3636,7 @@ void gen_vperm2f128_pd256(Node *node) {
   pop_ymm(1);
   int64_t imm = eval(node->builtin_args[2]);
   if (imm < 0 || imm > 255)
-    error_tok(node->builtin_args[2]->tok, "immediate out of range");
+    error_tok(node->builtin_args[2]->tok, "%s:%d: in %s: immediate out of range", __FILE__, __LINE__, __func__);
   println("  vperm2f128 $%ld, %%ymm1, %%ymm0, %%ymm0", imm);
 }
 
@@ -3648,7 +3648,7 @@ void gen_vperm2f128_ps256(Node *node) {
   pop_ymm(1);
   int64_t imm = eval(node->builtin_args[2]);
   if (imm < 0 || imm > 255)
-    error_tok(node->builtin_args[2]->tok, "immediate out of range");
+    error_tok(node->builtin_args[2]->tok, "%s:%d: in %s: immediate out of range", __FILE__, __LINE__, __func__);
   println("  vperm2f128 $%ld, %%ymm1, %%ymm0, %%ymm0", imm);
 }
 
@@ -3656,7 +3656,7 @@ void gen_vpermilpd(Node *node) {
   gen_expr(node->lhs);
   int64_t imm = eval(node->rhs);
   if (imm < 0 || imm > 255)
-    error_tok(node->rhs->tok, "immediate out of range");
+    error_tok(node->rhs->tok, "%s:%d: in %s: immediate out of range", __FILE__, __LINE__, __func__);
   println("  vpermilpd $%ld, %%xmm0, %%xmm0", imm);
 }
 
@@ -3664,7 +3664,7 @@ void gen_vpermilps(Node *node) {
   gen_expr(node->lhs);
   int64_t imm = eval(node->rhs);
   if (imm < 0 || imm > 255)
-    error_tok(node->rhs->tok, "immediate out of range");
+    error_tok(node->rhs->tok, "%s:%d: in %s: immediate out of range", __FILE__, __LINE__, __func__);
   println("  vpermilps $%ld, %%xmm0, %%xmm0", imm);
 }
 
@@ -3672,7 +3672,7 @@ void gen_vpermilpd256(Node *node) {
   gen_expr(node->lhs);
   int64_t imm = eval(node->rhs);
   if (imm < 0 || imm > 255)
-    error_tok(node->rhs->tok, "immediate out of range");
+    error_tok(node->rhs->tok, "%s:%d: in %s: immediate out of range", __FILE__, __LINE__, __func__);
   println("  vpermilpd $%ld, %%ymm0, %%ymm0", imm);
 }
 
@@ -3680,7 +3680,7 @@ void gen_vpermilps256(Node *node) {
   gen_expr(node->lhs);
   int64_t imm = eval(node->rhs);
   if (imm < 0 || imm > 255)
-    error_tok(node->rhs->tok, "immediate out of range");
+    error_tok(node->rhs->tok, "%s:%d: in %s: immediate out of range", __FILE__, __LINE__, __func__);
   println("  vpermilps $%ld, %%ymm0, %%ymm0", imm);
 }
 
@@ -3706,7 +3706,7 @@ static const char *vbmi2_insn(Node *node) {
     case ND_VPSHRD_V8DI_MASK:  return "vpshrdq";
     case ND_VPSHLD_V16SI_MASK: return "vpshldd";
     case ND_VPSHLD_V8DI_MASK:  return "vpshldq";
-    default: error("not a VBMI2 node kind");
+    default: error("%s:%d: in %s: not a VBMI2 node kind", __FILE__, __LINE__, __func__);
   }
 }
 
@@ -3721,7 +3721,7 @@ void gen_vbmi2_3(Node *node) {
 
   int64_t imm = eval(node->builtin_args[2]);
   if (imm < 0 || imm > 255)
-    error_tok(node->builtin_args[2]->tok, "immediate out of range");
+    error_tok(node->builtin_args[2]->tok, "%s:%d: in %s: immediate out of range", __FILE__, __LINE__, __func__);
 
   if (ty->size > 32)
     println("  %s $%ld, %%zmm1, %%zmm0, %%zmm0", vbmi2_insn(node), imm);
@@ -3751,7 +3751,7 @@ void gen_vbmi2_5(Node *node) {
 
   int64_t imm = eval(node->builtin_args[2]);
   if (imm < 0 || imm > 255)
-    error_tok(node->builtin_args[2]->tok, "immediate out of range");
+    error_tok(node->builtin_args[2]->tok, "%s:%d: in %s: immediate out of range", __FILE__, __LINE__, __func__);
 
   if (ty->size > 32)
     println("  %s $%ld, %%zmm1, %%zmm0, %%zmm2{%k1}", vbmi2_insn(node), imm);

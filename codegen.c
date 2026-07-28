@@ -755,7 +755,7 @@ void gen_addr(Node *node)
   
   }
 
-  error_tok(node->tok, "%s:%d not an lvalue %d", __FILE__, __LINE__, node->kind);
+  error_tok(node->tok, "%s:%d: in %s: not an lvalue %d", __FILE__, __LINE__, __func__, node->kind);
 }
 
 // Copy n bytes from the source address in %rax to the destination in dst_reg.
@@ -1994,7 +1994,7 @@ static void gen_vector_op(Node *node) {
     //gen_expr(node->lhs);          // materialize operand in %xmm0
     break;    
   default:
-    error_tok(node->tok, "%s:%d: in %s:  unsupported vector operation %d", __FILE__, __LINE__, __func__, node->kind);
+    error_tok(node->tok, "%s:%d: in %s: unsupported vector operation %d", __FILE__, __LINE__, __func__, node->kind);
   }
 
   switch (vec_ty->base->kind) {
@@ -3154,6 +3154,8 @@ void gen_expr(Node *node)
     if (stack_args > 0)
       println("  add $%d, %%rsp", stack_args * 8);
 
+    if (node->lhs->kind == ND_VAR && node->lhs->var->is_function && node->lhs->var->is_noreturn)
+      println("  ud2");
 
     depth -= stack_args;
 
@@ -4086,7 +4088,7 @@ switch (node->lhs->ty->kind)
       return;
     }
 
-    error_tok(node->tok, "%s invalid expression", __FILE__);
+    error_tok(node->tok, "%s:%d: in %s: invalid expression", __FILE__, __LINE__, __func__);
   }
   case TY_LDOUBLE:
   {
@@ -4139,7 +4141,7 @@ switch (node->lhs->ty->kind)
     }
 
 
-    error_tok(node->tok, "%s invalid expression", __FILE__);
+    error_tok(node->tok, "%s:%d: in %s: invalid expression", __FILE__, __LINE__, __func__);
   }
   }
 
@@ -4286,7 +4288,7 @@ switch (node->lhs->ty->kind)
     return;
   }
 
-  error_tok(node->tok, "%s invalid expression", __FILE__);
+  error_tok(node->tok, "%s:%d: in %s: invalid expression", __FILE__, __LINE__, __func__);
 }
 
 static void gen_stmt(Node *node)
@@ -4465,7 +4467,7 @@ static void gen_stmt(Node *node)
     return;
   }
 
-  error_tok(node->tok, "%s invalid statement", __FILE__);
+  error_tok(node->tok, "%s:%d: in %s: invalid statement", __FILE__, __LINE__, __func__);
 }
 
 
