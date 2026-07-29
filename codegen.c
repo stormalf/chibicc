@@ -4719,6 +4719,9 @@ static void emit_text(Obj *prog)
       println("  .globl %s", sym(fn));
     }
 
+    if (fn->alias_name)
+      println("  .set %s, %s", sym(fn), fn->alias_name);
+
     // Respect section attribute if set
     if (fn->section)
       println("  .section %s,\"ax\",@progbits", fn->section);

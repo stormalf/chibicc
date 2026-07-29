@@ -397,6 +397,11 @@ struct Obj
   bool is_returned_twice;
   bool is_noinline;
   bool is_deprecated;
+  char *deprecated_msg;
+  char *error_msg;
+  char *warning_msg;
+  bool is_sentinel;
+  int sentinel_pos;
   bool is_warn_unused_result;
   int nonnull_param_mask;
   bool is_used;
@@ -451,6 +456,11 @@ struct VarAttr
   bool is_packed;
   bool is_noinline;
   bool is_deprecated;
+  char *deprecated_msg;
+  char *error_msg;
+  char *warning_msg;
+  bool is_sentinel;
+  int sentinel_pos;
   bool is_warn_unused_result;
   int nonnull_param_mask;
   bool is_used;
@@ -1367,6 +1377,10 @@ struct Type
   char *visibility;
   bool is_inline;
   bool is_unused;
+  bool is_deprecated;
+  char *deprecated_msg;
+  char *error_msg;
+  char *warning_msg;
   int min_vector_width;
   bool is_compound_lit; // Flag to indicate if this type is a compound literal
   // Function type

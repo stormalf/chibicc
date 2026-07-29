@@ -266,6 +266,10 @@ static void PrintType(FILE *f, int l, const char *s, Type *t) {
       PrintBool(f, l + 2, "has_vla: ", t->has_vla);
       PrintBool(f, l + 2, "is_weak: ", t->is_weak);
       PrintBool(f, l + 2, "is_inline: ", t->is_inline);
+      PrintBool(f, l + 2, "is_deprecated: ", t->is_deprecated);
+      PrintStr(f, l + 2, "deprecated_msg: ", t->deprecated_msg);
+      PrintStr(f, l + 2, "error_msg: ", t->error_msg);
+      PrintStr(f, l + 2, "warning_msg: ", t->warning_msg);
       PrintBool(f, l + 2, "is_compound_lit: ", t->is_compound_lit);
       PrintBool(f, l + 2, "is_vector: ", t->is_vector);
       PrintBool(f, l + 2, "is_constructor: ", t->is_constructor);
@@ -486,8 +490,17 @@ static void PrintObj(FILE *f, int l, const char *s, Obj *o) {
   PrintBool(f, l + 2, "is_param: ", o->is_param);
   PrintBool(f, l + 2, "is_read: ", o->is_read);
   PrintBool(f, l + 2, "is_written: ", o->is_written);
-  PrintBool(f, l + 2, "is_read: ", o->is_used);
-  PrintBool(f, l + 2, "is_read: ", o->is_unused);
+  PrintBool(f, l + 2, "is_used: ", o->is_used);
+  PrintBool(f, l + 2, "is_unused: ", o->is_unused);
+  PrintBool(f, l + 2, "is_deprecated: ", o->is_deprecated);
+  PrintStr(f, l + 2, "deprecated_msg: ", o->deprecated_msg);
+  PrintStr(f, l + 2, "error_msg: ", o->error_msg);
+  PrintStr(f, l + 2, "warning_msg: ", o->warning_msg);
+  PrintBool(f, l + 2, "is_sentinel: ", o->is_sentinel);
+  PrintInt(f, l + 2, "sentinel_pos: ", o->sentinel_pos);
+  PrintBool(f, l + 2, "is_noinline: ", o->is_noinline);
+  PrintBool(f, l + 2, "is_warn_unused_result: ", o->is_warn_unused_result);
+  PrintInt(f, l + 2, "nonnull_param_mask: ", o->nonnull_param_mask);
   PrintLine(f, l, "}");
 }
 

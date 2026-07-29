@@ -7060,6 +7060,11 @@ static Token *function(Token *tok, Type *basety, VarAttr *attr)
   fn->is_noreturn |= attr->is_noreturn;
   fn->is_noinline |= attr->is_noinline;
   fn->is_deprecated |= attr->is_deprecated;
+  fn->deprecated_msg = fn->deprecated_msg ?: attr->deprecated_msg;
+  fn->error_msg = fn->error_msg ?: attr->error_msg;
+  fn->warning_msg = fn->warning_msg ?: attr->warning_msg;
+  fn->is_sentinel |= attr->is_sentinel;
+  fn->sentinel_pos = attr->sentinel_pos;
   fn->is_used |= attr->is_used;
   fn->is_returned_twice |= attr->is_returned_twice;
   fn->is_unused |= attr->is_unused;
@@ -7258,6 +7263,9 @@ static Token *global_declaration(Token *tok, Type *basety, VarAttr *attr)
       var->is_root = true;
     var->is_aligned = var->is_aligned | decl_attr.is_aligned;
     var->is_deprecated = decl_attr.is_deprecated;
+    var->deprecated_msg = decl_attr.deprecated_msg;
+    var->error_msg = decl_attr.error_msg;
+    var->warning_msg = decl_attr.warning_msg;
     var->is_externally_visible = decl_attr.is_externally_visible;
     var->is_definition = !decl_attr.is_extern && ty->kind != TY_FUNC;
     var->is_static = decl_attr.is_static;
@@ -7462,7 +7470,7 @@ Obj *parse(Token *tok)
     tok = global_declaration(tok, basety, &attr);
   }
 
-  inline_function_bodies(globals);
+  //inline_function_bodies(globals);
   mark_liveness_on_locals(globals);
 
   for (Obj *var = globals; var; var = var->next)

@@ -139,7 +139,8 @@ Token *type_attributes(Token *tok, void *arg)
        consume(&tok, tok, "deprecated"))) {
     SET_CTX(ctx);
     tok = skip(tok, "(", ctx);
-    ConsumeStringLiteral(&tok, tok);
+    ty->deprecated_msg = ConsumeStringLiteral(&tok, tok);
+    ty->is_deprecated = true;
     SET_CTX(ctx);
     return skip(tok, ")", ctx);
   }
@@ -161,8 +162,12 @@ Token *type_attributes(Token *tok, void *arg)
     return skip(tok, ")", ctx);
   }
 
-  if (consume(&tok, tok, "deprecated") || consume(&tok, tok, "__deprecated__") ||
-      consume(&tok, tok, "may_alias") ||  consume(&tok, tok, "__may_alias__") ||
+  if (consume(&tok, tok, "deprecated") || consume(&tok, tok, "__deprecated__")) {
+    ty->is_deprecated = true;
+    return tok;
+  }
+
+  if (consume(&tok, tok, "may_alias") ||  consume(&tok, tok, "__may_alias__") ||
       consume(&tok, tok, "__transparent_union__") || consume(&tok, tok, "transparent_union")) {
     return tok;
   }
@@ -184,10 +189,12 @@ Token *type_attributes(Token *tok, void *arg)
   }
 
   if (consume(&tok, tok, "cold") || consume(&tok, tok, "__cold__")) {
+    ty->section = ".text.unlikely";
     return tok;
   }
 
   if (consume(&tok, tok, "hot") || consume(&tok, tok, "__hot__")) {
+    ty->section = ".text.likely";
     return tok;
   }
 
@@ -427,8 +434,16 @@ Token *type_attributes(Token *tok, void *arg)
     return tok;
   }
 
-  if (consume(&tok, tok, "sentinel") || consume(&tok, tok, "__sentinel__") ||
-    consume(&tok, tok, "optimize") || consume(&tok, tok, "__optimize__") ||
+  if (consume(&tok, tok, "sentinel") || consume(&tok, tok, "__sentinel__")) {
+    if (consume(&tok, tok, "(")) {
+      const_expr(&tok, tok);
+      if (!consume(&tok, tok, ")"))
+        tok = skip(tok, ")", ctx);
+    }
+    return tok;
+  }
+
+  if (consume(&tok, tok, "optimize") || consume(&tok, tok, "__optimize__") ||
     consume(&tok, tok, "assume_aligned") || consume(&tok, tok, "__assume_aligned__") ||
     consume(&tok, tok, "alloc_size") || consume(&tok, tok, "__alloc_size__") ||
     consume(&tok, tok, "attribute_alloc_size") || consume(&tok, tok, "__attribute_alloc_size__") ||
@@ -444,30 +459,27 @@ Token *type_attributes(Token *tok, void *arg)
     return tok;
   }
 
-  if (consume(&tok, tok, "error") || consume(&tok, tok, "__error__") ||
-      consume(&tok, tok, "warning") || consume(&tok, tok, "__warning__") ||
-      consume(&tok, tok, "__access__")
-      )  {
-
-    bool two_parent= false;
+  if (consume(&tok, tok, "error") || consume(&tok, tok, "__error__")) {
     SET_CTX(ctx);
     tok = skip(tok, "(", ctx);
-    if (equal(tok, "("))   {
-      SET_CTX(ctx);
-      tok = skip(tok, "(", ctx);
-      two_parent = true;
-    }
-
-    while (!equal(tok, ")")) {
-      tok = tok->next;
-    }
-
-    if (two_parent) {
-      SET_CTX(ctx);
-      tok = skip(tok, ")", ctx);
-    }
+    ty->error_msg = ConsumeStringLiteral(&tok, tok);
     SET_CTX(ctx);
     return skip(tok, ")", ctx);
+  }
+
+  if (consume(&tok, tok, "warning") || consume(&tok, tok, "__warning__")) {
+    SET_CTX(ctx);
+    tok = skip(tok, "(", ctx);
+    ty->warning_msg = ConsumeStringLiteral(&tok, tok);
+    SET_CTX(ctx);
+    return skip(tok, ")", ctx);
+  }
+
+  if (consume(&tok, tok, "__access__")) {
+    SET_CTX(ctx);
+    tok = skip(tok, "(", ctx);
+    tok = skip(tok, ")", ctx);
+    return tok;
   }
 
   if (consume(&tok, tok, "no_sanitize"))  {
@@ -716,29 +728,27 @@ Token *thing_attributes(Token *tok, void *arg) {
     return skip(tok, ")", ctx);
   }
 
-  if (consume(&tok, tok, "error") || consume(&tok, tok, "__error__") ||
-      consume(&tok, tok, "warning") || consume(&tok, tok, "__warning__") ||
-       consume(&tok, tok, "__access__")
-      )  {
-
-    bool two_parent= false;
+  if (consume(&tok, tok, "error") || consume(&tok, tok, "__error__")) {
     SET_CTX(ctx);
     tok = skip(tok, "(", ctx);
-
-    if (equal(tok, "("))   {
-      SET_CTX(ctx);
-      tok = skip(tok, "(", ctx);
-      two_parent = true;
-    }
-    while (!equal(tok, ")")) {
-      tok = tok->next;
-    }
-    if (two_parent) {
-      SET_CTX(ctx);
-      tok = skip(tok, ")", ctx);
-    }
+    attr->error_msg = ConsumeStringLiteral(&tok, tok);
     SET_CTX(ctx);
     return skip(tok, ")", ctx);
+  }
+
+  if (consume(&tok, tok, "warning") || consume(&tok, tok, "__warning__")) {
+    SET_CTX(ctx);
+    tok = skip(tok, "(", ctx);
+    attr->warning_msg = ConsumeStringLiteral(&tok, tok);
+    SET_CTX(ctx);
+    return skip(tok, ")", ctx);
+  }
+
+  if (consume(&tok, tok, "__access__")) {
+    SET_CTX(ctx);
+    tok = skip(tok, "(", ctx);
+    tok = skip(tok, ")", ctx);
+    return tok;
   }
 
   if (consume(&tok, tok, "mode") || consume(&tok, tok, "__mode__")) {
@@ -765,7 +775,8 @@ Token *thing_attributes(Token *tok, void *arg) {
        consume(&tok, tok, "deprecated"))) {
     SET_CTX(ctx);
     tok = skip(tok, "(", ctx);
-    ConsumeStringLiteral(&tok, tok);
+    attr->deprecated_msg = ConsumeStringLiteral(&tok, tok);
+    attr->is_deprecated = true;
     SET_CTX(ctx);
     return skip(tok, ")", ctx);
   }
@@ -963,8 +974,19 @@ Token *thing_attributes(Token *tok, void *arg) {
       return tok;
     }
 
-    if (consume(&tok, tok, "sentinel") || consume(&tok, tok, "__sentinel__") ||
-      consume(&tok, tok, "optimize") || consume(&tok, tok, "__optimize__") ||
+    if (consume(&tok, tok, "sentinel") || consume(&tok, tok, "__sentinel__")) {
+      attr->is_sentinel = true;
+      if (consume(&tok, tok, "(")) {
+        attr->sentinel_pos = const_expr(&tok, tok);
+        if (!consume(&tok, tok, ")"))
+          tok = skip(tok, ")", ctx);
+      } else {
+        attr->sentinel_pos = 0;
+      }
+      return tok;
+    }
+
+    if (consume(&tok, tok, "optimize") || consume(&tok, tok, "__optimize__") ||
       consume(&tok, tok, "assume_aligned") || consume(&tok, tok, "__assume_aligned__") ||
       consume(&tok, tok, "alloc_size") || consume(&tok, tok, "__alloc_size__") ||
       consume(&tok, tok, "attribute_alloc_size") || consume(&tok, tok, "__attribute_alloc_size__") ||
@@ -1068,8 +1090,12 @@ static void check_warn_unused_result_node(Node *node) {
 static void check_deprecated_node(Node *node) {
   if (!node)
     return;
-  if (node->kind == ND_VAR && node->var && node->var->is_deprecated)
-    warn_tok(node->tok, "%s:%d: in %s: '%s' is deprecated", __FILE__, __LINE__, __func__, node->var->name);
+  if (node->kind == ND_VAR && node->var && node->var->is_deprecated) {
+    if (node->var->deprecated_msg)
+      warn_tok(node->tok, "%s:%d: in %s: '%s' is deprecated: %s", __FILE__, __LINE__, __func__, node->var->name, node->var->deprecated_msg);
+    else
+      warn_tok(node->tok, "%s:%d: in %s: '%s' is deprecated", __FILE__, __LINE__, __func__, node->var->name);
+  }
   check_deprecated_node(node->lhs);
   check_deprecated_node(node->rhs);
   check_deprecated_node(node->cond);
@@ -1118,6 +1144,55 @@ static void check_nonnull_node(Node *node) {
   }
 }
 
+static void check_error_warning_node(Node *node) {
+  if (!node)
+    return;
+  if (node->kind == ND_FUNCALL && node->lhs->kind == ND_VAR &&
+      node->lhs->var->is_function) {
+    if (node->lhs->var->error_msg)
+      error_tok(node->tok, "%s", node->lhs->var->error_msg);
+    if (node->lhs->var->warning_msg)
+      warn_tok(node->tok, "%s:%d: in %s: %s", __FILE__, __LINE__, __func__, node->lhs->var->warning_msg);
+  }
+  check_error_warning_node(node->lhs);
+  check_error_warning_node(node->rhs);
+  check_error_warning_node(node->cond);
+  check_error_warning_node(node->then);
+  check_error_warning_node(node->els);
+  check_error_warning_node(node->init);
+  check_error_warning_node(node->inc);
+  if (node->kind == ND_BLOCK) {
+    for (Node *n = node->body; n; n = n->next)
+      check_error_warning_node(n);
+  }
+}
+
+static void check_sentinel_node(Node *node) {
+  if (!node)
+    return;
+  if (node->kind == ND_FUNCALL && node->lhs->kind == ND_VAR &&
+      node->lhs->var->is_function) {
+    if (node->lhs->var->is_sentinel) {
+      Node *last = NULL;
+      for (Node *a = node->args; a; a = a->next)
+        last = a;
+      if (last && !is_null_constant(last))
+        warn_tok(last->tok, "%s:%d: in %s: missing sentinel NULL in call to '%s'", __FILE__, __LINE__, __func__, node->lhs->var->name);
+    }
+  }
+  check_sentinel_node(node->lhs);
+  check_sentinel_node(node->rhs);
+  check_sentinel_node(node->cond);
+  check_sentinel_node(node->then);
+  check_sentinel_node(node->els);
+  check_sentinel_node(node->init);
+  check_sentinel_node(node->inc);
+  if (node->kind == ND_BLOCK) {
+    for (Node *n = node->body; n; n = n->next)
+      check_sentinel_node(n);
+  }
+}
+
 void emit_unused_warnings(Obj *fn) {
   if (!fn->name)
     return;
@@ -1134,4 +1209,6 @@ void emit_unused_warnings(Obj *fn) {
   check_warn_unused_result_node(fn->body);
   check_deprecated_node(fn->body);
   check_nonnull_node(fn->body);
+  check_error_warning_node(fn->body);
+  check_sentinel_node(fn->body);
 }

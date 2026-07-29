@@ -58,7 +58,53 @@ static Node *subst_params(Node *node, Obj *fn, Node *args) {
   return node;
 }
 
-//basic inlining restricted to only simple case to manage for now
+static bool has_local_ref(Node *node) {
+  if (!node) return false;
+  if (node->kind == ND_VAR && node->var && !node->var->is_function
+      && node->var->is_local && !node->var->is_param)
+    return true;
+  return (has_local_ref(node->next) ||
+          has_local_ref(node->lhs) ||
+          has_local_ref(node->rhs) ||
+          has_local_ref(node->cond) ||
+          has_local_ref(node->then) ||
+          has_local_ref(node->els) ||
+          has_local_ref(node->init) ||
+          has_local_ref(node->inc) ||
+          has_local_ref(node->body) ||
+          has_local_ref(node->args) ||
+          has_local_ref(node->builtin_dest) ||
+          has_local_ref(node->builtin_src) ||
+          has_local_ref(node->builtin_size) ||
+          has_local_ref(node->builtin_val) ||
+          has_local_ref(node->cas_addr) ||
+          has_local_ref(node->cas_old) ||
+          has_local_ref(node->cas_new));
+}
+
+static bool has_special(Node *node) {
+  if (!node) return false;
+  if (node->kind == ND_MEMBER || node->kind == ND_FUNCALL)
+    return true;
+  return (has_special(node->next) ||
+          has_special(node->lhs) ||
+          has_special(node->rhs) ||
+          has_special(node->cond) ||
+          has_special(node->then) ||
+          has_special(node->els) ||
+          has_special(node->init) ||
+          has_special(node->inc) ||
+          has_special(node->body) ||
+          has_special(node->args) ||
+          has_special(node->builtin_dest) ||
+          has_special(node->builtin_src) ||
+          has_special(node->builtin_size) ||
+          has_special(node->builtin_val) ||
+          has_special(node->cas_addr) ||
+          has_special(node->cas_old) ||
+          has_special(node->cas_new));
+}
+
 static bool can_inline(Obj *fn) {
   if (!fn->is_inline)
     return false;
@@ -79,8 +125,9 @@ static bool can_inline(Obj *fn) {
     return false;
   if (stmt->kind != ND_RETURN || !stmt->lhs)
     return false;
-  for (Obj *var = fn->locals; var; var = var->next)
-    if (!var->is_param)
+  if (has_local_ref(stmt->lhs))
+    return false;
+  if (has_special(stmt->lhs))
       return false;
   return true;
 }
@@ -100,6 +147,7 @@ static Node *inline_in_stmt(Node *node, Obj *current_fn) {
       Obj *callee = node->lhs->var;
       if (callee != current_fn && can_inline(callee)) {
         Node *result = inline_funcall(node, callee);
+        result->next = node->next;
         return inline_in_stmt(result, current_fn);
       }
     }
